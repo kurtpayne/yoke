@@ -1,0 +1,267 @@
+import { useState, useRef, useEffect, useCallback } from "react";
+import { X, Copy, Check } from "lucide-react";
+
+interface CliCommand {
+  label: string;
+  platforms: { linux: string; mac?: string; windows?: string };
+}
+
+interface CliModalProps {
+  commands: CliCommand[];
+  domain?: string;
+  ip?: string;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="flex items-center gap-1 px-2 py-0.5 rounded transition-all"
+      style={{
+        background: copied ? "rgba(63, 185, 80, 0.15)" : "var(--surface-raised)",
+        border: "1px solid var(--border-muted)",
+        color: copied ? "var(--success)" : "var(--dim)",
+        cursor: "pointer",
+        fontSize: "10px",
+        fontFamily: "var(--font-ui)",
+      }}
+      title="Copy to clipboard"
+    >
+      {copied ? <Check size={10} /> : <Copy size={10} />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+export function CliButton({ commands, domain, ip }: CliModalProps) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"linux" | "windows">("linux");
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") setOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [open, handleKeyDown]);
+
+  // Replace placeholders
+  const interpolate = (cmd: string) => {
+    let result = cmd;
+    if (domain) result = result.replace(/\{domain\}/g, domain);
+    if (ip) {
+      result = result.replace(/\{ip\}/g, ip);
+      result = result.replace(/\{reversed_ip\}/g, ip.split(".").reverse().join("."));
+    }
+    return result;
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="cli-btn"
+        title="Show CLI commands"
+        aria-label="Show CLI commands"
+      >
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, lineHeight: 1, letterSpacing: "-0.5px" }}>&gt;_</span>
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", textTransform: "none" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+        >
+          <div
+            ref={modalRef}
+            className="w-full max-w-lg mx-4 rounded-xl overflow-hidden"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)" }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
+              <div className="flex items-center gap-2">
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--accent)", fontWeight: 700 }}>&gt;_</span>
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--text)", fontWeight: 600 }}>CLI Equivalents</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Platform tabs */}
+                <div className="flex rounded-md overflow-hidden" style={{ border: "1px solid var(--border-muted)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setTab("linux")}
+                    className="px-3 py-1 transition-all"
+                    style={{
+                      fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 500, cursor: "pointer", border: "none",
+                      background: tab === "linux" ? "var(--accent)" : "transparent",
+                      color: tab === "linux" ? "var(--accent-fg)" : "var(--dim)",
+                    }}
+                  >
+                    Linux / macOS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTab("windows")}
+                    className="px-3 py-1 transition-all"
+                    style={{
+                      fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 500, cursor: "pointer", border: "none",
+                      background: tab === "windows" ? "var(--accent)" : "transparent",
+                      color: tab === "windows" ? "var(--accent-fg)" : "var(--dim)",
+                    }}
+                  >
+                    Windows
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  style={{ color: "var(--dim)", cursor: "pointer", background: "none", border: "none" }}
+                  aria-label="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Commands list */}
+            <div className="p-3 space-y-2" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+              {commands.map((cmd, i) => {
+                const raw = tab === "windows" && cmd.platforms.windows
+                  ? cmd.platforms.windows
+                  : tab === "linux" && cmd.platforms.mac
+                  ? cmd.platforms.mac
+                  : cmd.platforms.linux;
+                const text = interpolate(raw);
+                return (
+                  <div key={`cli-${i}`} className="rounded-lg p-3" style={{ background: "var(--bg)", border: "1px solid var(--border-muted)" }}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", fontWeight: 500 }}>
+                        {cmd.label}
+                      </span>
+                      <CopyButton text={text} />
+                    </div>
+                    <pre style={{
+                      fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--accent)",
+                      whiteSpace: "pre-wrap", wordBreak: "break-all", lineHeight: "18px", margin: 0,
+                    }}>
+                      {text}
+                    </pre>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Pre-built CLI command sets ──────────────────────────────────────
+
+export function dnsCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "A Records", platforms: { linux: `dig ${domain} A +short`, windows: `nslookup ${domain}` } },
+    { label: "MX Records", platforms: { linux: `dig ${domain} MX +short`, windows: `nslookup -type=MX ${domain}` } },
+    { label: "TXT Records", platforms: { linux: `dig ${domain} TXT +short`, windows: `nslookup -type=TXT ${domain}` } },
+    { label: "NS Records", platforms: { linux: `dig ${domain} NS +short`, windows: `nslookup -type=NS ${domain}` } },
+    { label: "AAAA Records", platforms: { linux: `dig ${domain} AAAA +short`, windows: `nslookup -type=AAAA ${domain}` } },
+    { label: "SOA Record", platforms: { linux: `dig ${domain} SOA +short`, windows: `nslookup -type=SOA ${domain}` } },
+  ];
+}
+
+export function whoisCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "WHOIS Lookup", platforms: { linux: `whois ${domain}`, windows: `whois ${domain}` } },
+  ];
+}
+
+export function sslCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "SSL Certificate Details", platforms: { linux: `openssl s_client -connect ${domain}:443 -servername ${domain} 2>/dev/null | openssl x509 -noout -dates -issuer -subject`, windows: `openssl s_client -connect ${domain}:443 -servername ${domain} 2>nul | openssl x509 -noout -dates -issuer -subject` } },
+    { label: "SSL Verify", platforms: { linux: `curl -sI https://${domain} -o /dev/null -w '%{ssl_verify_result}'`, windows: `curl -sI https://${domain} -o nul -w "%{ssl_verify_result}"` } },
+  ];
+}
+
+export function headersCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "HTTP Headers", platforms: { linux: `curl -sI https://${domain}`, windows: `curl -sI https://${domain}` } },
+    { label: "Security Headers Only", platforms: { linux: `curl -sI https://${domain} | grep -iE '(strict-transport|content-security|x-frame|x-content-type|referrer-policy|permissions-policy)'`, windows: `curl -sI https://${domain} | findstr /I "strict-transport content-security x-frame x-content-type referrer-policy permissions-policy"` } },
+  ];
+}
+
+export function dnssecCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "DNSKEY Records", platforms: { linux: `dig ${domain} DNSKEY +short`, windows: `nslookup -type=DNSKEY ${domain}` } },
+    { label: "DS Records", platforms: { linux: `dig ${domain} DS +short`, windows: `nslookup -type=DS ${domain}` } },
+    { label: "DNSSEC Validation", platforms: { linux: `dig +dnssec ${domain}`, windows: `nslookup -type=A ${domain}` } },
+  ];
+}
+
+export function shodanCliCommands(ip: string): CliCommand[] {
+  return [
+    { label: "Shodan InternetDB", platforms: { linux: `curl -s https://internetdb.shodan.io/${ip} | python3 -m json.tool`, windows: `curl -s https://internetdb.shodan.io/${ip} | python -m json.tool` } },
+  ];
+}
+
+export function emailAuthCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "SPF Record", platforms: { linux: `dig ${domain} TXT +short | grep spf`, windows: `nslookup -type=TXT ${domain} | findstr spf` } },
+    { label: "DMARC Record", platforms: { linux: `dig _dmarc.${domain} TXT +short`, windows: `nslookup -type=TXT _dmarc.${domain}` } },
+    { label: "DKIM (default)", platforms: { linux: `dig default._domainkey.${domain} TXT +short`, windows: `nslookup -type=TXT default._domainkey.${domain}` } },
+    { label: "BIMI Record", platforms: { linux: `dig default._bimi.${domain} TXT +short`, windows: `nslookup -type=TXT default._bimi.${domain}` } },
+    { label: "MTA-STS Policy", platforms: { linux: `curl -s https://mta-sts.${domain}/.well-known/mta-sts.txt`, windows: `curl -s https://mta-sts.${domain}/.well-known/mta-sts.txt` } },
+  ];
+}
+
+export function ipInfoCliCommands(ip: string): CliCommand[] {
+  return [
+    { label: "IP Geolocation", platforms: { linux: `curl -s http://ip-api.com/json/${ip}`, windows: `curl -s http://ip-api.com/json/${ip}` } },
+    { label: "Reverse DNS", platforms: { linux: `host ${ip}`, windows: `nslookup ${ip}` } },
+  ];
+}
+
+export function blocklistCliCommands(ip: string): CliCommand[] {
+  const reversed = ip.split(".").reverse().join(".");
+  return [
+    { label: "Spamhaus Check", platforms: { linux: `dig ${reversed}.zen.spamhaus.org +short`, windows: `nslookup ${reversed}.zen.spamhaus.org` } },
+  ];
+}
+
+export function performanceCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "Response Timing", platforms: { linux: `curl -sI -o /dev/null -w 'HTTP/%{http_version} %{http_code}\\nTTFB: %{time_starttransfer}s\\nTotal: %{time_total}s\\nSize: %{size_download} bytes\\n' https://${domain}`, windows: `curl -sI -o nul -w "HTTP/%{http_version} %{http_code}\\nTTFB: %{time_starttransfer}s\\nTotal: %{time_total}s\\nSize: %{size_download} bytes\\n" https://${domain}` } },
+    { label: "Ping", platforms: { linux: `ping -c 4 ${domain}`, windows: `ping -n 4 ${domain}` } },
+    { label: "Traceroute", platforms: { linux: `traceroute ${domain}`, windows: `tracert ${domain}` } },
+  ];
+}
+
+export function compressionCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "Compression Check", platforms: { linux: `curl -sI -H "Accept-Encoding: gzip, deflate, br" https://${domain} | grep -i content-encoding`, windows: `curl -sI -H "Accept-Encoding: gzip, deflate, br" https://${domain} | findstr /I content-encoding` } },
+  ];
+}
+
+export function robotsCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "robots.txt", platforms: { linux: `curl -s https://${domain}/robots.txt`, windows: `curl -s https://${domain}/robots.txt` } },
+    { label: "Sitemap", platforms: { linux: `curl -s https://${domain}/sitemap.xml | head -20`, windows: `curl -s https://${domain}/sitemap.xml` } },
+  ];
+}
+
+export function availabilityCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "Global HTTP Check", platforms: { linux: `curl -sH "Accept: application/json" "https://check-host.net/check-http?host=https://${domain}&max_nodes=10"`, windows: `curl -sH "Accept: application/json" "https://check-host.net/check-http?host=https://${domain}&max_nodes=10"` } },
+  ];
+}

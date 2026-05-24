@@ -1,0 +1,458 @@
+import { CheckCircle2, AlertTriangle, XCircle, Info, ExternalLink } from "lucide-react";
+import { Tooltip } from "./Tooltip";
+import type { AnalysisResult } from "../utils/types";
+
+interface Signal {
+  type: "strength" | "notice" | "issue" | "info";
+  text: string;
+  detail?: string;
+}
+
+function buildSignals(data: AnalysisResult): Signal[] {
+  const signals: Signal[] = [];
+  const httpBlocked = data.http_probe_blocked === true;
+
+  // ─── SSL ───
+  const sslGrade = data.ssl?.grade;
+  if (sslGrade) {
+    if (sslGrade.startsWith("A"))
+      signals.push({ type: "strength", text: `SSL Grade ${sslGrade}`, detail: data.ssl?.issuer ? `Issued by ${data.ssl.issuer}` : undefined });
+    else if (sslGrade.startsWith("B"))
+      signals.push({ type: "notice", text: `SSL Grade ${sslGrade}`, detail: "Good but not optimal — consider upgrading configuration" });
+    else
+      signals.push({ type: "issue", text: `SSL Grade ${sslGrade}`, detail: "Weak SSL configuration detected" });
+  } else if (!data.not_registered) {
+    signals.push({ type: "issue", text: "SSL certificate not detected" });
+  }
+
+  // SSL expiry
+  if (data.ssl?.valid_to) {
+    const daysLeft = Math.floor((new Date(data.ssl.valid_to).getTime() - Date.now()) / 86400000);
+    if (daysLeft < 0) signals.push({ type: "issue", text: "SSL certificate expired", detail: `Expired ${Math.abs(daysLeft)} days ago` });
+    else if (daysLeft < 30) signals.push({ type: "notice", text: `SSL expires in ${daysLeft} days`, detail: "Renewal recommended soon" });
+  }
+
+  // ─── Security Headers ───
+  if (!httpBlocked && data.headers?.security_grade) {
+    const sg = data.headers.security_grade;
+    if (sg === "A") signals.push({ type: "strength", text: "Strong security headers" });
+    else if (sg === "B") signals.push({ type: "strength", text: "Good security headers", detail: `Grade ${sg}` });
+    else if (sg === "C") signals.push({ type: "notice", text: "Moderate security headers", detail: `Grade ${sg} — some headers missing` });
+    else if (sg !== "N/A") signals.push({ type: "notice", text: "Weak security headers", detail: `Grade ${sg}` });
+  }
+
+  // CSP
+  if (!httpBlocked && data.headers?.raw) {
+    if (data.headers.raw["content-security-policy"]) {
+      signals.push({ type: "strength", text: "Content Security Policy configured" });
+    } else {
+      signals.push({ type: "notice", text: "No Content Security Policy (CSP)" });
+    }
+  }
+
+  // ─── HSTS ───
+  if (!httpBlocked && data.headers?.raw) {
+    const hsts = data.headers.raw["strict-transport-security"];
+    if (hsts) {
+      const hasPreload = hsts.includes("preload");
+      const hasSubdomains = hsts.includes("includeSubDomains") || hsts.includes("includeSubdomains");
+      if (hasPreload && hasSubdomains) signals.push({ type: "strength", text: "HSTS with preload enabled" });
+      else if (hsts) signals.push({ type: "strength", text: "HSTS enabled", detail: !hasPreload ? "Consider adding preload directive" : undefined });
+    } else {
+      signals.push({ type: "notice", text: "No HSTS header" });
+    }
+  }
+
+  // ─── DNSSEC ───
+  if (data.dnssec?.enabled) {
+    signals.push({ type: "strength", text: "DNSSEC enabled" });
+  } else if (data.dnssec && !data.dnssec.enabled) {
+    signals.push({ type: "notice", text: "DNSSEC not enabled" });
+  }
+
+  // ─── Email Auth ───
+  if (data.email_auth && !data.is_subdomain) {
+    const { spf, dmarc, dkim_selectors_found } = data.email_auth;
+    const hasSpf = spf.found;
+    const hasDmarc = dmarc.found;
+    const hasDkim = dkim_selectors_found.length > 0;
+    if (hasSpf && hasDmarc && hasDkim) {
+      const policy = dmarc.policy;
+      if (policy === "reject") signals.push({ type: "strength", text: "Full email authentication (SPF + DMARC reject + DKIM)" });
+      else signals.push({ type: "strength", text: "Email authentication configured", detail: `DMARC policy: ${policy ?? "unknown"}` });
+    } else {
+      if (!hasSpf) signals.push({ type: "issue", text: "No SPF record", detail: "Email spoofing protection missing" });
+      if (!hasDmarc) signals.push({ type: "issue", text: "No DMARC record", detail: "Email authentication policy missing" });
+      if (!hasDkim) signals.push({ type: "notice", text: "No DKIM selectors found" });
+    }
+  }
+
+  // ─── BIMI ───
+  if (data.email_auth?.bimi?.found) {
+    signals.push({ type: "strength", text: "BIMI record configured", detail: "Brand logo in email clients" });
+  }
+
+  // ─── Blocklists ───
+  const listedCount = (data.blocklists ?? []).filter(b => b.listed).length;
+  if (listedCount > 0) {
+    signals.push({ type: "issue", text: `Listed on ${listedCount} blocklist${listedCount > 1 ? "s" : ""}`, detail: "Domain reputation may be impacted" });
+  } else if ((data.blocklists ?? []).length > 0) {
+    signals.push({ type: "strength", text: "Clean on all blocklists" });
+  }
+
+  // ─── Performance ───
+  if (data.performance?.score != null) {
+    if (data.performance.score >= 90) signals.push({ type: "strength", text: `PageSpeed score ${data.performance.score}/100` });
+    else if (data.performance.score >= 50) signals.push({ type: "notice", text: `PageSpeed score ${data.performance.score}/100` });
+    else signals.push({ type: "issue", text: `Low PageSpeed score: ${data.performance.score}/100` });
+  }
+
+  if (data.status?.response_time_ms != null) {
+    const rt = data.status.response_time_ms;
+    if (rt < 300) signals.push({ type: "strength", text: `Fast response time (${rt}ms)` });
+    else if (rt < 1000) signals.push({ type: "info", text: `Response time: ${rt}ms` });
+    else signals.push({ type: "notice", text: `Slow response time (${rt}ms)` });
+  }
+
+  // ─── Domain Registration ───
+  if (data.rdap?.domain_age_days != null) {
+    const age = data.rdap.domain_age_days;
+    if (age < 30) signals.push({ type: "notice", text: `Domain registered ${age} days ago`, detail: "Very new domain" });
+    else if (age < 365) signals.push({ type: "info", text: `Domain age: ${Math.floor(age / 30)} months` });
+    else signals.push({ type: "info", text: `Domain age: ${Math.floor(age / 365)}y ${Math.floor((age % 365) / 30)}m` });
+  }
+
+  if (data.rdap?.days_until_expiry != null) {
+    const daysLeft = data.rdap.days_until_expiry;
+    if (daysLeft < 0) signals.push({ type: "issue", text: "Domain registration expired" });
+    else if (daysLeft < 30) signals.push({ type: "issue", text: `Domain expires in ${daysLeft} days`, detail: "Renewal critical" });
+    else if (daysLeft < 90) signals.push({ type: "notice", text: `Domain expires in ${daysLeft} days` });
+  }
+
+  // ─── Hosting / Infrastructure ───
+  if (data.hosting?.provider) signals.push({ type: "info", text: `Hosted on ${data.hosting.provider}` });
+  if (data.hosting?.cdn) signals.push({ type: "info", text: `CDN: ${data.hosting.cdn}` });
+  if (data.hosting?.waf) signals.push({ type: "strength", text: `WAF: ${data.hosting.waf}` });
+
+  // ─── Tech ───
+  if (data.wordpress) {
+    const wpVersion = data.wordpress.version;
+    signals.push({ type: "info", text: `WordPress${wpVersion ? ` ${wpVersion}` : ""}` });
+    if (data.wordpress.page_builder) signals.push({ type: "info", text: `Page builder: ${data.wordpress.page_builder}` });
+  }
+
+  // ─── Tranco Ranking ───
+  if (data.tranco_rank != null) {
+    if (data.tranco_rank <= 1000) signals.push({ type: "info", text: `Tranco rank #${data.tranco_rank.toLocaleString()}`, detail: "Top 1K globally" });
+    else if (data.tranco_rank <= 100000) signals.push({ type: "info", text: `Tranco rank #${data.tranco_rank.toLocaleString()}` });
+    else signals.push({ type: "info", text: `Tranco rank #${data.tranco_rank.toLocaleString()}` });
+  }
+
+  // ─── Shodan ───
+  if (data.shodan?.vulns && data.shodan.vulns.length > 0) {
+    signals.push({ type: "issue", text: `${data.shodan.vulns.length} known CVE${data.shodan.vulns.length > 1 ? "s" : ""} detected`, detail: data.shodan.vulns.slice(0, 3).join(", ") });
+  }
+  if (data.shodan?.ports && data.shodan.ports.length > 0) {
+    const unusual = data.shodan.ports.filter(p => ![80, 443, 22, 25, 587, 993, 143].includes(p));
+    if (unusual.length > 0) signals.push({ type: "notice", text: `Unusual open ports: ${unusual.join(", ")}` });
+  }
+
+  // ─── Robots / AI ───
+  if (data.robots_parsed?.is_missing) {
+    signals.push({ type: "notice", text: "No robots.txt found" });
+  } else if (data.robots_parsed?.is_restrictive) {
+    signals.push({ type: "info", text: "Restrictive robots.txt" });
+  }
+
+  if (data.llms_txt?.found) {
+    signals.push({ type: "info", text: "llms.txt present", detail: "AI-ready domain" });
+  }
+
+  // ─── Legal ───
+  if (!httpBlocked && data.legal) {
+    if (data.legal.pages_found.length >= 2) signals.push({ type: "strength", text: "Privacy policy and terms found" });
+    else if (data.legal.pages_found.length === 1) signals.push({ type: "notice", text: `Only ${data.legal.pages_found[0].name} found` });
+    else signals.push({ type: "notice", text: "No privacy policy or terms detected" });
+  }
+
+  // ─── HTTP Probe Blocked ───
+  if (httpBlocked) {
+    signals.push({ type: "notice", text: "HTTP probe blocked", detail: "Some data based on DNS and SSL only" });
+  }
+
+  // ─── Data Breaches ───
+  if (data.breaches) {
+    if (data.breaches.found && data.breaches.count > 0) {
+      const { count, total_pwned } = data.breaches;
+      const countStr = total_pwned >= 1_000_000_000 ? `${(total_pwned / 1_000_000_000).toFixed(1)}B`
+        : total_pwned >= 1_000_000 ? `${(total_pwned / 1_000_000).toFixed(1)}M`
+        : total_pwned >= 1_000 ? `${(total_pwned / 1_000).toFixed(1)}K`
+        : total_pwned.toLocaleString();
+      signals.push({
+        type: "issue",
+        text: `${count} known data breach${count > 1 ? "es" : ""}`,
+        detail: `${countStr} accounts exposed`,
+      });
+    } else {
+      signals.push({ type: "strength", text: "No known data breaches" });
+    }
+  }
+
+  // ─── Security.txt ───
+  if (data.security_txt) {
+    if (data.security_txt.found) {
+      if (data.security_txt.has_bug_bounty) {
+        signals.push({ type: "strength", text: `Bug bounty program (${data.security_txt.bug_bounty_platform ?? "active"})` });
+      } else {
+        signals.push({ type: "strength", text: "Security disclosure policy (security.txt)" });
+      }
+      if (data.security_txt.is_expired) {
+        signals.push({ type: "notice", text: "security.txt is expired", detail: `Expires: ${data.security_txt.expires}` });
+      }
+    } else if (data.tranco_rank != null && data.tranco_rank <= 10000) {
+      signals.push({ type: "notice", text: "No security.txt", detail: "Major site without vulnerability disclosure policy" });
+    }
+  }
+
+  // ─── Green Hosting ───
+  if (data.green_hosting && !data.green_hosting.error) {
+    if (data.green_hosting.green) {
+      signals.push({ type: "strength", text: "Verified green hosting", detail: data.green_hosting.hosted_by ? `Hosted by ${data.green_hosting.hosted_by}` : undefined });
+    } else {
+      signals.push({ type: "info", text: "Hosting not verified as green" });
+    }
+  }
+
+  // ─── CAA ───
+  if (data.caa_analysis) {
+    if (!data.caa_analysis.has_caa) {
+      signals.push({ type: "notice", text: "No CAA records", detail: "Any CA can issue certificates" });
+    }
+  }
+
+  // ─── GreyNoise ───
+  if (data.greynoise && !data.greynoise.error) {
+    if (data.greynoise.classification === "malicious") {
+      signals.push({ type: "issue", text: "IP classified as malicious", detail: data.greynoise.name ?? "Identified by GreyNoise" });
+    } else if (data.greynoise.riot) {
+      signals.push({ type: "info", text: "IP is a common business service", detail: data.greynoise.name ?? "CDN/DNS/Cloud provider" });
+    }
+  }
+
+  // ─── Well-Known ───
+  if (data.well_known) {
+    if (data.well_known.pwa_ready) {
+      signals.push({ type: "info", text: "Progressive Web App ready" });
+    }
+    if (data.well_known.has_mobile_apps) {
+      signals.push({ type: "info", text: "Mobile app deep links configured" });
+    }
+    if (data.well_known.ads_partner_count != null && data.well_known.ads_partner_count > 0) {
+      signals.push({ type: "info", text: `${data.well_known.ads_partner_count} ad partners (ads.txt)` });
+    }
+  }
+
+  // ─── Certificate Transparency ───
+  if (data.cert_transparency && !data.cert_transparency.error) {
+    if (data.cert_transparency.subdomains.length > 20) {
+      signals.push({ type: "info", text: `${data.cert_transparency.subdomains.length} subdomains via CT logs` });
+    }
+  }
+
+  return signals;
+}
+
+// ─── External Tool Links ───
+
+interface ExternalLink {
+  name: string;
+  url: string;
+  category: string;
+}
+
+function buildExternalLinks(data: AnalysisResult): ExternalLink[] {
+  const domain = data.domain;
+  const ip = data.ip_info?.ip;
+  const links: ExternalLink[] = [];
+
+  // Security
+  links.push({ name: "SecurityHeaders", url: `https://securityheaders.com/?q=${domain}&followRedirects=on`, category: "Security" });
+  links.push({ name: "Mozilla Observatory", url: `https://observatory.mozilla.org/analyze/${domain}`, category: "Security" });
+  links.push({ name: "SSL Labs", url: `https://www.ssllabs.com/ssltest/analyze.html?d=${domain}`, category: "Security" });
+  links.push({ name: "VirusTotal", url: `https://www.virustotal.com/gui/domain/${domain}`, category: "Security" });
+  links.push({ name: "Google Safe Browsing", url: `https://transparencyreport.google.com/safe-browsing/search?url=${domain}`, category: "Security" });
+
+  // Infrastructure
+  if (ip) {
+    links.push({ name: "Shodan", url: `https://www.shodan.io/host/${ip}`, category: "Infrastructure" });
+    links.push({ name: "Censys", url: `https://search.censys.io/hosts/${ip}`, category: "Infrastructure" });
+  }
+  links.push({ name: "DNSViz", url: `https://dnsviz.net/d/${domain}/dnssec/`, category: "Infrastructure" });
+
+  // WHOIS
+  links.push({ name: "ICANN Lookup", url: `https://lookup.icann.org/en/lookup?name=${domain}`, category: "WHOIS" });
+  links.push({ name: "who.is", url: `https://who.is/whois/${domain}`, category: "WHOIS" });
+
+  // Email
+  links.push({ name: "MXToolbox", url: `https://mxtoolbox.com/SuperTool.aspx?action=mx%3a${domain}&run=toolpage`, category: "Email" });
+
+  // Performance
+  links.push({ name: "PageSpeed Insights", url: `https://pagespeed.web.dev/analysis?url=https://${domain}`, category: "Performance" });
+  links.push({ name: "GTmetrix", url: `https://gtmetrix.com/?url=https://${domain}`, category: "Performance" });
+
+  // Archive
+  links.push({ name: "Wayback Machine", url: `https://web.archive.org/web/*/https://${domain}`, category: "Archive" });
+
+  // Tech
+  links.push({ name: "BuiltWith", url: `https://builtwith.com/${domain}`, category: "Tech" });
+
+  return links;
+}
+
+// ─── Render ───
+
+const iconMap = {
+  strength: <CheckCircle2 size={13} />,
+  notice: <AlertTriangle size={13} />,
+  issue: <XCircle size={13} />,
+  info: <Info size={13} />,
+};
+
+const colorMap = {
+  strength: "var(--success)",
+  notice: "var(--warning)",
+  issue: "var(--danger)",
+  info: "var(--accent)",
+};
+
+const bgMap = {
+  strength: "var(--success-subtle)",
+  notice: "var(--warning-subtle)",
+  issue: "var(--danger-subtle)",
+  info: "var(--accent-subtle)",
+};
+
+const labelMap = {
+  strength: "Strengths",
+  notice: "Notices",
+  issue: "Issues",
+  info: "Info",
+};
+
+const tooltipMap: Record<string, string> = {
+  strength: "Security and infrastructure features this domain has implemented well",
+  notice: "Areas that could be improved but aren't necessarily problems",
+  issue: "Active problems that should be addressed — these may affect security, deliverability, or trust",
+  info: "Neutral facts about this domain's infrastructure, hosting, and configuration",
+};
+
+export function DomainSignals({ data }: { data: AnalysisResult }) {
+  const signals = buildSignals(data);
+  if (signals.length === 0) return null;
+
+  const groups: Record<string, Signal[]> = { strength: [], notice: [], issue: [], info: [] };
+  for (const s of signals) {
+    groups[s.type].push(s);
+  }
+
+  // Order: issues first (attention), then notices, strengths, info
+  const order: Array<Signal["type"]> = ["issue", "notice", "strength", "info"];
+  const nonEmptyGroups = order.filter(t => groups[t].length > 0);
+
+  return (
+    <div className="panel">
+      <div className="panel-header flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="opacity-60"><Info size={14} /></span>
+          <span>Domain Signals</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {groups.issue.length > 0 && <span className="badge badge-fail">{groups.issue.length} issue{groups.issue.length > 1 ? "s" : ""}</span>}
+          {groups.notice.length > 0 && <span className="badge badge-warn">{groups.notice.length} notice{groups.notice.length > 1 ? "s" : ""}</span>}
+          {groups.strength.length > 0 && <span className="badge badge-pass">{groups.strength.length} strength{groups.strength.length > 1 ? "s" : ""}</span>}
+        </div>
+      </div>
+      <div className="p-4 space-y-4">
+        {nonEmptyGroups.map(type => (
+          <div key={type}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <span style={{ color: colorMap[type] }}>{iconMap[type]}</span>
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 600, color: colorMap[type], textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {labelMap[type]}
+              </span>
+              <Tooltip text={tooltipMap[type]} help />
+            </div>
+            <div className="space-y-1">
+              {groups[type].map((signal, i) => (
+                <div
+                  key={`sig-${i}`}
+                  className="flex items-start gap-2 rounded-md px-2.5 py-1.5"
+                  style={{ background: bgMap[type] }}
+                >
+                  <span style={{ color: colorMap[type], marginTop: "1px", flexShrink: 0 }}>{iconMap[type]}</span>
+                  <div>
+                    <span style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--text)", fontWeight: 500 }}>
+                      {signal.text}
+                    </span>
+                    {signal.detail && (
+                      <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", marginLeft: "6px" }}>
+                        — {signal.detail}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ExternalTools({ data }: { data: AnalysisResult }) {
+  const links = buildExternalLinks(data);
+  const categories = [...new Set(links.map(l => l.category))];
+
+  return (
+    <div className="panel">
+      <div className="panel-header flex items-center gap-2.5">
+        <span className="opacity-60"><ExternalLink size={14} /></span>
+        <span>External Tools</span>
+      </div>
+      <div className="p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {categories.map(cat => (
+            <div key={cat}>
+              <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
+                {cat}
+              </div>
+              <div className="space-y-1">
+                {links.filter(l => l.category === cat).map((link, i) => (
+                  <a
+                    key={`sig-${i}`}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 rounded px-1.5 py-1 transition-colors"
+                    style={{
+                      fontFamily: "var(--font-ui)",
+                      fontSize: "11px",
+                      color: "var(--accent)",
+                      textDecoration: "none",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-subtle)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <ExternalLink size={10} style={{ flexShrink: 0, opacity: 0.6 }} />
+                    {link.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

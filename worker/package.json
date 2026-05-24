@@ -1,0 +1,15 @@
+{
+  "name": "yoke-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --outfile=dist/worker.js --target=browser --minify",
+    "typecheck": "bun x tsc --noEmit",
+    "dev": "npx wrangler dev"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250516.0",
+    "typescript": "5.6.3"
+  }
+}
