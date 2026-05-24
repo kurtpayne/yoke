@@ -108,7 +108,7 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {techBadges.map((t, i) => (
-              <span key={tag} className="badge badge-info" style={{ fontSize: "11px" }}>
+              <span key={t.name} className="badge badge-info" style={{ fontSize: "11px" }}>
                 {t.name}{t.version ? ` ${t.version}` : ""}
               </span>
             ))}

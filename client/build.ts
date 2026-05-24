@@ -108,12 +108,12 @@ const html = `<!DOCTYPE html>
     }
     </script>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>" />
-    \${cssLink}
+    ${cssLink}
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/\${jsPath}"></script>
+    <script type="module" src="/${jsPath}"></script>
   </body>
 </html>`;
 

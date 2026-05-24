@@ -130,7 +130,7 @@ export function ShodanPanel({ data }: { data: AnalysisResult }) {
           </div>
           <div className="px-4 py-2 flex flex-wrap gap-1.5">
             {shodan.hostnames.slice(0, 5).map((h, i) => (
-              <span key={tag} className="badge badge-info" style={{ fontSize: "10px" }}>
+              <span key={h} className="badge badge-info" style={{ fontSize: "10px" }}>
                 <Server size={9} style={{ marginRight: "3px" }} />{h}
               </span>
             ))}
