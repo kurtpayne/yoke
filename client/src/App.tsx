@@ -213,6 +213,7 @@ function TechTab({ data }: { data: AnalysisResult }) {
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://builtwith.com/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>BuiltWith ↗</a>
         <a href={`https://www.wappalyzer.com/lookup/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Wappalyzer ↗</a>
+        <a href={`https://search.google.com/test/rich-results?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Rich Results Test ↗</a>
       </div>
     </div>
   );
@@ -230,6 +231,7 @@ function PerformanceTab({ data }: { data: AnalysisResult }) {
       </div>
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://pagespeed.web.dev/analysis?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>PageSpeed Insights ↗</a>
+        <a href={`https://www.webpagetest.org/?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>WebPageTest ↗</a>
         <a href={`https://gtmetrix.com/?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>GTmetrix ↗</a>
         <a href={`https://web.archive.org/web/*/https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Wayback Machine ↗</a>
       </div>
@@ -238,9 +240,10 @@ function PerformanceTab({ data }: { data: AnalysisResult }) {
 }
 
 function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
+  const domain = data.domain;
   return (
     <div className="space-y-3">
-      <BusinessTab domain={data.domain} />
+      <BusinessTab domain={domain} />
       <SectionHeader title="Social Sharing" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <OgPreviewPanel data={data} />
@@ -249,6 +252,10 @@ function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
       <SectionHeader title="Registration" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <WhoisPanel data={data} />
+      </div>
+      <div className="flex flex-wrap gap-2 px-1">
+        <a href={`https://ahrefs.com/backlink-checker/?input=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Ahrefs Backlinks ↗</a>
+        <a href={`https://www.similarweb.com/website/${domain}/`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SimilarWeb ↗</a>
       </div>
     </div>
   );

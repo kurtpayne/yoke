@@ -299,12 +299,15 @@ function buildExternalLinks(data: AnalysisResult): ExternalLink[] {
   // Performance
   links.push({ name: "PageSpeed Insights", url: `https://pagespeed.web.dev/analysis?url=https://${domain}`, category: "Performance" });
   links.push({ name: "GTmetrix", url: `https://gtmetrix.com/?url=https://${domain}`, category: "Performance" });
+  links.push({ name: "WebPageTest", url: `https://www.webpagetest.org/?url=https://${domain}`, category: "Performance" });
 
   // Archive
   links.push({ name: "Wayback Machine", url: `https://web.archive.org/web/*/https://${domain}`, category: "Archive" });
 
-  // Tech
+  // Tech & SEO
   links.push({ name: "BuiltWith", url: `https://builtwith.com/${domain}`, category: "Tech" });
+  links.push({ name: "Rich Results Test", url: `https://search.google.com/test/rich-results?url=https://${domain}`, category: "SEO" });
+  links.push({ name: "Ahrefs Backlinks", url: `https://ahrefs.com/backlink-checker/?input=${domain}`, category: "SEO" });
 
   return links;
 }

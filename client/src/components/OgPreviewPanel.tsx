@@ -104,7 +104,7 @@ export function OgPreviewPanel({ data }: { data: AnalysisResult }) {
           <div className="sub-section" style={{ color: "var(--warning)" }}>Missing Tags</div>
           <div className="px-4 py-2 flex flex-wrap gap-1.5">
             {sm.missing.map((tag, i) => (
-              <span key={item} className="badge badge-warn" style={{ fontSize: "11px" }}>
+              <span key={tag} className="badge badge-warn" style={{ fontSize: "11px" }}>
                 <AlertCircle size={9} style={{ marginRight: "3px" }} />{tag}
               </span>
             ))}
