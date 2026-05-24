@@ -7,10 +7,10 @@
   "action": {
     "default_title": "Analyze this domain",
     "default_icon": {
-      "16": "icons/bolt/icon16.png",
-      "32": "icons/bolt/icon32.png",
-      "48": "icons/bolt/icon48.png",
-      "128": "icons/bolt/icon128.png"
+      "16": "icons/ox/icon16.png",
+      "32": "icons/ox/icon32.png",
+      "48": "icons/ox/icon48.png",
+      "128": "icons/ox/icon128.png"
     }
   },
   "side_panel": {
@@ -20,8 +20,8 @@
     "service_worker": "background.js"
   },
   "icons": {
-    "16": "icons/bolt/icon16.png",
-    "48": "icons/bolt/icon48.png",
-    "128": "icons/bolt/icon128.png"
+    "16": "icons/ox/icon16.png",
+    "48": "icons/ox/icon48.png",
+    "128": "icons/ox/icon128.png"
   }
 }
