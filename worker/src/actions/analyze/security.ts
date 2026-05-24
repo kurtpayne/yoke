@@ -1,4 +1,4 @@
-import type { DnsRecord, IpInfo, HostingResult, CookieAudit, CookieSecurityResult } from "./types";
+import type { DnsRecord, IpInfo, HostingResult, CookieAudit, CookieSecurityResult, OgTwitterResult, LegalResult } from "./types";
 
 // ─── Cloudflare Worker Header Sanitization ──────────────────────────
 // CF Workers inject their own headers (server: cloudflare, cf-ray, cf-cache-status, etc.)

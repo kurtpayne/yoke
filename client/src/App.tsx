@@ -440,23 +440,46 @@ export function App() {
         {/* Results */}
         {analyze.data && !analyze.isPending && (
           <div className="mt-0">
-            {/* Curl API showcase bar */}
-            <div className="mb-3">
-              <CurlBar domain={analyze.data.domain} activeTab={activeTab} />
-            </div>
+            {/* Curl API showcase bar — hidden on AI tab (cost control) */}
+            {activeTab !== 'ai' && (
+              <div className="mb-3">
+                <CurlBar domain={analyze.data.domain} activeTab={activeTab} />
+              </div>
+            )}
             <TabContent tab={activeTab} data={cleanTechStack(analyze.data)} onNavigate={handleNavigate} />
           </div>
         )}
 
-        {/* Empty state */}
+        {/* Empty state — SEO-friendly landing content */}
         {!analyze.data && !analyze.isPending && !analyze.error && (
-          <div className="flex flex-col items-center justify-center py-24">
+          <div className="flex flex-col items-center justify-center py-16">
             <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-5" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               <Search size={28} style={{ color: "var(--accent)", opacity: 0.4 }} />
             </div>
-            <p style={{ fontFamily: "var(--font-ui)", fontSize: "14px", color: "var(--dim)", textAlign: "center", maxWidth: "420px", lineHeight: "22px" }}>
-              Enter a domain to explore DNS records, SSL certificates, security headers, tech stack, performance metrics, company data, news, and more — across 9 intelligence tabs.
+            <h2 style={{ fontFamily: "var(--font-ui)", fontSize: "18px", fontWeight: 700, color: "var(--text)", textAlign: "center", marginBottom: "0.5rem" }}>
+              Free Domain Intelligence &amp; OSINT Tool
+            </h2>
+            <p style={{ fontFamily: "var(--font-ui)", fontSize: "14px", color: "var(--dim)", textAlign: "center", maxWidth: "520px", lineHeight: "22px", marginBottom: "1.5rem" }}>
+              Enter any domain to analyze DNS records, SSL certificates, WHOIS data, security headers, tech stack, performance, data breaches, and more — across 9 intelligence tabs.
             </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", width: "100%", maxWidth: "700px", marginBottom: "1.5rem" }}>
+              <div className="panel" style={{ padding: "0.75rem 1rem" }}>
+                <h3 style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--accent)", marginBottom: "0.25rem" }}>🔍 Deep Analysis</h3>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>DNS, SSL, WHOIS, security headers, email auth, DNSSEC, and certificate transparency</p>
+              </div>
+              <div className="panel" style={{ padding: "0.75rem 1rem" }}>
+                <h3 style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--accent)", marginBottom: "0.25rem" }}>🛡️ Security &amp; Breaches</h3>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>HIBP breach detection, Shodan/GreyNoise intel, Observatory scoring, cookie audit</p>
+              </div>
+              <div className="panel" style={{ padding: "0.75rem 1rem" }}>
+                <h3 style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--accent)", marginBottom: "0.25rem" }}>⚙️ Tech Stack</h3>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>Framework, CMS, CDN, WAF detection. Deep WordPress fingerprinting with plugins and themes</p>
+              </div>
+              <div className="panel" style={{ padding: "0.75rem 1rem" }}>
+                <h3 style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--accent)", marginBottom: "0.25rem" }}>🤖 AI &amp; API</h3>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>AI-powered analysis with expert personas. Free JSON API: <code style={{ fontSize: "10px", color: "var(--text)" }}>curl yoke.lol/stripe.com</code></p>
+              </div>
+            </div>
             <ApiTeaser />
           </div>
         )}

@@ -1,6 +1,6 @@
 import { fetchWithTimeout } from "../../helpers";
 import { fingerprints } from "../../fingerprints";
-import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult } from "./types";
+import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectHop } from "./types";
 
 // ─── HTTP Fetch + Headers + Tech + Meta ──────────────────────────────
 

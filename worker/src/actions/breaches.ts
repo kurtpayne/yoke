@@ -1,5 +1,5 @@
 import { fetchWithTimeout, getFromCache, setCache, MULTI_PART_TLDS } from "../helpers";
-import { BREACH_BREACH_CATALOG_CACHE_TTL_MS_MS, BREACH_RESULT_CACHE_TTL_MS_MS } from "../config/cache";
+import { BREACH_CATALOG_CACHE_TTL_MS, BREACH_RESULT_CACHE_TTL_MS } from "../config/cache";
 
 // ─── Types ───────────────────────────────────────────────────────────
 

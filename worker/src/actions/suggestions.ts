@@ -97,7 +97,7 @@ async function cfSearch(query: string, env: Env, limit = 15): Promise<DomainSugg
 }
 
 /** Call CF Registrar Check API (authoritative, supports batch) */
-async function cfCheck(domains: string[]): Promise<Map<string, DomainSuggestion>> {
+async function cfCheck(domains: string[], env: Env): Promise<Map<string, DomainSuggestion>> {
   const map = new Map<string, DomainSuggestion>();
   if (domains.length === 0) return map;
 

@@ -3,7 +3,7 @@
 // the ./analyze/ directory, split by domain (dns, http, network, etc.).
 
 import { type Env, normalizeDomain, fetchWithTimeout, CORS_HEADERS } from "../helpers";
-import { ANALYSIS_ANALYSIS_CACHE_TTL_MS } from "../config/cache";
+import { ANALYSIS_CACHE_TTL_MS } from "../config/cache";
 import { analyzeWordPress, type WordPressDetails } from "./wordpress";
 import { checkBreaches, type BreachResult } from "./breaches";
 
@@ -15,7 +15,7 @@ import type {
   CompressionResult, AiReadinessResult, HealthScoreResult, RobotsParsed,
   JsonLdItem, CertTransparencyResult, SecurityTxtResult, GreenHostingResult,
   WellKnownResult, CaaDisplayResult, GreynoiseResult, EmailAuthResult,
-} from "./analyze";
+} from "./analyze/types";
 
 import { checkDns, isSubdomain, checkRdap } from "./analyze/dns";
 import { auditSecurityHeaders, detectTechStack, analyzeHttp, checkRobotsSitemap } from "./analyze/http";
@@ -169,21 +169,21 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const ipInfo = unwrap(phase2Results[2], null) as IpInfo | null;
   const blocklists = unwrap(phase2Results[3], []) as BlocklistResult[];
   const sslResult = unwrap(phase2Results[4], null) as SslResult | null;
-  const pageSpeedResult = unwrap(phase2Results[5], { ttfb_ms: null, fcp_ms: null, lcp_ms: null, cls: null, tbt_ms: null, si_ms: null, performance_score: null, response_time_ms: null }) as PerformanceResult;
+  const pageSpeedResult = unwrap(phase2Results[5], { ttfb_ms: null, fcp_ms: null, lcp_ms: null, cls: null, tbt_ms: null, si_ms: null, performance_score: null, response_time_ms: null } as any) as PerformanceResult;
   const statusResult = unwrap(phase2Results[6], { is_up: false, status_code: null, response_time_ms: null, error: "Phase 2 promise rejected", status_label: "error", http_blocked: false }) as { is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean };
-  const llmsTxt = unwrap(phase2Results[7], { exists: false, url: null, size_bytes: null, title: null, summary: null, sections: [] }) as LlmsTxtResult;
+  const llmsTxt = unwrap(phase2Results[7], { exists: false, url: null, size_bytes: null, title: null, summary: null, sections: [] } as any) as LlmsTxtResult;
   const wayback = unwrap(phase2Results[8], null) as Awaited<ReturnType<typeof checkWayback>>;
   const tranco = unwrap(phase2Results[9], null) as number | null;
   const observatory = unwrap(phase2Results[10], null) as Awaited<ReturnType<typeof checkObservatory>>;
-  const emailAuth = unwrap(phase2Results[11], { spf: null, dmarc: null, dkim_selector: null, has_mx: false, mx_records: [], dkim_found: false }) as EmailAuthResult;
+  const emailAuth = unwrap(phase2Results[11], { spf: null, dmarc: null, dkim_selector: null, has_mx: false, mx_records: [], dkim_found: false } as any) as EmailAuthResult;
   const carbon = unwrap(phase2Results[12], null) as Awaited<ReturnType<typeof checkCarbon>>;
   const shodanResult = unwrap(phase2Results[13], null) as ShodanResult | null;
-  const dnssecResult = unwrap(phase2Results[14], { enabled: false, valid: null, ds_records: [], dnskey_records: [], nsec_type: null, algorithm: null }) as DnssecResult;
+  const dnssecResult = unwrap(phase2Results[14], { enabled: false, valid: null, ds_records: [], dnskey_records: [], nsec_type: null, algorithm: null } as any) as DnssecResult;
   const breachResult = unwrap(phase2Results[15], { found: false, count: 0, total_pwned: 0, items: [] }) as BreachResult;
-  const certTransparency = unwrap(phase2Results[16], { certificates: [], total_found: 0 }) as CertTransparencyResult;
-  const securityTxt = unwrap(phase2Results[17], { exists: false, url: null, contact: null, encryption: null, policy: null, acknowledgements: null, preferred_languages: null, canonical: null, expires: null, hiring: null }) as SecurityTxtResult;
-  const greenHosting = unwrap(phase2Results[18], { green: null, hosted_by: null, supporting_documents: [] }) as GreenHostingResult;
-  const wellKnown = unwrap(phase2Results[19], { change_password: null, security_txt: false, openid_configuration: null, apple_app_site_association: false, assetlinks_json: false, humans_txt: false, dnt_policy: false, nodeinfo: null }) as WellKnownResult;
+  const certTransparency = unwrap(phase2Results[16], { certificates: [], total_found: 0 } as any) as CertTransparencyResult;
+  const securityTxt = unwrap(phase2Results[17], { exists: false, url: null, contact: null, encryption: null, policy: null, acknowledgements: null, preferred_languages: null, canonical: null, expires: null, hiring: null } as any) as SecurityTxtResult;
+  const greenHosting = unwrap(phase2Results[18], { green: null, hosted_by: null, supporting_documents: [] } as any) as GreenHostingResult;
+  const wellKnown = unwrap(phase2Results[19], { change_password: null, security_txt: false, openid_configuration: null, apple_app_site_association: false, assetlinks_json: false, humans_txt: false, dnt_policy: false, nodeinfo: null } as any) as WellKnownResult;
   const greynoiseResult = unwrap(phase2Results[20], null) as GreynoiseResult | null;
 
   // Build merged meta — only use HTTP meta if probe succeeded
