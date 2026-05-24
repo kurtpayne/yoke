@@ -16,14 +16,16 @@ const STORAGE_KEY = "yoke-theme";
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "dark";
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored && VALID_THEMES.has(stored)) return stored as Theme;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored && VALID_THEMES.has(stored)) return stored as Theme;
+  } catch { /* localStorage blocked (e.g. iframe/extension context) */ }
   return "dark";
 }
 
 function applyTheme(theme: Theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  localStorage.setItem(STORAGE_KEY, theme);
+  try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* */ }
 }
 
 export function ThemeToggle() {

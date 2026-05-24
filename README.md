@@ -80,7 +80,16 @@ curl -s yoke.lol/stripe.com | jq '.tech_stack'
 ```
 
 ### Chrome Extension
-Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj), then click the Yoke icon on any page.
+
+Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj), then click the Yoke icon on any page. Opens a side panel with full domain analysis for the current site.
+
+**Load from source** (for development):
+1. Open `chrome://extensions/`
+2. Enable "Developer mode" (top right)
+3. Click "Load unpacked" → select the `extension/` directory
+4. Click the ⚡ icon on any site to open the side panel
+
+The extension source lives in [`extension/`](extension/) — it's a lightweight wrapper that loads yoke.lol in a side panel and auto-detects the domain from your current tab. Includes 6 selectable toolbar icons.
 
 ## Self-Hosting
 
@@ -147,8 +156,10 @@ Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/yok
 │  │  Leaflet)   │     │  ┌─────────────────┐  │    │
 │  └─────────────┘     │  │  D1 Cache (SQL)  │  │    │
 │                       │  └─────────────────┘  │    │
-│                       └───────┬───────────────┘    │
-│                               │                    │
+│  ┌─────────────┐     └───────┬───────────────┘    │
+│  │Chrome Ext.  │─ iframe ────┘                    │
+│  │ (side panel)│                                  │
+│  └─────────────┘                                  │
 └───────────────────────────────┼────────────────────┘
                                 │
           ┌─────────────────────┼─────────────────────┐
@@ -166,6 +177,7 @@ Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/yok
 - **Frontend:** React 19, Tailwind CSS v4, React Query, Leaflet, Lucide icons
 - **Backend:** Cloudflare Worker (zero external dependencies, ~35KB bundled)
 - **Database:** Cloudflare D1 (SQLite-compatible, edge caching)
+- **Extension:** Chrome Manifest V3, side panel API, zero dependencies
 - **Build:** Bun (bundler + runtime)
 
 ## API Routes

@@ -38,6 +38,7 @@ import { DnssecPanel, CookieSecurityPanel, CompressionPanel, HostingPanel, Email
 import { BreachPanel } from "./components/BreachPanel";
 import { CertTransparencyPanel, SecurityTxtPanel, GreenHostingPanel, WellKnownPanel, CaaPanel, GreynoisePanel } from "./components/Tier1Panels";
 import type { AnalysisResult } from "./utils/types";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Known false-positive e-commerce detections: WooCommerce & Magento pattern-match
 // on pages that merely *mention* those names (e.g. Stripe lists them as integrations).
@@ -475,7 +476,9 @@ export function App() {
                 <CurlBar domain={analyze.data.domain} activeTab={activeTab} />
               </div>
             )}
-            <TabContent tab={activeTab} data={cleanTechStack(analyze.data)} onNavigate={handleNavigate} />
+            <ErrorBoundary fallbackLabel="This tab encountered an error" key={activeTab}>
+              <TabContent tab={activeTab} data={cleanTechStack(analyze.data)} onNavigate={handleNavigate} />
+            </ErrorBoundary>
           </div>
         )}
 
