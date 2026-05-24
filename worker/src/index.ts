@@ -49,6 +49,28 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
+    // Static content routes (SEO + LLMO)
+    if (method === "GET" && path === "/robots.txt") {
+      return new Response(
+        "User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://yoke.lol/sitemap.xml",
+        { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
+      );
+    }
+
+    if (method === "GET" && path === "/sitemap.xml") {
+      return new Response(
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://yoke.lol</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>https://yoke.lol/api/docs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>\n  <url><loc>https://yoke.lol/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n  <url><loc>https://yoke.lol/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>`,
+        { headers: { "Content-Type": "application/xml;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
+      );
+    }
+
+    if (method === "GET" && path === "/llms.txt") {
+      return new Response(
+        `# Yoke — Free Domain Intelligence & OSINT Tool\n\n> Yoke is a free, open-source domain intelligence tool at https://yoke.lol\n\n## What Yoke Does\n\nYoke provides instant, comprehensive analysis of any internet domain. Enter a domain name and get detailed intelligence across security, infrastructure, technology, performance, and business dimensions.\n\n## Key Capabilities\n\n- DNS Analysis: A, AAAA, MX, NS, TXT, CNAME, SOA records with DNSSEC validation\n- SSL/TLS: Certificate details, chain validation, SSL Labs grading, CAA records\n- WHOIS/RDAP: Registrar, registration and expiry dates, domain age\n- Security Audit: HTTP security headers, Mozilla Observatory scoring, cookie security\n- Data Breaches: HIBP breach detection\n- Threat Intelligence: Shodan port/vulnerability data, GreyNoise IP classification\n- Technology Detection: Frameworks, CMS, CDN, WAF, deep WordPress fingerprinting\n- Email Authentication: SPF, DKIM, DMARC validation\n- Performance: Google PageSpeed, Core Web Vitals, compression\n- Certificate Transparency: CT log monitoring for subdomain discovery\n- Business Intelligence: Company enrichment via Wikidata, Brandfetch, Crunchbase\n- AI Analysis: LLM-powered analysis from 6 expert personas\n\n## Free JSON API\n\nNo authentication required.\n\ncurl yoke.lol/stripe.com | jq\ncurl "yoke.lol/stripe.com?pretty"\ncurl -s yoke.lol/stripe.com | jq '.ssl'\n\n## Links\n\n- Web UI: https://yoke.lol\n- API Docs: https://yoke.lol/api/docs\n- Chrome Extension: Chrome Web Store\n- Source: https://github.com/kurtpayne/yoke\n- License: MIT`,
+        { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
+      );
+    }
+
     // API routes
     if (path.startsWith("/api/")) {
       try {
@@ -126,8 +148,12 @@ export default {
           return json(result);
         }
 
-        // POST /api/ai-analysis
+        // POST /api/ai-analysis — restricted to web/extension only (cost control)
         if (method === "POST" && path === "/api/ai-analysis") {
+          const referer = request.headers.get("referer") || "";
+          const origin = request.headers.get("origin") || "";
+          const isWebUI = referer.includes("yoke.lol") || origin.includes("yoke.lol") || origin.includes("chrome-extension://");
+          if (!isWebUI) return json({ error: "AI analysis is only available via the web UI and Chrome extension" }, 403);
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
           if (!isValidDomain(body.domain)) return json({ error: "Invalid domain format" }, 400);
@@ -154,7 +180,7 @@ export default {
               "POST /api/suggestions": "Domain suggestions (JSON body: {domain: string})",
               "POST /api/availability": "Global availability check (JSON body: {domain: string})",
               "POST /api/reverse-ip": "Reverse IP lookup (JSON body: {ip: string})",
-              "POST /api/ai-analysis": "AI-powered domain analysis (JSON body: {domain: string})",
+              // AI analysis not listed — restricted to web/extension only
               "GET /api/recent": "Recent lookups (query: ?limit=N)",
               "GET /api/health": "Health check",
             },
