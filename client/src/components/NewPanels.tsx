@@ -1,4 +1,4 @@
-import { ShieldCheck, Lock, Cookie, Cloud, Server } from "lucide-react";
+import { ShieldCheck, Lock, Cookie, Cloud, Server, Zap } from "lucide-react";
 import { Panel, DataRow, StatusBadge } from "./Panel";
 import { CliButton, dnssecCliCommands, compressionCliCommands } from "./CliModal";
 import { Tooltip } from "./Tooltip";
