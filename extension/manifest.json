@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Yoke — Domain Intelligence",
-  "version": "1.1.0",
-  "description": "Instant domain intelligence for any site. DNS, SSL, security headers, tech stack, performance, and more.",
+  "version": "1.2.0",
+  "description": "Analyze any domain instantly — DNS, SSL, WHOIS, security, tech stack, performance, and more.",
   "permissions": ["activeTab", "sidePanel", "storage"],
   "action": {
     "default_title": "Analyze this domain",
