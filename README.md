@@ -130,6 +130,7 @@ Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/yok
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENROUTER_API_KEY` | No | Enables AI Analysis tab (Claude via OpenRouter) |
+| `GOOGLE_PAGESPEED_API_KEY` | No | Google PageSpeed Insights API key — unlocks Lighthouse scores and Core Web Vitals. Without it, PageSpeed requests are unauthenticated and rate-limited. Free tier: 25K req/day. Get one at [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (enable "PageSpeed Insights API"). |
 | `CF_ACCOUNT_ID` | No | Cloudflare account ID (for some API features) |
 | `CF_API_TOKEN` | No | Cloudflare API token (for DNS-over-HTTPS fallback) |
 

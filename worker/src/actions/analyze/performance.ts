@@ -5,7 +5,7 @@ import type { PerformanceResult, CompressionResult } from "./types";
 // ─── PageSpeed ───────────────────────────────────────────────────────
 
 
-export async function checkPageSpeed(domain: string, ttfbFallback: number | null, db?: D1Database): Promise<PerformanceResult> {
+export async function checkPageSpeed(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string): Promise<PerformanceResult> {
   // Check separate performance cache (24h TTL)
   if (db) {
     try {
@@ -18,7 +18,8 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
   }
 
   try {
-    const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance`, { timeout: 30000 });
+    const keyParam = apiKey ? `&key=${apiKey}` : "";
+    const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 30000 });
     if (res.status === 429) return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "Rate limited — try again later", screenshot: null };
     if (!res.ok) return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: `API error (${res.status})`, screenshot: null };
     const data = await res.json() as { lighthouseResult?: { categories?: { performance?: { score?: number } }; audits?: Record<string, { numericValue?: number; details?: { data?: string } }>; }; };
