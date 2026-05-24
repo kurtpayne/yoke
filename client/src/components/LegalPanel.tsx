@@ -26,7 +26,7 @@ export function LegalPanel({ data }: { data: AnalysisResult }) {
         const found = foundNames.has(name);
         const page = legal.pages_found.find((p) => p.name === name);
         return (
-          <div key={page.name} className="data-row" style={{ alignItems: "center" }}>
+          <div key={name} className="data-row" style={{ alignItems: "center" }}>
             <div className="flex items-center gap-2.5">
               {found ? (
                 <CheckCircle size={12} style={{ color: "var(--success)", flexShrink: 0 }} />

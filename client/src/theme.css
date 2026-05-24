@@ -668,3 +668,78 @@ body {
   opacity: 0.8;
   text-decoration: underline;
 }
+
+/* ─── Collapsible & Draggable Panel Layout ─────────────────────── */
+
+.yoke-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+@media (min-width: 1024px) {
+  .yoke-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .yoke-grid .full-width {
+    grid-column: 1 / -1;
+  }
+}
+
+.yoke-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Drag slot */
+.yoke-slot {
+  border-radius: var(--radius);
+  transition: opacity 0.15s ease;
+}
+.yoke-slot.dragging {
+  opacity: 0.3;
+}
+.yoke-slot.drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+/* Grip handle (inside panel-header) */
+.yoke-grip {
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 3px;
+  color: var(--dim);
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.yoke-slot:hover .yoke-grip,
+.panel:hover .yoke-grip {
+  opacity: 0.5;
+}
+.yoke-grip:hover {
+  opacity: 1 !important;
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+.yoke-grip:active {
+  cursor: grabbing;
+}
+
+/* Collapse chevron */
+.yoke-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--dim);
+  transition: transform 0.2s ease;
+}
+
+/* Touch-friendly */
+@media (max-width: 768px) {
+  .yoke-grip {
+    opacity: 0.4;
+    padding: 4px;
+  }
+}

@@ -133,7 +133,7 @@ export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
         const headerKey = check.header.toLowerCase();
         const tooltip = HEADER_TOOLTIPS[headerKey];
         return (
-          <div key={item.header} className="data-row" style={{ alignItems: "flex-start" }}>
+          <div key={check.header} className="data-row" style={{ alignItems: "flex-start" }}>
             <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
               <div
                 className="w-2 h-2 rounded-full flex-shrink-0"

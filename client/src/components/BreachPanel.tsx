@@ -1,5 +1,6 @@
 import { ShieldAlert, ShieldCheck, ExternalLink, AlertTriangle } from "lucide-react";
 import { Tooltip } from "./Tooltip";
+import { Panel } from "./Panel";
 import type { AnalysisResult, BreachItem } from "../utils/types";
 
 function formatCount(n: number): string {
@@ -99,7 +100,7 @@ function BreachCard({ breach }: { breach: BreachItem }) {
       <div className="flex flex-wrap gap-1">
         {breach.data_classes.map((cls, i) => (
           <span
-            key={breach.Name}
+            key={cls}
             className="rounded px-1.5 py-0.5"
             style={{
               fontFamily: "var(--font-ui)",
@@ -143,32 +144,27 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
 
   const { found, count, total_pwned, items } = breaches;
 
-  return (
-    <div className="panel">
-      <div className="panel-header flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span style={{ opacity: 0.6, color: found ? "var(--danger)" : "var(--success)" }}>
-            {found ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
-          </span>
-          <span>Data Breaches</span>
-          <Tooltip text="Known data breaches where this domain's data was compromised, sourced from Have I Been Pwned" help />
-        </div>
-        <div className="flex items-center gap-2">
-          {found ? (
-            <>
-              <span className="badge badge-fail">
-                {count} breach{count > 1 ? "es" : ""}
-              </span>
-              <span className="badge badge-fail" style={{ opacity: 0.8 }}>
-                {formatCount(total_pwned)} accounts
-              </span>
-            </>
-          ) : (
-            <span className="badge badge-pass">No known breaches</span>
-          )}
-        </div>
-      </div>
+  const icon = found ? <ShieldAlert size={14} style={{ color: "var(--danger)" }} /> : <ShieldCheck size={14} style={{ color: "var(--success)" }} />;
 
+  const badge = (
+    <div className="flex items-center gap-2">
+      {found ? (
+        <>
+          <span className="badge badge-fail">
+            {count} breach{count > 1 ? "es" : ""}
+          </span>
+          <span className="badge badge-fail" style={{ opacity: 0.8 }}>
+            {formatCount(total_pwned)} accounts
+          </span>
+        </>
+      ) : (
+        <span className="badge badge-pass">No known breaches</span>
+      )}
+    </div>
+  );
+
+  return (
+    <Panel title="Data Breaches" icon={icon} badge={badge}>
       <div className="p-4">
         {found ? (
           <div className="space-y-2">
@@ -208,6 +204,6 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
           </div>
         )}
       </div>
-    </div>
+    </Panel>
   );
 }
