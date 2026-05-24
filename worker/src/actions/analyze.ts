@@ -142,7 +142,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
     checkIpInfo(domain, dnsRecords),
     checkBlocklists(dnsRecords),
     checkSsl(domain),
-    checkPageSpeed(domain, httpAnalysis?.response_time_ms ?? null, env.DB),
+    checkPageSpeed(domain, httpAnalysis?.response_time_ms ?? null, env.DB, env.GOOGLE_PAGESPEED_API_KEY),
     checkStatus(domain),
     checkLlmsTxt(domain),
     checkWayback(domain),
