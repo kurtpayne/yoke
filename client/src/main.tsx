@@ -6,10 +6,14 @@ import "./theme.css";
 
 // Apply saved theme before first paint to avoid flash
 (() => {
-  const saved = localStorage.getItem("yoke-theme");
-  const valid = new Set(["dark", "light", "arcade", "deep-blue", "enterprise", "newsprint"]);
-  const theme = saved && valid.has(saved) ? saved : "dark";
-  document.documentElement.setAttribute("data-theme", theme);
+  try {
+    const saved = localStorage.getItem("yoke-theme");
+    const valid = new Set(["dark", "light", "arcade", "deep-blue", "enterprise", "newsprint"]);
+    const theme = saved && valid.has(saved) ? saved : "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  } catch {
+    document.documentElement.setAttribute("data-theme", "dark");
+  }
 })();
 
 const queryClient = new QueryClient({

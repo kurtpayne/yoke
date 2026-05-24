@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Yoke — Domain Intelligence",
+  "version": "1.1.0",
+  "description": "Instant domain intelligence for any site. DNS, SSL, security headers, tech stack, performance, and more.",
+  "permissions": ["activeTab", "sidePanel", "storage"],
+  "action": {
+    "default_title": "Analyze this domain",
+    "default_icon": {
+      "16": "icons/bolt/icon16.png",
+      "32": "icons/bolt/icon32.png",
+      "48": "icons/bolt/icon48.png",
+      "128": "icons/bolt/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/bolt/icon16.png",
+    "48": "icons/bolt/icon48.png",
+    "128": "icons/bolt/icon128.png"
+  }
+}
