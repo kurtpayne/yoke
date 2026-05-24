@@ -4,6 +4,7 @@ export interface Env {
   OPENROUTER_API_KEY?: string;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
+  GOOGLE_PAGESPEED_API_KEY?: string;
 }
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
