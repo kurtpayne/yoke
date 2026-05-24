@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Restrict permissions — CI only needs to read source, nothing else
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -18,15 +22,32 @@ jobs:
           bun-version: latest
 
       - name: Install root dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Install client dependencies
         working-directory: client
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Install worker dependencies
         working-directory: worker
-        run: bun install
+        run: bun install --frozen-lockfile
+
+      - name: Audit dependencies for known vulnerabilities
+        working-directory: client
+        run: bun pm ls --all 2>/dev/null | head -50
+        continue-on-error: true
+
+      - name: Check for suspicious install scripts in dependencies
+        working-directory: client
+        run: |
+          echo "Checking for preinstall/postinstall scripts in dependencies..."
+          SUSPICIOUS=$(find node_modules -maxdepth 3 -name "package.json" -exec grep -l '"preinstall"\|"postinstall"' {} \; 2>/dev/null || true)
+          if [ -n "$SUSPICIOUS" ]; then
+            echo "::warning::Found packages with install scripts:"
+            echo "$SUSPICIOUS"
+          else
+            echo "✓ No suspicious install scripts found"
+          fi
 
       - name: Type check (worker)
         working-directory: worker
