@@ -1,0 +1,416 @@
+import { fetchWithTimeout } from "../../helpers";
+import type {
+  DnsRecord, LlmsTxtResult, RobotsParsed, JsonLdItem,
+  OgTwitterResult, LegalResult, AiReadinessResult,
+  BimiResult, MtaStsResult, TlsRptResult, EmailAuthResult,
+} from "./types";
+
+// ─── llms.txt ────────────────────────────────────────────────────────
+
+export async function checkLlmsTxt(domain: string): Promise<LlmsTxtResult> {
+  const result: LlmsTxtResult = { found: false, content: null, full_found: false, full_content: null };
+  const [r1, r2] = await Promise.allSettled([
+    fetchWithTimeout(`https://${domain}/llms.txt`, { timeout: 5000 }),
+    fetchWithTimeout(`https://${domain}/llms-full.txt`, { timeout: 5000 }),
+  ]);
+  if (r1.status === "fulfilled" && r1.value.ok) {
+    try { const text = await r1.value.text(); if (text && !text.includes("<!doctype") && !text.includes("<html")) { result.found = true; result.content = text.slice(0, 3000); } } catch { /* ignore */ }
+  }
+  if (r2.status === "fulfilled" && r2.value.ok) {
+    try { const text = await r2.value.text(); if (text && !text.includes("<!doctype") && !text.includes("<html")) { result.full_found = true; result.full_content = text.slice(0, 5000); } } catch { /* ignore */ }
+  }
+  return result;
+}
+
+// ─── Wayback Machine ────────────────────────────────────────────────
+
+export async function checkWayback(domain: string): Promise<{ first_snapshot: string | null; last_snapshot: string | null; total_snapshots: number | null; archive_url: string } | null> {
+  const archiveUrl = `https://web.archive.org/web/*/${domain}`;
+  try {
+    const sparklineRes = await fetchWithTimeout(`https://web.archive.org/__wb/sparkline?output=json&url=${encodeURIComponent(domain)}&collection=web`, { timeout: 8000 });
+    if (!sparklineRes.ok) return { first_snapshot: null, last_snapshot: null, total_snapshots: null, archive_url: archiveUrl };
+    const sparkData = await sparklineRes.json() as { years?: Record<string, number[]>; first_ts?: string; last_ts?: string; };
+    let totalSnapshots = 0; let firstYear: string | null = null; let lastYear: string | null = null;
+    if (sparkData.years) {
+      const years = Object.keys(sparkData.years).sort();
+      if (years.length > 0) { firstYear = years[0] ?? null; lastYear = years[years.length - 1] ?? null; }
+      for (const counts of Object.values(sparkData.years)) { for (const c of counts) totalSnapshots += c; }
+    }
+    const formatTs = (ts: string | undefined | null): string | null => { if (!ts || ts.length < 8) return null; return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}`; };
+    return { first_snapshot: formatTs(sparkData.first_ts) ?? (firstYear ? `${firstYear}-01-01` : null), last_snapshot: formatTs(sparkData.last_ts) ?? (lastYear ? `${lastYear}-12-31` : null), total_snapshots: totalSnapshots > 0 ? totalSnapshots : null, archive_url: archiveUrl };
+  } catch { return { first_snapshot: null, last_snapshot: null, total_snapshots: null, archive_url: archiveUrl }; }
+}
+
+// ─── Tranco Ranking ──────────────────────────────────────────────────
+
+export async function checkTranco(domain: string): Promise<number | null> {
+  try {
+    const res = await fetchWithTimeout(`https://tranco-list.eu/api/ranks/domain/${encodeURIComponent(domain)}`, { timeout: 5000 });
+    if (!res.ok) return null;
+    const data = await res.json() as { ranks?: Array<{ rank?: number }> };
+    return data.ranks?.[0]?.rank ?? null;
+  } catch { return null; }
+}
+
+// ─── Mozilla HTTP Observatory ────────────────────────────────────────
+
+export async function checkObservatory(domain: string): Promise<{ grade: string | null; score: number | null; tests_passed: number | null; tests_total: number | null } | null> {
+  try {
+    const res = await fetchWithTimeout(`https://observatory.mozilla.org/api/v2/analyze?host=${encodeURIComponent(domain)}`, { timeout: 10000, method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `host=${encodeURIComponent(domain)}` });
+    if (!res.ok) return null;
+    const data = await res.json() as { grade?: string; score?: number; tests_passed?: number; tests_quantity?: number; };
+    return { grade: data.grade ?? null, score: data.score ?? null, tests_passed: data.tests_passed ?? null, tests_total: data.tests_quantity ?? null };
+  } catch { return null; }
+}
+
+// ─── Email Authentication ────────────────────────────────────────────
+
+export async function checkEmailAuth(domain: string, dnsRecords: DnsRecord[]): Promise<EmailAuthResult> {
+  const spf = { found: false, record: null as string | null, mechanisms: [] as string[], all_qualifier: null as string | null };
+  for (const rec of dnsRecords) {
+    if (rec.type === "TXT") {
+      const cleanData = rec.data.replace(/^"|"$/g, "");
+      if (cleanData.startsWith("v=spf1")) {
+        spf.found = true; spf.record = cleanData;
+        const parts = cleanData.split(/\s+/).slice(1);
+        for (const p of parts) { if (/^[+\-~?]all$/i.test(p)) spf.all_qualifier = p; else spf.mechanisms.push(p); }
+        break;
+      }
+    }
+  }
+  const dmarc = { found: false, record: null as string | null, policy: null as string | null, subdomain_policy: null as string | null, rua: null as string | null, ruf: null as string | null };
+  try {
+    const res = await fetchWithTimeout(`https://dns.google/resolve?name=_dmarc.${encodeURIComponent(domain)}&type=TXT`, { timeout: 5000 });
+    const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
+    if (data.Status === 0 && data.Answer) {
+      for (const ans of data.Answer) {
+        const cleanData = ans.data.replace(/^"|"$/g, "");
+        if (cleanData.startsWith("v=DMARC1")) {
+          dmarc.found = true; dmarc.record = cleanData;
+          dmarc.policy = cleanData.match(/;\s*p=([^;\s]+)/)?.[1] ?? null;
+          dmarc.subdomain_policy = cleanData.match(/;\s*sp=([^;\s]+)/)?.[1] ?? null;
+          dmarc.rua = cleanData.match(/;\s*rua=([^;\s]+)/)?.[1] ?? null;
+          dmarc.ruf = cleanData.match(/;\s*ruf=([^;\s]+)/)?.[1] ?? null;
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  const dkimSelectors: string[] = [];
+  const commonSelectors = ["google", "default", "selector1", "selector2", "k1", "mail", "dkim"];
+  await Promise.allSettled(commonSelectors.map(async (sel) => {
+    try {
+      const res = await fetchWithTimeout(`https://dns.google/resolve?name=${sel}._domainkey.${encodeURIComponent(domain)}&type=TXT`, { timeout: 3000 });
+      const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
+      if (data.Status === 0 && data.Answer && data.Answer.length > 0) dkimSelectors.push(sel);
+    } catch { /* ignore */ }
+  }));
+
+  // BIMI
+  const bimi: BimiResult = { found: false, record: null, logo_url: null, authority_url: null };
+  try {
+    const res = await fetchWithTimeout(`https://dns.google/resolve?name=default._bimi.${encodeURIComponent(domain)}&type=TXT`, { timeout: 4000 });
+    const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
+    if (data.Status === 0 && data.Answer) {
+      for (const ans of data.Answer) {
+        const cleanData = ans.data.replace(/^"|"$/g, "");
+        if (cleanData.toLowerCase().startsWith("v=bimi1")) {
+          bimi.found = true;
+          bimi.record = cleanData;
+          bimi.logo_url = cleanData.match(/;\s*l=([^;\s]+)/)?.[1] ?? null;
+          bimi.authority_url = cleanData.match(/;\s*a=([^;\s]+)/)?.[1] ?? null;
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // MTA-STS
+  const mtaSts: MtaStsResult = { dns_found: false, policy_found: false, mode: null };
+  try {
+    const dnsRes = await fetchWithTimeout(`https://dns.google/resolve?name=_mta-sts.${encodeURIComponent(domain)}&type=TXT`, { timeout: 4000 });
+    const dnsData = await dnsRes.json() as { Status: number; Answer?: Array<{ data: string }> };
+    if (dnsData.Status === 0 && dnsData.Answer?.length) {
+      for (const ans of dnsData.Answer) {
+        if (ans.data.replace(/^"|"$/g, "").toLowerCase().includes("v=stsv1")) {
+          mtaSts.dns_found = true;
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  try {
+    const policyRes = await fetchWithTimeout(`https://mta-sts.${domain}/.well-known/mta-sts.txt`, { timeout: 5000 });
+    if (policyRes.ok) {
+      const text = await policyRes.text();
+      if (text && text.includes("mode:")) {
+        mtaSts.policy_found = true;
+        const modeMatch = text.match(/mode:\s*(enforce|testing|none)/i);
+        mtaSts.mode = modeMatch?.[1]?.toLowerCase() ?? null;
+      }
+    }
+  } catch { /* ignore */ }
+
+  // TLS-RPT
+  const tlsRpt: TlsRptResult = { found: false, record: null, rua: null };
+  try {
+    const res = await fetchWithTimeout(`https://dns.google/resolve?name=_smtp._tls.${encodeURIComponent(domain)}&type=TXT`, { timeout: 4000 });
+    const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
+    if (data.Status === 0 && data.Answer) {
+      for (const ans of data.Answer) {
+        const cleanData = ans.data.replace(/^"|"$/g, "");
+        if (cleanData.toLowerCase().startsWith("v=tlsrptv1")) {
+          tlsRpt.found = true;
+          tlsRpt.record = cleanData;
+          tlsRpt.rua = cleanData.match(/;\s*rua=([^;\s]+)/)?.[1] ?? null;
+          break;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  return { spf, dmarc, dkim_selectors_found: dkimSelectors, bimi, mta_sts: mtaSts, tls_rpt: tlsRpt };
+}
+
+// ─── Deep robots.txt parsing ────────────────────────────────────────
+
+export function parseRobotsDeep(robotsTxt: string | null, robotsExists: boolean): RobotsParsed {
+  if (!robotsExists || !robotsTxt) return { blocks: [], crawl_delay: null, sitemaps: [], interesting_blocked: [], is_restrictive: false, is_missing: true };
+  const blocks: Array<{ user_agent: string; disallow: string[]; allow: string[] }> = [];
+  const sitemaps: string[] = [];
+  let crawlDelay: number | null = null;
+  let currentUA = ""; let currentDisallow: string[] = []; let currentAllow: string[] = [];
+  const flushBlock = () => { if (currentUA) { blocks.push({ user_agent: currentUA, disallow: [...currentDisallow], allow: [...currentAllow] }); currentDisallow = []; currentAllow = []; } };
+  for (const rawLine of robotsTxt.split("\n")) {
+    const line = rawLine.split("#")[0]?.trim() ?? "";
+    if (!line) continue;
+    const [directive, ...rest] = line.split(":");
+    const value = rest.join(":").trim();
+    switch (directive?.toLowerCase()) {
+      case "user-agent": if (currentUA && (currentDisallow.length > 0 || currentAllow.length > 0)) flushBlock(); currentUA = value; currentDisallow = []; currentAllow = []; break;
+      case "disallow": if (value) currentDisallow.push(value); break;
+      case "allow": if (value) currentAllow.push(value); break;
+      case "crawl-delay": crawlDelay = parseFloat(value) || null; break;
+      case "sitemap": if (value) sitemaps.push(value); break;
+    }
+  }
+  flushBlock();
+  const interestingPaths = ["/admin", "/wp-admin", "/api", "/private", "/internal", "/staging", "/debug", "/config", "/env", "/.env", "/.git", "/backup"];
+  const allDisallowed = blocks.flatMap((b) => b.disallow);
+  const interestingBlocked = allDisallowed.filter((p) => interestingPaths.some((ip) => p.toLowerCase().startsWith(ip)));
+  const wildcardBlock = blocks.find((b) => b.user_agent === "*");
+  const isRestrictive = !!wildcardBlock && wildcardBlock.disallow.includes("/") && wildcardBlock.allow.length === 0;
+  return { blocks, crawl_delay: crawlDelay, sitemaps, interesting_blocked: interestingBlocked, is_restrictive: isRestrictive, is_missing: false };
+}
+
+// ─── HTTP Protocol Detection ────────────────────────────────────────
+
+export function detectHttpProtocols(headers: Record<string, string> | null): { http2: boolean; http3: boolean; alt_svc: string | null } {
+  if (!headers) return { http2: false, http3: false, alt_svc: null };
+  const altSvc = headers["alt-svc"] ?? null;
+  return { http2: !!altSvc || !!headers["x-firefox-spdy"] || !!headers[":status"], http3: altSvc ? /h3(?:=|-)/.test(altSvc) : false, alt_svc: altSvc };
+}
+
+// ─── Schema.org / JSON-LD Extraction ────────────────────────────────
+
+export function extractJsonLd(html: string): JsonLdItem[] {
+  const items: JsonLdItem[] = [];
+  const regex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1] ?? "");
+      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      for (const entry of entries) {
+        if (typeof entry === "object" && entry !== null) {
+          const e = entry as Record<string, unknown>;
+          items.push({
+            type: (typeof e["@type"] === "string" ? e["@type"] : Array.isArray(e["@type"]) ? (e["@type"] as string[]).join(", ") : "Unknown"),
+            name: typeof e.name === "string" ? e.name : null,
+            description: typeof e.description === "string" ? e.description.slice(0, 200) : null,
+            url: typeof e.url === "string" ? e.url : null,
+            raw: e,
+          });
+        }
+      }
+    } catch { /* malformed JSON-LD */ }
+  }
+  return items.slice(0, 10);
+}
+
+// ─── NEW: Open Graph + Twitter Card Audit ───────────────────────────
+
+export function extractSocialMeta(html: string): OgTwitterResult {
+  const extractMeta = (html: string, attr: string, name: string): string | null => {
+    const r1 = new RegExp(`<meta[^>]+${attr}=["']${name}["'][^>]+content=["']([^"']+)["']`, "i");
+    const r2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${attr}=["']${name}["']`, "i");
+    return html.match(r1)?.[1] ?? html.match(r2)?.[1] ?? null;
+  };
+
+  const og = {
+    title: extractMeta(html, "property", "og:title"),
+    description: extractMeta(html, "property", "og:description"),
+    image: extractMeta(html, "property", "og:image"),
+    type: extractMeta(html, "property", "og:type"),
+    url: extractMeta(html, "property", "og:url"),
+    site_name: extractMeta(html, "property", "og:site_name"),
+    locale: extractMeta(html, "property", "og:locale"),
+  };
+
+  const twitter = {
+    card: extractMeta(html, "name", "twitter:card"),
+    site: extractMeta(html, "name", "twitter:site"),
+    creator: extractMeta(html, "name", "twitter:creator"),
+    title: extractMeta(html, "name", "twitter:title"),
+    description: extractMeta(html, "name", "twitter:description"),
+    image: extractMeta(html, "name", "twitter:image"),
+  };
+
+  const missing: string[] = [];
+  const essential = [
+    ["og:title", og.title], ["og:description", og.description], ["og:image", og.image],
+    ["og:type", og.type], ["og:url", og.url],
+    ["twitter:card", twitter.card], ["twitter:title", twitter.title ?? og.title],
+    ["twitter:description", twitter.description ?? og.description],
+  ] as const;
+
+  let filled = 0;
+  for (const [name, val] of essential) {
+    if (val) filled++;
+    else missing.push(name);
+  }
+  const score = Math.round((filled / essential.length) * 100);
+
+  return { og, twitter, score, missing };
+}
+
+// ─── NEW: Legal Pages Detection ─────────────────────────────────────
+
+export const LEGAL_PATTERNS: Array<{ name: string; patterns: RegExp[] }> = [
+  { name: "Privacy Policy", patterns: [/\/privacy/i, /privacy[_-]?policy/i] },
+  { name: "Terms of Service", patterns: [/\/terms/i, /terms[_-]?of[_-]?service/i, /terms[_-]?of[_-]?use/i, /\/tos\b/i] },
+  { name: "Cookie Policy", patterns: [/cookie[_-]?policy/i, /\/cookies\b/i] },
+  { name: "Accessibility", patterns: [/\/accessibility/i, /\/a11y\b/i] },
+  { name: "GDPR", patterns: [/\/gdpr/i, /data[_-]?protection/i] },
+  { name: "Imprint", patterns: [/\/imprint/i, /\/impressum/i] },
+];
+
+export const CONSENT_PROVIDERS: Array<{ name: string; pattern: RegExp }> = [
+  { name: "Cookiebot", pattern: /cookiebot/i },
+  { name: "OneTrust", pattern: /onetrust|optanon/i },
+  { name: "Quantcast", pattern: /quantcast.*choice|__tcfapi/i },
+  { name: "TrustArc", pattern: /trustarc|truste/i },
+  { name: "Osano", pattern: /osano/i },
+  { name: "CookieYes", pattern: /cookieyes/i },
+  { name: "Didomi", pattern: /didomi/i },
+  { name: "Usercentrics", pattern: /usercentrics/i },
+];
+
+export function detectLegalPages(html: string, domain: string): LegalResult {
+  const pagesFound: Array<{ name: string; url: string }> = [];
+  const seen = new Set<string>();
+
+  // Extract all <a href="..."> links
+  const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = linkRegex.exec(html)) !== null) {
+    const href = match[1] ?? "";
+    const text = (match[2] ?? "").replace(/<[^>]+>/g, "").trim().toLowerCase();
+
+    for (const lp of LEGAL_PATTERNS) {
+      if (seen.has(lp.name)) continue;
+      const hrefMatch = lp.patterns.some((p) => p.test(href));
+      const textMatch = lp.patterns.some((p) => p.test(text));
+      if (hrefMatch || textMatch) {
+        seen.add(lp.name);
+        let url = href;
+        if (url && !url.startsWith("http")) {
+          try { url = new URL(url, `https://${domain}`).href; } catch { /* keep as-is */ }
+        }
+        pagesFound.push({ name: lp.name, url });
+      }
+    }
+  }
+
+  let cookieConsentDetected = false;
+  let consentProvider: string | null = null;
+  for (const cp of CONSENT_PROVIDERS) {
+    if (cp.pattern.test(html)) {
+      cookieConsentDetected = true;
+      consentProvider = cp.name;
+      break;
+    }
+  }
+
+  return { pages_found: pagesFound, cookie_consent_detected: cookieConsentDetected, consent_provider: consentProvider };
+}
+
+// ─── NEW: Cookie Security Audit ─────────────────────────────────────
+// ─── NEW: AI Readiness Score ────────────────────────────────────────
+
+export function calculateAiReadiness(
+  llmsTxt: LlmsTxtResult | null,
+  robotsParsed: RobotsParsed,
+  jsonLd: JsonLdItem[],
+  html: string,
+  ogResult: OgTwitterResult | null,
+): AiReadinessResult {
+  const checks: Array<{ name: string; passed: boolean; points: number }> = [];
+
+  // llms.txt
+  const hasLlmsTxt = !!llmsTxt?.found;
+  checks.push({ name: "llms.txt exists", passed: hasLlmsTxt, points: hasLlmsTxt ? 20 : 0 });
+
+  const hasLlmsFull = !!llmsTxt?.full_found;
+  checks.push({ name: "llms-full.txt exists", passed: hasLlmsFull, points: hasLlmsFull ? 10 : 0 });
+
+  // Check robots.txt for AI bots
+  const aiAgents: Record<string, { allow: number; deny: number }> = {};
+  const aiBotNames = ["GPTBot", "ClaudeBot", "CCBot", "Bingbot", "Google-Extended", "anthropic-ai", "ChatGPT-User"];
+  for (const block of robotsParsed.blocks) {
+    const ua = block.user_agent.toLowerCase();
+    for (const bot of aiBotNames) {
+      if (ua === bot.toLowerCase() || ua === "*") {
+        if (!aiAgents[bot]) aiAgents[bot] = { allow: 0, deny: 0 };
+        if (ua === bot.toLowerCase()) {
+          if (block.disallow.includes("/")) aiAgents[bot]!.deny++;
+          else aiAgents[bot]!.allow++;
+        }
+      }
+    }
+  }
+
+  const gptBotAllowed = !aiAgents["GPTBot"]?.deny;
+  checks.push({ name: "Allows GPTBot", passed: gptBotAllowed, points: gptBotAllowed ? 15 : -15 });
+
+  const claudeBotAllowed = !aiAgents["ClaudeBot"]?.deny && !aiAgents["CCBot"]?.deny;
+  checks.push({ name: "Allows ClaudeBot", passed: claudeBotAllowed, points: claudeBotAllowed ? 10 : -10 });
+
+  const bingbotAllowed = !aiAgents["Bingbot"]?.deny;
+  checks.push({ name: "Allows Bingbot", passed: bingbotAllowed, points: bingbotAllowed ? 5 : 0 });
+
+  // JSON-LD
+  const hasJsonLd = jsonLd.length > 0;
+  checks.push({ name: "Structured data (JSON-LD)", passed: hasJsonLd, points: hasJsonLd ? 15 : 0 });
+
+  const hasOrgSchema = jsonLd.some((j) => j.type.includes("Organization") || j.type.includes("WebSite"));
+  checks.push({ name: "Organization/WebSite schema", passed: hasOrgSchema, points: hasOrgSchema ? 10 : 0 });
+
+  // OG tags
+  const hasOg = !!(ogResult && ogResult.og.title && ogResult.og.description);
+  checks.push({ name: "Open Graph tags", passed: hasOg, points: hasOg ? 10 : 0 });
+
+  // RSS
+  const rssMatch = html.match(/<link[^>]+type=["']application\/(?:rss|atom)\+xml["'][^>]+href=["']([^"']+)["']/i);
+  const rssFeed = rssMatch?.[1] ?? null;
+  checks.push({ name: "RSS/Atom feed", passed: !!rssFeed, points: rssFeed ? 5 : 0 });
+
+  const maxScore = 100; // theoretical max
+  const score = Math.max(0, checks.reduce((sum, c) => sum + c.points, 0));
+  const pct = (score / maxScore) * 100;
+  const grade = pct >= 80 ? "A" : pct >= 60 ? "B" : pct >= 40 ? "C" : pct >= 20 ? "D" : "F";
+
+  return { score, max_score: maxScore, grade, checks, rss_feed: rssFeed };
+}
+
+// ─── NEW: Domain Health Score ───────────────────────────────────────

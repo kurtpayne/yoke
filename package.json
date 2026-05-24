@@ -1,0 +1,19 @@
+{
+  "name": "yoke-public",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run build:client && bun run build:worker",
+    "build:client": "cd client && bun run build",
+    "build:worker": "cd worker && bun run build",
+    "dev:client": "cd client && bun run dev",
+    "typecheck": "cd client && bun run typecheck && cd ../worker && bun run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "5.6.3",
+    "vitest": "1.6.1"
+  }
+}

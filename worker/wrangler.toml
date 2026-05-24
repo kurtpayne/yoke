@@ -1,0 +1,16 @@
+name = "yoke"
+main = "dist/worker.js"
+compatibility_date = "2024-12-01"
+account_id = "b5cdaad4db136b796354280697e0ceb9"
+
+[assets]
+directory = "../client/dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "yoke-cache"
+database_id = "ce2c3c22-a91c-4254-a80c-1cdc95c7ceb7"
+
+[routes]
+pattern = "yoke.lol"
+zone_name = "yoke.lol"

@@ -1,0 +1,210 @@
+import { Lock, ShieldCheck, Shield } from "lucide-react";
+import { Panel, DataRow, GradeBadge, StatusBadge, ErrorState } from "./Panel";
+import { CliButton, sslCliCommands, headersCliCommands } from "./CliModal";
+import { Tooltip } from "./Tooltip";
+import type { AnalysisResult } from "../utils/types";
+
+const HEADER_TOOLTIPS: Record<string, string> = {
+  "strict-transport-security": "HSTS forces browsers to only connect via HTTPS, preventing downgrade attacks and cookie hijacking",
+  "content-security-policy": "CSP restricts what resources (scripts, styles, images) a page can load, mitigating cross-site scripting (XSS) attacks",
+  "x-frame-options": "Prevents the page from being embedded in iframes on other sites, protecting against clickjacking attacks",
+  "x-content-type-options": "Stops browsers from guessing (MIME-sniffing) the content type, preventing attacks that exploit type confusion",
+  "referrer-policy": "Controls how much URL information is shared when navigating to other sites, protecting user privacy",
+  "permissions-policy": "Restricts which browser features (camera, microphone, geolocation) the page can use",
+  "x-xss-protection": "Legacy XSS filter (largely replaced by CSP). Some browsers still respect it as an extra layer",
+  "cross-origin-opener-policy": "Isolates the browsing context to prevent cross-origin attacks like Spectre",
+  "cross-origin-embedder-policy": "Controls whether the page can load cross-origin resources, enabling shared memory features",
+  "cross-origin-resource-policy": "Prevents other sites from reading this site's resources, blocking data leaks",
+  "cache-control": "Controls how browsers and CDNs cache responses — improper caching can leak sensitive data",
+  "x-permitted-cross-domain-policies": "Restricts Flash and PDF cross-domain data loading (legacy but still checked)",
+  "nel": "Network Error Logging — reports network errors to a specified endpoint for monitoring",
+  "expect-ct": "Certificate Transparency — ensures the site's SSL cert is publicly logged (now largely automated)",
+};
+
+const SSL_GRADE_TOOLTIPS: Record<string, string> = {
+  "A+": "Excellent — strong configuration with HSTS. Best possible rating.",
+  "A": "Strong — secure configuration, no significant weaknesses found.",
+  "A-": "Good — minor configuration improvements possible.",
+  "B": "Adequate — some legacy cipher suites or missing best practices.",
+  "C": "Weak — outdated protocols or cipher suites in use.",
+  "D": "Insecure — significant vulnerabilities or weak encryption.",
+  "F": "Failing — critical security issues detected.",
+  "T": "Certificate not trusted — self-signed or invalid cert chain.",
+};
+
+export function SslPanel({ data }: { data: AnalysisResult }) {
+  const ssl = data.ssl;
+  if (!ssl) return (
+    <Panel title="SSL / TLS" icon={<Lock size={14} />}>
+      <ErrorState message="SSL analysis unavailable" />
+    </Panel>
+  );
+
+  const formatDate = (iso: string | null) => {
+    if (!iso) return "—";
+    try { return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }); }
+    catch { return iso; }
+  };
+
+  const gradeTooltip = ssl.grade ? (SSL_GRADE_TOOLTIPS[ssl.grade] ?? `SSL Labs grade: ${ssl.grade}`) : "";
+
+  return (
+    <Panel
+      title="SSL / TLS"
+      icon={<Lock size={14} />}
+      badge={
+        <div className="flex items-center gap-1.5">
+          <CliButton commands={sslCliCommands(data.domain)} domain={data.domain} />
+          {ssl.grade ? (
+            <Tooltip text={gradeTooltip}>
+              <span style={{ cursor: "help" }}><GradeBadge grade={ssl.grade} /></span>
+            </Tooltip>
+          ) : ssl.error ? <StatusBadge status="warn" label="N/A" /> : undefined}
+        </div>
+      }
+    >
+      {ssl.error && (
+        <div className="px-4 py-3" style={{ color: "var(--dim)", fontFamily: "var(--font-ui)", fontSize: "12px" }}>
+          {ssl.error}
+        </div>
+      )}
+      {ssl.issuer && <DataRow label="Issuer" value={ssl.issuer} />}
+      {ssl.valid_from && <DataRow label="Valid From" value={formatDate(ssl.valid_from)} />}
+      {ssl.valid_to && <DataRow label="Valid To" value={formatDate(ssl.valid_to)} />}
+      {ssl.protocols.length > 0 && (
+        <DataRow
+          label="Protocols"
+          value={
+            <div className="flex flex-wrap gap-1.5 justify-end">
+              {ssl.protocols.map((p, i) => (
+                <Tooltip key={p} text={p.includes("1.3") ? "TLS 1.3 — latest and most secure protocol" : p.includes("1.2") ? "TLS 1.2 — widely supported and secure" : p.includes("1.1") || p.includes("1.0") ? "Outdated protocol — should be disabled" : `Protocol: ${p}`}>
+                  <span className="badge badge-info" style={{ fontSize: "10px", cursor: "help" }}>{p}</span>
+                </Tooltip>
+              ))}
+            </div>
+          }
+        />
+      )}
+      {ssl.key_exchange && <DataRow label="Key Exchange" value={ssl.key_exchange} />}
+      {!ssl.issuer && !ssl.valid_from && !ssl.valid_to && ssl.protocols.length === 0 && !ssl.key_exchange && !ssl.error && (
+        <div className="px-4 py-3" style={{ color: "var(--dim)", fontFamily: "var(--font-ui)", fontSize: "12px" }}>
+          Certificate details unavailable — only the grade could be determined
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
+  const headers = data.headers;
+  if (!headers) return (
+    <Panel title="Security Headers" icon={<ShieldCheck size={14} />}>
+      <ErrorState message="HTTP headers unavailable" />
+    </Panel>
+  );
+
+  const passCount = headers.security_audit.filter(h => h.status === "pass").length;
+  const totalCount = headers.security_audit.length;
+
+  return (
+    <Panel
+      title="Security Headers"
+      icon={<ShieldCheck size={14} />}
+      badge={
+        <div className="flex items-center gap-2">
+          <CliButton commands={headersCliCommands(data.domain)} domain={data.domain} />
+          <Tooltip text={`${passCount} of ${totalCount} recommended security headers are present`}>
+            <span style={{ cursor: "help" }}>
+              <StatusBadge
+                status={passCount === totalCount ? "pass" : passCount > totalCount / 2 ? "warn" : "fail"}
+                label={`${passCount}/${totalCount}`}
+              />
+            </span>
+          </Tooltip>
+          <Tooltip text="Overall security headers grade. A = most headers present, F = most headers missing.">
+            <span style={{ cursor: "help" }}>
+              <GradeBadge grade={headers.security_grade} />
+            </span>
+          </Tooltip>
+        </div>
+      }
+    >
+      {headers.security_audit.map((check, i) => {
+        const headerKey = check.header.toLowerCase();
+        const tooltip = HEADER_TOOLTIPS[headerKey];
+        return (
+          <div key={item.header} className="data-row" style={{ alignItems: "flex-start" }}>
+            <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
+              <div
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{
+                  background: check.status === "pass" ? "var(--success)" : check.status === "fail" ? "var(--danger)" : "var(--warning)",
+                }}
+              />
+              {tooltip ? (
+                <Tooltip text={tooltip}>
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: "11px", cursor: "help",
+                    color: check.status === "pass" ? "var(--text)" : check.status === "fail" ? "var(--danger)" : "var(--warning)",
+                    borderBottom: "1px dotted var(--dim)",
+                  }}>
+                    {check.header}
+                  </span>
+                </Tooltip>
+              ) : (
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: "11px",
+                  color: check.status === "pass" ? "var(--text)" : check.status === "fail" ? "var(--danger)" : "var(--warning)",
+                }}>
+                  {check.header}
+                </span>
+              )}
+            </div>
+            <div className="text-right flex-shrink-0 ml-3" style={{ maxWidth: "50%" }}>
+              {check.value ? (
+                <span className="break-all" style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
+                  {check.value.length > 60 ? check.value.slice(0, 60) + "…" : check.value}
+                </span>
+              ) : check.recommendation ? (
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+                  {check.recommendation}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </Panel>
+  );
+}
+
+export function ObservatoryPanel({ data }: { data: AnalysisResult }) {
+  const obs = data.observatory;
+  if (!obs) return null;
+
+  return (
+    <Panel
+      title="Mozilla Observatory"
+      icon={<Shield size={14} />}
+      badge={obs.grade ? <GradeBadge grade={obs.grade} /> : <StatusBadge status="neutral" label="Pending" />}
+    >
+      {obs.score != null && <DataRow label="Score" value={`${obs.score}/100`} />}
+      {obs.tests_passed != null && obs.tests_total != null && (
+        <DataRow
+          label="Tests Passed"
+          value={
+            <StatusBadge
+              status={obs.tests_passed === obs.tests_total ? "pass" : obs.tests_passed > obs.tests_total / 2 ? "warn" : "fail"}
+              label={`${obs.tests_passed}/${obs.tests_total}`}
+            />
+          }
+        />
+      )}
+      {!obs.grade && !obs.score && (
+        <div className="p-4" style={{ color: "var(--dim)", fontFamily: "var(--font-ui)", fontSize: "12px" }}>
+          Observatory scan initiated — results may take a moment
+        </div>
+      )}
+    </Panel>
+  );
+}
