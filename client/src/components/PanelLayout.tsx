@@ -1,0 +1,194 @@
+import { useState, useRef, useEffect, createContext, useContext, type ReactNode } from "react";
+
+// ─── localStorage persistence ────────────────────────────────────
+
+const STORAGE_KEY = "yoke-panel-layout";
+
+interface LayoutState {
+  collapsed: Record<string, boolean>;
+  order: Record<string, string[]>;
+}
+
+function loadLayout(): LayoutState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { collapsed: parsed.collapsed ?? {}, order: parsed.order ?? {} };
+    }
+  } catch { /* */ }
+  return { collapsed: {}, order: {} };
+}
+
+function saveLayout(state: LayoutState) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* */ }
+}
+
+export function resetLayout() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ }
+}
+
+// ─── Context ─────────────────────────────────────────────────────
+
+interface PanelCtx {
+  panelId: string;
+  collapsed: boolean;
+  toggle: () => void;
+}
+
+const PanelContext = createContext<PanelCtx | null>(null);
+
+export function usePanelContext(): PanelCtx | null {
+  return useContext(PanelContext);
+}
+
+// ─── PanelDef ────────────────────────────────────────────────────
+
+export interface PanelDef {
+  id: string;
+  node: ReactNode;
+  visible?: boolean;
+  fullWidth?: boolean;
+}
+
+// ─── PanelGrid ───────────────────────────────────────────────────
+
+export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panels: PanelDef[]; grid?: boolean }) {
+  const [layout, setLayout] = useState<LayoutState>(() => loadLayout());
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const dragSrcRef = useRef<string | null>(null);
+
+  // Filter visible
+  const visible: PanelDef[] = [];
+  for (let i = 0; i < panels.length; i++) {
+    if (panels[i].visible !== false) visible.push(panels[i]);
+  }
+
+  // Compute order
+  const defaultOrder = visible.map(p => p.id);
+  const saved = layout.order[tabId];
+  let orderedIds: string[];
+  if (saved) {
+    const a = saved.filter(id => defaultOrder.indexOf(id) >= 0);
+    for (const id of defaultOrder) {
+      if (a.indexOf(id) < 0) a.push(id);
+    }
+    orderedIds = a;
+  } else {
+    orderedIds = defaultOrder;
+  }
+
+  const ordered: PanelDef[] = [];
+  for (const id of orderedIds) {
+    const p = visible.find(v => v.id === id);
+    if (p) ordered.push(p);
+  }
+
+  function isCollapsed(pid: string): boolean {
+    return !!layout.collapsed[tabId + ":" + pid];
+  }
+
+  function toggle(pid: string) {
+    setLayout(function(prev) {
+      const key = tabId + ":" + pid;
+      const next = {
+        collapsed: Object.assign({}, prev.collapsed, { [key]: !prev.collapsed[key] }),
+        order: prev.order,
+      };
+      saveLayout(next);
+      return next;
+    });
+  }
+
+  function onDragStart(pid: string, e: React.DragEvent<HTMLDivElement>) {
+    dragSrcRef.current = pid;
+    e.dataTransfer.setData("text/plain", pid);
+    e.dataTransfer.effectAllowed = "move";
+    const el = e.currentTarget;
+    requestAnimationFrame(function() { el.style.opacity = "0.35"; });
+  }
+
+  function onDragEnd(e: React.DragEvent<HTMLDivElement>) {
+    dragSrcRef.current = null;
+    setDragOverId(null);
+    e.currentTarget.style.opacity = "1";
+  }
+
+  function onDragOver(pid: string, e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragSrcRef.current !== pid) setDragOverId(pid);
+  }
+
+  function onDrop(toId: string, e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOverId(null);
+    const fromId = e.dataTransfer.getData("text/plain");
+    if (!fromId || fromId === toId) return;
+    setLayout(function(prev) {
+      const cur = prev.order[tabId] || defaultOrder.slice();
+      const arr = cur.filter(function(id) { return defaultOrder.indexOf(id) >= 0; });
+      for (const id of defaultOrder) {
+        if (arr.indexOf(id) < 0) arr.push(id);
+      }
+      const fi = arr.indexOf(fromId);
+      const ti = arr.indexOf(toId);
+      if (fi < 0 || ti < 0) return prev;
+      arr.splice(fi, 1);
+      arr.splice(ti, 0, fromId);
+      const next = {
+        collapsed: prev.collapsed,
+        order: Object.assign({}, prev.order, { [tabId]: arr }),
+      };
+      saveLayout(next);
+      return next;
+    });
+  }
+
+  const items = ordered.map(function(p) {
+    const coll = isCollapsed(p.id);
+    const cls = "yoke-slot" +
+      (dragOverId === p.id ? " drop-target" : "") +
+      (coll ? " slot-collapsed" : "") +
+      (p.fullWidth ? " full-width" : "");
+
+    return (
+      <PanelContext.Provider key={p.id} value={{ panelId: p.id, collapsed: coll, toggle: function() { toggle(p.id); } }}>
+        <div
+          className={cls}
+          draggable={true}
+          onDragStart={function(e) { onDragStart(p.id, e); }}
+          onDragEnd={onDragEnd}
+          onDragOver={function(e) { onDragOver(p.id, e); }}
+          onDragLeave={function() { setDragOverId(null); }}
+          onDrop={function(e) { onDrop(p.id, e); }}
+        >
+          {p.node}
+        </div>
+      </PanelContext.Provider>
+    );
+  });
+
+  return <div className={grid ? "yoke-grid" : "yoke-stack"}>{items}</div>;
+}
+
+// ─── ResetLayoutButton ───────────────────────────────────────────
+
+export function ResetLayoutButton() {
+  const [confirm, setConfirm] = useState(false);
+  const t = useRef<ReturnType<typeof setTimeout>>();
+  function click() {
+    if (confirm) { resetLayout(); window.location.reload(); }
+    else { setConfirm(true); t.current = setTimeout(function() { setConfirm(false); }, 3000); }
+  }
+  useEffect(function() { return function() { if (t.current) clearTimeout(t.current); }; }, []);
+  return (
+    <button onClick={click} style={{
+      color: "var(--dim)", background: "none", border: "none", cursor: "pointer",
+      fontFamily: "var(--font-ui)", fontSize: "12px", padding: 0, transition: "color 0.15s",
+    }}
+    onMouseEnter={function(e) { e.currentTarget.style.color = "var(--text)"; }}
+    onMouseLeave={function(e) { e.currentTarget.style.color = "var(--dim)"; }}
+    >{confirm ? "Click again to confirm" : "Reset Layout"}</button>
+  );
+}

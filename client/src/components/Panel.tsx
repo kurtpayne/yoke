@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useRef, useEffect, useState, type ReactNode } from "react";
+import { usePanelContext } from "./PanelLayout";
 
 interface PanelProps {
   title: string;
@@ -8,16 +9,95 @@ interface PanelProps {
 }
 
 export function Panel({ title, icon, children, badge }: PanelProps) {
+  const ctx = usePanelContext();
+
+  // If not inside a PanelGrid, render normally (no collapse/drag)
+  if (!ctx) {
+    return (
+      <div className="panel">
+        <div className="panel-header flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="opacity-60">{icon}</span>
+            <span>{title}</span>
+          </div>
+          {badge}
+        </div>
+        <div>{children}</div>
+      </div>
+    );
+  }
+
+  return <CollapsiblePanel title={title} icon={icon} badge={badge} collapsed={ctx.collapsed} onToggle={ctx.toggle}>{children}</CollapsiblePanel>;
+}
+
+function CollapsiblePanel({ title, icon, badge, collapsed, onToggle, children }: PanelProps & { collapsed: boolean; onToggle: () => void }) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [animHeight, setAnimHeight] = useState<number | "auto">(collapsed ? 0 : "auto");
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    const el = bodyRef.current;
+    if (!el) return;
+    if (collapsed) {
+      const h = el.scrollHeight;
+      setAnimHeight(h);
+      // Force reflow then animate to 0
+      requestAnimationFrame(() => requestAnimationFrame(() => setAnimHeight(0)));
+    } else {
+      setAnimHeight(el.scrollHeight);
+      const t = setTimeout(() => setAnimHeight("auto"), 220);
+      return () => clearTimeout(t);
+    }
+  }, [collapsed]);
+
+  const heightStyle = collapsed && !mounted.current ? 0 : animHeight === "auto" ? "auto" : `${animHeight}px`;
+
   return (
     <div className="panel">
-      <div className="panel-header flex items-center justify-between">
+      <div
+        className="panel-header flex items-center justify-between"
+        onClick={onToggle}
+        style={{ cursor: "pointer", userSelect: "none", borderBottomColor: collapsed ? "transparent" : undefined }}
+      >
         <div className="flex items-center gap-2.5">
+          {/* Drag handle */}
+          <span
+            className="yoke-grip"
+            onClick={e => e.stopPropagation()}
+            title="Drag to reorder"
+          >
+            <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
+              <circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/>
+              <circle cx="2" cy="7" r="1.1"/><circle cx="6" cy="7" r="1.1"/>
+              <circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/>
+            </svg>
+          </span>
           <span className="opacity-60">{icon}</span>
           <span>{title}</span>
         </div>
-        {badge}
+        <div className="flex items-center gap-2">
+          {!collapsed && badge}
+          <span className="yoke-chevron" style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0)" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </span>
+        </div>
       </div>
-      <div>{children}</div>
+      <div
+        ref={bodyRef}
+        style={{
+          height: heightStyle,
+          overflow: collapsed || animHeight !== "auto" ? "hidden" : "visible",
+          transition: mounted.current ? "height 0.2s ease" : "none",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

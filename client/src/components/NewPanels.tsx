@@ -59,7 +59,7 @@ export function CookieSecurityPanel({ data }: { data: AnalysisResult }) {
       }
     >
       {cs.cookies.map((cookie, i) => (
-        <div key={c.name} className="data-row" style={{ alignItems: "flex-start" }}>
+        <div key={cookie.name} className="data-row" style={{ alignItems: "flex-start" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)" }}>
             {cookie.name.length > 30 ? cookie.name.slice(0, 30) + "…" : cookie.name}
           </span>

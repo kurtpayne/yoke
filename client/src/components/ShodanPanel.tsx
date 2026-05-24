@@ -113,7 +113,7 @@ export function ShodanPanel({ data }: { data: AnalysisResult }) {
           <div className="sub-section">Tags</div>
           <div className="px-4 py-2 flex flex-wrap gap-1.5">
             {shodan.tags.map((tag, i) => (
-              <span key={vuln} className="badge badge-neutral" style={{ fontSize: "11px" }}>
+              <span key={tag} className="badge badge-neutral" style={{ fontSize: "11px" }}>
                 <Tag size={9} style={{ marginRight: "3px" }} />{tag}
               </span>
             ))}

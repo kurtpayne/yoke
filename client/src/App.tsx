@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { Search, Loader2, RotateCcw } from "lucide-react";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { PanelGrid, ResetLayoutButton, type PanelDef } from "./components/PanelLayout";
 
 // Components
 import { TabBar, type TabId } from "./components/TabBar";
@@ -74,6 +75,17 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
   // Quick tech stack badges
   const techBadges = (data.tech_stack ?? []).slice(0, 8);
 
+  const quickInfoPanels: PanelDef[] = [
+    { id: "screenshot", node: <ScreenshotPanel data={data} /> },
+    { id: "domain-expiry", node: <DomainExpiryPanel data={data} /> },
+    { id: "tranco", node: <TrancoPanel data={data} /> },
+  ];
+
+  const summaryPanels: PanelDef[] = [
+    { id: "whois", node: <WhoisPanel data={data} /> },
+    ...(data.ip_info ? [{ id: "ip-info", node: <IpInfoPanel data={data} /> }] : []),
+  ];
+
   return (
     <div className="space-y-3">
       {/* Vitals Strip + Hosting badges */}
@@ -92,11 +104,7 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
       <DomainSignals data={data} />
 
       {/* Quick info cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <ScreenshotPanel data={data} />
-        <DomainExpiryPanel data={data} />
-        <TrancoPanel data={data} />
-      </div>
+      <PanelGrid tabId="overview-quick" panels={quickInfoPanels} />
 
       {/* Quick tech stack */}
       {techBadges.length > 0 && (
@@ -120,10 +128,7 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
       )}
 
       {/* Quick summary cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <WhoisPanel data={data} />
-        {data.ip_info && <IpInfoPanel data={data} />}
-      </div>
+      <PanelGrid tabId="overview-summary" panels={summaryPanels} />
 
       {/* External Tools */}
       <ExternalTools data={data} />
@@ -134,22 +139,25 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
 function InfrastructureTab({ data }: { data: AnalysisResult }) {
   const domain = data.domain;
   const ip = data.ip_info?.ip;
+
+  const panels: PanelDef[] = [
+    { id: "ip-map", node: <IpMap data={data} />, fullWidth: true },
+    { id: "dns", node: <DnsPanel data={data} /> },
+    { id: "ip-info", node: <IpInfoPanel data={data} /> },
+    { id: "hosting", node: <HostingPanel data={data} /> },
+    { id: "green-hosting", node: <GreenHostingPanel data={data} /> },
+    { id: "dnssec", node: <DnssecPanel data={data} /> },
+    { id: "http-protocols", node: <HttpProtocolsPanel data={data} /> },
+    { id: "compression", node: <CompressionPanel data={data} /> },
+    { id: "shodan", node: <ShodanPanel data={data} /> },
+    { id: "greynoise", node: <GreynoisePanel data={data} /> },
+    { id: "cert-transparency", node: <CertTransparencyPanel data={data} /> },
+    { id: "redirects", node: <RedirectPanel data={data} /> },
+  ];
+
   return (
     <div className="space-y-3">
-      <IpMap data={data} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <DnsPanel data={data} />
-        <IpInfoPanel data={data} />
-        <HostingPanel data={data} />
-        <GreenHostingPanel data={data} />
-        <DnssecPanel data={data} />
-        <HttpProtocolsPanel data={data} />
-        <CompressionPanel data={data} />
-        <ShodanPanel data={data} />
-        <GreynoisePanel data={data} />
-        <CertTransparencyPanel data={data} />
-        <RedirectPanel data={data} />
-      </div>
+      <PanelGrid tabId="infrastructure" panels={panels} />
       {/* Contextual external links */}
       <div className="flex flex-wrap gap-2 px-1">
         {ip && <a href={`https://www.shodan.io/host/${ip}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Shodan ↗</a>}
@@ -159,39 +167,38 @@ function InfrastructureTab({ data }: { data: AnalysisResult }) {
         <a href={`https://who.is/whois/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>who.is ↗</a>
       </div>
       <SectionHeader title="Raw Headers" />
-      <div className="grid grid-cols-1 gap-3">
-        <HeadersPanel data={data} />
-      </div>
+      <PanelGrid tabId="infrastructure-headers" panels={[
+        { id: "headers", node: <HeadersPanel data={data} /> },
+      ]} grid={false} />
     </div>
   );
 }
 
 function SecurityTab({ data }: { data: AnalysisResult }) {
   const domain = data.domain;
+
+  const panels: PanelDef[] = [
+    { id: "breaches", node: <BreachPanel data={data} />, fullWidth: true },
+    { id: "ssl", node: <SslPanel data={data} /> },
+    { id: "security-headers", node: <SecurityHeadersPanel data={data} /> },
+    { id: "observatory", node: <ObservatoryPanel data={data} /> },
+    { id: "email-auth", node: <EmailAuthPanel data={data} /> },
+    { id: "cookie-security", node: <CookieSecurityPanel data={data} /> },
+    { id: "security-txt", node: <SecurityTxtPanel data={data} /> },
+    { id: "caa", node: <CaaPanel data={data} /> },
+    { id: "availability", node: <AvailabilityPanel data={data} /> },
+    { id: "ai-readiness", node: <AiReadinessPanel data={data} /> },
+    { id: "blocklist", node: <BlocklistPanel data={data} /> },
+    { id: "email-extras", node: <EmailExtrasPanel data={data} /> },
+  ];
+
   return (
     <div className="space-y-3">
-      {/* Breach panel at the top — most impactful */}
-      <BreachPanel data={data} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <SslPanel data={data} />
-        <SecurityHeadersPanel data={data} />
-        <DnssecPanel data={data} />
-        <ObservatoryPanel data={data} />
-        <SecurityTxtPanel data={data} />
-        <CaaPanel data={data} />
-        <EmailAuthPanel data={data} />
-        <EmailExtrasPanel data={data} />
-        <CookieSecurityPanel data={data} />
-        <BlocklistPanel data={data} />
-      </div>
-      {/* Contextual external links */}
+      <PanelGrid tabId="security" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
-        <a href={`https://securityheaders.com/?q=${domain}&followRedirects=on`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SecurityHeaders ↗</a>
         <a href={`https://observatory.mozilla.org/analyze/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Observatory ↗</a>
-        <a href={`https://www.ssllabs.com/ssltest/analyze.html?d=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SSL Labs ↗</a>
-        <a href={`https://www.virustotal.com/gui/domain/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>VirusTotal ↗</a>
-        <a href={`https://transparencyreport.google.com/safe-browsing/search?url=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Safe Browsing ↗</a>
-        <a href={`https://mxtoolbox.com/SuperTool.aspx?action=mx%3a${domain}&run=toolpage`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>MXToolbox ↗</a>
+        <a href={`https://securityheaders.com/?q=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SecurityHeaders.com ↗</a>
+        <a href={`https://haveibeenpwned.com/DomainSearch/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>HIBP ↗</a>
       </div>
     </div>
   );
@@ -199,17 +206,20 @@ function SecurityTab({ data }: { data: AnalysisResult }) {
 
 function TechTab({ data }: { data: AnalysisResult }) {
   const domain = data.domain;
+
+  const panels: PanelDef[] = [
+    { id: "tech-stack", node: <TechStackPanel data={data} /> },
+    { id: "wordpress", node: <WordPressPanel data={data} />, visible: !!data.wordpress },
+    { id: "meta", node: <MetaPanel data={data} /> },
+    { id: "json-ld", node: <JsonLdPanel data={data} /> },
+    { id: "robots", node: <RobotsDeepPanel data={data} /> },
+    { id: "llms-txt", node: <LlmsTxtPanel data={data} /> },
+    { id: "well-known", node: <WellKnownPanel data={data} /> },
+  ];
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <TechStackPanel data={data} />
-        {data.wordpress && <WordPressPanel data={data} />}
-        <MetaPanel data={data} />
-        <JsonLdPanel data={data} />
-        <RobotsDeepPanel data={data} />
-        <LlmsTxtPanel data={data} />
-        <WellKnownPanel data={data} />
-      </div>
+      <PanelGrid tabId="tech" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://builtwith.com/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>BuiltWith ↗</a>
         <a href={`https://www.wappalyzer.com/lookup/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Wappalyzer ↗</a>
@@ -221,14 +231,17 @@ function TechTab({ data }: { data: AnalysisResult }) {
 
 function PerformanceTab({ data }: { data: AnalysisResult }) {
   const domain = data.domain;
+
+  const panels: PanelDef[] = [
+    { id: "pagespeed", node: <PerformancePanel data={data} /> },
+    { id: "compression", node: <CompressionPanel data={data} /> },
+    { id: "carbon", node: <CarbonPanel data={data} /> },
+    { id: "wayback", node: <WaybackPanel data={data} /> },
+  ];
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <PerformancePanel data={data} />
-        <CompressionPanel data={data} />
-        <CarbonPanel data={data} />
-        <WaybackPanel data={data} />
-      </div>
+      <PanelGrid tabId="performance" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://pagespeed.web.dev/analysis?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>PageSpeed Insights ↗</a>
         <a href={`https://www.webpagetest.org/?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>WebPageTest ↗</a>
@@ -241,18 +254,27 @@ function PerformanceTab({ data }: { data: AnalysisResult }) {
 
 function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
   const domain = data.domain;
+
+  const mainPanels: PanelDef[] = [
+    { id: "business-info", node: <BusinessTab domain={domain} />, fullWidth: true },
+  ];
+
+  const socialPanels: PanelDef[] = [
+    { id: "og-preview", node: <OgPreviewPanel data={data} /> },
+    { id: "legal", node: <LegalPanel data={data} /> },
+  ];
+
+  const regPanels: PanelDef[] = [
+    { id: "whois", node: <WhoisPanel data={data} /> },
+  ];
+
   return (
     <div className="space-y-3">
-      <BusinessTab domain={domain} />
+      <PanelGrid tabId="business" panels={mainPanels} grid={false} />
       <SectionHeader title="Social Sharing" />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <OgPreviewPanel data={data} />
-        <LegalPanel data={data} />
-      </div>
+      <PanelGrid tabId="business-social" panels={socialPanels} />
       <SectionHeader title="Registration" />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <WhoisPanel data={data} />
-      </div>
+      <PanelGrid tabId="business-reg" panels={regPanels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://ahrefs.com/backlink-checker/?input=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Ahrefs Backlinks ↗</a>
         <a href={`https://www.similarweb.com/website/${domain}/`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SimilarWeb ↗</a>
@@ -574,6 +596,8 @@ export function App() {
         >
           Chrome Extension
         </a>
+        <span style={{ color: "var(--border)" }}>·</span>
+        <ResetLayoutButton />
       </footer>
     </main>
   );
