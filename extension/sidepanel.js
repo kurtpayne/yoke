@@ -14,6 +14,8 @@ const ICONS = [
 
 const settingsBtn = document.getElementById("settings-btn");
 const settingsPanel = document.getElementById("settings-panel");
+const settingsBackdrop = document.getElementById("settings-backdrop");
+const settingsClose = document.getElementById("settings-close");
 const iconGrid = document.getElementById("icon-grid");
 
 // Build icon grid
@@ -41,19 +43,37 @@ chrome.runtime.sendMessage({ type: "GET_ICON" }, (res) => {
   });
 });
 
+function openSettings() {
+  settingsPanel.classList.add("open");
+  settingsBackdrop.classList.add("open");
+  settingsBtn.classList.add("active");
+}
+
+function closeSettings() {
+  settingsPanel.classList.remove("open");
+  settingsBackdrop.classList.remove("open");
+  settingsBtn.classList.remove("active");
+}
+
 // Toggle settings
 settingsBtn.addEventListener("click", (e) => {
   e.stopPropagation();
-  settingsPanel.classList.toggle("open");
-  settingsBtn.classList.toggle("active");
+  if (settingsPanel.classList.contains("open")) {
+    closeSettings();
+  } else {
+    openSettings();
+  }
 });
 
-// Close settings when clicking elsewhere
-document.addEventListener("click", (e) => {
-  if (!settingsPanel.contains(e.target) && e.target !== settingsBtn) {
-    settingsPanel.classList.remove("open");
-    settingsBtn.classList.remove("active");
-  }
+// Close on backdrop click
+settingsBackdrop.addEventListener("click", closeSettings);
+
+// Close on X button
+settingsClose.addEventListener("click", closeSettings);
+
+// Close on Escape
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSettings();
 });
 
 // ── Domain loading ──
