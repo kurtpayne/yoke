@@ -28,7 +28,8 @@ interface PersonaInsights {
 
 interface AIAnalysisResult {
   summary: string;
-  risk_level: string;
+  posture: string;
+  risk_level?: string; // legacy cached results
   key_findings: KeyFinding[];
   persona_insights: PersonaInsights;
   attack_surface: string[];
@@ -50,11 +51,15 @@ interface AIAnalysisResponse {
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
-const RISK_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+const POSTURE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  strong: { bg: "rgba(46, 160, 67, 0.15)", text: "var(--success)", border: "rgba(46, 160, 67, 0.4)" },
+  fair: { bg: "rgba(210, 153, 34, 0.15)", text: "var(--warning)", border: "rgba(210, 153, 34, 0.4)" },
+  poor: { bg: "rgba(219, 109, 40, 0.15)", text: "#db6d28", border: "rgba(219, 109, 40, 0.4)" },
+  critical: { bg: "rgba(248, 81, 73, 0.15)", text: "var(--danger)", border: "rgba(248, 81, 73, 0.4)" },
+  // Legacy risk_level fallbacks for cached results
   low: { bg: "rgba(46, 160, 67, 0.15)", text: "var(--success)", border: "rgba(46, 160, 67, 0.4)" },
   medium: { bg: "rgba(210, 153, 34, 0.15)", text: "var(--warning)", border: "rgba(210, 153, 34, 0.4)" },
   high: { bg: "rgba(219, 109, 40, 0.15)", text: "#db6d28", border: "rgba(219, 109, 40, 0.4)" },
-  critical: { bg: "rgba(248, 81, 73, 0.15)", text: "var(--danger)", border: "rgba(248, 81, 73, 0.4)" },
 };
 
 const SEVERITY_ICONS: Record<string, typeof CheckCircle2> = {
@@ -99,8 +104,20 @@ const PERSONAS: { key: PersonaKey; label: string; icon: typeof Shield }[] = [
 
 // ─── Sub-Components ─────────────────────────────────────────────────
 
-function RiskBadge({ level }: { level: string }) {
-  const colors = RISK_COLORS[level] || RISK_COLORS.medium;
+// Map legacy risk_level values to posture labels
+const POSTURE_LABEL_MAP: Record<string, string> = {
+  strong: "Strong",
+  fair: "Fair",
+  poor: "Poor",
+  critical: "Critical",
+  low: "Strong",       // legacy
+  medium: "Fair",      // legacy
+  high: "Poor",        // legacy
+};
+
+function PostureBadge({ level }: { level: string }) {
+  const colors = POSTURE_COLORS[level] || POSTURE_COLORS.fair;
+  const label = POSTURE_LABEL_MAP[level] || level;
   return (
     <span
       style={{
@@ -115,7 +132,7 @@ function RiskBadge({ level }: { level: string }) {
         letterSpacing: "0.05em",
       }}
     >
-      {level} risk
+      {label} posture
     </span>
   );
 }
@@ -341,7 +358,7 @@ export function AIAnalysisPanel({ domain }: { domain: string }) {
           AI Domain Analysis
         </h3>
         <p style={{ fontSize: "13px", color: "var(--muted)", maxWidth: "400px", lineHeight: 1.6, marginBottom: "20px" }}>
-          Get an AI-powered assessment synthesizing all collected data — security posture, infrastructure choices, risk level, and actionable recommendations tailored to different personas.
+          Get an AI-powered assessment synthesizing all collected data — security posture, infrastructure choices, and actionable recommendations tailored to different personas.
         </p>
         <button
           onClick={generate}
@@ -428,7 +445,7 @@ export function AIAnalysisPanel({ domain }: { domain: string }) {
             <Sparkles size={16} style={{ color: "var(--accent)" }} />
             <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>AI Assessment</span>
           </div>
-          <RiskBadge level={result.risk_level} />
+          <PostureBadge level={result.posture || result.risk_level || "fair"} />
         </div>
         <p style={{ fontSize: "13px", lineHeight: 1.7, color: "var(--text)", margin: 0 }}>
           {result.summary}

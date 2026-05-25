@@ -26,6 +26,7 @@ import {
   checkLlmsTxt, checkWayback, checkTranco, checkObservatory,
   checkEmailAuth, parseRobotsDeep, detectHttpProtocols, extractJsonLd,
   extractSocialMeta, detectLegalPages, calculateAiReadiness,
+  checkAnsRecords,
 } from "./analyze/content";
 import { calculateHealthScore, getScreenshotUrl } from "./analyze/scoring";
 import { calculateDomainScore } from "./analyze/contextual-scoring";
@@ -152,7 +153,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
         }
       }
 
-      await send("phase", { phase: "phase2", status: "running", label: "Running 21 checks…", total: 21 });
+      await send("phase", { phase: "phase2", status: "running", label: "Running 22 checks…", total: 22 });
 
       // Phase 2: All parallel checks, but stream each result as it completes
       const ip = dnsRecords.find((r) => r.type === "A")?.data;
@@ -182,6 +183,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
         { key: "green_hosting", promise: checkGreenHosting(domain), label: "Green Hosting" },
         { key: "well_known", promise: checkWellKnownEndpoints(domain), label: "Well-Known" },
         { key: "greynoise", promise: ip ? checkGreynoise(ip) : Promise.resolve(null), label: "GreyNoise" },
+        { key: "ans", promise: checkAnsRecords(domain), label: "ANS / DNS-AID" },
       ];
 
       // Collect results as they arrive
@@ -341,7 +343,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
       const legal = detectLegalPages(html, domain);
       const cookieSecurity = auditCookies(effectiveHeaders);
       const compression = detectCompression(effectiveHeaders);
-      const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta);
+      const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta, (results.ans ?? null) as any);
       const structuredDataValidation = validateStructuredData(jsonLd);
       const accessibilityResult = httpProbeSucceeded ? analyzeAccessibility(html) : null;
       const thirdPartyScriptsResult = httpProbeSucceeded ? analyzeThirdPartyScripts(html, domain) : null;

@@ -26,6 +26,7 @@ import {
   checkLlmsTxt, checkWayback, checkTranco, checkObservatory,
   checkEmailAuth, parseRobotsDeep, detectHttpProtocols, extractJsonLd,
   extractSocialMeta, detectLegalPages, calculateAiReadiness,
+  checkAnsRecords,
 } from "./analyze/content";
 import { calculateHealthScore, getScreenshotUrl } from "./analyze/scoring";
 import { calculateDomainScore } from "./analyze/contextual-scoring";
@@ -168,6 +169,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
     checkGreenHosting(domain),
     checkWellKnownEndpoints(domain),
     ip ? checkGreynoise(ip) : Promise.resolve(null),
+    checkAnsRecords(domain),
   ]);
 
   // Unwrap settled results — use null for any rejected promises
@@ -195,6 +197,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const greenHosting = unwrap(phase2Results[18], { green: null, hosted_by: null, supporting_documents: [] } as any) as GreenHostingResult;
   const wellKnown = unwrap(phase2Results[19], { change_password: null, security_txt: false, openid_configuration: null, apple_app_site_association: false, assetlinks_json: false, humans_txt: false, dnt_policy: false, nodeinfo: null } as any) as WellKnownResult;
   const greynoiseResult = unwrap(phase2Results[20], null) as GreynoiseResult | null;
+  const ansResult = unwrap(phase2Results[21], null) as Awaited<ReturnType<typeof checkAnsRecords>> | null;
 
   // Build merged meta — only use HTTP meta if probe succeeded
   const meta: MetaResult = {
@@ -332,7 +335,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const legal = detectLegalPages(html, domain);
   const cookieSecurity = auditCookies(effectiveHeaders);
   const compression = detectCompression(effectiveHeaders);
-  const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta);
+  const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta, ansResult);
   const structuredDataValidation = validateStructuredData(jsonLd);
 
   // New feature modules — all synchronous, HTML-only

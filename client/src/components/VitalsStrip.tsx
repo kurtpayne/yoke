@@ -71,11 +71,11 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
       )}
 
       {sslGrade && (
-        <Tooltip text={`SSL/TLS certificate grade from Qualys SSL Labs. A+ is the highest rating (strong config + HSTS). B or below indicates legacy cipher suites or configuration weaknesses.`}>
+        <Tooltip text={sslGrade === "Valid" ? "SSL certificate detected via HTTPS connectivity. Full grade pending from SSL Labs." : `SSL/TLS certificate grade from Qualys SSL Labs. A+ is the highest rating (strong config + HSTS). B or below indicates legacy cipher suites or configuration weaknesses.`}>
           <div className="vital-pill" style={{ cursor: "help" }}>
             <Lock size={12} style={{ color: "var(--dim)" }} />
-            <span style={{ color: sslGrade.startsWith("A") ? "var(--success)" : sslGrade.startsWith("B") ? "#7ee787" : sslGrade.startsWith("C") ? "var(--warning)" : "var(--danger)" }}>
-              SSL {sslGrade}
+            <span style={{ color: sslGrade === "Valid" ? "#7ee787" : sslGrade.startsWith("A") ? "var(--success)" : sslGrade.startsWith("B") ? "#7ee787" : sslGrade.startsWith("C") ? "var(--warning)" : "var(--danger)" }}>
+              SSL {sslGrade === "Valid" ? "✓" : sslGrade}
             </span>
           </div>
         </Tooltip>

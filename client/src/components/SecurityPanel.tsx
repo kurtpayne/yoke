@@ -30,6 +30,7 @@ const SSL_GRADE_TOOLTIPS: Record<string, string> = {
   "D": "Insecure — significant vulnerabilities or weak encryption.",
   "F": "Failing — critical security issues detected.",
   "T": "Certificate not trusted — self-signed or invalid cert chain.",
+  "Valid": "SSL certificate detected — full grade pending from SSL Labs.",
 };
 
 export function SslPanel({ data }: { data: AnalysisResult }) {

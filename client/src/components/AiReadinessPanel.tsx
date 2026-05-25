@@ -1,10 +1,13 @@
-import { Bot, CheckCircle, XCircle, Rss } from "lucide-react";
+import { Bot, CheckCircle, XCircle, Rss, Cpu } from "lucide-react";
 import { Panel, DataRow, GradeBadge, StatusBadge } from "./Panel";
 import type { AnalysisResult } from "../utils/types";
 
 export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
   const ai = data.ai_readiness;
   if (!ai) return null;
+
+  const ans = ai.ans;
+  const hasAnyAgent = ans && (ans.ans_found || ans.agents_found || ans.agent_json_found);
 
   return (
     <Panel
@@ -74,6 +77,48 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
             </div>
           }
         />
+      )}
+
+      {/* Agent Discovery Details */}
+      {hasAnyAgent && (
+        <>
+          <div className="sub-section">Agent Discovery</div>
+          {ans.ans_found && (
+            <DataRow
+              label="ANS Record"
+              value={
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text)", wordBreak: "break-all" }}>
+                  {ans.ans_records.map((r, i) => <div key={i}>{r.length > 80 ? r.slice(0, 80) + "…" : r}</div>)}
+                </div>
+              }
+            />
+          )}
+          {ans.agents_found && (
+            <DataRow
+              label="DNS-AID Record"
+              value={
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text)", wordBreak: "break-all" }}>
+                  {ans.agents_records.map((r, i) => <div key={i}>{r.length > 80 ? r.slice(0, 80) + "…" : r}</div>)}
+                </div>
+              }
+            />
+          )}
+          {ans.agent_json_found && (
+            <DataRow
+              label="agent.json"
+              value={
+                <a
+                  href={`https://${data.domain}/.well-known/agent.json`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--accent)", textDecoration: "none" }}
+                >
+                  /.well-known/agent.json
+                </a>
+              }
+            />
+          )}
+        </>
       )}
     </Panel>
   );
