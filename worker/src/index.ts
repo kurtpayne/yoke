@@ -20,9 +20,9 @@ import { getAIAnalysis, buildAIPrompt, ALLOWED_MODELS, DEFAULT_MODEL } from "./a
 import { trackUsage, getUsageStats } from "./usage-tracking";
 import { renderUsagePage } from "./usage-page";
 
-import { CORS_HEADERS, normalizeDomain, isValidDomain, cleanDomain, getFromCache, getBaseUrl, initFlyProbeUrl } from "./helpers";
+import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, initFlyProbeUrl } from "./helpers";
 import type { Env } from "./helpers";
-import { handleSPARoute, serveAssetOrFallback, HTML_SECURITY_HEADERS, getHtmlSecurityHeaders } from "./spa";
+import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders } from "./spa";
 import { getApiDocsHtml } from "./pages";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────

@@ -200,7 +200,7 @@ async function callOpenRouter(
   let parsed: AIAnalysisResult;
   try {
     parsed = JSON.parse(jsonStr);
-  } catch {
+  } catch { /* invalid JSON */
     throw new Error(`Failed to parse LLM response as JSON: ${content.slice(0, 200)}`);
   }
 

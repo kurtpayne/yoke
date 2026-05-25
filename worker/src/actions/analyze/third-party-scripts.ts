@@ -158,7 +158,7 @@ function extractDomain(url: string): string {
     const fullUrl = url.startsWith("//") ? `https:${url}` : url;
     const parsed = new URL(fullUrl);
     return parsed.hostname;
-  } catch {
+  } catch { /* malformed URL */
     // Try basic extraction
     const match = url.match(/(?:https?:)?\/\/([^/]+)/);
     return match?.[1] ?? url;

@@ -76,17 +76,22 @@ Think of it as `dig` + `whois` + `nmap` + `curl` + BuiltWith + SecurityTrails �
 - **6 AI Personas** — Security Analyst, SEO Expert, Developer, Business Analyst, Privacy Auditor, Performance Engineer
 - **Top Priorities** — Deterministic prioritized action plan with effort estimates, cross-axis insights, ranked by impact
 - **Posture Assessment** — Strong/Fair/Poor/Critical posture labels (not alarmist risk scores)
-- **BYO API Key** — Set your own OpenRouter key (gear icon on AI tab or `localStorage`) to bypass platform rate limits
+- **BYO API Key** — Set your own OpenRouter key (gear icon on AI tab) to bypass platform rate limits. Includes model picker (Claude Sonnet 4, Opus 4, GPT-4o, o3, Gemini 2.5 Pro, Llama 4 Maverick) and prompt editor.
 - **Powered by Claude** — Deep analysis via OpenRouter with 24h caching
 
 ### 🔗 Sharing & API
 - **Share Bar** — Copy link, share to X/Twitter, LinkedIn, Reddit, plus native Web Share API on mobile
 - **Dynamic OG Tags** — Rich link previews when sharing domain analysis URLs
+- **Re-analyze** — Force a fresh analysis bypassing cache with one click
 - **Public JSON API** — `curl yoke.lol/stripe.com | jq`
 - **Streaming Analysis** — Real-time SSE progress with per-check status updates
 - **Chrome Extension** — One-click analysis for any site you're visiting
 - **Well-Known Endpoints** — robots.txt parsing, sitemap detection, ads.txt, humans.txt, llms.txt
-- **ANS / DNS-AID Detection** — Agent Name Service (`_ans.` TXT), DNS-AID/BANDAID (`_agents.` TXT), and `/.well-known/agent.json` — scored as bonus points under AI Readiness
+- **ANS / DNS-AID Detection** — Agent Name Service (`_ans.` TXT), DNS-AID/BANDAID (`_agents.` TXT), and `/.well-known/agent.json` — scored as bonus points under AI Readiness. Wildcard DNS detection prevents false positives.
+- **SSL Labs Deep Link** — Every SSL panel links directly to the full SSL Labs report for the domain
+- **Social Verification Badges** — Green (verified on homepage) and yellow (probe-discovered) indicators for social accounts
+- **RFC / Documentation Links** — Findings link to relevant RFCs and MDN documentation (HSTS → MDN, DMARC → RFC 7489, etc.)
+- **6 Themes** — Dark (default), Light, Midnight, Nord, Solarized, High Contrast
 
 ## Usage
 
@@ -216,6 +221,8 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 | `CF_API_TOKEN` | No | Cloudflare API token (for DNS-over-HTTPS fallback) |
 | `BASE_URL` | No | Override the instance base URL (e.g. `https://yoke.example.com`). Auto-detected from incoming requests — only needed if behind a reverse proxy that rewrites the Host header. |
 | `FLY_PROBE_URL` | No | URL of the Fly.io HTTP probe service (defaults to `https://yoke-probe.fly.dev`). Set this if you deploy your own probe, or leave unset to use direct probes from the Cloudflare edge. |
+| `FLY_AUTH_SECRET` | No | Shared secret between the Worker and Fly probe. If set on both sides, the probe rejects unauthenticated requests. If unset, the probe accepts all requests (self-hosting friendly). See [Worker-to-Fly Proxy Auth](#worker-to-fly-proxy-auth). |
+| `ADMIN_KEY` | No | Admin key for gated endpoints like `/api/cleanup`. |
 
 ## Architecture
 
@@ -248,7 +255,7 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
      ┌────┴────┐  ┌────────────┴──┐  ┌──────────────┐
      │DNS/RDAP │  │SSL Labs/HIBP  │  │PageSpeed/    │
      │Tranco   │  │CertSpotter    │  │GreyNoise     │
-     │ip-api   │  │Observatory    │  │Green Web     │
+     │ipwho.is │  │Observatory    │  │Green Web     │
      │Wikidata │  │Brandfetch     │  │Crunchbase    │
      │Yahoo Fin│  │Bing News      │  │HackerNews    │
      └─────────┘  └───────────────┘  └──────────────┘
@@ -256,12 +263,12 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 ```
 
 ### Tech Stack
-- **Frontend:** React 19, Tailwind CSS v4, React Query, Leaflet, Lucide icons
-- **Backend:** Cloudflare Worker (zero external dependencies, ~35KB bundled)
+- **Frontend:** React 19, Tailwind CSS v4, React Query, Leaflet, Lucide icons — code-split with React.lazy (21 lazy chunks, ~213KB initial JS)
+- **Backend:** Cloudflare Worker (zero external dependencies, ~214KB bundled) with DNS-over-HTTPS fallback (dns.google → cloudflare-dns.com)
 - **Database:** Cloudflare D1 (SQLite-compatible, edge caching)
-- **Probe Proxy:** Go on Fly.io (HTTP status checks + check-host.net relay)
+- **Probe Proxy:** Go on Fly.io (HTTP status checks + check-host.net relay), secured via shared `FLY_AUTH_SECRET`
 - **Extension:** Chrome Manifest V3, side panel API, zero dependencies
-- **Build:** Bun (bundler + runtime)
+- **Build:** Bun (bundler + runtime), Node.js 22+ for Wrangler deploy
 
 ## API Routes
 
@@ -292,7 +299,7 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 Call `GET /api/cleanup` with your admin key to clean up old data:
 
 ```bash
-curl -H "Authorization: Bearer YOUR_ADMIN_KEY" https://yokesec.com/api/cleanup
+curl -H "Authorization: Bearer YOUR_ADMIN_KEY" https://yoke.lol/api/cleanup
 ```
 
 This deletes:
@@ -323,11 +330,19 @@ If not set, the probe accepts all requests (self-hosting friendly).
 Contributions welcome! Please open an issue first to discuss what you'd like to change.
 
 ```bash
-# Type check everything
-bun run typecheck
+# Install dependencies
+cd client && bun install && cd ..
+cd worker && bun install && cd ..
 
 # Run tests
-bun run test
+npx vitest run
+
+# Build client + worker
+cd client && bun run build.ts && cd ..
+cd worker && bun run build && cd ..
+
+# Deploy (requires Node.js 22+ for Wrangler)
+bash deploy.sh
 ```
 
 ## License
