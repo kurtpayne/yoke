@@ -1,6 +1,7 @@
 import { PerformancePanel, CarbonPanel } from "../PerformancePanel";
 import { ThirdPartyScriptsPanel } from "../ThirdPartyScriptsPanel";
 import { CompressionPanel } from "../NewPanels";
+import { CachePanel } from "../CachePanel";
 import { PanelGrid, type PanelDef } from "../PanelLayout";
 import { AxisScoreBadge } from "../DomainScore";
 import type { AnalysisResult } from "../../utils/types";
@@ -12,6 +13,7 @@ export default function PerformanceTab({ data }: { data: AnalysisResult }) {
     { id: "pagespeed", node: <PerformancePanel data={data} /> },
     { id: "third-party-scripts", node: <ThirdPartyScriptsPanel data={data} /> },
     { id: "compression", node: <CompressionPanel data={data} /> },
+    { id: "cache", node: <CachePanel data={data} /> },
     { id: "carbon", node: <CarbonPanel data={data} /> },
   ];
 
