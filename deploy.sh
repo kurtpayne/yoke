@@ -52,7 +52,12 @@ if $DEPLOY_CF; then
   cd worker && bun run build && cd ..
 
   echo "🚀 Deploying to Cloudflare..."
-  cd worker && npx wrangler deploy && cd ..
+  cd worker
+  if ! npx wrangler deploy; then
+    echo "❌ Cloudflare Worker deploy failed"
+    exit 1
+  fi
+  cd ..
 
   echo "✅ Cloudflare Worker deployed"
 fi
@@ -71,7 +76,12 @@ if $DEPLOY_FLY; then
   fi
 
   echo "🚀 Deploying Fly probe..."
-  cd fly-proxy && fly deploy && cd ..
+  cd fly-proxy
+  if ! fly deploy; then
+    echo "❌ Fly probe deploy failed"
+    exit 1
+  fi
+  cd ..
 
   echo "✅ Fly probe deployed"
 fi
