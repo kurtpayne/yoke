@@ -8,7 +8,7 @@ import type {
   RobotsParsed, MetaResult, HttpAnalysis, SecurityHeaderCheck,
   EmailAuthResult, CertTransparencyResult, GreynoiseResult,
   HostingResult, TechItem, AccessibilityResult, ThirdPartyScriptsResult,
-  CookieConsentResult,
+  CookieConsentResult, CacheAnalysis,
 } from "./types";
 import {
   PERF_SCORE, LCP, CLS, TTFB, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
@@ -288,6 +288,7 @@ export function calculateDomainScore(opts: {
   accessibility: AccessibilityResult | null;
   thirdPartyScripts: ThirdPartyScriptsResult | null;
   cookieConsent: CookieConsentResult | null;
+  cacheAnalysis: CacheAnalysis | null;
 }): DomainScoreResult {
   // Step 1: Detect archetype
   const archetype = detectArchetype({
@@ -473,6 +474,20 @@ export function calculateDomainScore(opts: {
       findings.push({ signal: "compression", axis: "performance", severity: "good", label: `Compression: ${opts.compression.encoding}`, tradeoff: null, weight: 2 });
     } else if (!opts.httpBlocked) {
       findings.push({ signal: "no_compression", axis: "performance", severity: "medium", label: "No compression detected", tradeoff: null, weight: 2 });
+    }
+  }
+
+  // Cache headers
+  if (opts.cacheAnalysis && !opts.httpBlocked) {
+    const cv = opts.cacheAnalysis.verdict;
+    if (cv === "excellent" || cv === "good") {
+      findings.push({ signal: "cache_headers", axis: "performance", severity: "good", label: opts.cacheAnalysis.verdict_label, tradeoff: null, weight: 3 });
+    } else if (cv === "fair") {
+      findings.push({ signal: "cache_headers", axis: "performance", severity: "info", label: opts.cacheAnalysis.verdict_label, tradeoff: null, weight: 3 });
+    } else if (cv === "poor") {
+      findings.push({ signal: "cache_headers", axis: "performance", severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }), label: opts.cacheAnalysis.verdict_label, tradeoff: "Aggressive caching may serve stale content to users.", weight: 3 });
+    } else if (cv === "none") {
+      findings.push({ signal: "cache_headers", axis: "performance", severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }), label: "No cache headers — browsers use heuristic caching", tradeoff: null, weight: 3 });
     }
   }
 

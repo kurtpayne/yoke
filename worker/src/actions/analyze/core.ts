@@ -13,13 +13,14 @@ import type {
   PerformanceResult, RdapResult, LlmsTxtResult, ShodanResult, DnssecResult,
   HostingResult, CookieSecurityResult,
   CompressionResult, CertTransparencyResult, SecurityTxtResult, GreenHostingResult,
-  WellKnownResult, GreynoiseResult, EmailAuthResult,
+  WellKnownResult, GreynoiseResult, EmailAuthResult, CacheAnalysis,
 } from "./types";
 
 import { checkDns, isSubdomain, checkRdap, dohQuery } from "./dns";
 import { auditSecurityHeaders, detectTechStack, analyzeHttp, checkRobotsSitemap } from "./http";
 import { checkIpInfo, checkBlocklists, checkSsl, checkStatus, checkShodan, checkDnssec } from "./network";
 import { checkPageSpeed, detectCompression, checkCarbon } from "./performance";
+import { checkCacheHeaders } from "./cache";
 import { isActuallyCloudflare, sanitizeCfHeaders, detectHosting, auditCookies } from "./security";
 import {
   checkLlmsTxt, checkWayback, checkTranco, checkObservatory,
@@ -103,6 +104,7 @@ export interface AnalysisResult {
   legal: unknown;
   cookie_security: CookieSecurityResult | null;
   compression: CompressionResult | null;
+  cache_analysis: CacheAnalysis | null;
   ai_readiness: unknown;
   health_score: unknown;
   wordpress: unknown;
@@ -179,6 +181,7 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     legal: null,
     cookie_security: null,
     compression: null,
+    cache_analysis: null,
     ai_readiness: null,
     health_score: { score: 0, max_score: 71, grade: "N/A", breakdown: {} },
     wordpress: null,
@@ -519,6 +522,7 @@ export async function runAnalysis(
   const legal = detectLegalPages(html, domain);
   const cookieSecurity = auditCookies(effectiveHeaders);
   const compression = detectCompression(effectiveHeaders);
+  const cacheAnalysis = checkCacheHeaders(effectiveHeaders);
   const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta, ansResult as Awaited<ReturnType<typeof checkAnsRecords>> | null);
   const structuredDataValidation = validateStructuredData(jsonLd);
 
@@ -575,6 +579,7 @@ export async function runAnalysis(
     accessibility: accessibilityResult,
     thirdPartyScripts: thirdPartyScriptsResult,
     cookieConsent: cookieConsentResult,
+    cacheAnalysis,
   });
 
   const result: AnalysisResult = {
@@ -615,6 +620,7 @@ export async function runAnalysis(
     legal,
     cookie_security: cookieSecurity,
     compression,
+    cache_analysis: cacheAnalysis,
     ai_readiness: aiReadiness,
     health_score: healthScore,
     wordpress: wpDetails,
