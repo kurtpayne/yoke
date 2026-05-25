@@ -6,21 +6,42 @@ import type { DnsRecord, RdapResult } from "./types";
 
 export const DNS_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "CAA"] as const;
 
+// DoH resolvers — try Google first, fall back to Cloudflare
+const DOH_RESOLVERS = [
+  "https://dns.google/resolve",
+  "https://cloudflare-dns.com/dns-query",
+] as const;
+
+/** Query a DoH resolver with fallback. Returns parsed JSON response or null. */
+async function dohQuery(
+  name: string,
+  type: string,
+  timeout = 5000,
+): Promise<{ Status: number; Answer?: Array<{ name: string; type: number; TTL: number; data: string }> } | null> {
+  for (const resolver of DOH_RESOLVERS) {
+    try {
+      const res = await fetchWithTimeout(
+        `${resolver}?name=${encodeURIComponent(name)}&type=${type}`,
+        { timeout, headers: resolver.includes("cloudflare") ? { Accept: "application/dns-json" } : undefined },
+      );
+      if (res.ok) {
+        return (await res.json()) as { Status: number; Answer?: Array<{ name: string; type: number; TTL: number; data: string }> };
+      }
+    } catch { /* resolver failed, try next */ }
+  }
+  return null;
+}
+
+export { dohQuery };
+
 export async function checkDns(domain: string): Promise<DnsRecord[]> {
   const results: DnsRecord[] = [];
   
   // Standard record types for the root domain
   const queries = DNS_TYPES.map(async (type) => {
     try {
-      const res = await fetchWithTimeout(
-        `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${type}`,
-        { timeout: 5000 },
-      );
-      const data = await res.json() as {
-        Status: number;
-        Answer?: Array<{ name: string; type: number; TTL: number; data: string }>;
-      };
-      if (data.Status === 0 && data.Answer) {
+      const data = await dohQuery(domain, type);
+      if (data && data.Status === 0 && data.Answer) {
         for (const ans of data.Answer) {
           results.push({ type, name: ans.name.replace(/\.$/, ""), ttl: ans.TTL, data: ans.data });
         }
@@ -34,15 +55,8 @@ export async function checkDns(domain: string): Promise<DnsRecord[]> {
     { prefix: "_agents", label: "TXT" },
   ].map(async ({ prefix, label }) => {
     try {
-      const res = await fetchWithTimeout(
-        `https://dns.google/resolve?name=${encodeURIComponent(`${prefix}.${domain}`)}&type=${label}`,
-        { timeout: 5000 },
-      );
-      const data = await res.json() as {
-        Status: number;
-        Answer?: Array<{ name: string; type: number; TTL: number; data: string }>;
-      };
-      if (data.Status === 0 && data.Answer) {
+      const data = await dohQuery(`${prefix}.${domain}`, label);
+      if (data && data.Status === 0 && data.Answer) {
         for (const ans of data.Answer) {
           results.push({ type: label, name: ans.name.replace(/\.$/, ""), ttl: ans.TTL, data: ans.data });
         }

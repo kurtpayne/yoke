@@ -284,8 +284,42 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 | `POST` | `/api/ai-analysis` | AI-powered deep analysis (web/extension only) |
 | `GET` | `/api/recent` | Recent lookups |
 | `GET` | `/api/health` | Health check |
+| `GET` | `/api/cleanup` | D1 cleanup — admin only (see Maintenance) |
 | `GET` | `/api/docs` | API documentation (JSON) |
 | `GET` | `/compare/:d1/:d2` | Compare view (client-side SPA route) |
+
+## Maintenance
+
+### D1 Database Cleanup
+
+Call `GET /api/cleanup` with your admin key to clean up old data:
+
+```bash
+curl -H "Authorization: Bearer YOUR_ADMIN_KEY" https://yokesec.com/api/cleanup
+```
+
+This deletes:
+- **domain_cache** entries older than 7 days
+- **domain_lookups** keeping only the 500 most recent
+- **ai_rate_limits** expired records (>1 day old)
+- **endpoint_rate_limits** expired records (>1 day old)
+- **api_errors** older than 7 days
+
+Recommended: run daily via cron or Cloudflare scheduled worker.
+
+### Worker-to-Fly Proxy Auth
+
+Set `FLY_AUTH_SECRET` on both the Worker and Fly proxy to secure the probe:
+
+```bash
+# Cloudflare Worker
+wrangler secret put FLY_AUTH_SECRET
+
+# Fly.io (set in fly.toml or via fly secrets)
+fly secrets set FLY_AUTH_SECRET=your-shared-secret
+```
+
+If not set, the probe accepts all requests (self-hosting friendly).
 
 ## Contributing
 

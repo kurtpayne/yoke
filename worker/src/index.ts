@@ -301,10 +301,9 @@ export default {
           if (!body.domain) return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
-          const cfColo = (request as any).cf?.colo as string | undefined;
-          const cfCountry = (request as any).cf?.country as string | undefined;
-          const cfCity = (request as any).cf?.city as string | undefined;
-          const result = await checkGlobalAvailability(domain, { colo: cfColo, country: cfCountry, city: cfCity });
+          // CF Workers expose request.cf with IncomingRequestCfProperties
+          const cf = (request as Request & { cf?: { colo?: string; country?: string; city?: string } }).cf;
+          const result = await checkGlobalAvailability(domain, { colo: cf?.colo, country: cf?.country, city: cf?.city });
           await trackUsage(env.STATS_DB, "availability");
           return json(result);
         }
@@ -395,6 +394,40 @@ export default {
           } catch (e) {
             return json({ error: "Failed to clear cache" }, 500);
           }
+        }
+
+        // GET /api/cleanup — scheduled D1 cleanup (admin-only)
+        // Deletes old cache entries (>7 days) and expired rate limit records.
+        // Can be called via cron or manually.
+        if (method === "GET" && path === "/api/cleanup") {
+          const authErr = checkAdminAuth(request, env.ADMIN_KEY);
+          if (authErr) return authErr;
+          const cutoff7d = Date.now() - (7 * 24 * 60 * 60 * 1000);
+          const cutoff1d = Date.now() - (24 * 60 * 60 * 1000);
+          const results: Record<string, string> = {};
+          try {
+            const cacheRes = await env.DB.prepare("DELETE FROM domain_cache WHERE cached_at < ?").bind(cutoff7d).run();
+            results.domain_cache = `${cacheRes.meta?.changes ?? "?"} rows deleted (>7 days old)`;
+          } catch (e) { results.domain_cache = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          try {
+            const lookupRes = await env.DB.prepare(
+              "DELETE FROM domain_lookups WHERE id NOT IN (SELECT id FROM domain_lookups ORDER BY analyzed_at DESC LIMIT 500)"
+            ).run();
+            results.domain_lookups = `${lookupRes.meta?.changes ?? "?"} rows deleted (keeping 500 most recent)`;
+          } catch (e) { results.domain_lookups = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          try {
+            const rlRes = await env.STATS_DB.prepare("DELETE FROM ai_rate_limits WHERE date < date('now', '-1 day')").run();
+            results.ai_rate_limits = `${rlRes.meta?.changes ?? "?"} expired rows deleted`;
+          } catch (e) { results.ai_rate_limits = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          try {
+            const rlRes2 = await env.STATS_DB.prepare("DELETE FROM endpoint_rate_limits WHERE ts < ?").bind(cutoff1d).run();
+            results.endpoint_rate_limits = `${rlRes2.meta?.changes ?? "?"} expired rows deleted`;
+          } catch (e) { results.endpoint_rate_limits = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          try {
+            const errRes = await env.STATS_DB.prepare("DELETE FROM api_errors WHERE ts < ?").bind(cutoff7d).run();
+            results.api_errors = `${errRes.meta?.changes ?? "?"} rows deleted (>7 days old)`;
+          } catch (e) { results.api_errors = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          return json({ ok: true, cleaned_at: new Date().toISOString(), results });
         }
 
         // GET /api/docs — serve HTML for browsers, JSON for API clients

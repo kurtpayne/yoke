@@ -80,9 +80,10 @@ async function cfSearch(query: string, env: Env, limit = 15): Promise<DomainSugg
       { timeout: 8000, headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` } }
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as any;
+    // CF Search API response shape (external API — type narrowly)
+    const data = (await res.json()) as { success: boolean; result?: { domains?: Array<{ name: string; registrable: boolean; pricing?: { registration_cost: string; renewal_cost: string; currency: string } }> } };
     if (!data.success) return [];
-    return (data.result?.domains ?? []).map((d: any) => ({
+    return (data.result?.domains ?? []).map((d) => ({
       domain: d.name,
       available: d.registrable === true,
       registrable: d.registrable,
@@ -119,7 +120,8 @@ async function cfCheck(domains: string[], env: Env): Promise<Map<string, DomainS
         }
       );
       if (!res.ok) return [];
-      const data = (await res.json()) as any;
+      // CF Check API response shape (external API)
+      const data = (await res.json()) as { success: boolean; result?: { domains?: Array<{ name: string; registrable: boolean; reason?: string; pricing?: { registration_cost: string; renewal_cost: string; currency: string } }> } };
       if (!data.success) return [];
       return data.result?.domains ?? [];
     })
@@ -150,7 +152,8 @@ async function dohCheck(domain: string): Promise<boolean | null> {
       { timeout: 8000, headers: { Accept: "application/dns-json" } }
     );
     if (!res.ok) return null;
-    const data = (await res.json()) as any;
+    // DoH JSON response shape
+    const data = (await res.json()) as { Status: number; Answer?: unknown[] };
     // NXDOMAIN (status 3) = domain doesn't exist = likely available
     if (data.Status === 3) return true;
     // NOERROR (status 0) with Answer = has NS records = taken
@@ -162,7 +165,8 @@ async function dohCheck(domain: string): Promise<boolean | null> {
         { timeout: 8000, headers: { Accept: "application/dns-json" } }
       );
       if (aRes.ok) {
-        const aData = (await aRes.json()) as any;
+        // DoH JSON response shape
+        const aData = (await aRes.json()) as { Status: number; Answer?: unknown[] };
         if (aData.Answer && aData.Answer.length > 0) return false;
       }
       // No NS, no A — probably available but not certain

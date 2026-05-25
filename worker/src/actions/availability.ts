@@ -54,10 +54,11 @@ async function resolveViaDoH(domain: string, resolverUrl: string): Promise<strin
       { timeout: 5000, headers: { Accept: "application/dns-json" } }
     );
     if (!res.ok) return [];
-    const data = (await res.json()) as any;
+    // DoH JSON response shape
+    const data = (await res.json()) as { Answer?: Array<{ type: number; data: string }> };
     return (data.Answer ?? [])
-      .filter((a: any) => a.type === 1)
-      .map((a: any) => a.data);
+      .filter((a) => a.type === 1)
+      .map((a) => a.data);
   } catch {
     return [];
   }
@@ -207,8 +208,9 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
       { timeout: 3000, headers: { Accept: "application/dns-json" } }
     );
     if (dnsRes.ok) {
-      const dnsData = (await dnsRes.json()) as any;
-      ips = (dnsData.Answer ?? []).filter((a: any) => a.type === 1).map((a: any) => a.data);
+      // DoH JSON response shape
+      const dnsData = (await dnsRes.json()) as { Answer?: Array<{ type: number; data: string }> };
+      ips = (dnsData.Answer ?? []).filter((a) => a.type === 1).map((a) => a.data);
     }
   } catch { /* ignore */ }
 

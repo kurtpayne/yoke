@@ -381,13 +381,24 @@ export function calculateDomainScore(opts: {
     });
   }
 
-  // DNSSEC
+  // DNSSEC — bonus when present, minimal penalty when absent for most archetypes
   if (opts.dnssec) {
     findings.push({
       signal: "dnssec", axis: "security",
-      severity: opts.dnssec.enabled ? "good" : contextualSeverity("low", arch, { institutional: "medium", commerce: "low" }),
+      severity: opts.dnssec.enabled
+        ? "good"
+        : contextualSeverity("info", arch, {
+            institutional: "medium",
+            infrastructure: "medium",
+            commerce: "low",
+            corporate: "low",
+            application: "info",
+            content: "info",
+            general: "info",
+          }),
       label: opts.dnssec.enabled ? "DNSSEC enabled" : "DNSSEC not enabled",
-      tradeoff: null, weight: 2,
+      tradeoff: opts.dnssec.enabled ? null : "DNSSEC adds DNS-level authenticity but can complicate DNS management. Most sites work fine without it.",
+      weight: opts.dnssec.enabled ? 2 : 1, // Higher weight when present (reward), lower when absent (don't penalize)
     });
   }
 
