@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -15,6 +16,102 @@ import (
 )
 
 var domainRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$`)
+
+// ─── SSRF Protection ────────────────────────────────────────────────
+// Block connections to private, reserved, and link-local IP ranges.
+// Applied at dial time to catch DNS rebinding attacks.
+
+var privateRanges []*net.IPNet
+
+func init() {
+	cidrs := []string{
+		"127.0.0.0/8",      // IPv4 loopback
+		"10.0.0.0/8",       // RFC1918
+		"172.16.0.0/12",    // RFC1918
+		"192.168.0.0/16",   // RFC1918
+		"169.254.0.0/16",   // link-local
+		"224.0.0.0/4",      // multicast
+		"0.0.0.0/8",        // unspecified
+		"100.64.0.0/10",    // carrier-grade NAT
+		"192.0.0.0/24",     // IETF protocol
+		"192.0.2.0/24",     // documentation (TEST-NET-1)
+		"198.51.100.0/24",  // documentation (TEST-NET-2)
+		"203.0.113.0/24",   // documentation (TEST-NET-3)
+		"198.18.0.0/15",    // benchmarking
+		"240.0.0.0/4",      // reserved
+		"::1/128",          // IPv6 loopback
+		"fc00::/7",         // IPv6 unique local
+		"fe80::/10",        // IPv6 link-local
+		"ff00::/8",         // IPv6 multicast
+	}
+	for _, cidr := range cidrs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err == nil {
+			privateRanges = append(privateRanges, network)
+		}
+	}
+}
+
+func isPrivateIP(ip net.IP) bool {
+	// Check IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	for _, network := range privateRanges {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// safeDialContext resolves the hostname and rejects private IPs before connecting.
+func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address: %s", addr)
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip.IP) {
+			return nil, fmt.Errorf("connection to private/reserved IP %s blocked (SSRF protection)", ip.IP)
+		}
+	}
+	// Connect to the first resolved address
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
+}
+
+// safeTransport returns an http.Transport that rejects private IPs at dial time.
+func safeTransport() *http.Transport {
+	return &http.Transport{
+		DialContext:       safeDialContext,
+		ForceAttemptHTTP2: true,
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: false},
+	}
+}
+
+// safeTLSDial resolves the hostname, rejects private IPs, then does a TLS handshake.
+func safeTLSDial(domain string, timeout time.Duration, tlsConfig *tls.Config) (*tls.Conn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, domain)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip.IP) {
+			return nil, fmt.Errorf("connection to private/reserved IP %s blocked (SSRF protection)", ip.IP)
+		}
+	}
+	dialer := &net.Dialer{Timeout: timeout}
+	addr := net.JoinHostPort(ips[0].IP.String(), "443")
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	return conn, err
+}
 
 func main() {
 	port := os.Getenv("PORT")
@@ -151,14 +248,13 @@ func probeSSL(domain string) SSLResult {
 	var connectErr error
 
 	// Attempt connection with TLS 1.2+ (Go's default)
-	dialer := &net.Dialer{Timeout: 8 * time.Second}
-	conn, err := tls.DialWithDialer(dialer, "tcp", domain+":443", &tls.Config{
+	conn, err := safeTLSDial(domain, 8*time.Second, &tls.Config{
 		ServerName:         domain,
 		InsecureSkipVerify: false,
 	})
 	if err != nil {
 		// Try with InsecureSkipVerify to still get cert info for expired/self-signed
-		conn, err = tls.DialWithDialer(dialer, "tcp", domain+":443", &tls.Config{
+		conn, err = safeTLSDial(domain, 8*time.Second, &tls.Config{
 			ServerName:         domain,
 			InsecureSkipVerify: true,
 		})
@@ -186,7 +282,7 @@ func probeSSL(domain string) SSLResult {
 	case tls.VersionTLS13:
 		protocols = append(protocols, "TLS 1.3")
 		// Also test TLS 1.2 support
-		conn12, err := tls.DialWithDialer(dialer, "tcp", domain+":443", &tls.Config{
+		conn12, err := safeTLSDial(domain, 8*time.Second, &tls.Config{
 			ServerName:         domain,
 			InsecureSkipVerify: true,
 			MaxVersion:         tls.VersionTLS12,
@@ -351,7 +447,8 @@ func probeStatus(domain string) StatusResult {
 	var lastErr error
 
 	noRedirectClient := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout:   10 * time.Second,
+		Transport: safeTransport(),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -438,7 +535,8 @@ type ProtocolResult struct {
 func probeProtocols(domain string) ProtocolResult {
 	// Make an HTTP/2 request and check alt-svc header for h3
 	client := &http.Client{
-		Timeout: 8 * time.Second,
+		Timeout:   8 * time.Second,
+		Transport: safeTransport(),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},

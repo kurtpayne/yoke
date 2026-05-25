@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../../helpers";
+import { fetchWithTimeout, boundedText } from "../../helpers";
 import { fingerprints } from "../../fingerprints";
 import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectHop } from "./types";
 
@@ -167,7 +167,7 @@ export async function analyzeHttp(domain: string): Promise<HttpAnalysis | null> 
       finalStatusCode = res.status;
       finalHeaders = {};
       res.headers.forEach((v, k) => { finalHeaders[k.toLowerCase()] = v; });
-      try { html = await res.text(); } catch { html = ""; }
+      try { html = await boundedText(res); } catch { html = ""; }
       break;
     } catch {
       if (i === 0 && currentUrl.startsWith("https://")) { currentUrl = `http://${domain}`; continue; }
@@ -216,12 +216,12 @@ export async function checkRobotsSitemap(domain: string): Promise<Pick<MetaResul
   const result = { robots_txt: null as string | null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null as string | null, sitemap_page_count: null as number | null };
   try {
     const res = await fetchWithTimeout(`https://${domain}/robots.txt`, { timeout: 5000 });
-    if (res.ok) { const text = await res.text(); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.robots_txt = text.slice(0, 2000); result.robots_txt_exists = true; } }
+    if (res.ok) { const text = await boundedText(res); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.robots_txt = text.slice(0, 2000); result.robots_txt_exists = true; } }
   } catch { /* ignore */ }
   try {
     const res = await fetchWithTimeout(`https://${domain}/sitemap.xml`, { timeout: 5000 });
     if (res.ok) {
-      const text = await res.text();
+      const text = await boundedText(res);
       if (text.includes("<urlset") || text.includes("<sitemapindex")) {
         result.sitemap_detected = true; result.sitemap_url = `https://${domain}/sitemap.xml`;
         const urlMatches = text.match(/<url>/gi); const sitemapMatches = text.match(/<sitemap>/gi);
