@@ -198,6 +198,18 @@ export default {
           return getAIAnalysis(domain, env);
         }
 
+        // DELETE /api/cache/:domain — purge cached analysis for a domain
+        if (method === "DELETE" && path.startsWith("/api/cache/")) {
+          const domain = cleanDomain(path.replace("/api/cache/", ""));
+          if (!domain) return json({ error: "Invalid domain" }, 400);
+          try {
+            await env.DB.prepare("DELETE FROM domain_cache WHERE domain = ?").bind(domain).run();
+            return json({ ok: true, domain, message: "Cache cleared" });
+          } catch (e) {
+            return json({ error: "Failed to clear cache" }, 500);
+          }
+        }
+
         // GET /api/health
         if (method === "GET" && path === "/api/health") {
           return json({ status: "ok", timestamp: new Date().toISOString() });

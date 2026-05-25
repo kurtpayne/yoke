@@ -733,6 +733,12 @@ main {
   background: var(--accent-subtle);
 }
 
+/* Logo inversion for light themes */
+[data-theme="light"] .site-logo,
+[data-theme="newsprint"] .site-logo {
+  filter: brightness(0) saturate(100%);
+}
+
 /* Selection highlight in light theme */
 [data-theme="light"] ::selection {
   background: var(--accent);
