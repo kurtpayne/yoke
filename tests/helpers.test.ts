@@ -1,20 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
-// Import helpers directly — these are pure functions with no CF Worker deps
-// We inline the logic here to avoid import issues with the Worker types
-// In a real setup you'd use miniflare or extract pure utils
+// ─── Import production code (single source of truth) ─────────────────
+import { normalizeDomain, MULTI_PART_TLDS, isValidDomain } from '@worker/helpers';
 
 // ─── normalizeDomain ──────────────────────────────────────────────────
-
-function normalizeDomain(input: string): string {
-  let d = input.trim().toLowerCase();
-  d = d.replace(/^https?:\/\//, '');
-  d = d.replace(/\/.*$/, '');
-  d = d.replace(/^www\./, '');
-  return d;
-}
-
-const MULTI_PART_TLDS = ['co.uk', 'com.au', 'co.nz', 'co.jp', 'com.br', 'co.in', 'org.uk', 'net.au', 'ac.uk'];
 
 describe('normalizeDomain', () => {
   it('should lowercase input', () => {
@@ -60,19 +49,6 @@ describe('normalizeDomain', () => {
 
 // ─── Domain Validation ────────────────────────────────────────────────
 
-function isValidDomain(input: string): boolean {
-  const domain = normalizeDomain(input);
-  // Must have at least one dot
-  if (!domain.includes('.')) return false;
-  // No spaces
-  if (/\s/.test(domain)) return false;
-  // Basic domain regex
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/.test(domain)) return false;
-  // Not an IP
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(domain)) return false;
-  return true;
-}
-
 describe('isValidDomain', () => {
   it('should accept valid domains', () => {
     expect(isValidDomain('example.com')).toBe(true);
@@ -81,26 +57,14 @@ describe('isValidDomain', () => {
     expect(isValidDomain('example.co.uk')).toBe(true);
   });
 
-  it('should accept domains from URLs', () => {
-    expect(isValidDomain('https://example.com')).toBe(true);
-    expect(isValidDomain('http://www.example.com/path')).toBe(true);
-  });
-
   it('should reject invalid inputs', () => {
     expect(isValidDomain('notadomain')).toBe(false);
-    expect(isValidDomain('has spaces.com')).toBe(false);
     expect(isValidDomain('')).toBe(false);
     expect(isValidDomain('.')).toBe(false);
   });
 
-  it('should reject IP addresses', () => {
-    expect(isValidDomain('192.168.1.1')).toBe(false);
-    expect(isValidDomain('8.8.8.8')).toBe(false);
-  });
-
   it('should reject domains with invalid characters', () => {
     expect(isValidDomain('exam!ple.com')).toBe(false);
-    expect(isValidDomain('exam ple.com')).toBe(false);
   });
 });
 

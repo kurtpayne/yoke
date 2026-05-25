@@ -15,6 +15,23 @@ export interface Env {
 import { ANALYSIS_CACHE_TTL_MS } from "./config/cache";
 export const CACHE_TTL_MS = ANALYSIS_CACHE_TTL_MS;
 
+// ─── Domain Validation ───────────────────────────────────────────────
+
+const DOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+export function isValidDomain(domain: string): boolean {
+  return DOMAIN_RE.test(domain) && domain.includes(".");
+}
+
+/** Normalize and validate a domain string. Returns the cleaned domain or null if invalid. */
+export function cleanDomain(raw: string): string | null {
+  const d = normalizeDomain(raw);
+  // Reject IP literals (IPv4 and IPv6)
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(d)) return null;
+  if (/^\[.*\]$/.test(d) || d === "::1" || d.includes(":")) return null;
+  return isValidDomain(d) ? d : null;
+}
+
 export function normalizeDomain(input: string): string {
   let d = input.trim().toLowerCase();
   d = d.replace(/^https?:\/\//, "");

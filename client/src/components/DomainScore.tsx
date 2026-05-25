@@ -59,8 +59,18 @@ const FALLBACK_ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = 
 function recomputeScore(axes: Record<Axis, AxisScoreData>, archetype: ArchetypeName, weightsTable?: Record<ArchetypeName, Record<Axis, number>>): { composite: number; grade: string } {
   const weights = (weightsTable ?? FALLBACK_ARCHETYPE_WEIGHTS)[archetype];
   let composite = 0;
+  let totalMeasuredWeight = 0;
   for (const axis of AXES) {
-    composite += axes[axis].score * weights[axis];
+    if (!axes[axis].not_measured && axes[axis].score != null) {
+      totalMeasuredWeight += weights[axis];
+    }
+  }
+  if (totalMeasuredWeight > 0) {
+    for (const axis of AXES) {
+      if (!axes[axis].not_measured && axes[axis].score != null) {
+        composite += axes[axis].score! * (weights[axis] / totalMeasuredWeight);
+      }
+    }
   }
   composite = Math.round(composite);
   const grade = composite >= 90 ? "A" : composite >= 80 ? "B" : composite >= 70 ? "C" : composite >= 60 ? "D" : "F";
@@ -128,7 +138,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  const values = AXES.map(a => axes[a].score * animProgress);
+  const values = AXES.map(a => (axes[a].not_measured || axes[a].score == null) ? 0 : axes[a].score! * animProgress);
   const dataPoints = polygonPoints(values);
 
   return (
@@ -205,6 +215,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
           const labelR = RADIUS + 18;
           const [x, y] = polarToCartesian(angle, labelR);
           const score = axes[axis].score;
+          const notMeasured = axes[axis].not_measured || score == null;
           const weight = Math.round(axes[axis].weight * 100);
           const isHovered = hoveredAxis === axis;
 
@@ -219,9 +230,10 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
                   fontFamily: "var(--font-ui)",
                   fontSize: "10px",
                   fontWeight: isHovered ? 600 : 500,
-                  fill: isHovered ? "var(--accent)" : "var(--dim)",
+                  fill: notMeasured ? "var(--dim)" : isHovered ? "var(--accent)" : "var(--dim)",
                   cursor: "default",
                   transition: "fill 0.15s",
+                  opacity: notMeasured ? 0.5 : 1,
                 }}
                 onMouseEnter={() => setHoveredAxis(axis)}
                 onMouseLeave={() => setHoveredAxis(null)}
@@ -238,13 +250,14 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
                   fontFamily: "var(--font-mono)",
                   fontSize: "9px",
                   fontWeight: 600,
-                  fill: score >= 80 ? "var(--success)" : score >= 60 ? "var(--warning)" : "var(--danger)",
-                  opacity: isHovered ? 1 : 0.7,
+                  fill: notMeasured ? "var(--dim)" : score! >= 80 ? "var(--success)" : score! >= 60 ? "var(--warning)" : "var(--danger)",
+                  opacity: notMeasured ? 0.4 : isHovered ? 1 : 0.7,
+                  fontStyle: notMeasured ? "italic" : "normal",
                 }}
                 onMouseEnter={() => setHoveredAxis(axis)}
                 onMouseLeave={() => setHoveredAxis(null)}
               >
-                {score}
+                {notMeasured ? "N/M" : score}
               </text>
             </g>
           );
@@ -286,11 +299,13 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
           }}
         >
           <span style={{ fontWeight: 600, color: "var(--text)" }}>
-            {AXIS_LABELS[hoveredAxis]}: {axes[hoveredAxis].score}/100
+            {AXIS_LABELS[hoveredAxis]}: {axes[hoveredAxis].not_measured ? "Not measured" : `${axes[hoveredAxis].score}/100`}
           </span>
-          <span style={{ color: "var(--dim)", marginLeft: 6 }}>
-            ({Math.round(weights[hoveredAxis] * 100)}% weight for {ARCHETYPE_LABELS[archetype]})
-          </span>
+          {!axes[hoveredAxis].not_measured && (
+            <span style={{ color: "var(--dim)", marginLeft: 6 }}>
+              ({Math.round(weights[hoveredAxis] * 100)}% weight for {ARCHETYPE_LABELS[archetype]})
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -421,24 +436,36 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
             <div className="space-y-1.5">
               {AXES.map(axis => {
                 const a = ds.axes[axis];
+                const nm = a.not_measured || a.score == null;
                 return (
-                  <div key={axis} className="flex items-center gap-2" style={{ fontSize: "11px" }}>
+                  <div key={axis} className="flex items-center gap-2" style={{ fontSize: "11px", opacity: nm ? 0.5 : 1 }}>
                     <span style={{ fontFamily: "var(--font-ui)", color: "var(--dim)", width: 80, flexShrink: 0, fontWeight: 500 }}>
                       {AXIS_LABELS[axis]}
                     </span>
-                    <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--border)" }}>
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${a.score}%`,
-                          background: a.score >= 80 ? "var(--success)" : a.score >= 60 ? "var(--warning)" : "var(--danger)",
-                          transition: "width 0.6s ease-out",
-                        }}
-                      />
-                    </div>
-                    <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--text)", minWidth: 24, textAlign: "right" }}>
-                      {a.score}
-                    </span>
+                    {nm ? (
+                      <>
+                        <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--border)" }} />
+                        <span style={{ fontFamily: "var(--font-ui)", fontSize: "9px", fontStyle: "italic", color: "var(--dim)", minWidth: 60, textAlign: "right" }}>
+                          Not measured
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--border)" }}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${a.score}%`,
+                              background: a.score! >= 80 ? "var(--success)" : a.score! >= 60 ? "var(--warning)" : "var(--danger)",
+                              transition: "width 0.6s ease-out",
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--text)", minWidth: 24, textAlign: "right" }}>
+                          {a.score}
+                        </span>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -565,6 +592,21 @@ export function AxisScoreBadge({ data, axis }: { data: AnalysisResult; axis: Axi
   if (!ds) return null;
 
   const axisData = ds.axes[axis];
+  if (axisData.not_measured || axisData.score == null) {
+    return (
+      <div className="flex items-center gap-2 px-1 mb-2">
+        <div className="vital-pill" style={{ padding: "4px 10px", opacity: 0.5 }}>
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {AXIS_LABELS[axis]}
+          </span>
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontStyle: "italic", color: "var(--dim)" }}>
+            Not measured
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const score = axisData.score;
   const color = score >= 80 ? "var(--success)" : score >= 60 ? "var(--warning)" : "var(--danger)";
 

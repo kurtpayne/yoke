@@ -280,8 +280,8 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [axes1, axes2]);
 
-  const vals1 = AXES.map(a => axes1[a].score * animProgress);
-  const vals2 = AXES.map(a => axes2[a].score * animProgress);
+  const vals1 = AXES.map(a => (axes1[a].score ?? 0) * animProgress);
+  const vals2 = AXES.map(a => (axes2[a].score ?? 0) * animProgress);
 
   return (
     <div className="compare-radar-container">
@@ -419,12 +419,12 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
               left: "50%", bottom: -8, transform: "translateX(-50%)",
               whiteSpace: "nowrap", pointerEvents: "none",
             }}>
-            <span style={{ color: "var(--accent)", fontWeight: 600 }}>{axes1[hoveredAxis].score}</span>
+            <span style={{ color: "var(--accent)", fontWeight: 600 }}>{axes1[hoveredAxis].score ?? "N/M"}</span>
             <span style={{ color: "var(--dim)", margin: "0 4px" }}>vs</span>
-            <span style={{ color: "#f97316", fontWeight: 600 }}>{axes2[hoveredAxis].score}</span>
+            <span style={{ color: "#f97316", fontWeight: 600 }}>{axes2[hoveredAxis].score ?? "N/M"}</span>
             <span style={{ color: "var(--dim)", marginLeft: 6 }}>
-              ({axes1[hoveredAxis].score - axes2[hoveredAxis].score > 0 ? "+" : ""}
-              {axes1[hoveredAxis].score - axes2[hoveredAxis].score})
+              ({(axes1[hoveredAxis].score ?? 0) - (axes2[hoveredAxis].score ?? 0) > 0 ? "+" : ""}
+              {(axes1[hoveredAxis].score ?? 0) - (axes2[hoveredAxis].score ?? 0)})
             </span>
           </div>
         )}

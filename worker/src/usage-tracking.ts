@@ -37,9 +37,11 @@ export async function getUsageStats(db: D1Database, days = 30): Promise<{
   by_endpoint: Record<string, number>;
   by_day: { day: string; endpoint: string; hits: number }[];
   total: number;
+  tab_views?: Record<string, number>;
 }> {
   await ensureTable(db);
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const tsCutoff = Date.now() - 7 * 86400000; // tab_views: last 7 days
 
   const [summaryResult, dailyResult] = await db.batch([
     db.prepare(
@@ -63,5 +65,19 @@ export async function getUsageStats(db: D1Database, days = 30): Promise<{
     hits: r.hits,
   }));
 
-  return { by_endpoint, by_day, total };
+  // Tab views summary (last 7 days, best-effort)
+  let tab_views: Record<string, number> | undefined;
+  try {
+    const tvResult = await db.prepare(
+      "SELECT tab, COUNT(*) as cnt FROM tab_views WHERE ts >= ? GROUP BY tab ORDER BY cnt DESC"
+    ).bind(tsCutoff).all();
+    if (tvResult.results && tvResult.results.length > 0) {
+      tab_views = {};
+      for (const row of tvResult.results as { tab: string; cnt: number }[]) {
+        tab_views[row.tab] = row.cnt;
+      }
+    }
+  } catch { /* table may not exist yet */ }
+
+  return { by_endpoint, by_day, total, tab_views };
 }

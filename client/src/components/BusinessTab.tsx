@@ -152,7 +152,7 @@ function StockCard({ stock, ticker }: { stock: NonNullable<CompanyInfoResult["st
   const Icon = isPositive ? TrendingUp : TrendingDown;
 
   return (
-    <Panel title={`${ticker} Stock`} icon={<Icon size={14} />}>
+    <Panel title={`${ticker} Stock`} icon={<Icon size={14} />} badge={<span style={{ fontSize: "10px", color: "var(--dim)", fontStyle: "italic" }}>via Yahoo Finance</span>}>
       <div className="p-4">
         <div className="flex items-baseline gap-3 mb-4">
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "32px", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
@@ -253,9 +253,14 @@ export function BusinessTab({ domain }: { domain: string }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      {data?.company && <CompanyCard company={data.company} crunchbaseUrl={data?.crunchbase_url ?? null} />}
-      {data?.stock && data.company?.ticker && <StockCard stock={data.stock} ticker={data.company.ticker} />}
+    <div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {data?.company && <CompanyCard company={data.company} crunchbaseUrl={data?.crunchbase_url ?? null} />}
+        {data?.stock && data.company?.ticker && <StockCard stock={data.stock} ticker={data.company.ticker} />}
+      </div>
+      <p style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", textAlign: "center", marginTop: "12px", opacity: 0.7 }}>
+        Company data sourced from public databases and may not reflect current information.
+      </p>
     </div>
   );
 }
