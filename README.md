@@ -139,6 +139,7 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 
 ### Prerequisites
 - [Bun](https://bun.sh/) (build toolchain)
+- [Node.js 22+](https://nodejs.org/) (required for Wrangler CLI / `npx wrangler deploy`)
 - [Cloudflare account](https://dash.cloudflare.com/) with Workers and D1 enabled
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (`npm i -g wrangler`)
 
@@ -176,17 +177,13 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
    wrangler secret put GOOGLE_PAGESPEED_API_KEY
    ```
 
-5. **Build:**
+5. **Build and deploy:**
    ```bash
-   bun run build
+   bash deploy.sh
    ```
+   This builds the client and worker, then deploys via `npx wrangler deploy`. Requires Node.js 22+.
 
-6. **Deploy:**
-   ```bash
-   cd worker && npx wrangler deploy
-   ```
-
-7. **Deploy HTTP probe proxy (optional but recommended):**
+6. **Deploy HTTP probe proxy (optional but recommended):**
 
    Cloudflare Worker outbound requests come from Cloudflare IP ranges, which some sites block. The included Fly.io proxy routes HTTP status probes from non-Cloudflare IPs so sites like `meta.com` don't falsely report as DOWN.
 
