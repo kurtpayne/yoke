@@ -10,7 +10,7 @@
 // datacenter is identified via request.cf metadata so the UI can show where
 // the probe originated.
 
-import { fetchWithTimeout, getFlyProbeUrl } from "../helpers";
+import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders } from "../helpers";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ async function checkHostProbes(domain: string): Promise<{
   try {
     startRes = await fetchWithTimeout(
       `${getFlyProbeUrl()}/check-http?host=${encodeURIComponent(domain)}&max_nodes=20`,
-      { timeout: 10000, headers: { Accept: "application/json" } }
+      { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders() } }
     );
   } catch {
     return null;
@@ -134,7 +134,7 @@ async function checkHostProbes(domain: string): Promise<{
     try {
       const pollRes = await fetchWithTimeout(
         `${getFlyProbeUrl()}/check-result/${check.request_id}`,
-        { timeout: 10000, headers: { Accept: "application/json" } }
+        { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders() } }
       );
       if (pollRes.ok) {
         rawResults = (await pollRes.json()) as CheckHostResults;

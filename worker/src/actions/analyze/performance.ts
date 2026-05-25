@@ -33,7 +33,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
     // Cache successful results for 24h
     if (db && result.score != null) {
       try {
-        await db.prepare("INSERT INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
+        await db.prepare("INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
           .bind(domain, JSON.stringify(result), Date.now()).run();
       } catch { /* ignore */ }
     }

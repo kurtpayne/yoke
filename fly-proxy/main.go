@@ -119,25 +119,52 @@ func main() {
 		port = "8080"
 	}
 
-	http.HandleFunc("/", handler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handler)
+
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	fmt.Printf("yoke-probe proxy listening on :%s\n", port)
-	http.ListenAndServe(":"+port, nil)
+	server.ListenAndServe()
+}
+
+// checkAuth verifies the Authorization header if FLY_AUTH_SECRET is set.
+// If the env var is not set, all requests are allowed (self-hosting friendly).
+func checkAuth(r *http.Request) bool {
+	secret := os.Getenv("FLY_AUTH_SECRET")
+	if secret == "" {
+		return true // No auth configured — allow all (self-hosting mode)
+	}
+	auth := r.Header.Get("Authorization")
+	return auth == "Bearer "+secret
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	// CORS
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(204)
 		return
 	}
 
-	// Health check
+	// Health check (always allowed, no auth required)
 	if r.URL.Path == "/" || r.URL.Path == "/health" {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"status":"ok","service":"yoke-probe"}`)
+		return
+	}
+
+	// Auth check — reject unauthorized requests for all endpoints except health
+	if !checkAuth(r) {
+		http.Error(w, `{"error":"unauthorized"}`, 403)
 		return
 	}
 

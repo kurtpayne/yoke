@@ -11,6 +11,9 @@ export interface Env {
   ADMIN_KEY?: string;
   BASE_URL?: string;
   FLY_PROBE_URL?: string;
+  FLY_AUTH_SECRET?: string;
+  /** Execution context for ctx.waitUntil — set per-request from the Worker fetch handler */
+  _ctx?: ExecutionContext;
 }
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
@@ -82,15 +85,25 @@ export const DEFAULT_FLY_PROBE_URL = "https://yoke-probe.fly.dev";
 
 // Module-level probe URL, set from env at request start via initFlyProbeUrl()
 let _flyProbeUrl = DEFAULT_FLY_PROBE_URL;
+let _flyAuthSecret: string | undefined;
 
-/** Set the Fly probe URL for the current request. Call from the worker entry point. */
+/** Set the Fly probe URL and auth secret for the current request. Call from the worker entry point. */
 export function initFlyProbeUrl(env: Env): void {
   _flyProbeUrl = env.FLY_PROBE_URL || DEFAULT_FLY_PROBE_URL;
+  _flyAuthSecret = env.FLY_AUTH_SECRET;
 }
 
 /** Get the current Fly probe URL. */
 export function getFlyProbeUrl(): string {
   return _flyProbeUrl;
+}
+
+/** Get auth headers for Fly probe requests (empty object if no secret configured). */
+export function getFlyAuthHeaders(): Record<string, string> {
+  if (_flyAuthSecret) {
+    return { "Authorization": `Bearer ${_flyAuthSecret}` };
+  }
+  return {};
 }
 
 /** Derive the instance base URL from a request, with optional env override. */
@@ -214,7 +227,7 @@ export async function getFromCache(db: D1Database, domain: string, cacheType: st
 
 export async function setCache(db: D1Database, domain: string, cacheType: string, data: unknown): Promise<void> {
   await db.prepare(
-    "INSERT INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, ?, ?, ?)"
+    "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, ?, ?, ?)"
   ).bind(domain, cacheType, JSON.stringify(data), Date.now()).run();
 }
 
@@ -233,4 +246,15 @@ export async function maybePruneCache(db: D1Database): Promise<void> {
       "DELETE FROM domain_lookups WHERE id NOT IN (SELECT id FROM domain_lookups ORDER BY analyzed_at DESC LIMIT 500)"
     ).run();
   } catch { /* cleanup failure is non-critical */ }
+}
+
+// ─── Background Work Helper ──────────────────────────────────────────
+// Wraps a promise in ctx.waitUntil() if ExecutionContext is available,
+// so the work continues after the response is sent without blocking it.
+
+export function backgroundWork(env: Env, work: Promise<unknown>): void {
+  if (env._ctx) {
+    env._ctx.waitUntil(work.catch(() => {}));
+  }
+  // If no ctx, the promise just runs — caller doesn't await it anyway
 }
