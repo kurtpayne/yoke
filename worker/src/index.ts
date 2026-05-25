@@ -444,7 +444,7 @@ export default {
           }
           return json({
             name: "Yoke Domain Intelligence API",
-            version: "1.0",
+            version: "1.3.0",
             endpoints: {
               "GET /{domain}": "Full domain analysis (content negotiation: JSON for curl/API clients, HTML for browsers)",
               "POST /api/analyze": "Full domain analysis (JSON body: {domain: string})",
