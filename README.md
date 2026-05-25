@@ -62,6 +62,7 @@ Think of it as `dig` + `whois` + `nmap` + `curl` + BuiltWith + SecurityTrails �
 ### 📊 Performance & Business
 - **PageSpeed Insights** — Lighthouse scores, Core Web Vitals (FCP, LCP, TBT, CLS)
 - **Company Intelligence** — Wikidata + Brandfetch + Crunchbase enrichment
+- **Stock Data** — Live ticker, price, change, market cap, volume, 52-week range, and 5-day sparkline for publicly traded companies (via Yahoo Finance)
 - **News & Social** — Bing News, Hacker News, and social account discovery
 - **Domain Signals** — Aggregated strength/notice/weakness indicators
 
@@ -164,6 +165,28 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
    cd worker && npx wrangler deploy
    ```
 
+7. **Deploy HTTP probe proxy (optional but recommended):**
+
+   Cloudflare Worker outbound requests come from Cloudflare IP ranges, which some sites block. The included Fly.io proxy routes HTTP status probes from non-Cloudflare IPs so sites like `meta.com` don't falsely report as DOWN.
+
+   ```bash
+   # Install flyctl if needed
+   curl -L https://fly.io/install.sh | sh
+
+   # Deploy the probe proxy
+   cd fly-proxy
+   fly launch          # first time — creates the app
+   fly deploy           # subsequent deploys
+   ```
+
+   The proxy exposes two endpoints:
+   - `/probe-status?domain=example.com` — HTTP status check with redirect following, returns `{is_up, status_code, response_time_ms, status_label, error}`
+   - `/check-http?host=example.com` — Proxied check-host.net global availability probes (check-host.net blocks CF Worker IPs directly)
+
+   **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`) with zero dependencies. Set the `PROBE_PROXY_URL` environment variable on your worker to point at your deployment, or edit the proxy URL in `worker/src/actions/analyze/network.ts`.
+
+   **Without a proxy:** Everything still works — the worker falls back to direct HTTP probes from the Cloudflare edge. Sites that block CF IPs will show as RESTRICTED instead of UP, but DNS, SSL, and all other checks are unaffected.
+
 ### Environment Variables
 
 | Variable | Required | Description |
@@ -188,11 +211,18 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
 │  └─────────────┘     │  │  D1 Cache (SQL)  │  │    │
 │                       │  └─────────────────┘  │    │
 │  ┌─────────────┐     └───────┬───────────────┘    │
-│  │Chrome Ext.  │─ iframe ────┘                    │
-│  │ (side panel)│                                  │
-│  └─────────────┘                                  │
-└───────────────────────────────┼────────────────────┘
-                                │
+│  │Chrome Ext.  │─ iframe ────┘       │            │
+│  │ (side panel)│                     │            │
+│  └─────────────┘                     │            │
+└──────────────────────────────┼───────┼────────────┘
+                               │       │
+          ┌────────────────────┘       │
+          │                    ┌───────┴──────────┐
+          │                    │  Fly.io Proxy     │
+          │                    │  (HTTP probes +   │
+          │                    │   check-host.net) │
+          │                    └──────────────────┘
+          │
           ┌─────────────────────┼─────────────────────┐
           │                     │                      │
      ┌────┴────┐  ┌────────────┴──┐  ┌──────────────┐
@@ -200,6 +230,7 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
      │Tranco   │  │CertSpotter    │  │GreyNoise     │
      │ip-api   │  │Observatory    │  │Green Web     │
      │Wikidata │  │Brandfetch     │  │Crunchbase    │
+     │Yahoo Fin│  │Bing News      │  │HackerNews    │
      └─────────┘  └───────────────┘  └──────────────┘
                     50+ data points
 ```
@@ -208,6 +239,7 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
 - **Frontend:** React 19, Tailwind CSS v4, React Query, Leaflet, Lucide icons
 - **Backend:** Cloudflare Worker (zero external dependencies, ~35KB bundled)
 - **Database:** Cloudflare D1 (SQLite-compatible, edge caching)
+- **Probe Proxy:** Go on Fly.io (HTTP status checks + check-host.net relay)
 - **Extension:** Chrome Manifest V3, side panel API, zero dependencies
 - **Build:** Bun (bundler + runtime)
 
