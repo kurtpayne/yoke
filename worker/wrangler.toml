@@ -5,6 +5,7 @@ account_id = "b5cdaad4db136b796354280697e0ceb9"
 
 [assets]
 directory = "../client/dist"
+binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"

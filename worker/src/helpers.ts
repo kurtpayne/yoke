@@ -2,11 +2,13 @@
 export interface Env {
   DB: D1Database;
   STATS_DB: D1Database;
+  ASSETS: { fetch: (request: Request) => Promise<Response> };
   OPENROUTER_API_KEY?: string;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   GOOGLE_PAGESPEED_API_KEY?: string;
   WHOISFREAKS_API_KEY?: string;
+  ADMIN_KEY?: string;
 }
 
 // ─── Shared Helpers ──────────────────────────────────────────────────

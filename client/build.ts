@@ -135,8 +135,15 @@ const html = `<!DOCTYPE html>
 
 writeFileSync(join(outdir, "index.html"), html);
 
+// Copy logo/favicon images to dist for social crawlers and /logo.png, /favicon.ico routes
+import { copyFileSync } from "fs";
+const assetsDir = join(import.meta.dir, "..", "assets", "logo");
+copyFileSync(join(assetsDir, "mark-transparent-512.png"), join(outdir, "logo.png"));
+copyFileSync(join(assetsDir, "icon-32.png"), join(outdir, "favicon.ico"));
+
 console.log("✓ Client build complete");
 console.log(`  JS:   ${jsPath}`);
 if (cssPath) console.log(`  CSS:  ${cssPath}`);
 console.log(`  HTML: index.html`);
+console.log(`  Assets: logo.png, favicon.ico`);
 console.log(`  Output dir: ${outdir}`);
