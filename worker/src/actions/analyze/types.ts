@@ -137,3 +137,6 @@ export { type ScriptInfo, type ScriptCategory, type ThirdPartyScriptsResult } fr
 
 // ─── Cookie Consent types ─────────────────────────────────────────────
 export { type CmpDetection, type CookieInfo, type CookieConsentResult } from "./cookie-consent";
+
+// ─── Cache Analysis types ─────────────────────────────────────────────
+export { type CacheAnalysis } from "./cache";

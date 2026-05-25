@@ -25,6 +25,7 @@ export type {
   LegalData,
   CookieSecurityData,
   CompressionData,
+  CacheAnalysisData,
   AiReadinessData,
   HealthScoreData,
   WordPressData,

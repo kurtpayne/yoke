@@ -481,9 +481,16 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
                 Get a free key <ExternalLink size={9} />
               </a>
             </div>
-            <p style={{ fontSize: "11px", color: "var(--muted)", margin: "0 0 8px 0", lineHeight: 1.5 }}>
-              Stored in your browser only — never sent to Yoke servers. Unlocks unlimited AI analysis and model selection.
-            </p>
+            <div style={{ fontSize: "11px", color: "var(--muted)", margin: "0 0 8px 0", lineHeight: 1.6 }}>
+              <p style={{ margin: "0 0 6px 0" }}>
+                <strong style={{ color: "var(--text)" }}>Why?</strong> Yoke's AI analysis uses{" "}
+                <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>OpenRouter</a>
+                {" "}to access models like Claude, GPT-4o, and Gemini. Without a key, you get 10 analyses/day on our shared key. With your own, you get unlimited access, model selection, and prompt editing.
+              </p>
+              <p style={{ margin: "0" }}>
+                <strong style={{ color: "var(--text)" }}>Privacy:</strong> Your key is stored in your browser's localStorage only — it's sent directly from your browser to OpenRouter, never to Yoke's servers. We can't see, log, or access it. <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>Privacy policy →</a>
+              </p>
+            </div>
             <div style={{ display: "flex", gap: "6px" }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <input

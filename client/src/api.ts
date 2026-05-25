@@ -175,6 +175,7 @@ export interface AnalysisResult {
   legal: LegalData | null;
   cookie_security: CookieSecurityData | null;
   compression: CompressionData | null;
+  cache_analysis: CacheAnalysisData | null;
   ai_readiness: AiReadinessData | null;
   health_score: HealthScoreData | null;
   wordpress: WordPressData | null;
@@ -277,6 +278,14 @@ export interface SocialMetaData {
 export interface LegalData { pages_found: Array<{ name: string; url: string }>; cookie_consent_detected: boolean; consent_provider: string | null; }
 export interface CookieSecurityData { cookies: Array<{ name: string; secure: boolean; httponly: boolean; samesite: string | null }>; issues: string[]; }
 export interface CompressionData { encoding: string | null; vary_accept_encoding: boolean; }
+export interface CacheAnalysisData {
+  cache_control: { raw: string | null; directives: Record<string, string | true>; effective_ttl_seconds: number | null; ttl_human: string | null };
+  cdn_cache: { status: string | null; provider: string | null; age_seconds: number | null };
+  conditional: { etag: boolean; last_modified: boolean; varies_on: string[] };
+  verdict: "excellent" | "good" | "fair" | "poor" | "none";
+  verdict_label: string;
+  issues: string[];
+}
 export interface AiReadinessData { score: number; max_score: number; grade: string; checks: Array<{ name: string; passed: boolean; points: number }>; rss_feed: string | null; ans: { ans_found: boolean; ans_records: string[]; agents_found: boolean; agents_records: string[]; agent_json_found: boolean } | null; }
 export interface HealthScoreData { score: number; max_score: number; grade: string; breakdown: Record<string, number>; }
 
