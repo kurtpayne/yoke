@@ -146,15 +146,16 @@ export default {
       try {
         // POST /api/analyze
         if (method === "POST" && path === "/api/analyze") {
-          const body = await parseBody<{ domain?: string }>(request);
+          const body = await parseBody<{ domain?: string; force?: boolean }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const skipCache = body.force === true;
           await trackUsage(env.STATS_DB, "analyze");
           // Support SSE streaming when client requests it
           const wantsStream = request.headers.get("Accept") === "text/event-stream";
-          if (wantsStream) return analyzeDomainStream(domain, env);
-          return analyzeDomain(domain, env);
+          if (wantsStream) return analyzeDomainStream(domain, env, skipCache);
+          return analyzeDomain(domain, env, skipCache);
         }
 
         // POST /api/compare

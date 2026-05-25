@@ -773,7 +773,7 @@ export function calculateDomainScore(opts: {
   }
   composite = Math.round(composite);
 
-  const grade = composite >= 90 ? "A" : composite >= 80 ? "B" : composite >= 70 ? "C" : composite >= 60 ? "D" : "F";
+  const grade = composite >= 85 ? "A" : composite >= 70 ? "B" : composite >= 55 ? "C" : composite >= 40 ? "D" : "F";
 
   return { composite, grade, axes: axisScores, archetype };
 }

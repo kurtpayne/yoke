@@ -40,13 +40,14 @@ import {
   checkWellKnownEndpoints, analyzeCaaRecords, checkGreynoise,
 } from "./analyze/tier1";
 
-export async function analyzeDomain(domain: string, env: Env): Promise<Response> {
+export async function analyzeDomain(domain: string, env: Env, skipCache = false): Promise<Response> {
   domain = normalizeDomain(domain);
   if (!domain || !domain.includes(".")) {
     return new Response(JSON.stringify({ error: "Invalid domain" }), { status: 400, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
   }
 
   // Check cache
+  if (!skipCache) {
   try {
     const cached = await env.DB.prepare("SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = 'analysis' ORDER BY cached_at DESC LIMIT 1").bind(domain).first<{ data_json: string; cached_at: number }>();
     if (cached && Date.now() - cached.cached_at < ANALYSIS_CACHE_TTL_MS) {
@@ -54,6 +55,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
       return new Response(JSON.stringify({ ...parsed, cached: true }), { headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
     }
   } catch { /* cache miss */ }
+  }
 
   // Phase 0: Quick DNS resolution check — detect non-existent domains early
   let dnsRecords: DnsRecord[];

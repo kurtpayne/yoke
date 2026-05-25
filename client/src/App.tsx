@@ -129,7 +129,7 @@ function useStreamingAnalysis() {
   });
   const abortRef = useRef<AbortController | null>(null);
 
-  const mutate = useCallback((domain: string) => {
+  const mutate = useCallback((domain: string, options?: { force?: boolean }) => {
     // Abort any in-flight analysis
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -145,7 +145,6 @@ function useStreamingAnalysis() {
       domain,
       (evt: StreamEvent) => {
         if (controller.signal.aborted) return;
-
         switch (evt.type) {
           case "phase": {
             const d = evt.data as { phase: string; status: string; label: string; total?: number };
@@ -194,6 +193,7 @@ function useStreamingAnalysis() {
         }
       },
       controller.signal,
+      options?.force,
     ).catch((err) => {
       if (controller.signal.aborted) return;
       setError(err instanceof Error ? err : new Error(String(err)));
