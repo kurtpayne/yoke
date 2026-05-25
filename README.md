@@ -217,12 +217,21 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 
    The `fly-proxy/fly.toml` is gitignored, so updates via `git pull` won't conflict.
 
-   The proxy exposes three endpoints:
-   - `/probe-status?domain=example.com` — HTTP status check with redirect following, returns `{is_up, status_code, response_time_ms, status_label, error}`
+   The proxy exposes these endpoints:
+   - `/probe-status?domain=example.com` — HTTP status check with redirect following, HTTP/2 and HTTP/3 protocol detection, returns `{is_up, status_code, response_time_ms, status_label, http2, http3, alt_svc, error}`
    - `/probe-timing?host=example.com` — Connection timing breakdown, returns `{dns_ms, tcp_ms, tls_ms, total_ms, ip, tls_version, error}`
+   - `/probe-geo?ip=1.2.3.4` — IP geolocation via local MaxMind GeoLite2-City database (sub-ms, no rate limits), falls back to ip-api.com and ipwho.is
    - `/check-http?host=example.com` — Proxied check-host.net global availability probes (check-host.net blocks CF Worker IPs directly)
 
-   **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`) with zero dependencies. Set the `FLY_PROBE_URL` environment variable to point at your deployment.
+   **MaxMind GeoIP (recommended):** For reliable IP geolocation without rate limits, sign up for a free [MaxMind GeoLite2](https://www.maxmind.com/en/geolite2/signup) account and pass your license key as a build argument when deploying:
+
+   ```bash
+   MAXMIND_LICENSE_KEY=your_key_here fly deploy -a your-app -c fly-proxy/fly.toml fly-proxy/
+   ```
+
+   The Dockerfile downloads the GeoLite2-City database at build time. Without a license key, the probe falls back to ip-api.com and ipwho.is (rate-limited).
+
+   **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`). Set the `FLY_PROBE_URL` environment variable to point at your deployment.
 
    **Without a proxy:** Everything still works — the worker falls back to direct HTTP probes from the Cloudflare edge. Sites that block CF IPs will show as RESTRICTED instead of UP, but DNS, SSL, and all other checks are unaffected.
 
