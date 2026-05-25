@@ -816,6 +816,15 @@ export function App() {
         </a>
         <span style={{ color: "var(--border)" }}>·</span>
         <a
+          href="/status"
+          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+        >
+          Status
+        </a>
+        <span style={{ color: "var(--border)" }}>·</span>
+        <a
           href="/privacy"
           style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
           onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
