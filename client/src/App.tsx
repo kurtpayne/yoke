@@ -770,12 +770,32 @@ export function App() {
           </div>
         )}
 
-        {/* Cached indicator */}
+        {/* Cached indicator + re-analyze */}
         {analyze.data?.cached && (
-          <div className="mt-4 text-center">
+          <div className="mt-4 flex items-center justify-center gap-3">
             <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)" }}>
               ● Cached result from {new Date(analyze.data.analyzed_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
             </span>
+            <button
+              type="button"
+              onClick={() => analyze.mutate(analyze.data!.domain, { force: true })}
+              disabled={analyze.isPending}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all"
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border)",
+                color: "var(--dim)",
+                fontFamily: "var(--font-ui)",
+                fontSize: "11px",
+                cursor: "pointer",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--dim)"; }}
+              title="Force fresh analysis, bypassing cache"
+            >
+              <RotateCcw size={10} />
+              Re-analyze
+            </button>
           </div>
         )}
 

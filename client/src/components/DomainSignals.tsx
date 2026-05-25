@@ -2,6 +2,48 @@ import { CheckCircle2, AlertTriangle, XCircle, Info, ExternalLink } from "lucide
 import { Tooltip } from "./Tooltip";
 import type { AnalysisResult } from "../utils/types";
 
+// ─── Reference Links for Findings ───
+// Maps signal keywords to authoritative documentation
+const REFERENCE_LINKS: Record<string, { url: string; label: string }> = {
+  "hsts": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security", label: "MDN: HSTS" },
+  "strict-transport-security": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security", label: "MDN: HSTS" },
+  "content security policy": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP", label: "MDN: CSP" },
+  "csp": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP", label: "MDN: CSP" },
+  "dmarc": { url: "https://datatracker.ietf.org/doc/html/rfc7489", label: "RFC 7489" },
+  "spf": { url: "https://datatracker.ietf.org/doc/html/rfc7208", label: "RFC 7208" },
+  "dkim": { url: "https://datatracker.ietf.org/doc/html/rfc6376", label: "RFC 6376" },
+  "dnssec": { url: "https://www.cloudflare.com/dns/dnssec/how-dnssec-works/", label: "DNSSEC Guide" },
+  "certificate transparency": { url: "https://datatracker.ietf.org/doc/html/rfc6962", label: "RFC 6962" },
+  "x-content-type-options": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options", label: "MDN: X-Content-Type-Options" },
+  "x-frame-options": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options", label: "MDN: X-Frame-Options" },
+  "referrer-policy": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy", label: "MDN: Referrer-Policy" },
+  "permissions-policy": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Permissions-Policy", label: "MDN: Permissions-Policy" },
+  "http/2": { url: "https://developer.mozilla.org/en-US/docs/Glossary/HTTP_2", label: "MDN: HTTP/2" },
+  "http/3": { url: "https://developer.mozilla.org/en-US/docs/Glossary/HTTP_3", label: "MDN: HTTP/3" },
+  "ssl": { url: "https://www.ssllabs.com/projects/documentation/", label: "SSL Labs Docs" },
+  "tls": { url: "https://datatracker.ietf.org/doc/html/rfc8446", label: "RFC 8446 (TLS 1.3)" },
+  "caa": { url: "https://datatracker.ietf.org/doc/html/rfc8659", label: "RFC 8659" },
+  "security.txt": { url: "https://datatracker.ietf.org/doc/html/rfc9116", label: "RFC 9116" },
+  "bimi": { url: "https://bimigroup.org/implementation-guide/", label: "BIMI Guide" },
+  "robots.txt": { url: "https://developers.google.com/search/docs/crawling-indexing/robots/intro", label: "Google: robots.txt" },
+  "sitemap": { url: "https://www.sitemaps.org/protocol.html", label: "Sitemaps Protocol" },
+  "json-ld": { url: "https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data", label: "Google: Structured Data" },
+  "structured data": { url: "https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data", label: "Google: Structured Data" },
+  "open graph": { url: "https://ogp.me/", label: "Open Graph Protocol" },
+  "pagespeed": { url: "https://developer.chrome.com/docs/lighthouse/overview", label: "Lighthouse Docs" },
+  "ipv6": { url: "https://www.google.com/intl/en/ipv6/statistics.html", label: "IPv6 Adoption" },
+  "mta-sts": { url: "https://datatracker.ietf.org/doc/html/rfc8461", label: "RFC 8461" },
+  "blocklist": { url: "https://www.dnsbl.info/", label: "DNSBL Info" },
+};
+
+export function findReferenceLink(text: string): { url: string; label: string } | null {
+  const lower = text.toLowerCase();
+  for (const [keyword, ref] of Object.entries(REFERENCE_LINKS)) {
+    if (lower.includes(keyword)) return ref;
+  }
+  return null;
+}
+
 interface Signal {
   type: "strength" | "notice" | "issue" | "info";
   text: string;
@@ -390,14 +432,16 @@ export function DomainSignals({ data, streaming }: { data: AnalysisResult; strea
               <Tooltip text={tooltipMap[type]} help />
             </div>
             <div className="space-y-1">
-              {groups[type].map((signal, i) => (
+              {groups[type].map((signal, i) => {
+                const ref = findReferenceLink(signal.text);
+                return (
                 <div
                   key={`sig-${i}`}
                   className="flex items-start gap-2 rounded-md px-2.5 py-1.5"
                   style={{ background: bgMap[type] }}
                 >
                   <span style={{ color: colorMap[type], marginTop: "1px", flexShrink: 0 }}>{iconMap[type]}</span>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <span style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--text)", fontWeight: 500 }}>
                       {signal.text}
                     </span>
@@ -407,8 +451,22 @@ export function DomainSignals({ data, streaming }: { data: AnalysisResult; strea
                       </span>
                     )}
                   </div>
+                  {ref && (
+                    <a
+                      href={ref.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={ref.label}
+                      style={{ color: "var(--dim)", flexShrink: 0, marginTop: "2px", opacity: 0.5, transition: "opacity 0.15s" }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
+                    >
+                      <ExternalLink size={10} />
+                    </a>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
