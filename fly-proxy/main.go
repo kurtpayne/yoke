@@ -7,15 +7,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/oschwald/geoip2-golang"
 )
 
 var domainRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$`)
+
+// MaxMind GeoLite2 database (loaded at startup if available)
+var geoDB *geoip2.Reader
+
+func initGeoIP() {
+	paths := []string{"/GeoLite2-City.mmdb", "./GeoLite2-City.mmdb"}
+	for _, p := range paths {
+		db, err := geoip2.Open(p)
+		if err == nil {
+			geoDB = db
+			log.Printf("[geo] Loaded MaxMind GeoLite2-City from %s", p)
+			return
+		}
+	}
+	log.Println("[geo] MaxMind GeoLite2-City not found — using API fallback")
+}
 
 // ─── SSRF Protection ────────────────────────────────────────────────
 // Block connections to private, reserved, and link-local IP ranges.
@@ -133,6 +152,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handler)
+
+	// Initialize MaxMind GeoIP database
+	initGeoIP()
 
 	server := &http.Server{
 		Addr:         ":" + port,
@@ -308,7 +330,11 @@ type GeoResult struct {
 }
 
 func probeGeoIP(ip string) GeoResult {
-	// Try ip-api.com first (45 req/min, no key needed, good data)
+	// Try local MaxMind DB first (no rate limits, sub-ms)
+	if result := tryMaxMind(ip); result != nil {
+		return *result
+	}
+	// Fall back to ip-api.com (45 req/min, no key needed)
 	if result := tryIpApi(ip); result != nil {
 		return *result
 	}
@@ -318,6 +344,33 @@ func probeGeoIP(ip string) GeoResult {
 	}
 	errStr := "all geolocation providers failed"
 	return GeoResult{IP: ip, Error: &errStr}
+}
+
+func tryMaxMind(ip string) *GeoResult {
+	if geoDB == nil {
+		return nil
+	}
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return nil
+	}
+	record, err := geoDB.City(parsedIP)
+	if err != nil {
+		return nil
+	}
+
+	city := record.City.Names["en"]
+	country := record.Country.Names["en"]
+	countryCode := record.Country.IsoCode
+	lat := record.Location.Latitude
+	lon := record.Location.Longitude
+
+	// MaxMind doesn't have ISP/ASN in the City DB — leave those for enrichment
+	return &GeoResult{
+		IP: ip, City: &city, Country: &country,
+		CountryCode: &countryCode, Lat: &lat, Lon: &lon,
+		ISP: nil, Org: nil, ASN: nil, Source: "maxmind",
+	}
 }
 
 func tryIpApi(ip string) *GeoResult {
