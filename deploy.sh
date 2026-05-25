@@ -4,10 +4,10 @@ cd "$(dirname "$0")"
 
 # ── Usage ────────────────────────────────────────────────────────────
 usage() {
-  echo "Usage: bash deploy.sh <target>"
+  echo "Usage: bash deploy.sh [target]"
   echo ""
-  echo "Targets:"
-  echo "  --all   Deploy Cloudflare Worker + Fly probe"
+  echo "Targets (default: deploy everything):"
+  echo "  --all   Deploy Cloudflare Worker + Fly probe (same as no args)"
   echo "  --cf    Deploy Cloudflare Worker only"
   echo "  --fly   Deploy Fly.io probe only"
   echo ""
@@ -23,7 +23,9 @@ DEPLOY_CF=false
 DEPLOY_FLY=false
 
 if [[ $# -eq 0 ]]; then
-  usage
+  # Default: deploy everything (keep them in sync)
+  DEPLOY_CF=true
+  DEPLOY_FLY=true
 fi
 
 for arg in "$@"; do
