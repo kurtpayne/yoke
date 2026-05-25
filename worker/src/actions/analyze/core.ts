@@ -2,7 +2,7 @@
 // Single source of truth for all analysis logic.
 // Both the JSON endpoint and the SSE streaming endpoint use this.
 
-import { type Env, normalizeDomain, fetchWithTimeout, maybePruneCache } from "../../helpers";
+import { type Env, normalizeDomain, fetchWithTimeout, maybePruneCache, backgroundWork } from "../../helpers";
 import { ANALYSIS_CACHE_TTL_MS } from "../../config/cache";
 import { analyzeWordPress } from "../wordpress";
 import { checkBreaches, type BreachResult } from "../breaches";
@@ -414,8 +414,8 @@ export async function runAnalysis(
 
   await Promise.allSettled(wrappedPromises);
 
-  // Probabilistic prune of old error rows (~5% of requests)
-  if (Math.random() < 0.05) pruneApiErrors(env.STATS_DB);
+  // Probabilistic prune of old error rows (~5% of requests) — non-blocking
+  if (Math.random() < 0.05) backgroundWork(env, pruneApiErrors(env.STATS_DB));
 
   // ── Assemble final result ────────────────────────────────────────
 
@@ -637,35 +637,15 @@ export async function runAnalysis(
   };
 
   // ── Post-analysis: score logging, caching, cleanup ───────────────
+  // All post-analysis D1 writes are non-blocking background work.
+  // They use ctx.waitUntil() so they continue after the response is sent.
+
+  const resultJson = JSON.stringify(result);
 
   // Historical score logging (non-critical)
   if (domainScore) {
-    try {
-      await env.STATS_DB.prepare(
-        `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
-        domain, domainScore.composite, domainScore.axes.security.score,
-        domainScore.axes.performance.score, domainScore.axes.reliability.score,
-        domainScore.axes.trust.score, domainScore.axes.visibility.score,
-        domainScore.archetype.detected, domainScore.archetype.confidence,
-        new Date().toISOString(),
-      ).run();
-    } catch {
+    backgroundWork(env, (async () => {
       try {
-        await env.STATS_DB.prepare(
-          `CREATE TABLE IF NOT EXISTS domain_scores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
-            composite_score INTEGER NOT NULL, security_score INTEGER NOT NULL,
-            performance_score INTEGER NOT NULL, reliability_score INTEGER NOT NULL,
-            trust_score INTEGER NOT NULL, visibility_score INTEGER NOT NULL,
-            archetype TEXT NOT NULL, archetype_confidence REAL NOT NULL,
-            scored_at TEXT NOT NULL DEFAULT (datetime('now')),
-            UNIQUE(domain, scored_at)
-          )`
-        ).run();
-        await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`).run();
-        await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`).run();
         await env.STATS_DB.prepare(
           `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -676,26 +656,53 @@ export async function runAnalysis(
           domainScore.archetype.detected, domainScore.archetype.confidence,
           new Date().toISOString(),
         ).run();
-      } catch { /* auto-migration + retry failed — non-critical */ }
-    }
+      } catch {
+        try {
+          await env.STATS_DB.prepare(
+            `CREATE TABLE IF NOT EXISTS domain_scores (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
+              composite_score INTEGER NOT NULL, security_score INTEGER NOT NULL,
+              performance_score INTEGER NOT NULL, reliability_score INTEGER NOT NULL,
+              trust_score INTEGER NOT NULL, visibility_score INTEGER NOT NULL,
+              archetype TEXT NOT NULL, archetype_confidence REAL NOT NULL,
+              scored_at TEXT NOT NULL DEFAULT (datetime('now')),
+              UNIQUE(domain, scored_at)
+            )`
+          ).run();
+          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`).run();
+          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`).run();
+          await env.STATS_DB.prepare(
+            `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            domain, domainScore.composite, domainScore.axes.security.score,
+            domainScore.axes.performance.score, domainScore.axes.reliability.score,
+            domainScore.axes.trust.score, domainScore.axes.visibility.score,
+            domainScore.archetype.detected, domainScore.archetype.confidence,
+            new Date().toISOString(),
+          ).run();
+        } catch { /* auto-migration + retry failed — non-critical */ }
+      }
+    })());
   }
 
-  // Cache result
-  try {
-    await env.DB.prepare(
-      "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)"
-    ).bind(domain, JSON.stringify(result), Date.now()).run();
-  } catch { /* cache write failure is non-critical */ }
+  // Cache result + recent lookup (non-blocking)
+  backgroundWork(env, (async () => {
+    try {
+      await env.DB.prepare(
+        "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)"
+      ).bind(domain, resultJson, Date.now()).run();
+    } catch { /* cache write failure is non-critical */ }
 
-  // Insert recent lookup
-  try {
-    await env.DB.prepare(
-      "INSERT INTO domain_lookups (domain, results_json, analyzed_at) VALUES (?, ?, ?)"
-    ).bind(domain, JSON.stringify(result), Date.now()).run();
-  } catch { /* ignore */ }
+    try {
+      await env.DB.prepare(
+        "INSERT INTO domain_lookups (domain, results_json, analyzed_at) VALUES (?, ?, ?)"
+      ).bind(domain, resultJson, Date.now()).run();
+    } catch { /* ignore */ }
 
-  // Probabilistic cache cleanup
-  maybePruneCache(env.DB);
+    // Probabilistic cache cleanup
+    await maybePruneCache(env.DB);
+  })());
 
   return { kind: "complete", data: result };
 }

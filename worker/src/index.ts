@@ -128,13 +128,15 @@ function checkAdminAuth(request: Request, adminKey: string | undefined): Respons
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
 
     // Initialize per-request config from env
     initFlyProbeUrl(env);
+    // Thread execution context for background work
+    if (ctx) env._ctx = ctx;
 
     // Handle CORS preflight
     if (method === "OPTIONS") {

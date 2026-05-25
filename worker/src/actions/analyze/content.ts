@@ -1,4 +1,4 @@
-import { fetchWithTimeout, boundedText, getFlyProbeUrl } from "../../helpers";
+import { fetchWithTimeout, boundedText, getFlyProbeUrl, getFlyAuthHeaders } from "../../helpers";
 import type {
   DnsRecord, LlmsTxtResult, RobotsParsed, JsonLdItem,
   OgTwitterResult, LegalResult, AiReadinessResult,
@@ -342,6 +342,7 @@ export async function probeHttpProtocols(domain: string): Promise<{ http2: boole
   try {
     const res = await fetch(`${getFlyProbeUrl()}/probe-protocols?domain=${encodeURIComponent(domain)}`, {
       signal: AbortSignal.timeout(10000),
+      headers: getFlyAuthHeaders(),
     });
     if (res.ok) {
       const data = await res.json() as { http2: boolean; http3: boolean; alt_svc: string | null; error?: string };

@@ -1,4 +1,4 @@
-import { fetchWithTimeout, getFlyProbeUrl } from "../../helpers";
+import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders } from "../../helpers";
 import type { DnsRecord, IpInfo, BlocklistResult, SslResult, ShodanResult, DnssecResult } from "./types";
 
 // ─── IP Geolocation ──────────────────────────────────────────────────
@@ -170,7 +170,7 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
   try {
     const probeRes = await fetchWithTimeout(
       `${getFlyProbeUrl()}/probe-ssl?domain=${encodeURIComponent(domain)}`,
-      { timeout: 12000 }
+      { timeout: 12000, headers: getFlyAuthHeaders() }
     );
     if (probeRes.ok) {
       const data = await probeRes.json() as {
@@ -257,7 +257,7 @@ export async function checkStatus(domain: string): Promise<{ is_up: boolean; sta
   try {
     const probeRes = await fetchWithTimeout(
       `${getFlyProbeUrl()}/probe-status?domain=${encodeURIComponent(domain)}`,
-      { timeout: 15000 }
+      { timeout: 15000, headers: getFlyAuthHeaders() }
     );
     if (probeRes.ok) {
       const data = await probeRes.json() as { is_up: boolean; status_code: number | null; response_time_ms: number; error: string | null; status_label: string; http_blocked: boolean };
