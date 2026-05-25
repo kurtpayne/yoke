@@ -201,7 +201,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
 
     // Add _meta field
     (data as Record<string, unknown>)._meta = {
-      api_version: "1.0",
+      api_version: "1.3.0",
       analyzed_at: new Date().toISOString(),
       docs: `${baseUrl}/api/docs`,
       source: new URL(baseUrl).hostname,
@@ -218,7 +218,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "X-Yoke-Cache": isCached ? "HIT" : "MISS",
-        "X-Yoke-Version": "1.0",
+        "X-Yoke-Version": "1.3.0",
         "X-Yoke-Docs": `${baseUrl}/api/docs`,
         "Cache-Control": "public, max-age=300",
       },
@@ -226,7 +226,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analysis failed";
     return jsonResponse(
-      { error: msg, _meta: { api_version: "1.0", docs: `${baseUrl}/api/docs` } },
+      { error: msg, _meta: { api_version: "1.3.0", docs: `${baseUrl}/api/docs` } },
       500,
     );
   }

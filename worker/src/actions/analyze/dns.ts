@@ -49,22 +49,36 @@ export async function checkDns(domain: string): Promise<DnsRecord[]> {
     } catch { /* individual type failure is fine */ }
   });
 
-  // Agent discovery records (ANS + DNS-AID subdomains)
-  const agentQueries = [
-    { prefix: "_ans", label: "TXT" },
-    { prefix: "_agents", label: "TXT" },
-  ].map(async ({ prefix, label }) => {
-    try {
-      const data = await dohQuery(`${prefix}.${domain}`, label);
-      if (data && data.Status === 0 && data.Answer) {
-        for (const ans of data.Answer) {
-          results.push({ type: label, name: ans.name.replace(/\.$/, ""), ttl: ans.TTL, data: ans.data });
-        }
-      }
-    } catch { /* agent record lookup failure is fine */ }
-  });
+  await Promise.allSettled(queries);
 
-  await Promise.allSettled([...queries, ...agentQueries]);
+  // Wildcard DNS detection: probe a random subdomain to see if it resolves.
+  // Domains with wildcard records (*.example.com) will resolve ANY subdomain,
+  // producing false positives for _ans / _agents TXT lookups.
+  let hasWildcardDns = false;
+  try {
+    const probe = await dohQuery(`_yoke-wildcard-probe-${Date.now()}.${domain}`, "A", 3000);
+    if (probe && probe.Status === 0 && probe.Answer?.length) {
+      hasWildcardDns = true;
+    }
+  } catch { /* probe failure = no wildcard */ }
+
+  // Agent discovery records (ANS + DNS-AID subdomains) — skip if wildcard DNS detected
+  if (!hasWildcardDns) {
+    const agentQueries = [
+      { prefix: "_ans", label: "TXT" },
+      { prefix: "_agents", label: "TXT" },
+    ].map(async ({ prefix, label }) => {
+      try {
+        const data = await dohQuery(`${prefix}.${domain}`, label);
+        if (data && data.Status === 0 && data.Answer) {
+          for (const ans of data.Answer) {
+            results.push({ type: label, name: ans.name.replace(/\.$/, ""), ttl: ans.TTL, data: ans.data });
+          }
+        }
+      } catch { /* agent record lookup failure is fine */ }
+    });
+    await Promise.allSettled(agentQueries);
+  }
   return results;
 }
 

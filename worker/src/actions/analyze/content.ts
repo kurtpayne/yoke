@@ -49,48 +49,77 @@ export async function checkAnsRecords(domain: string): Promise<AnsResult> {
     agent_json_found: false,
   };
 
-  const [ansRes, agentsRes, agentJsonRes] = await Promise.allSettled([
+  // Wildcard DNS detection: probe a random subdomain. Domains with wildcard
+  // records (*.example.com) resolve ANY subdomain, causing false positives
+  // for _ans / _agents TXT lookups.
+  let hasWildcardDns = false;
+  try {
+    const probeRes = await fetchWithTimeout(
+      `https://dns.google/resolve?name=${encodeURIComponent(`_yoke-wildcard-probe-${Date.now()}.${domain}`)}&type=A`,
+      { timeout: 3000 },
+    );
+    if (probeRes.ok) {
+      const probeData = await probeRes.json() as { Status: number; Answer?: Array<{ data: string }> };
+      if (probeData.Status === 0 && probeData.Answer?.length) {
+        hasWildcardDns = true;
+      }
+    }
+  } catch { /* probe failure = no wildcard */ }
+
+  // Run DNS lookups (skip if wildcard) and agent.json fetch in parallel
+  const promises: Promise<void>[] = [];
+
+  // agent.json is an HTTP endpoint check — not affected by wildcard DNS
+  promises.push((async () => {
+    try {
+      const agentJsonRes = await fetchWithTimeout(`https://${domain}/.well-known/agent.json`, { timeout: 5000 });
+      if (agentJsonRes.ok) {
+        const text = await boundedText(agentJsonRes);
+        if (text && !text.toLowerCase().includes("<!doctype") && !text.toLowerCase().includes("<html")) {
+          JSON.parse(text);
+          result.agent_json_found = true;
+        }
+      }
+    } catch { /* not valid JSON or unreachable */ }
+  })());
+
+  if (!hasWildcardDns) {
     // ANS: _ans.{domain} TXT records
-    fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(`_ans.${domain}`)}&type=TXT`, { timeout: 5000 }),
+    promises.push((async () => {
+      try {
+        const ansRes = await fetchWithTimeout(
+          `https://dns.google/resolve?name=${encodeURIComponent(`_ans.${domain}`)}&type=TXT`,
+          { timeout: 5000 },
+        );
+        if (ansRes.ok) {
+          const data = await ansRes.json() as { Status: number; Answer?: Array<{ data: string }> };
+          if (data.Status === 0 && data.Answer?.length) {
+            result.ans_found = true;
+            result.ans_records = data.Answer.map((a) => a.data.replace(/^"|"$/g, ""));
+          }
+        }
+      } catch { /* ignore */ }
+    })());
+
     // DNS-AID/BANDAID: _agents.{domain} TXT/SVCB records
-    fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(`_agents.${domain}`)}&type=TXT`, { timeout: 5000 }),
-    // Well-known agent.json endpoint
-    fetchWithTimeout(`https://${domain}/.well-known/agent.json`, { timeout: 5000 }),
-  ]);
-
-  // Parse ANS TXT
-  if (ansRes.status === "fulfilled" && ansRes.value.ok) {
-    try {
-      const data = await ansRes.value.json() as { Status: number; Answer?: Array<{ data: string }> };
-      if (data.Status === 0 && data.Answer?.length) {
-        result.ans_found = true;
-        result.ans_records = data.Answer.map((a) => a.data.replace(/^"|"$/g, ""));
-      }
-    } catch { /* ignore */ }
+    promises.push((async () => {
+      try {
+        const agentsRes = await fetchWithTimeout(
+          `https://dns.google/resolve?name=${encodeURIComponent(`_agents.${domain}`)}&type=TXT`,
+          { timeout: 5000 },
+        );
+        if (agentsRes.ok) {
+          const data = await agentsRes.json() as { Status: number; Answer?: Array<{ data: string }> };
+          if (data.Status === 0 && data.Answer?.length) {
+            result.agents_found = true;
+            result.agents_records = data.Answer.map((a) => a.data.replace(/^"|"$/g, ""));
+          }
+        }
+      } catch { /* ignore */ }
+    })());
   }
 
-  // Parse DNS-AID TXT
-  if (agentsRes.status === "fulfilled" && agentsRes.value.ok) {
-    try {
-      const data = await agentsRes.value.json() as { Status: number; Answer?: Array<{ data: string }> };
-      if (data.Status === 0 && data.Answer?.length) {
-        result.agents_found = true;
-        result.agents_records = data.Answer.map((a) => a.data.replace(/^"|"$/g, ""));
-      }
-    } catch { /* ignore */ }
-  }
-
-  // Parse agent.json
-  if (agentJsonRes.status === "fulfilled" && agentJsonRes.value.ok) {
-    try {
-      const text = await boundedText(agentJsonRes.value);
-      // Verify it's actually JSON, not an HTML error page
-      if (text && !text.toLowerCase().includes("<!doctype") && !text.toLowerCase().includes("<html")) {
-        JSON.parse(text); // validate JSON
-        result.agent_json_found = true;
-      }
-    } catch { /* not valid JSON */ }
-  }
+  await Promise.allSettled(promises);
 
   return result;
 }

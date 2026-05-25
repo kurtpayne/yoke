@@ -92,6 +92,12 @@ export function SslPanel({ data }: { data: AnalysisResult }) {
           Certificate details unavailable — only the grade could be determined
         </div>
       )}
+      <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
+        <a href={`https://www.ssllabs.com/ssltest/analyze.html?d=${encodeURIComponent(data.domain)}`} target="_blank" rel="noopener noreferrer"
+          style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--accent)", textDecoration: "none" }}>
+          Full analysis on SSL Labs →
+        </a>
+      </div>
     </Panel>
   );
 }
