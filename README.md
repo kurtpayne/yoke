@@ -224,6 +224,21 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 | `FLY_AUTH_SECRET` | No | Shared secret between the Worker and Fly probe. If set on both sides, the probe rejects unauthenticated requests. If unset, the probe accepts all requests (self-hosting friendly). See [Worker-to-Fly Proxy Auth](#worker-to-fly-proxy-auth). |
 | `ADMIN_KEY` | No | Admin key for gated endpoints like `/api/cleanup`. |
 
+Self-hosted instances have **no rate limits** — all features work identically to yoke.lol.
+
+### Updating
+
+```bash
+git pull
+bash deploy.sh
+```
+
+### Troubleshooting
+
+- **D1 tables not created?** Tables are auto-created on first request. Just hit your instance once.
+- **Secrets not working?** Run `npx wrangler secret list` to verify they're set.
+- **Build errors?** Make sure you're using Node 22+ and have both `client/` and `worker/` dependencies installed.
+
 ## Architecture
 
 ```

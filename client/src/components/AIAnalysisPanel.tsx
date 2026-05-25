@@ -531,24 +531,25 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
             )}
           </div>
 
-          {/* ── Model Selector (only visible with BYO key) ── */}
-          {hasKey && (
-            <div>
+          {/* ── Model Selector (disabled without BYO key) ── */}
+            <div style={{ opacity: hasKey ? 1 : 0.45, pointerEvents: hasKey ? "auto" : "none" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
                 <Sparkles size={12} style={{ color: "var(--accent)" }} />
                 <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Model</span>
+                {!hasKey && <span style={{ fontSize: "10px", color: "var(--muted)", fontStyle: "italic" }}>requires API key</span>}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                 {AVAILABLE_MODELS.map(m => (
                   <button
                     key={m.id}
                     onClick={() => handleModelChange(m.id)}
+                    disabled={!hasKey}
                     style={{
                       padding: "5px 10px", borderRadius: "6px",
                       border: `1px solid ${model === m.id ? "var(--accent)" : "var(--border)"}`,
                       background: model === m.id ? "rgba(88,166,255,0.12)" : "var(--bg)",
                       color: model === m.id ? "var(--accent)" : "var(--muted)",
-                      cursor: "pointer", fontSize: "11px",
+                      cursor: hasKey ? "pointer" : "default", fontSize: "11px",
                       fontWeight: model === m.id ? 600 : 400,
                       transition: "all 0.15s",
                     }}
@@ -559,14 +560,13 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
                 ))}
               </div>
             </div>
-          )}
 
-          {/* ── Prompt Editor (only visible with BYO key) ── */}
-          {hasKey && (
-            <div>
+          {/* ── Prompt Editor (disabled without BYO key) ── */}
+            <div style={{ opacity: hasKey ? 1 : 0.45, pointerEvents: hasKey ? "auto" : "none" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
                 <Code size={12} style={{ color: "var(--accent)" }} />
                 <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Prompt</span>
+                {!hasKey && <span style={{ fontSize: "10px", color: "var(--muted)", fontStyle: "italic" }}>requires API key</span>}
                 {promptEdited && (
                   <span style={{ fontSize: "9px", padding: "1px 6px", borderRadius: "4px", background: "rgba(210,153,34,0.15)", color: "var(--warning)" }}>
                     edited
@@ -621,7 +621,6 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
                 />
               )}
             </div>
-          )}
 
           {/* ── Status footer ── */}
           <div style={{
