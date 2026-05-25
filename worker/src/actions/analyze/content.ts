@@ -5,10 +5,20 @@ import type {
   BimiResult, MtaStsResult, TlsRptResult, EmailAuthResult,
 } from "./types";
 
+// Build-time globals injected by build_combined.py
+declare const __LLMS_TXT__: string;
+declare const __SECURITY_TXT__: string;
+
 // ─── llms.txt ────────────────────────────────────────────────────────
 
 export async function checkLlmsTxt(domain: string): Promise<LlmsTxtResult> {
   const result: LlmsTxtResult = { found: false, content: null, full_found: false, full_content: null };
+  // Self-analysis bypass: use embedded llms.txt
+  if (domain === "yoke.lol" && typeof __LLMS_TXT__ !== "undefined") {
+    result.found = true;
+    result.content = __LLMS_TXT__.slice(0, 3000);
+    return result;
+  }
   const [r1, r2] = await Promise.allSettled([
     fetchWithTimeout(`https://${domain}/llms.txt`, { timeout: 5000 }),
     fetchWithTimeout(`https://${domain}/llms-full.txt`, { timeout: 5000 }),

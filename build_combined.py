@@ -196,15 +196,34 @@ function decodeB64(b64) {
   return bytes;
 }
 
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "0",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://yoke.lol https://*.googleapis.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+function htmlHeaders(extra) {
+  return { ...SECURITY_HEADERS, "Content-Type": "text/html;charset=UTF-8", ...extra };
+}
+
+const __SECURITY_TXT__ = "Contact: https://github.com/kurtpayne/yoke/issues\\nExpires: 2027-05-24T00:00:00.000Z\\nPreferred-Languages: en\\nCanonical: https://yoke.lol/.well-known/security.txt";
+
 function serveSPA(request) {
   const url = new URL(request.url);
   const path = url.pathname;
 
+  if (path === "/.well-known/security.txt" || path === "/security.txt") {
+    return new Response(__SECURITY_TXT__, { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400" } });
+  }
   if (path === "/privacy") {
-    return new Response(__PRIVACY_HTML__, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=86400" } });
+    return new Response(__PRIVACY_HTML__, { headers: htmlHeaders({ "Cache-Control": "public, max-age=86400" }) });
   }
   if (path === "/terms") {
-    return new Response(__TERMS_HTML__, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=86400" } });
+    return new Response(__TERMS_HTML__, { headers: htmlHeaders({ "Cache-Control": "public, max-age=86400" }) });
   }
   if (path === "/robots.txt") {
     return new Response(__ROBOTS_TXT__, { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400" } });
@@ -216,7 +235,7 @@ function serveSPA(request) {
     return new Response(__LLMS_TXT__, { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400" } });
   }
   if (path === "/api/docs") {
-    return new Response(__API_DOCS_HTML__, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=3600" } });
+    return new Response(__API_DOCS_HTML__, { headers: htmlHeaders({ "Cache-Control": "public, max-age=3600" }) });
   }
   if (__JS_NAME__ && path === "/" + __JS_NAME__) {
     return new Response(decodeB64(__JS_B64__), { headers: { "Content-Type": "application/javascript;charset=UTF-8", "Cache-Control": "public, max-age=31536000, immutable" } });
@@ -251,7 +270,7 @@ function serveSPA(request) {
     html = html.replace(/name="twitter:description" content="[^"]*"/, 'name="twitter:description" content="' + ogDesc + '"');
     html = html.replace(/name="description" content="[^"]*"/, 'name="description" content="' + ogDesc + '"');
     html = html.replace(/rel="canonical" href="[^"]*"/, 'rel="canonical" href="' + ogUrl + '"');
-    return new Response(html, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=300" } });
+    return new Response(html, { headers: htmlHeaders({ "Cache-Control": "public, max-age=300" }) });
   }
 
   // Compare permalinks
@@ -271,10 +290,10 @@ function serveSPA(request) {
     html = html.replace(/name="twitter:description" content="[^"]*"/, 'name="twitter:description" content="' + ogDesc + '"');
     html = html.replace(/name="description" content="[^"]*"/, 'name="description" content="' + ogDesc + '"');
     html = html.replace(/rel="canonical" href="[^"]*"/, 'rel="canonical" href="' + ogUrl + '"');
-    return new Response(html, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=300" } });
+    return new Response(html, { headers: htmlHeaders({ "Cache-Control": "public, max-age=300" }) });
   }
 
-  return new Response(__HTML__, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=300" } });
+  return new Response(__HTML__, { headers: htmlHeaders({ "Cache-Control": "public, max-age=300" }) });
 }
 
 """)
@@ -315,7 +334,8 @@ export default {{
     // (paths like /sitemap.xml, /llms.txt, /robots.txt match the domain pattern)
     if (path === "/robots.txt" || path === "/sitemap.xml" || path === "/llms.txt" ||
         path === "/privacy" || path === "/terms" || path === "/api/docs" ||
-        path === "/logo.png" || path === "/favicon.ico" || path === "/lockup.png") {{
+        path === "/logo.png" || path === "/favicon.ico" || path === "/lockup.png" ||
+        path === "/.well-known/security.txt" || path === "/security.txt") {{
       return serveSPA(request);
     }}
 
