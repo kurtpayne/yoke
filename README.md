@@ -160,20 +160,30 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
    cd worker && bun install && cd ..
    ```
 
-2. **Create D1 database:**
+2. **Configure Wrangler:**
+   ```bash
+   cp worker/wrangler.toml.example worker/wrangler.toml
+   ```
+   Edit `worker/wrangler.toml` — uncomment and fill in your `account_id`, D1 database IDs, and route. This file is gitignored, so `git pull` will never overwrite your config.
+
+3. **Create D1 databases:**
    ```bash
    wrangler d1 create yoke-cache
+   wrangler d1 create yoke-stats
    ```
-   Update `worker/wrangler.toml` with your database ID.
+   Update `worker/wrangler.toml` with the database IDs from the output.
 
-3. **Run migrations:**
+4. **Run migrations:**
    ```bash
    wrangler d1 execute yoke-cache --file=worker/migrations/0001_init.sql
    wrangler d1 execute yoke-cache --file=worker/migrations/0002_domain_scores.sql
    ```
 
-4. **Configure secrets:**
+5. **Configure secrets:**
    ```bash
+   # Recommended — set your instance URL for self-analysis support
+   wrangler secret put BASE_URL    # e.g. https://yoke.example.com
+
    # Optional — enables AI Analysis tab
    wrangler secret put OPENROUTER_API_KEY
 
@@ -184,13 +194,13 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
    wrangler secret put GOOGLE_PAGESPEED_API_KEY
    ```
 
-5. **Build and deploy:**
+6. **Build and deploy:**
    ```bash
-   bash deploy.sh
+   bash deploy.sh --cf
    ```
    This builds the client and worker, then deploys via `npx wrangler deploy`. Requires Node.js 22+.
 
-6. **Deploy HTTP probe proxy (optional but recommended):**
+7. **Deploy HTTP probe proxy (optional but recommended):**
 
    Cloudflare Worker outbound requests come from Cloudflare IP ranges, which some sites block. The included Fly.io proxy routes HTTP status probes from non-Cloudflare IPs so sites like `meta.com` don't falsely report as DOWN.
 
@@ -198,11 +208,14 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
    # Install flyctl if needed
    curl -L https://fly.io/install.sh | sh
 
-   # Deploy the probe proxy
+   # Configure the probe
    cd fly-proxy
+   cp fly.toml.example fly.toml   # edit app name and region
    fly launch          # first time — creates the app
    fly deploy           # subsequent deploys
    ```
+
+   The `fly-proxy/fly.toml` is gitignored, so updates via `git pull` won't conflict.
 
    The proxy exposes three endpoints:
    - `/probe-status?domain=example.com` — HTTP status check with redirect following, returns `{is_up, status_code, response_time_ms, status_label, error}`
@@ -222,18 +235,25 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 | `GOOGLE_PAGESPEED_API_KEY` | No | Google PageSpeed Insights API key — unlocks Lighthouse scores and Core Web Vitals. Without it, PageSpeed requests are unauthenticated and rate-limited. Free tier: 25K req/day. Get one at [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (enable "PageSpeed Insights API"). |
 | `CF_ACCOUNT_ID` | No | Cloudflare account ID (for some API features) |
 | `CF_API_TOKEN` | No | Cloudflare API token (for DNS-over-HTTPS fallback) |
-| `BASE_URL` | No | Override the instance base URL (e.g. `https://yoke.example.com`). Auto-detected from incoming requests — only needed if behind a reverse proxy that rewrites the Host header. |
+| `BASE_URL` | No | Instance base URL (e.g. `https://yoke.example.com`). Enables self-analysis (analyzing your own domain). Auto-detected from incoming requests if unset. |
 | `FLY_PROBE_URL` | No | URL of the Fly.io HTTP probe service (defaults to `https://yoke-probe.fly.dev`). Set this if you deploy your own probe, or leave unset to use direct probes from the Cloudflare edge. |
-| `FLY_AUTH_SECRET` | No | Shared secret between the Worker and Fly probe. If set on both sides, the probe rejects unauthenticated requests. If unset, the probe accepts all requests (self-hosting friendly). See [Worker-to-Fly Proxy Auth](#worker-to-fly-proxy-auth). |
+| `FLY_AUTH_SECRET` | No | Shared secret between the Worker and Fly probe. **Required** for the probe to start — set it on both sides. To run without auth, set `ALLOW_OPEN_PROXY=true` on the probe instead. See [Worker-to-Fly Proxy Auth](#worker-to-fly-proxy-auth). |
 | `ADMIN_KEY` | No | Admin key for gated endpoints like `/api/cleanup`. |
+| `RATE_LIMIT_ANALYZE` | No | Max analyze requests per IP per hour. Default: `30`. Set to `0` to disable. |
+| `RATE_LIMIT_COMPARE` | No | Max compare requests per IP per hour. Default: `15`. Set to `0` to disable. |
+| `RATE_LIMIT_SUBDOMAIN` | No | Max subdomain scan requests per IP per hour. Default: `20`. Set to `0` to disable. |
+| `RATE_LIMIT_AVAILABILITY` | No | Max availability check requests per IP per hour. Default: `60`. Set to `0` to disable. |
+| `CACHE_TTL_HOURS` | No | Analysis cache TTL in hours. Default: `1`. Set to `0` to disable caching. |
 
-Self-hosted instances have **no rate limits** — all features work identically to yoke.lol.
+To disable all rate limits on a self-hosted instance, set each `RATE_LIMIT_*` variable to `0`.
 
 ### Updating
 
+Both `worker/wrangler.toml` and `fly-proxy/fly.toml` are gitignored — `git pull` will never overwrite your config.
+
 ```bash
 git pull
-bash deploy.sh
+bash deploy.sh --all
 ```
 
 ### Troubleshooting
@@ -331,17 +351,23 @@ Recommended: run daily via cron or Cloudflare scheduled worker.
 
 ### Worker-to-Fly Proxy Auth
 
-Set `FLY_AUTH_SECRET` on both the Worker and Fly proxy to secure the probe:
+The Fly probe **requires** `FLY_AUTH_SECRET` to start. Set it on both the Worker and the probe:
 
 ```bash
 # Cloudflare Worker
 wrangler secret put FLY_AUTH_SECRET
 
-# Fly.io (set in fly.toml or via fly secrets)
+# Fly.io
 fly secrets set FLY_AUTH_SECRET=your-shared-secret
 ```
 
-If not set, the probe accepts all requests (self-hosting friendly).
+Both sides must use the same secret. The Worker sends it as a Bearer token; the probe rejects requests without it.
+
+To intentionally run the probe without authentication (not recommended for public deployments), set `ALLOW_OPEN_PROXY=true`:
+
+```bash
+fly secrets set ALLOW_OPEN_PROXY=true
+```
 
 ## Contributing
 

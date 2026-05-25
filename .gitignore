@@ -14,6 +14,10 @@ dist/
 # Cloudflare
 .wrangler/
 .mf/
+worker/wrangler.toml
+
+# Fly.io
+fly-proxy/fly.toml
 
 # OS
 .DS_Store

@@ -106,12 +106,12 @@ export function detectTechStack(headers: Record<string, string>, html: string): 
   return found;
 }
 
-export async function analyzeHttp(domain: string): Promise<HttpAnalysis | null> {
+export async function analyzeHttp(domain: string, instanceHost?: string): Promise<HttpAnalysis | null> {
   // ─── Self-analysis bypass ────────────────────────────────────────────
   // CF Workers can't fetch their own domain (recursive request protection).
   // We have __HTML__ and SECURITY_HEADERS embedded at build time, so synthesize
   // the HTTP analysis directly from the known response.
-  if (domain === "yoke.lol" && typeof __HTML__ !== "undefined") {
+  if (instanceHost && domain === instanceHost && typeof __HTML__ !== "undefined") {
     const selfHeaders: Record<string, string> = {
       ...(typeof SECURITY_HEADERS !== "undefined" ? Object.fromEntries(Object.entries(SECURITY_HEADERS).map(([k, v]) => [k.toLowerCase(), v])) : {}),
       "content-type": "text/html;charset=utf-8",
@@ -132,13 +132,13 @@ export async function analyzeHttp(domain: string): Promise<HttpAnalysis | null> 
     const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1] ?? null;
     let faviconUrl = html.match(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i)?.[1] ?? null;
-    if (faviconUrl && !faviconUrl.startsWith("http")) faviconUrl = new URL(faviconUrl, "https://yoke.lol").href;
+    if (faviconUrl && !faviconUrl.startsWith("http")) faviconUrl = new URL(faviconUrl, `https://${instanceHost}`).href;
     return {
-      redirects: [{ url: "https://yoke.lol", status_code: 200, server: "cloudflare", response_time_ms: 1 }],
+      redirects: [{ url: `https://${instanceHost}`, status_code: 200, server: "cloudflare", response_time_ms: 1 }],
       headers: { raw: selfHeaders, security_audit: audit, security_grade: grade },
       tech_stack: techStack,
       meta: { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null, og_title: ogTitle, og_description: ogDesc, og_image: ogImage, favicon_url: faviconUrl },
-      final_url: "https://yoke.lol", html, status_code: 200, response_time_ms: 1,
+      final_url: `https://${instanceHost}`, html, status_code: 200, response_time_ms: 1,
     };
   }
 
@@ -204,16 +204,16 @@ export async function analyzeHttp(domain: string): Promise<HttpAnalysis | null> 
 
 // ─── Robots & Sitemap ────────────────────────────────────────────────
 
-export async function checkRobotsSitemap(domain: string): Promise<Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">> {
+export async function checkRobotsSitemap(domain: string, instanceHost?: string): Promise<Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">> {
   // Self-analysis bypass for robots/sitemap (CF Workers can't fetch their own domain)
-  if (domain === "yoke.lol" && typeof __ROBOTS_TXT__ !== "undefined") {
+  if (instanceHost && domain === instanceHost && typeof __ROBOTS_TXT__ !== "undefined") {
     const robotsTxt = __ROBOTS_TXT__.replace(/\\n/g, "\n");
     const hasSitemap = typeof __SITEMAP_XML__ !== "undefined";
     const sitemapXml = hasSitemap ? __SITEMAP_XML__ : "";
     const urlMatches = sitemapXml.match(/<url>/gi);
     return {
       robots_txt: robotsTxt.slice(0, 2000), robots_txt_exists: true,
-      sitemap_detected: hasSitemap, sitemap_url: hasSitemap ? "https://yoke.lol/sitemap.xml" : null,
+      sitemap_detected: hasSitemap, sitemap_url: hasSitemap ? `https://${instanceHost}/sitemap.xml` : null,
       sitemap_page_count: urlMatches ? urlMatches.length : null,
     };
   }

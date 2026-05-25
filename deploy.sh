@@ -37,6 +37,12 @@ done
 
 # ── Cloudflare Worker ────────────────────────────────────────────────
 if $DEPLOY_CF; then
+  if [[ ! -f worker/wrangler.toml ]]; then
+    echo "❌ worker/wrangler.toml not found."
+    echo "   Copy worker/wrangler.toml.example to worker/wrangler.toml and fill in your values."
+    exit 1
+  fi
+
   echo "🔨 Building client..."
   cd client && bun run build.ts && cd ..
 
@@ -51,6 +57,12 @@ fi
 
 # ── Fly.io Probe ─────────────────────────────────────────────────────
 if $DEPLOY_FLY; then
+  if [[ ! -f fly-proxy/fly.toml ]]; then
+    echo "❌ fly-proxy/fly.toml not found."
+    echo "   Copy fly-proxy/fly.toml.example to fly-proxy/fly.toml and fill in your values."
+    exit 1
+  fi
+
   if ! command -v fly &>/dev/null; then
     echo "❌ fly CLI not found. Install it: curl -L https://fly.io/install.sh | sh"
     exit 1

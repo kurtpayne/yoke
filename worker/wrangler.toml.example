@@ -1,7 +1,7 @@
 name = "yoke"
 main = "dist/worker.js"
 compatibility_date = "2024-12-01"
-account_id = "b5cdaad4db136b796354280697e0ceb9"
+# account_id = "your-cloudflare-account-id"
 
 [assets]
 directory = "../client/dist"
@@ -10,13 +10,14 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "yoke-cache"
-database_id = "ce2c3c22-a91c-4254-a80c-1cdc95c7ceb7"
+# database_id = "your-yoke-cache-database-id"
 
 [[d1_databases]]
 binding = "STATS_DB"
 database_name = "yoke-stats"
-database_id = "6f29dfb9-b7ff-497f-a4aa-4dbb3b7dd6e1"
+# database_id = "your-yoke-stats-database-id"
 
-[[routes]]
-pattern = "yoke.lol/*"
-zone_name = "yoke.lol"
+# Uncomment and set for custom domain routing:
+# [[routes]]
+# pattern = "yourdomain.com/*"
+# zone_name = "yourdomain.com"

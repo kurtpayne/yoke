@@ -119,6 +119,18 @@ func main() {
 		port = "8080"
 	}
 
+	// Require FLY_AUTH_SECRET unless explicitly opted out
+	authSecret := os.Getenv("FLY_AUTH_SECRET")
+	if authSecret == "" {
+		if os.Getenv("ALLOW_OPEN_PROXY") != "true" {
+			fmt.Println("❌ FLY_AUTH_SECRET is not set. The probe will not start without authentication.")
+			fmt.Println("   Set FLY_AUTH_SECRET to a shared secret that your worker also knows.")
+			fmt.Println("   To intentionally run without auth (NOT recommended), set ALLOW_OPEN_PROXY=true")
+			os.Exit(1)
+		}
+		fmt.Println("⚠️  Running without authentication — probe is open to all requests")
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handler)
 
@@ -130,16 +142,16 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	fmt.Printf("yoke-probe proxy listening on :%s\n", port)
+	fmt.Printf("yoke probe proxy listening on :%s\n", port)
 	server.ListenAndServe()
 }
 
 // checkAuth verifies the Authorization header if FLY_AUTH_SECRET is set.
-// If the env var is not set, all requests are allowed (self-hosting friendly).
+// If the env var is not set (ALLOW_OPEN_PROXY mode), all requests are allowed.
 func checkAuth(r *http.Request) bool {
 	secret := os.Getenv("FLY_AUTH_SECRET")
 	if secret == "" {
-		return true // No auth configured — allow all (self-hosting mode)
+		return true // ALLOW_OPEN_PROXY mode — startup already warned
 	}
 	auth := r.Header.Get("Authorization")
 	return auth == "Bearer "+secret
@@ -158,7 +170,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	// Health check (always allowed, no auth required)
 	if r.URL.Path == "/" || r.URL.Path == "/health" {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","service":"yoke-probe"}`)
+		serviceName := os.Getenv("SERVICE_NAME")
+		if serviceName == "" {
+			serviceName = "yoke-probe"
+		}
+		fmt.Fprintf(w, `{"status":"ok","service":"%s"}`, serviceName)
 		return
 	}
 

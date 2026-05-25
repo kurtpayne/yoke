@@ -3,7 +3,7 @@
 // Both the JSON endpoint and the SSE streaming endpoint use this.
 
 import { type Env, normalizeDomain, maybePruneCache, backgroundWork } from "../../helpers";
-import { ANALYSIS_CACHE_TTL_MS } from "../../config/cache";
+import { getAnalysisCacheTtlMs } from "../../config/cache";
 import { analyzeWordPress } from "../wordpress";
 import { checkBreaches, type BreachResult } from "../breaches";
 import { logApiError, pruneApiErrors } from "../../api-errors";
@@ -278,6 +278,10 @@ export async function runAnalysis(
     throw new Error("Invalid domain");
   }
 
+  // Derive instance hostname for self-analysis bypass (CF Workers can't fetch themselves)
+  let instanceHost: string | undefined;
+  try { instanceHost = env.BASE_URL ? new URL(env.BASE_URL).hostname : undefined; } catch { /* ignore */ }
+
   const onPhase = callbacks?.onPhase ?? (async () => {});
   const onResult = callbacks?.onResult ?? (async () => {});
 
@@ -287,7 +291,7 @@ export async function runAnalysis(
       const cached = await env.DB.prepare(
         "SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = 'analysis' ORDER BY cached_at DESC LIMIT 1"
       ).bind(domain).first<{ data_json: string; cached_at: number }>();
-      if (cached && Date.now() - cached.cached_at < ANALYSIS_CACHE_TTL_MS) {
+      if (cached && Date.now() - cached.cached_at < getAnalysisCacheTtlMs(env)) {
         const parsed = JSON.parse(cached.data_json);
         return { kind: "cached", data: { ...parsed, cached: true } };
       }
@@ -316,7 +320,7 @@ export async function runAnalysis(
   {
     const [dnsResult, httpResult] = await Promise.allSettled([
       checkDns(domain),
-      analyzeHttp(domain),
+      analyzeHttp(domain, instanceHost),
     ]);
     dnsRecords = dnsResult.status === "fulfilled" ? dnsResult.value : [];
     httpAnalysis = httpResult.status === "fulfilled" ? httpResult.value : null;
@@ -353,13 +357,13 @@ export async function runAnalysis(
   type Phase2Check = { key: string; promise: Promise<unknown>; label: string };
   const checks: Phase2Check[] = [
     { key: "rdap", promise: checkRdap(domain, env), label: "WHOIS / RDAP" },
-    { key: "_robots_sitemap", promise: checkRobotsSitemap(domain), label: "Robots & Sitemap" },
+    { key: "_robots_sitemap", promise: checkRobotsSitemap(domain, instanceHost), label: "Robots & Sitemap" },
     { key: "ip_info", promise: checkIpInfo(domain, dnsRecords), label: "IP Geolocation" },
     { key: "blocklists", promise: checkBlocklists(dnsRecords), label: "Blocklist Check" },
     { key: "ssl", promise: checkSsl(domain), label: "SSL / TLS" },
     { key: "performance", promise: checkPageSpeed(domain, httpAnalysis?.response_time_ms ?? null, env.DB, env.GOOGLE_PAGESPEED_API_KEY), label: "Google PageSpeed" },
     { key: "_status", promise: checkStatus(domain), label: "HTTP Status" },
-    { key: "llms_txt", promise: checkLlmsTxt(domain), label: "LLMs.txt" },
+    { key: "llms_txt", promise: checkLlmsTxt(domain, instanceHost), label: "LLMs.txt" },
     { key: "wayback", promise: checkWayback(domain), label: "Wayback Machine" },
     { key: "tranco_rank", promise: checkTranco(domain), label: "Tranco Ranking" },
     { key: "observatory", promise: checkObservatory(domain), label: "Observatory" },
@@ -369,7 +373,7 @@ export async function runAnalysis(
     { key: "dnssec", promise: checkDnssec(domain), label: "DNSSEC" },
     { key: "breaches", promise: checkBreaches(domain, env.DB), label: "Data Breaches" },
     { key: "cert_transparency", promise: checkCertTransparency(domain), label: "Cert Transparency" },
-    { key: "security_txt", promise: checkSecurityTxt(domain), label: "Security.txt" },
+    { key: "security_txt", promise: checkSecurityTxt(domain, instanceHost), label: "Security.txt" },
     { key: "green_hosting", promise: checkGreenHosting(domain), label: "Green Hosting" },
     { key: "well_known", promise: checkWellKnownEndpoints(domain), label: "Well-Known" },
     { key: "greynoise", promise: ip ? checkGreynoise(ip) : Promise.resolve(null), label: "GreyNoise" },

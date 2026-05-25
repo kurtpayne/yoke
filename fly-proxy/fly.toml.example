@@ -1,5 +1,6 @@
-app = "yoke-probe"
-primary_region = "sjc"
+# Copy this to fly.toml and customize for your deployment.
+app = "your-app-name"
+primary_region = "sjc"  # Change to your preferred region
 
 [build]
 

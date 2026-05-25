@@ -12,6 +12,13 @@ export interface Env {
   BASE_URL?: string;
   FLY_PROBE_URL?: string;
   FLY_AUTH_SECRET?: string;
+  /** Rate limit overrides (set to "0" to disable a specific limit) */
+  RATE_LIMIT_ANALYZE?: string;
+  RATE_LIMIT_COMPARE?: string;
+  RATE_LIMIT_SUBDOMAIN?: string;
+  RATE_LIMIT_AVAILABILITY?: string;
+  /** Analysis cache TTL override in hours (default: 1) */
+  CACHE_TTL_HOURS?: string;
   /** Execution context for ctx.waitUntil — set per-request from the Worker fetch handler */
   _ctx?: ExecutionContext;
 }
@@ -19,8 +26,9 @@ export interface Env {
 // ─── Shared Helpers ──────────────────────────────────────────────────
 
 // Re-export from centralized config for backward compatibility
-import { ANALYSIS_CACHE_TTL_MS } from "./config/cache";
+import { ANALYSIS_CACHE_TTL_MS, getAnalysisCacheTtlMs } from "./config/cache";
 export const CACHE_TTL_MS = ANALYSIS_CACHE_TTL_MS;
+export { getAnalysisCacheTtlMs };
 
 // ─── Domain Validation ───────────────────────────────────────────────
 
