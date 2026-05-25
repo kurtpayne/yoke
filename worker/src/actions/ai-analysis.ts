@@ -340,35 +340,37 @@ interface CachedAIResult {
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
-const AI_DAILY_LIMIT = 10;
+const AI_HOURLY_LIMIT = 10;
 
 async function ensureRateLimitTable(db: D1Database): Promise<void> {
   await db.prepare(
-    "CREATE TABLE IF NOT EXISTS ai_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, date TEXT NOT NULL)"
+    "CREATE TABLE IF NOT EXISTS ai_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, ts INTEGER NOT NULL DEFAULT 0)"
   ).run();
   await db.prepare(
-    "CREATE INDEX IF NOT EXISTS idx_ai_rate_ip_date ON ai_rate_limits(ip, date)"
+    "CREATE INDEX IF NOT EXISTS idx_ai_rate_ip_ts ON ai_rate_limits(ip, ts)"
   ).run();
 }
 
 async function getRateLimitCount(db: D1Database, ip: string): Promise<number> {
+  const cutoff = Math.floor(Date.now() / 1000) - 3600;
   const row = await db.prepare(
-    "SELECT COUNT(*) as cnt FROM ai_rate_limits WHERE ip = ? AND date = date('now')"
-  ).bind(ip).first<{ cnt: number }>();
+    "SELECT COUNT(*) as cnt FROM ai_rate_limits WHERE ip = ? AND ts > ?"
+  ).bind(ip, cutoff).first<{ cnt: number }>();
   return row?.cnt ?? 0;
 }
 
 async function recordRateLimitHit(db: D1Database, ip: string): Promise<void> {
   await db.prepare(
-    "INSERT INTO ai_rate_limits (ip, date) VALUES (?, date('now'))"
-  ).bind(ip).run();
+    "INSERT INTO ai_rate_limits (ip, ts) VALUES (?, ?)"
+  ).bind(ip, Math.floor(Date.now() / 1000)).run();
 }
 
 async function cleanupOldRateLimits(db: D1Database): Promise<void> {
-  // Probabilistic cleanup: 5% chance per request, delete entries older than 7 days
+  // Probabilistic cleanup: 5% chance per request, delete entries older than 2 hours
   if (Math.random() > 0.05) return;
   try {
-    await db.prepare("DELETE FROM ai_rate_limits WHERE date < date('now', '-7 days')").run();
+    const cutoff = Math.floor(Date.now() / 1000) - 7200;
+    await db.prepare("DELETE FROM ai_rate_limits WHERE ts < ?").bind(cutoff).run();
   } catch { /* cleanup failure is non-critical */ }
 }
 
@@ -420,15 +422,15 @@ export async function getAIAnalysis(
     try {
       await ensureRateLimitTable(env.STATS_DB);
       const count = await getRateLimitCount(env.STATS_DB, clientIP);
-      if (count >= AI_DAILY_LIMIT) {
+      if (count >= AI_HOURLY_LIMIT) {
         // Build the DIY prompt for the rate-limited user
         const { system, user } = buildAIPrompt(analysisCache);
         const diyPrompt = `${system}\n\n---\n\n${user}`;
         return new Response(JSON.stringify({
           rate_limited: true,
-          limit: AI_DAILY_LIMIT,
+          limit: AI_HOURLY_LIMIT,
           used: count,
-          reset: "tomorrow",
+          reset: "~1 hour",
           diy_prompt: diyPrompt,
           model_suggestion: "anthropic/claude-sonnet-4",
           instructions: "Copy the prompt below and paste it into ChatGPT, Claude, Gemini, or any AI assistant. Or enter your own OpenRouter API key in the settings above for unlimited analysis.",
@@ -489,7 +491,7 @@ export async function getAIAnalysis(
     if (!byoKey) {
       try {
         await env.STATS_DB.prepare(
-          "DELETE FROM ai_rate_limits WHERE id = (SELECT id FROM ai_rate_limits WHERE ip = ? AND date = date('now') ORDER BY id DESC LIMIT 1)"
+          "DELETE FROM ai_rate_limits WHERE id = (SELECT id FROM ai_rate_limits WHERE ip = ? AND ts > (strftime('%s', 'now') - 3600) ORDER BY id DESC LIMIT 1)"
         ).bind(clientIP).run();
       } catch { /* decrement failure is non-critical */ }
     }

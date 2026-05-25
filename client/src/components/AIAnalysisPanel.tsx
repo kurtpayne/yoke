@@ -844,6 +844,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
 
   const generateForPersona = useCallback(async (personaKey: PersonaKey) => {
     if (personaResults[personaKey]) return; // already cached
+    if (loadingPersona) return; // another request in flight — wait for it (it returns all personas)
     setLoadingPersona(personaKey);
     setPersonaError(null);
 
@@ -889,7 +890,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
     } finally {
       setLoadingPersona(null);
     }
-  }, [domain, personaResults, selectedModel]);
+  }, [domain, personaResults, selectedModel, loadingPersona]);
 
   const handleKeyChange = (key: string) => {
     setKeyVersion(v => v + 1);
