@@ -1,24 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
-// ─── RDAP/WHOIS Fallback Chain Tests ─────────────────────────────────
-// Tests the RDAP endpoint resolution, retry logic, IANA bootstrap parsing,
-// and registrar name extraction. Inlined to avoid CF Worker runtime deps.
+// ─── Import production code (single source of truth) ─────────────────
+import { RDAP_ENDPOINTS, extractRegistrar, parseIanaBootstrap } from '@worker/actions/analyze/dns';
 
-// ─── Static RDAP Endpoint Map (subset) ───────────────────────────────
-
-const RDAP_ENDPOINTS: Record<string, string> = {
-  com: "https://rdap.verisign.com/com/v1",
-  net: "https://rdap.verisign.com/net/v1",
-  org: "https://rdap.org/domain",
-  lol: "https://rdap.centralnic.com/lol",
-  ai: "https://rdap.identitydigital.services/rdap",
-  cc: "https://rdap.verisign.com/cc/v1",
-  tv: "https://rdap.verisign.com/tv/v1",
-  fm: "https://rdap.centralnic.com/fm",
-  dev: "https://rdap.nic.google",
-  app: "https://rdap.nic.google",
-  biz: "https://rdap.identitydigital.services/rdap",
-};
+// ─── Static RDAP Endpoint Map ────────────────────────────────────────
 
 describe('Static RDAP Endpoint Map', () => {
   it('should have an endpoint for .lol (our own domain!)', () => {
@@ -51,24 +36,6 @@ describe('Static RDAP Endpoint Map', () => {
 });
 
 // ─── IANA Bootstrap Parsing ──────────────────────────────────────────
-
-interface BootstrapEntry {
-  tlds: string[];
-  urls: string[];
-}
-
-function parseIanaBootstrap(data: { services: [string[], string[]][] }): Map<string, string> {
-  const map = new Map<string, string>();
-  if (!data?.services) return map;
-  for (const [tlds, urls] of data.services) {
-    if (!urls?.length) continue;
-    const url = urls[0].replace(/\/+$/, "");
-    for (const tld of tlds) {
-      map.set(tld.toLowerCase(), url);
-    }
-  }
-  return map;
-}
 
 describe('IANA Bootstrap Parsing', () => {
   it('should parse a valid bootstrap response', () => {
@@ -118,47 +85,17 @@ describe('IANA Bootstrap Parsing', () => {
 
 // ─── Registrar Name Extraction (3-tier fallback) ─────────────────────
 
-interface RdapEntity {
-  roles?: string[];
-  vcardArray?: [string, [string, Record<string, unknown>, string, string][]];
-  handle?: string;
-  publicIds?: { type: string; identifier: string }[];
-}
-
-function extractRegistrar(entities: RdapEntity[]): string | null {
-  const registrarEntity = entities?.find(e => e.roles?.includes("registrar"));
-  if (!registrarEntity) return null;
-
-  // Tier 1: vcardArray fn
-  if (registrarEntity.vcardArray?.[1]) {
-    const fn = registrarEntity.vcardArray[1].find((field) => field[0] === "fn");
-    if (fn?.[3]) return fn[3];
-  }
-
-  // Tier 2: publicIds (IANA Registrar ID)
-  if (registrarEntity.publicIds?.length) {
-    const ianaId = registrarEntity.publicIds.find(p => p.type === "IANA Registrar ID");
-    if (ianaId) return `Registrar ID: ${ianaId.identifier}`;
-    return registrarEntity.publicIds[0].identifier;
-  }
-
-  // Tier 3: handle
-  if (registrarEntity.handle) return registrarEntity.handle;
-
-  return null;
-}
-
 describe('Registrar Name Extraction', () => {
   it('should extract from vcardArray (tier 1)', () => {
-    const entities: RdapEntity[] = [{
+    const entities = [{
       roles: ["registrar"],
-      vcardArray: ["vcard", [["fn", {}, "text", "GoDaddy.com, LLC"]]],
+      vcardArray: ["vcard", [["fn", {}, "text", "GoDaddy.com, LLC"]]] as any,
     }];
     expect(extractRegistrar(entities)).toBe("GoDaddy.com, LLC");
   });
 
   it('should fall back to publicIds (tier 2)', () => {
-    const entities: RdapEntity[] = [{
+    const entities = [{
       roles: ["registrar"],
       publicIds: [{ type: "IANA Registrar ID", identifier: "146" }],
     }];
@@ -166,7 +103,7 @@ describe('Registrar Name Extraction', () => {
   });
 
   it('should fall back to handle (tier 3)', () => {
-    const entities: RdapEntity[] = [{
+    const entities = [{
       roles: ["registrar"],
       handle: "MARKMONITOR-REG",
     }];
@@ -174,9 +111,9 @@ describe('Registrar Name Extraction', () => {
   });
 
   it('should prefer vcardArray over publicIds', () => {
-    const entities: RdapEntity[] = [{
+    const entities = [{
       roles: ["registrar"],
-      vcardArray: ["vcard", [["fn", {}, "text", "Preferred Registrar"]]],
+      vcardArray: ["vcard", [["fn", {}, "text", "Preferred Registrar"]]] as any,
       publicIds: [{ type: "IANA Registrar ID", identifier: "999" }],
       handle: "FALLBACK",
     }];
@@ -184,7 +121,7 @@ describe('Registrar Name Extraction', () => {
   });
 
   it('should return null when no registrar entity exists', () => {
-    const entities: RdapEntity[] = [{
+    const entities = [{
       roles: ["abuse"],
       handle: "ABUSE-HANDLER",
     }];
@@ -227,10 +164,8 @@ describe('Retry Logic', () => {
     let attempts = 0;
     const maxRetries = 2;
 
-    // Simulate the retry loop from dns.ts
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       attempts++;
-      // Simulate failure on both attempts
       const failed = true;
       if (failed && attempt === 0) continue;
       break;
@@ -245,7 +180,6 @@ describe('Retry Logic', () => {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       attempts++;
-      // Simulate success on first attempt
       const success = true;
       if (success) break;
     }

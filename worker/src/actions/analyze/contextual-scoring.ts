@@ -41,9 +41,10 @@ export interface ArchetypeResult {
 }
 
 export interface AxisScore {
-  score: number;
+  score: number | null;
   weight: number;
   findings: Finding[];
+  not_measured?: boolean;
 }
 
 export interface DomainScoreResult {
@@ -57,9 +58,40 @@ export interface DomainScoreResult {
 
 const SEVERITY_SCORE = SEVERITY_SCORES;
 
+// ─── Exported Scoring Helpers ────────────────────────────────────────
+// Pure functions extracted for testability. Used by calculateDomainScore below.
+
+export function computeAxisScore(findings: Finding[]): number {
+  if (findings.length === 0) return 75;
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const f of findings) {
+    weightedSum += SEVERITY_SCORE[f.severity] * f.weight;
+    totalWeight += f.weight;
+  }
+  return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 75;
+}
+
+export function computeComposite(axisScores: Record<Axis, number>, archetype: ArchetypeName): number {
+  const weights = ARCHETYPE_WEIGHTS[archetype];
+  let composite = 0;
+  for (const axis of Object.keys(weights) as Axis[]) {
+    composite += axisScores[axis] * weights[axis];
+  }
+  return Math.round(composite);
+}
+
+export function gradeFromComposite(score: number): string {
+  return score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
+}
+
+export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: Partial<Record<ArchetypeName, Severity>>): Severity {
+  return overrides[archetype] ?? baseSeverity;
+}
+
 // ─── Archetype Weight Profiles ───────────────────────────────────────
 
-const ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
+export const ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
   commerce:       { security: 0.35, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.10 },
   content:        { security: 0.15, performance: 0.25, reliability: 0.15, trust: 0.15, visibility: 0.30 },
   application:    { security: 0.30, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.15 },
@@ -224,14 +256,6 @@ export function detectArchetype(opts: {
   const secondary = (second && second[1].score > 0.25 && top[1].score - second[1].score < 0.15) ? second[0] : null;
 
   return { detected: top[0], confidence, secondary, signals: top[1].signals, platform, weights: ARCHETYPE_WEIGHTS };
-}
-
-// ─── Contextual Severity Rules ───────────────────────────────────────
-
-type SeverityMap = Partial<Record<ArchetypeName, Severity>>;
-
-function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: SeverityMap): Severity {
-  return overrides[archetype] ?? baseSeverity;
 }
 
 // ─── Scoring Engine ──────────────────────────────────────────────────
@@ -750,30 +774,32 @@ export function calculateDomainScore(opts: {
   for (const axis of axes) {
     const axisFindings = findings.filter(f => f.axis === axis);
     if (axisFindings.length === 0) {
-      axisScores[axis] = { score: 75, weight: weights[axis], findings: [] }; // default if no data
+      axisScores[axis] = { score: null, weight: weights[axis], findings: [], not_measured: true };
       continue;
     }
-
-    let weightedSum = 0;
-    let totalWeight = 0;
-    for (const f of axisFindings) {
-      weightedSum += SEVERITY_SCORE[f.severity] * f.weight;
-      totalWeight += f.weight;
-    }
-
-    const score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 75;
+    const score = computeAxisScore(axisFindings);
     axisScores[axis] = { score, weight: weights[axis], findings: axisFindings };
   }
 
   // ─── Compute Composite Score ─────────────────────────────────────
+  // Skip not_measured axes and redistribute their weight proportionally
+
+  let totalMeasuredWeight = 0;
+  for (const axis of axes) {
+    if (!axisScores[axis].not_measured) totalMeasuredWeight += axisScores[axis].weight;
+  }
 
   let composite = 0;
-  for (const axis of axes) {
-    composite += axisScores[axis].score * axisScores[axis].weight;
+  if (totalMeasuredWeight > 0) {
+    for (const axis of axes) {
+      if (!axisScores[axis].not_measured) {
+        composite += axisScores[axis].score! * (axisScores[axis].weight / totalMeasuredWeight);
+      }
+    }
   }
   composite = Math.round(composite);
 
-  const grade = composite >= 85 ? "A" : composite >= 70 ? "B" : composite >= 55 ? "C" : composite >= 40 ? "D" : "F";
+  const grade = gradeFromComposite(composite);
 
   return { composite, grade, axes: axisScores, archetype };
 }

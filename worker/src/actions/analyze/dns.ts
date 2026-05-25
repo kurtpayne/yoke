@@ -161,6 +161,20 @@ let bootstrapCache: Map<string, string> | null = null;
 let bootstrapFetchedAt = 0;
 const BOOTSTRAP_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
+/** Parse IANA RDAP bootstrap JSON into a TLD→URL map. */
+export function parseIanaBootstrap(data: { services: [string[], string[]][] }): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!data?.services) return map;
+  for (const [tlds, urls] of data.services) {
+    if (!urls?.length) continue;
+    const url = urls[0].replace(/\/+$/, "");
+    for (const t of tlds) {
+      map.set(t.toLowerCase(), url);
+    }
+  }
+  return map;
+}
+
 async function getBootstrapEndpoint(tld: string): Promise<string | null> {
   const now = Date.now();
   if (!bootstrapCache || (now - bootstrapFetchedAt) > BOOTSTRAP_TTL) {
@@ -168,13 +182,7 @@ async function getBootstrapEndpoint(tld: string): Promise<string | null> {
       const res = await fetchWithTimeout(IANA_BOOTSTRAP_URL, { timeout: 8000 });
       if (res.ok) {
         const data = await res.json() as { services: [string[], string[]][] };
-        const map = new Map<string, string>();
-        for (const [tlds, urls] of data.services) {
-          for (const t of tlds) {
-            map.set(t.toLowerCase(), urls[0]); // first URL is preferred
-          }
-        }
-        bootstrapCache = map;
+        bootstrapCache = parseIanaBootstrap(data);
         bootstrapFetchedAt = now;
       }
     } catch {
@@ -186,7 +194,7 @@ async function getBootstrapEndpoint(tld: string): Promise<string | null> {
 
 // ─── Registrar Name Extraction (with fallbacks) ─────────────────────
 
-function extractRegistrar(entities: Array<{
+export function extractRegistrar(entities: Array<{
   roles?: string[];
   vcardArray?: [string, Array<[string, Record<string, unknown>, string, string]>];
   handle?: string;

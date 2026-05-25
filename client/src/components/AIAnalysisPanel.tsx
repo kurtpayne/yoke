@@ -1,44 +1,18 @@
-import { useState } from "react";
-import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Key, Copy, Check, Settings } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Key, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
+import type { AnalysisResult } from "../utils/types";
 
 // ─── Types ──────────────────────────────────────────────────────────
-
-interface KeyFinding {
-  category: string;
-  finding: string;
-  severity: string;
-  action: string;
-}
-
-interface Recommendation {
-  priority: number;
-  action: string;
-  impact: string;
-  effort: string;
-}
-
-interface PersonaInsights {
-  site_owner: string;
-  security_researcher: string;
-  competitor_analyst: string;
-  domain_buyer: string;
-  developer: string;
-  seo_professional: string;
-}
 
 interface AIAnalysisResult {
   summary: string;
   posture: string;
-  risk_level?: string; // legacy cached results
-  key_findings: KeyFinding[];
-  persona_insights: PersonaInsights;
+  risk_level?: string;
+  key_findings: Array<{ category: string; finding: string; severity: string; action: string }>;
+  persona_insights: Record<string, string>;
   attack_surface: string[];
-  recommendations: Recommendation[];
-  _usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  recommendations: Array<{ priority: number; action: string; impact: string; effort: string }>;
+  _usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
 interface AIAnalysisResponse {
@@ -59,262 +33,130 @@ interface RateLimitResponse {
   instructions: string;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────
+// ─── Deterministic Key Findings ─────────────────────────────────────
 
-const POSTURE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  strong: { bg: "rgba(46, 160, 67, 0.15)", text: "var(--success)", border: "rgba(46, 160, 67, 0.4)" },
-  fair: { bg: "rgba(210, 153, 34, 0.15)", text: "var(--warning)", border: "rgba(210, 153, 34, 0.4)" },
-  poor: { bg: "rgba(219, 109, 40, 0.15)", text: "#db6d28", border: "rgba(219, 109, 40, 0.4)" },
-  critical: { bg: "rgba(248, 81, 73, 0.15)", text: "var(--danger)", border: "rgba(248, 81, 73, 0.4)" },
-  // Legacy risk_level fallbacks for cached results
-  low: { bg: "rgba(46, 160, 67, 0.15)", text: "var(--success)", border: "rgba(46, 160, 67, 0.4)" },
-  medium: { bg: "rgba(210, 153, 34, 0.15)", text: "var(--warning)", border: "rgba(210, 153, 34, 0.4)" },
-  high: { bg: "rgba(219, 109, 40, 0.15)", text: "#db6d28", border: "rgba(219, 109, 40, 0.4)" },
-};
-
-const SEVERITY_ICONS: Record<string, typeof CheckCircle2> = {
-  info: Info,
-  low: CheckCircle2,
-  medium: AlertTriangle,
-  high: XCircle,
-};
-
-const SEVERITY_COLORS: Record<string, string> = {
-  info: "var(--muted)",
-  low: "var(--success)",
-  medium: "var(--warning)",
-  high: "var(--danger)",
-};
-
-const CATEGORY_ICONS: Record<string, typeof Shield> = {
-  security: Shield,
-  infrastructure: Server,
-  performance: Gauge,
-  trust: TrendingUp,
-  seo: Search,
-  email: Mail,
-};
-
-const EFFORT_COLORS: Record<string, { bg: string; text: string }> = {
-  low: { bg: "rgba(46, 160, 67, 0.15)", text: "var(--success)" },
-  medium: { bg: "rgba(210, 153, 34, 0.15)", text: "var(--warning)" },
-  high: { bg: "rgba(248, 81, 73, 0.15)", text: "var(--danger)" },
-};
-
-type PersonaKey = keyof PersonaInsights;
-
-const PERSONAS: { key: PersonaKey; label: string; icon: typeof Shield }[] = [
-  { key: "site_owner", label: "Owner", icon: Users },
-  { key: "security_researcher", label: "Security", icon: Shield },
-  { key: "competitor_analyst", label: "Competitor", icon: BarChart3 },
-  { key: "domain_buyer", label: "Buyer", icon: DollarSign },
-  { key: "developer", label: "Developer", icon: Code },
-  { key: "seo_professional", label: "SEO", icon: Search },
-];
-
-// ─── Sub-Components ─────────────────────────────────────────────────
-
-// Map legacy risk_level values to posture labels
-const POSTURE_LABEL_MAP: Record<string, string> = {
-  strong: "Strong",
-  fair: "Fair",
-  poor: "Poor",
-  critical: "Critical",
-  low: "Strong",       // legacy
-  medium: "Fair",      // legacy
-  high: "Poor",        // legacy
-};
-
-function PostureBadge({ level }: { level: string }) {
-  const colors = POSTURE_COLORS[level] || POSTURE_COLORS.fair;
-  const label = POSTURE_LABEL_MAP[level] || level;
-  return (
-    <span
-      style={{
-        background: colors.bg,
-        color: colors.text,
-        border: `1px solid ${colors.border}`,
-        padding: "4px 12px",
-        borderRadius: "6px",
-        fontSize: "12px",
-        fontWeight: 600,
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
-      }}
-    >
-      {label} posture
-    </span>
-  );
+interface DetFinding {
+  icon: string;
+  text: string;
+  severity: "critical" | "warning" | "info" | "good";
 }
 
-function FindingCard({ finding }: { finding: KeyFinding }) {
-  const [expanded, setExpanded] = useState(false);
-  const Icon = SEVERITY_ICONS[finding.severity] || Info;
-  const color = SEVERITY_COLORS[finding.severity] || "var(--muted)";
-  const CatIcon = CATEGORY_ICONS[finding.category] || Info;
+function generateKeyFindings(data: AnalysisResult): DetFinding[] {
+  const findings: DetFinding[] = [];
 
-  return (
-    <div
-      style={{
-        background: "var(--card)",
-        border: "1px solid var(--border)",
-        borderRadius: "8px",
-        padding: "12px",
-        cursor: "pointer",
-      }}
-      onClick={() => setExpanded(!expanded)}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-        <Icon size={16} style={{ color, marginTop: "2px", flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <CatIcon size={12} style={{ color: "var(--muted)" }} />
-            <span style={{ fontSize: "10px", color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              {finding.category}
-            </span>
-          </div>
-          <div style={{ fontSize: "13px", color: "var(--text)", lineHeight: 1.5 }}>
-            {finding.finding}
-          </div>
-          {expanded && finding.action && (
-            <div
-              style={{
-                marginTop: "8px",
-                padding: "8px 10px",
-                background: "var(--bg)",
-                borderRadius: "6px",
-                fontSize: "12px",
-                color: "var(--muted)",
-                lineHeight: 1.5,
-              }}
-            >
-              <strong style={{ color: "var(--text)" }}>Action:</strong> {finding.action}
-            </div>
-          )}
-        </div>
-        {finding.action && (
-          expanded ? <ChevronUp size={14} style={{ color: "var(--muted)", flexShrink: 0 }} /> : <ChevronDown size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
-        )}
-      </div>
-    </div>
-  );
-}
+  // SSL issues
+  if (data.ssl) {
+    if (data.ssl.error && !data.ssl.grade) {
+      findings.push({ icon: "🔴", text: "SSL certificate issue: " + (data.ssl.error || "not detected"), severity: "critical" });
+    } else if (data.ssl.grade) {
+      if (data.ssl.grade.startsWith("A")) {
+        findings.push({ icon: "✅", text: `SSL grade ${data.ssl.grade}`, severity: "good" });
+      } else if (data.ssl.grade === "T") {
+        findings.push({ icon: "🔴", text: "SSL certificate has trust issues", severity: "critical" });
+      } else {
+        findings.push({ icon: "🟡", text: `SSL grade ${data.ssl.grade} — room for improvement`, severity: "warning" });
+      }
+    }
+    if (data.ssl.valid_to) {
+      const daysLeft = Math.floor((new Date(data.ssl.valid_to).getTime() - Date.now()) / 86400000);
+      if (daysLeft < 0) {
+        findings.push({ icon: "🔴", text: "SSL certificate has expired", severity: "critical" });
+      } else if (daysLeft <= 14) {
+        findings.push({ icon: "🔴", text: `SSL certificate expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`, severity: "critical" });
+      } else if (daysLeft <= 30) {
+        findings.push({ icon: "🟡", text: `SSL certificate expires in ${daysLeft} days`, severity: "warning" });
+      }
+    }
+  }
 
-function PersonaSwitcher({ insights }: { insights: PersonaInsights }) {
-  const [active, setActive] = useState<PersonaKey>("site_owner");
+  // Domain expiration
+  if (data.rdap?.days_until_expiry != null) {
+    if (data.rdap.days_until_expiry <= 30) {
+      findings.push({ icon: "🔴", text: `Domain expires in ${data.rdap.days_until_expiry} day${data.rdap.days_until_expiry === 1 ? "" : "s"}`, severity: "critical" });
+    } else if (data.rdap.days_until_expiry <= 90) {
+      findings.push({ icon: "🟡", text: `Domain expires in ${data.rdap.days_until_expiry} days`, severity: "warning" });
+    }
+  }
 
-  return (
-    <div>
-      <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>
-        {PERSONAS.map(({ key, label, icon: PIcon }) => (
-          <button
-            key={key}
-            onClick={() => setActive(key)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              padding: "5px 10px",
-              borderRadius: "6px",
-              border: `1px solid ${active === key ? "var(--accent)" : "var(--border)"}`,
-              background: active === key ? "rgba(88, 166, 255, 0.1)" : "transparent",
-              color: active === key ? "var(--accent)" : "var(--muted)",
-              cursor: "pointer",
-              fontSize: "11px",
-              fontWeight: active === key ? 600 : 400,
-              transition: "all 0.15s",
-            }}
-          >
-            <PIcon size={12} />
-            {label}
-          </button>
-        ))}
-      </div>
-      <div
-        style={{
-          background: "var(--card)",
-          border: "1px solid var(--border)",
-          borderRadius: "8px",
-          padding: "14px",
-          fontSize: "13px",
-          lineHeight: 1.7,
-          color: "var(--text)",
-        }}
-      >
-        {insights[active] || "No insights available for this persona."}
-      </div>
-    </div>
-  );
-}
+  // Security headers
+  if (data.headers) {
+    const missing = data.headers.security_audit.filter(h => h.status === "fail").map(h => h.header);
+    const critical = ["content-security-policy", "strict-transport-security"];
+    const missingCritical = missing.filter(h => critical.includes(h.toLowerCase()));
+    if (missingCritical.length > 0) {
+      findings.push({ icon: "🟡", text: `Missing security header${missingCritical.length > 1 ? "s" : ""}: ${missingCritical.join(", ")}`, severity: "warning" });
+    }
+  }
 
-function RecommendationItem({ rec }: { rec: Recommendation }) {
-  const effortStyle = EFFORT_COLORS[rec.effort] || EFFORT_COLORS.medium;
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: "12px",
-        padding: "10px 12px",
-        background: "var(--card)",
-        border: "1px solid var(--border)",
-        borderRadius: "8px",
-      }}
-    >
-      <div
-        style={{
-          width: "24px",
-          height: "24px",
-          borderRadius: "50%",
-          background: "rgba(88, 166, 255, 0.15)",
-          color: "var(--accent)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "12px",
-          fontWeight: 700,
-          flexShrink: 0,
-        }}
-      >
-        {rec.priority}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "13px", color: "var(--text)", lineHeight: 1.5, marginBottom: "4px" }}>
-          {rec.action}
-        </div>
-        <div style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.4 }}>
-          {rec.impact}
-        </div>
-      </div>
-      <span
-        style={{
-          padding: "2px 8px",
-          borderRadius: "4px",
-          fontSize: "10px",
-          fontWeight: 600,
-          textTransform: "uppercase",
-          background: effortStyle.bg,
-          color: effortStyle.text,
-          alignSelf: "flex-start",
-          flexShrink: 0,
-        }}
-      >
-        {rec.effort}
-      </span>
-    </div>
-  );
-}
+  // Email auth
+  if (data.email_auth) {
+    const missing: string[] = [];
+    if (!data.email_auth.spf?.found) missing.push("SPF");
+    if (data.email_auth.dkim_selectors_found?.length === 0) missing.push("DKIM");
+    if (!data.email_auth.dmarc?.found) missing.push("DMARC");
+    if (missing.length > 0) {
+      findings.push({ icon: "🟡", text: `Missing email authentication: ${missing.join(", ")}`, severity: "warning" });
+    } else {
+      const dmarcPolicy = data.email_auth.dmarc?.policy;
+      if (dmarcPolicy === "reject" || dmarcPolicy === "quarantine") {
+        findings.push({ icon: "✅", text: `Full email authentication (SPF + DKIM + DMARC ${dmarcPolicy})`, severity: "good" });
+      }
+    }
+  }
 
-// ─── Section Header ─────────────────────────────────────────────────
+  // Performance
+  if (data.performance) {
+    if (data.performance.score != null && data.performance.score < 50) {
+      findings.push({ icon: "🔴", text: `Low performance score: ${data.performance.score}/100`, severity: "critical" });
+    }
+    if (data.performance.lcp != null && data.performance.lcp > 4000) {
+      findings.push({ icon: "🟡", text: `Slow Largest Contentful Paint: ${(data.performance.lcp / 1000).toFixed(1)}s`, severity: "warning" });
+    }
+  }
 
-function SectionTitle({ icon: Icon, title }: { icon: typeof Shield; title: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px", marginTop: "20px" }}>
-      <Icon size={14} style={{ color: "var(--accent)" }} />
-      <span style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
-        {title}
-      </span>
-    </div>
-  );
+  // DNSSEC
+  if (data.dnssec) {
+    if (!data.dnssec.enabled) {
+      findings.push({ icon: "ℹ️", text: "DNSSEC not enabled", severity: "info" });
+    }
+  }
+
+  // Accessibility
+  if (data.accessibility) {
+    const score = (data.accessibility as { score?: number }).score;
+    if (score != null && score < 70) {
+      findings.push({ icon: "🟡", text: `Accessibility score ${score}/100 — needs improvement`, severity: "warning" });
+    }
+  }
+
+  // Blocklists
+  if (data.blocklists) {
+    const listed = data.blocklists.filter(b => b.listed);
+    if (listed.length > 0) {
+      findings.push({ icon: "🔴", text: `Listed on ${listed.length} blocklist${listed.length > 1 ? "s" : ""}: ${listed.map(b => b.name).join(", ")}`, severity: "critical" });
+    }
+  }
+
+  // Breaches
+  if (data.breaches && data.breaches.items && data.breaches.items.length > 0) {
+    findings.push({ icon: "🟡", text: `${data.breaches.items.length} known data breach${data.breaches.items.length > 1 ? "es" : ""} associated with this domain`, severity: "warning" });
+  }
+
+  // Status
+  if (data.status && !data.status.is_up) {
+    findings.push({ icon: "🔴", text: "Site appears to be down", severity: "critical" });
+  }
+
+  // Sort: critical first, then warning, info, good
+  const order: Record<string, number> = { critical: 0, warning: 1, info: 2, good: 3 };
+  findings.sort((a, b) => order[a.severity] - order[b.severity]);
+
+  // If no issues found, add a positive message
+  if (findings.length === 0) {
+    findings.push({ icon: "✅", text: "No critical issues detected — looking good!", severity: "good" });
+  }
+
+  return findings.slice(0, 7);
 }
 
 // ─── BYO Key helpers ────────────────────────────────────────────────
@@ -448,7 +290,6 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
         Yoke is free and open source — we rate-limit AI calls to manage costs, not knowledge.
       </p>
 
-      {/* Option 1: Copy prompt */}
       <div style={{
         width: "100%", maxWidth: "460px", background: "var(--card)",
         border: "1px solid var(--border)", borderRadius: "10px", padding: "16px", marginBottom: "14px",
@@ -470,7 +311,6 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
         </button>
       </div>
 
-      {/* Option 2: BYO key */}
       <div style={{
         width: "100%", maxWidth: "460px", background: "var(--card)",
         border: "1px solid var(--border)", borderRadius: "10px", padding: "16px",
@@ -507,19 +347,105 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
   );
 }
 
+// ─── Persona Definitions ────────────────────────────────────────────
+
+type PersonaKey = "security_researcher" | "developer" | "seo_professional" | "site_owner" | "competitor_analyst" | "domain_buyer";
+
+const PERSONAS: { key: PersonaKey; label: string; icon: typeof Shield; desc: string }[] = [
+  { key: "security_researcher", label: "Security", icon: Shield, desc: "Vulnerabilities, attack surface, and security posture" },
+  { key: "developer", label: "Developer", icon: Code, desc: "Tech stack, performance, and integration concerns" },
+  { key: "seo_professional", label: "SEO", icon: Search, desc: "Visibility, structured data, and discoverability" },
+  { key: "site_owner", label: "Owner", icon: Users, desc: "Overall health, trust signals, and compliance" },
+  { key: "competitor_analyst", label: "Competitor", icon: BarChart3, desc: "Market positioning, tech choices, and gaps" },
+  { key: "domain_buyer", label: "Buyer", icon: DollarSign, desc: "Domain value, age, history, and acquisition risk" },
+];
+
+// ─── AI Persona Insight Card ────────────────────────────────────────
+
+function PersonaInsightCard({
+  persona,
+  insight,
+  loading,
+  onGenerate,
+}: {
+  persona: typeof PERSONAS[number];
+  insight: string | null;
+  loading: boolean;
+  onGenerate: () => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  if (insight === null && !loading) {
+    return (
+      <div style={{
+        background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
+        padding: "16px", textAlign: "center",
+      }}>
+        <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "12px", lineHeight: 1.5 }}>
+          {persona.desc}
+        </p>
+        <button onClick={onGenerate} style={{
+          display: "inline-flex", alignItems: "center", gap: "6px",
+          padding: "7px 16px", borderRadius: "6px",
+          border: "1px solid var(--accent)", background: "rgba(88,166,255,0.1)",
+          color: "var(--accent)", cursor: "pointer", fontSize: "12px", fontWeight: 600,
+        }}>
+          <Sparkles size={12} />
+          Generate {persona.label} Analysis
+        </button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{
+        background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
+        padding: "20px", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
+      }}>
+        <Loader2 size={16} style={{ color: "var(--accent)", animation: "spin 1s linear infinite" }} />
+        <span style={{ fontSize: "12px", color: "var(--muted)" }}>Analyzing from {persona.label.toLowerCase()} perspective…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
+      padding: "14px", fontSize: "13px", lineHeight: 1.7, color: "var(--text)",
+    }}>
+      <div
+        style={{ display: "flex", justifyContent: "space-between", cursor: "pointer", marginBottom: expanded ? "8px" : 0 }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          {persona.label} Analysis
+        </span>
+        {expanded ? <ChevronUp size={14} style={{ color: "var(--muted)" }} /> : <ChevronDown size={14} style={{ color: "var(--muted)" }} />}
+      </div>
+      {expanded && <div>{insight}</div>}
+    </div>
+  );
+}
+
 // ─── Main Component ─────────────────────────────────────────────────
 
-export function AIAnalysisPanel({ domain }: { domain: string }) {
-  const [data, setData] = useState<AIAnalysisResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function AIAnalysisPanel({ domain, analysisData }: { domain: string; analysisData?: AnalysisResult }) {
+  const [activePersona, setActivePersona] = useState<PersonaKey | null>(null);
+  const [personaResults, setPersonaResults] = useState<Record<string, string>>({});
+  const [loadingPersona, setLoadingPersona] = useState<string | null>(null);
+  const [personaError, setPersonaError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState<RateLimitResponse | null>(null);
-  const [, setKeyVersion] = useState(0); // force re-render on key change
+  const [, setKeyVersion] = useState(0);
 
-  const generate = async () => {
-    setLoading(true);
-    setError(null);
-    setRateLimited(null);
+  const keyFindings = analysisData ? generateKeyFindings(analysisData) : [];
+
+  const generateForPersona = useCallback(async (personaKey: PersonaKey) => {
+    if (personaResults[personaKey]) return; // already cached
+    setLoadingPersona(personaKey);
+    setPersonaError(null);
+
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       const savedKey = getSavedKey();
@@ -535,29 +461,47 @@ export function AIAnalysisPanel({ domain }: { domain: string }) {
         const rl = await res.json() as RateLimitResponse;
         if (rl.rate_limited) {
           setRateLimited(rl);
+          setLoadingPersona(null);
           return;
         }
       }
 
       const json = await res.json() as AIAnalysisResponse;
       if (!res.ok || json.error) {
-        setError(json.error || `API error ${res.status}`);
-      } else {
-        setData(json);
+        setPersonaError(json.error || `API error ${res.status}`);
+      } else if (json.result?.persona_insights) {
+        // Cache ALL persona results from this response
+        const insights = json.result.persona_insights;
+        setPersonaResults(prev => {
+          const next = { ...prev };
+          for (const [key, value] of Object.entries(insights)) {
+            if (value) next[key] = value;
+          }
+          return next;
+        });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate analysis");
+      setPersonaError(err instanceof Error ? err.message : "Failed to generate analysis");
     } finally {
-      setLoading(false);
+      setLoadingPersona(null);
     }
-  };
+  }, [domain, personaResults]);
 
   const handleKeyChange = (key: string) => {
     setKeyVersion(v => v + 1);
-    // If currently rate-limited and key was just set, auto-retry
     if (key && rateLimited) {
       setRateLimited(null);
-      setTimeout(generate, 100);
+    }
+  };
+
+  const handlePersonaClick = (key: PersonaKey) => {
+    if (activePersona === key) {
+      setActivePersona(null); // toggle off
+    } else {
+      setActivePersona(key);
+      if (!personaResults[key]) {
+        generateForPersona(key);
+      }
     }
   };
 
@@ -566,216 +510,122 @@ export function AIAnalysisPanel({ domain }: { domain: string }) {
     return <RateLimitView data={rateLimited} onKeySet={handleKeyChange} />;
   }
 
-  // ─── Not yet generated ───
-  if (!data && !loading && !error) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
-        <div style={{ position: "absolute", top: "12px", right: "12px" }}>
-          <KeySettings onSave={handleKeyChange} />
-        </div>
-        <div
-          style={{
-            width: "64px",
-            height: "64px",
-            borderRadius: "16px",
-            background: "rgba(88, 166, 255, 0.1)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: "16px",
-          }}
-        >
-          <Sparkles size={28} style={{ color: "var(--accent)" }} />
-        </div>
-        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--text)", marginBottom: "8px" }}>
-          AI Domain Analysis
-        </h3>
-        <p style={{ fontSize: "13px", color: "var(--muted)", maxWidth: "400px", lineHeight: 1.6, marginBottom: "20px" }}>
-          Get an AI-powered assessment synthesizing all collected data — security posture, infrastructure choices, and actionable recommendations tailored to different personas.
-        </p>
-        <button
-          onClick={generate}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "10px 20px",
-            borderRadius: "8px",
-            border: "1px solid var(--accent)",
-            background: "rgba(88, 166, 255, 0.1)",
-            color: "var(--accent)",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: 600,
-            transition: "all 0.15s",
-          }}
-        >
-          <Sparkles size={14} />
-          Generate AI Analysis
-        </button>
-      </div>
-    );
-  }
-
-  // ─── Loading ───
-  if (loading) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
-        <Loader2 size={32} style={{ color: "var(--accent)", animation: "spin 1s linear infinite", marginBottom: "16px" }} />
-        <p style={{ fontSize: "14px", color: "var(--text)", marginBottom: "6px" }}>Analyzing {domain}...</p>
-        <p style={{ fontSize: "12px", color: "var(--muted)" }}>AI is synthesizing 25+ data points into actionable intelligence</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
-    );
-  }
-
-  // ─── Error ───
-  if (error) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
-        <XCircle size={32} style={{ color: "var(--danger)", marginBottom: "16px" }} />
-        <p style={{ fontSize: "14px", color: "var(--text)", marginBottom: "6px" }}>Analysis Failed</p>
-        <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "16px", maxWidth: "400px" }}>{error}</p>
-        <button
-          onClick={generate}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 16px",
-            borderRadius: "6px",
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-            color: "var(--text)",
-            cursor: "pointer",
-            fontSize: "12px",
-          }}
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
-
-  // ─── Results ───
-  if (!data?.result) return null;
-  const { result, analyzed_at, cached } = data;
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "12px", position: "relative" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px", position: "relative" }}>
       <div style={{ position: "absolute", top: 0, right: 0, zIndex: 10 }}>
         <KeySettings onSave={handleKeyChange} />
       </div>
-      {/* Summary + Risk Level */}
-      <div
-        style={{
-          background: "var(--card)",
-          border: "1px solid var(--border)",
-          borderRadius: "10px",
-          padding: "16px",
-          marginBottom: "16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <Sparkles size={16} style={{ color: "var(--accent)" }} />
-            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>AI Assessment</span>
-          </div>
-          <PostureBadge level={result.posture || result.risk_level || "fair"} />
+
+      {/* ─── Deterministic Key Findings ─── */}
+      <div style={{
+        background: "var(--card)", border: "1px solid var(--border)", borderRadius: "10px",
+        padding: "16px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+          <Zap size={14} style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Key Findings</span>
+          <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto" }}>based on scan data</span>
         </div>
-        <p style={{ fontSize: "13px", lineHeight: 1.7, color: "var(--text)", margin: 0 }}>
-          {result.summary}
-        </p>
-        <div style={{ marginTop: "10px", fontSize: "10px", color: "var(--muted)" }}>
-          {cached ? "Cached" : "Generated"} {analyzed_at ? new Date(analyzed_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}
-          {result._usage ? ` · ${result._usage.total_tokens} tokens` : ""}
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {keyFindings.map((f, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "13px", lineHeight: 1.5 }}>
+              <span style={{ flexShrink: 0, fontSize: "12px" }}>{f.icon}</span>
+              <span style={{
+                color: f.severity === "critical" ? "var(--danger)"
+                  : f.severity === "warning" ? "var(--warning)"
+                  : f.severity === "good" ? "var(--success)"
+                  : "var(--text)",
+              }}>
+                {f.text}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Key Findings */}
-      {result.key_findings?.length > 0 && (
-        <>
-          <SectionTitle icon={Zap} title="Key Findings" />
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {result.key_findings.map((f, i) => (
-              <FindingCard key={`finding-${i}`} finding={f} />
-            ))}
-          </div>
-        </>
-      )}
+      {/* ─── AI Deep Dive — Persona Pills ─── */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+          <Sparkles size={14} style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
+            AI Deep Dive
+          </span>
+          <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "4px" }}>
+            — click a perspective for AI-powered insights
+          </span>
+        </div>
 
-      {/* Persona Insights */}
-      {result.persona_insights && (
-        <>
-          <SectionTitle icon={Users} title="Persona Insights" />
-          <PersonaSwitcher insights={result.persona_insights} />
-        </>
-      )}
-
-      {/* Attack Surface */}
-      {result.attack_surface?.length > 0 && (
-        <>
-          <SectionTitle icon={Target} title="Attack Surface" />
-          <div
-            style={{
-              background: "var(--card)",
-              border: "1px solid var(--border)",
-              borderRadius: "8px",
-              padding: "12px",
-            }}
-          >
-            {result.attack_surface.map((item, i) => (
-              <div
-                key={`attack-${i}`}
+        {/* Persona pill tabs */}
+        <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>
+          {PERSONAS.map(({ key, label, icon: PIcon }) => {
+            const isActive = activePersona === key;
+            const hasResult = !!personaResults[key];
+            return (
+              <button
+                key={key}
+                onClick={() => handlePersonaClick(key)}
                 style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "8px",
-                  padding: "6px 0",
-                  borderBottom: i < result.attack_surface.length - 1 ? "1px solid var(--border)" : "none",
+                  display: "flex", alignItems: "center", gap: "5px",
+                  padding: "6px 12px", borderRadius: "20px",
+                  border: `1px solid ${isActive ? "var(--accent)" : hasResult ? "var(--success)" : "var(--border)"}`,
+                  background: isActive ? "rgba(88,166,255,0.1)" : hasResult ? "rgba(46,160,67,0.06)" : "transparent",
+                  color: isActive ? "var(--accent)" : hasResult ? "var(--success)" : "var(--muted)",
+                  cursor: "pointer", fontSize: "11px",
+                  fontWeight: isActive ? 600 : 400,
+                  transition: "all 0.15s",
                 }}
               >
-                <AlertTriangle size={12} style={{ color: "var(--warning)", marginTop: "3px", flexShrink: 0 }} />
-                <span style={{ fontSize: "12px", color: "var(--text)", lineHeight: 1.5 }}>{item}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+                <PIcon size={12} />
+                {label}
+                {hasResult && !isActive && <Check size={10} />}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Recommendations */}
-      {result.recommendations?.length > 0 && (
-        <>
-          <SectionTitle icon={CheckCircle2} title="Recommendations" />
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {result.recommendations.map((rec, i) => (
-              <RecommendationItem key={`rec-${i}`} rec={rec} />
-            ))}
-          </div>
-        </>
-      )}
+        {/* Active persona content */}
+        {activePersona && (
+          <PersonaInsightCard
+            persona={PERSONAS.find(p => p.key === activePersona)!}
+            insight={personaResults[activePersona] || null}
+            loading={loadingPersona === activePersona}
+            onGenerate={() => generateForPersona(activePersona)}
+          />
+        )}
 
-      {/* Regenerate button */}
-      <div style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}>
-        <button
-          onClick={generate}
-          disabled={loading}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 16px",
-            borderRadius: "6px",
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-            color: "var(--muted)",
-            cursor: "pointer",
-            fontSize: "11px",
-          }}
-        >
-          <Sparkles size={12} />
-          Regenerate Analysis
-        </button>
+        {/* Error display */}
+        {personaError && (
+          <div style={{
+            background: "rgba(248,81,73,0.1)", border: "1px solid rgba(248,81,73,0.3)",
+            borderRadius: "8px", padding: "12px", display: "flex", alignItems: "center", gap: "8px",
+          }}>
+            <XCircle size={14} style={{ color: "var(--danger)" }} />
+            <span style={{ fontSize: "12px", color: "var(--danger)" }}>{personaError}</span>
+            <button
+              onClick={() => activePersona && generateForPersona(activePersona)}
+              style={{
+                marginLeft: "auto", padding: "4px 10px", borderRadius: "4px",
+                border: "1px solid var(--border)", background: "var(--card)",
+                color: "var(--text)", cursor: "pointer", fontSize: "11px",
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* No persona selected — subtle prompt */}
+        {!activePersona && Object.keys(personaResults).length === 0 && (
+          <div style={{
+            textAlign: "center", padding: "20px",
+            background: "var(--card)", border: "1px dashed var(--border)", borderRadius: "8px",
+          }}>
+            <Sparkles size={20} style={{ color: "var(--muted)", opacity: 0.4, margin: "0 auto 8px" }} />
+            <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
+              Select a perspective above for AI-powered analysis tailored to that role.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

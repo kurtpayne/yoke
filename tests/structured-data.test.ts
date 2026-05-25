@@ -1,41 +1,19 @@
 import { describe, it, expect } from 'vitest';
 
-// ─── Structured Data Validation Tests ────────────────────────────────
-// Tests the JSON-LD validation logic against schema.org specifications.
+// ─── Import production code (single source of truth) ─────────────────
+import { validateStructuredData } from '@worker/actions/analyze/structured-data';
+import type { FieldValidation, SchemaValidation } from '@worker/actions/analyze/structured-data';
+import type { JsonLdItem } from '@worker/actions/analyze/types';
 
-// ─── Types (mirrors structured-data.ts) ──────────────────────────────
-
-interface FieldValidation {
-  field: string;
-  status: "present" | "missing" | "recommended";
-  value?: string;
+// ─── Helper to build JsonLdItem from type + raw ──────────────────────
+function item(type: string, raw: Record<string, unknown>): JsonLdItem {
+  return { type, name: (raw.name as string) ?? null, raw } as JsonLdItem;
 }
 
-interface SchemaValidation {
-  type: string;
-  status: "complete" | "partial" | "missing_required";
-  required_fields: FieldValidation[];
-  recommended_fields: FieldValidation[];
+function validate(type: string, raw: Record<string, unknown>): SchemaValidation {
+  const result = validateStructuredData([item(type, raw)]);
+  return result.validations[0];
 }
-
-interface SchemaSpec {
-  required: string[];
-  recommended: string[];
-}
-
-const SCHEMA_SPECS: Record<string, SchemaSpec> = {
-  Organization: { required: ["name", "url"], recommended: ["logo", "description", "sameAs"] },
-  Product: { required: ["name"], recommended: ["description", "image", "offers", "brand"] },
-  Article: { required: ["headline", "author", "datePublished"], recommended: ["image", "dateModified", "publisher"] },
-  BlogPosting: { required: ["headline", "author", "datePublished"], recommended: ["image", "dateModified", "publisher"] },
-  WebSite: { required: ["name", "url"], recommended: ["description", "potentialAction"] },
-  BreadcrumbList: { required: ["itemListElement"], recommended: [] },
-  FAQPage: { required: ["mainEntity"], recommended: ["name", "description"] },
-  Event: { required: ["name", "startDate", "location"], recommended: ["description", "endDate", "image"] },
-  VideoObject: { required: ["name", "description", "thumbnailUrl", "uploadDate"], recommended: ["contentUrl", "duration"] },
-};
-
-// ─── Validation Logic (simplified inline) ────────────────────────────
 
 function hasField(raw: Record<string, unknown>, field: string): boolean {
   const val = raw[field];
@@ -43,29 +21,6 @@ function hasField(raw: Record<string, unknown>, field: string): boolean {
   if (typeof val === "string" && val.trim() === "") return false;
   if (Array.isArray(val) && val.length === 0) return false;
   return true;
-}
-
-function validate(type: string, raw: Record<string, unknown>): SchemaValidation {
-  const spec = SCHEMA_SPECS[type];
-  if (!spec) return { type, status: "complete", required_fields: [], recommended_fields: [] };
-
-  const requiredFields: FieldValidation[] = spec.required.map(field => ({
-    field,
-    status: hasField(raw, field) ? "present" : "missing",
-  }));
-
-  const recommendedFields: FieldValidation[] = spec.recommended.map(field => ({
-    field,
-    status: hasField(raw, field) ? "present" : "recommended",
-  }));
-
-  const missingRequired = requiredFields.filter(f => f.status === "missing").length;
-  const status: SchemaValidation["status"] =
-    missingRequired === 0 ? "complete" :
-    missingRequired < spec.required.length ? "partial" :
-    "missing_required";
-
-  return { type, status, required_fields: requiredFields, recommended_fields: recommendedFields };
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────
@@ -207,7 +162,6 @@ describe('hasField edge cases', () => {
 // ─── Subdomain Prefix List Sanity ────────────────────────────────────
 
 describe('Subdomain Prefix List', () => {
-  // Core high-value prefixes that must be in any subdomain enumeration list
   const CRITICAL_PREFIXES = [
     "www", "mail", "api", "app", "dev", "staging", "admin", "blog",
     "cdn", "ftp", "smtp", "imap", "pop", "webmail", "status",
@@ -216,7 +170,6 @@ describe('Subdomain Prefix List', () => {
 
   it('critical prefixes should all be valid DNS labels', () => {
     for (const prefix of CRITICAL_PREFIXES) {
-      // DNS labels: 1-63 chars, alphanumeric + hyphens, no leading/trailing hyphens
       expect(prefix).toMatch(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/);
       expect(prefix.length).toBeLessThanOrEqual(63);
     }
@@ -228,14 +181,14 @@ describe('Subdomain Prefix List', () => {
   });
 
   it('critical prefixes should cover key categories', () => {
-    expect(CRITICAL_PREFIXES).toContain("api");     // API
-    expect(CRITICAL_PREFIXES).toContain("mail");    // Mail
-    expect(CRITICAL_PREFIXES).toContain("dev");     // Dev
-    expect(CRITICAL_PREFIXES).toContain("cdn");     // Infra
-    expect(CRITICAL_PREFIXES).toContain("admin");   // Admin
-    expect(CRITICAL_PREFIXES).toContain("shop");    // Commerce
-    expect(CRITICAL_PREFIXES).toContain("docs");    // Documentation
-    expect(CRITICAL_PREFIXES).toContain("blog");    // Marketing
-    expect(CRITICAL_PREFIXES).toContain("status");  // Monitoring
+    expect(CRITICAL_PREFIXES).toContain("api");
+    expect(CRITICAL_PREFIXES).toContain("mail");
+    expect(CRITICAL_PREFIXES).toContain("dev");
+    expect(CRITICAL_PREFIXES).toContain("cdn");
+    expect(CRITICAL_PREFIXES).toContain("admin");
+    expect(CRITICAL_PREFIXES).toContain("shop");
+    expect(CRITICAL_PREFIXES).toContain("docs");
+    expect(CRITICAL_PREFIXES).toContain("blog");
+    expect(CRITICAL_PREFIXES).toContain("status");
   });
 });

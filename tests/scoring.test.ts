@@ -1,69 +1,19 @@
 import { describe, it, expect } from 'vitest';
 
-// ─── Test the Contextual Scoring Engine ──────────────────────────────
-// We inline key logic here because the worker module has CF-specific imports.
-// This tests the scoring math, archetype detection, and contextual severity.
-
-// ─── Types (mirrors contextual-scoring.ts) ───────────────────────────
-
-type Axis = "security" | "performance" | "reliability" | "trust" | "visibility";
-type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
-type ArchetypeName = "commerce" | "content" | "application" | "corporate" | "infrastructure" | "institutional" | "general";
-
-interface Finding {
-  signal: string;
-  axis: Axis;
-  severity: Severity;
-  label: string;
-  tradeoff: string | null;
-  weight: number;
-}
-
-const SEVERITY_SCORE: Record<Severity, number> = {
-  critical: 0, high: 25, medium: 50, low: 75, info: 90, good: 100,
-};
-
-const ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
-  commerce:       { security: 0.35, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.10 },
-  content:        { security: 0.15, performance: 0.25, reliability: 0.15, trust: 0.15, visibility: 0.30 },
-  application:    { security: 0.30, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.15 },
-  corporate:      { security: 0.20, performance: 0.15, reliability: 0.15, trust: 0.30, visibility: 0.20 },
-  infrastructure: { security: 0.25, performance: 0.20, reliability: 0.30, trust: 0.10, visibility: 0.15 },
-  institutional:  { security: 0.35, performance: 0.10, reliability: 0.25, trust: 0.20, visibility: 0.10 },
-  general:        { security: 0.20, performance: 0.20, reliability: 0.20, trust: 0.20, visibility: 0.20 },
-};
-
-// ─── Scoring Math ────────────────────────────────────────────────────
-
-function computeAxisScore(findings: Finding[]): number {
-  if (findings.length === 0) return 75;
-  let weightedSum = 0;
-  let totalWeight = 0;
-  for (const f of findings) {
-    weightedSum += SEVERITY_SCORE[f.severity] * f.weight;
-    totalWeight += f.weight;
-  }
-  return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 75;
-}
-
-function computeComposite(axisScores: Record<Axis, number>, archetype: ArchetypeName): number {
-  const weights = ARCHETYPE_WEIGHTS[archetype];
-  let composite = 0;
-  for (const axis of Object.keys(weights) as Axis[]) {
-    composite += axisScores[axis] * weights[axis];
-  }
-  return Math.round(composite);
-}
-
-function toGrade(score: number): string {
-  return score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "F";
-}
+// ─── Import production code (single source of truth) ─────────────────
+import type { Axis, Severity } from '@worker/config/contextual-scoring-types';
+import { SEVERITY_SCORES } from '@worker/config/scoring-thresholds';
+import {
+  type ArchetypeName,
+  type Finding,
+  ARCHETYPE_WEIGHTS,
+  computeAxisScore,
+  computeComposite,
+  gradeFromComposite,
+  contextualSeverity,
+} from '@worker/actions/analyze/contextual-scoring';
 
 type SeverityMap = Partial<Record<ArchetypeName, Severity>>;
-
-function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: SeverityMap): Severity {
-  return overrides[archetype] ?? baseSeverity;
-}
 
 // ─── Archetype Weight Tests ──────────────────────────────────────────
 
@@ -113,17 +63,17 @@ describe('Archetype Weight Profiles', () => {
 
 describe('Severity Score Mapping', () => {
   it('critical should map to 0', () => {
-    expect(SEVERITY_SCORE.critical).toBe(0);
+    expect(SEVERITY_SCORES.critical).toBe(0);
   });
 
   it('good should map to 100', () => {
-    expect(SEVERITY_SCORE.good).toBe(100);
+    expect(SEVERITY_SCORES.good).toBe(100);
   });
 
   it('severities should be monotonically increasing', () => {
     const order: Severity[] = ["critical", "high", "medium", "low", "info", "good"];
     for (let i = 1; i < order.length; i++) {
-      expect(SEVERITY_SCORE[order[i]]).toBeGreaterThan(SEVERITY_SCORE[order[i - 1]]);
+      expect(SEVERITY_SCORES[order[i]]).toBeGreaterThan(SEVERITY_SCORES[order[i - 1]]);
     }
   });
 });
@@ -161,7 +111,7 @@ describe('Axis Score Computation', () => {
   });
 
   it('should respect higher weights', () => {
-    // Good (100) weight 9, Critical (0) weight 1 → should be close to 90
+    // Good (100) weight 9, Critical (0) weight 1 → should be 90
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 9 },
       { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 1 },
@@ -234,18 +184,18 @@ describe('Composite Score Computation', () => {
 // ─── Grade Assignment ────────────────────────────────────────────────
 
 describe('Grade Assignment', () => {
-  it('should assign correct grades', () => {
-    expect(toGrade(100)).toBe("A");
-    expect(toGrade(95)).toBe("A");
-    expect(toGrade(90)).toBe("A");
-    expect(toGrade(89)).toBe("B");
-    expect(toGrade(80)).toBe("B");
-    expect(toGrade(79)).toBe("C");
-    expect(toGrade(70)).toBe("C");
-    expect(toGrade(69)).toBe("D");
-    expect(toGrade(60)).toBe("D");
-    expect(toGrade(59)).toBe("F");
-    expect(toGrade(0)).toBe("F");
+  it('should assign correct grades (production thresholds)', () => {
+    expect(gradeFromComposite(100)).toBe("A");
+    expect(gradeFromComposite(95)).toBe("A");
+    expect(gradeFromComposite(85)).toBe("A");
+    expect(gradeFromComposite(84)).toBe("B");
+    expect(gradeFromComposite(70)).toBe("B");
+    expect(gradeFromComposite(69)).toBe("C");
+    expect(gradeFromComposite(55)).toBe("C");
+    expect(gradeFromComposite(54)).toBe("D");
+    expect(gradeFromComposite(40)).toBe("D");
+    expect(gradeFromComposite(39)).toBe("F");
+    expect(gradeFromComposite(0)).toBe("F");
   });
 });
 
@@ -292,8 +242,6 @@ describe('Contextual Severity', () => {
 // ─── Archetype Detection (simplified inline tests) ───────────────────
 
 describe('Archetype Detection Logic', () => {
-  // Test the signal-matching patterns directly
-
   it('.gov domain should strongly signal institutional', () => {
     const domain = "example.gov";
     const isInstitutional = /\.(gov|edu|mil)$/i.test(domain);

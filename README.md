@@ -16,6 +16,12 @@ Analyze any domain — DNS, WHOIS, SSL, security headers, tech stack, performanc
 
 ---
 
+## Support Yoke
+
+If Yoke saves you time, consider ⭐ [starring the repo](https://github.com/kurtpayne/yoke). GitHub Sponsors coming soon.
+
+---
+
 ## What is Yoke?
 
 Yoke is a fast, comprehensive domain intelligence tool built for developers, security researchers, sysadmins, and anyone who's curious about what's behind a domain. It pulls data from 50+ data points and presents it in a clean tabbed interface with a contextual scoring system.

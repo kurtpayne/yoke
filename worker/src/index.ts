@@ -31,7 +31,7 @@ interface Env {
   ADMIN_KEY?: string;
 }
 
-import { CORS_HEADERS, normalizeDomain } from "./helpers";
+import { CORS_HEADERS, normalizeDomain, isValidDomain, cleanDomain } from "./helpers";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
@@ -98,12 +98,6 @@ async function parseBody<T>(req: Request): Promise<T> {
   return req.json() as Promise<T>;
 }
 
-const DOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-
-function isValidDomain(domain: string): boolean {
-  return DOMAIN_RE.test(domain) && domain.includes(".");
-}
-
 /** Constant-time string comparison to prevent timing side-channels. */
 function timingSafeEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -139,15 +133,6 @@ function checkAdminAuth(request: Request, adminKey: string | undefined): Respons
     });
   }
   return null; // auth passed
-}
-
-/** Normalize and validate a domain string. Returns the cleaned domain or null if invalid. */
-function cleanDomain(raw: string): string | null {
-  const d = normalizeDomain(raw);
-  // Reject IP literals (IPv4 and IPv6)
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(d)) return null;
-  if (/^\[.*\]$/.test(d) || d === "::1" || d.includes(":")) return null;
-  return isValidDomain(d) ? d : null;
 }
 
 export default {
@@ -344,6 +329,28 @@ export default {
         if (method === "GET" && path === "/api/health") {
           const health = await getApiHealth(env.DB);
           return json(health);
+        }
+
+        // POST /api/track-tab — anonymous tab view analytics
+        if (method === "POST" && path === "/api/track-tab") {
+          const body = await parseBody<{ domain?: string; tab?: string }>(request);
+          if (!body.tab) return json({ error: "tab required" }, 400);
+          try {
+            await env.STATS_DB.prepare(
+              "INSERT INTO tab_views (tab, domain, ts) VALUES (?, ?, ?)"
+            ).bind(body.tab, body.domain || "", Date.now()).run();
+          } catch (e: unknown) {
+            if (e instanceof Error && e.message?.includes("no such table")) {
+              await env.STATS_DB.exec(
+                "CREATE TABLE IF NOT EXISTS tab_views (id INTEGER PRIMARY KEY AUTOINCREMENT, tab TEXT NOT NULL, domain TEXT, ts INTEGER NOT NULL)"
+              );
+              await env.STATS_DB.exec("CREATE INDEX IF NOT EXISTS idx_tab_views_tab ON tab_views(tab, ts)");
+              await env.STATS_DB.prepare(
+                "INSERT INTO tab_views (tab, domain, ts) VALUES (?, ?, ?)"
+              ).bind(body.tab, body.domain || "", Date.now()).run();
+            }
+          }
+          return json({ ok: true });
         }
 
         // GET /api/scoring — transparent scoring methodology

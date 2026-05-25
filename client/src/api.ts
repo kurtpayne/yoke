@@ -438,9 +438,10 @@ export interface ScoreFinding {
 }
 
 export interface AxisScoreData {
-  score: number;
+  score: number | null;
   weight: number;
   findings: ScoreFinding[];
+  not_measured?: boolean;
 }
 
 export interface ArchetypeData {
