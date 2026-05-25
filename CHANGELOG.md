@@ -6,10 +6,14 @@ All notable changes to Yoke are documented here.
 
 ### Features
 - **Top Priorities engine** — replaced Key Findings with a ranked, actionable fix-it list with effort estimates and cross-axis insights
-- **BYO API Key panel** — gear icon on AI tab opens advanced settings: API key input, model picker (Claude Sonnet 4, Opus 4, GPT-4o, o3, Gemini 2.5 Pro, Llama 4 Maverick), and live prompt editor
+- **BYO API Key panel** — gear icon on AI tab opens advanced settings: API key input, model picker (Claude Sonnet 4, Opus 4, GPT-4o, o3, Gemini 2.5 Pro, Llama 4 Maverick), and live prompt editor; controls visible but disabled without a key to improve discoverability
+- **BYO key UX copy** — clear "Why?" and "Privacy:" explanations in the panel; expanded `/privacy` page with full BYO key data handling details
 - **Re-analyze button** — force a fresh analysis bypassing cache with one click
 - **Social verification badges** — green (verified on homepage) and yellow (probe-discovered) indicators for discovered social accounts
-- **RFC / documentation links** — findings link to relevant RFCs and MDN docs (HSTS → MDN, DMARC → RFC 7489, CSP → MDN, etc.)
+- **RFC / documentation links** — AI Readiness checklist items link to specs (llmstxt.org, OpenAI crawler docs, schema.org, ANS spec); security headers link to MDN docs
+- **Cache analysis panel** — Performance tab shows parsed Cache-Control directives, CDN cache status (Cloudflare/Vercel/CloudFront/Fastly), ETag/Last-Modified, Vary, effective TTL, and a verdict with issues
+- **WAF detection** — identifies 11+ WAF providers (Cloudflare, Sucuri, Imperva, Akamai, AWS WAF, Barracuda, F5, DDoS-Guard, StackPath, Wordfence, ModSecurity) from headers, cookies, and HTML with confidence scoring
+- **Trust signals** — aggregated trust hallmarks across security (HSTS preload, CSP, CAA, DNSSEC, WAF), identity (OV/EV certs, security.txt, bug bounty, DMARC enforcement), transparency (humans.txt, ads.txt, open source), and operational maturity (status pages, uptime monitoring, feedback tools, changelog widgets, trust badges)
 - **SSL Labs deep link** — every SSL panel links directly to the full SSL Labs report
 - **6 themes** — Dark (default), Light, Midnight, Nord, Solarized, High Contrast
 - **Wildcard DNS detection** — random subdomain probe prevents false positives for ANS/DNS-AID agent discovery on domains with `*.domain` records
@@ -37,6 +41,7 @@ All notable changes to Yoke are documented here.
 ### Developer Experience
 - **`deploy.sh` in repo** — no longer gitignored; clean build + deploy in one command
 - **Retired `build_combined.py`** — all SPA routing ported to TypeScript (`worker/src/spa.ts`)
+- **Retired `QUICKSTART.md`** — self-hosting guide consolidated into README
 - **125 tests** — scoring, detection, helpers, WHOIS, structured data
 - **CHANGELOG.md** — you're reading it
 
