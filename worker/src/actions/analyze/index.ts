@@ -10,3 +10,5 @@ export * from "./security";
 export * from "./content";
 export * from "./scoring";
 export * from "./tier1";
+export * from "./contextual-scoring";
+export * from "./structured-data";

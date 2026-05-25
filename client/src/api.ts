@@ -15,6 +15,75 @@ async function apiFetch<T>(url: string, opts?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// ─── SSE Streaming Analysis ──────────────────────────────────────────
+// Streams analysis results as they complete, calling onEvent for each chunk.
+
+export interface StreamEvent {
+  type: "phase" | "result" | "done" | "error";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any;
+}
+
+export async function analyzeStream(
+  domain: string,
+  onEvent: (evt: StreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch("/api/analyze", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+    },
+    body: JSON.stringify({ domain }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    let msg = `API error ${res.status}`;
+    try { const j = JSON.parse(body); if (j.error) msg = j.error; } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE events from buffer
+    const parts = buffer.split("\n\n");
+    // Keep the last part as it may be incomplete
+    buffer = parts.pop() ?? "";
+
+    for (const part of parts) {
+      if (!part.trim()) continue;
+      let eventType = "message";
+      let eventData = "";
+      for (const line of part.split("\n")) {
+        if (line.startsWith("event: ")) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith("data: ")) {
+          eventData = line.slice(6);
+        }
+      }
+      if (eventData) {
+        try {
+          const parsed = JSON.parse(eventData);
+          onEvent({ type: eventType as StreamEvent["type"], data: parsed });
+        } catch { /* skip malformed */ }
+      }
+    }
+  }
+}
+
 export const api = {
   analyzeDomain: (args: { domain: string }) =>
     apiFetch<AnalysisResult>("/api/analyze", { method: "POST", body: JSON.stringify(args) }),
@@ -24,6 +93,9 @@ export const api = {
 
   getSubdomains: (args: { domain: string }) =>
     apiFetch<SubdomainsResult>("/api/subdomains", { method: "POST", body: JSON.stringify(args) }),
+
+  scanSubdomains: (args: { domain: string }) =>
+    apiFetch<SubdomainScanResult>("/api/subdomain-scan", { method: "POST", body: JSON.stringify(args) }),
 
   getCompanyInfo: (args: { domain: string }) =>
     apiFetch<CompanyInfoResult>("/api/company", { method: "POST", body: JSON.stringify(args) }),
@@ -42,6 +114,9 @@ export const api = {
 
   getDomainSuggestions: (args: { domain: string }) =>
     apiFetch<DomainSuggestionsResult>("/api/suggestions", { method: "POST", body: JSON.stringify(args) }),
+
+  compareDomains: (args: { domain1: string; domain2: string }) =>
+    apiFetch<CompareResult>("/api/compare", { method: "POST", body: JSON.stringify(args) }),
 };
 
 // ─── Type definitions (matching server response shapes) ──────────────
@@ -111,6 +186,21 @@ export interface AnalysisResult {
   well_known: WellKnownData | null;
   caa_analysis: CaaAnalysisData | null;
   greynoise: GreynoiseData | null;
+
+  // Contextual scoring
+  domain_score: DomainScoreData | null;
+
+  // Structured data validation
+  structured_data: StructuredDataValidationResult | null;
+
+  // Accessibility
+  accessibility: AccessibilityData | null;
+
+  // Third-party scripts
+  third_party_scripts: ThirdPartyScriptsData | null;
+
+  // Cookie consent
+  cookie_consent: CookieConsentData | null;
 }
 
 export interface DnsRecord { type: string; name: string; ttl: number; data: string; }
@@ -234,6 +324,7 @@ export interface AvailabilityResult {
     node: string;
     location: { country_code: string; country: string; city: string; ip: string; asn: string };
     status: "up" | "down" | "pending" | "error";
+    type?: "http" | "dns";
     status_code: number | null;
     response_time_ms: number | null;
     ip: string | null;
@@ -241,6 +332,8 @@ export interface AvailabilityResult {
   }>;
   request_id: string | null;
   permanent_link: string | null;
+  source?: "check-host" | "edge";
+  edge_colo?: string | null;
 }
 
 export interface DomainSuggestion {
@@ -324,4 +417,175 @@ export interface GreynoiseData {
   noise: boolean;
   riot: boolean;
   error: string | null;
+}
+
+// ─── Contextual Domain Score types ───────────────────────────────────
+
+export type Axis = "security" | "performance" | "reliability" | "trust" | "visibility";
+export type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
+export type ArchetypeName = "commerce" | "content" | "application" | "corporate" | "infrastructure" | "institutional" | "general";
+
+export interface ScoreFinding {
+  signal: string;
+  axis: Axis;
+  severity: Severity;
+  label: string;
+  tradeoff: string | null;
+  weight: number;
+}
+
+export interface AxisScoreData {
+  score: number;
+  weight: number;
+  findings: ScoreFinding[];
+}
+
+export interface ArchetypeData {
+  detected: ArchetypeName;
+  confidence: number;
+  secondary: ArchetypeName | null;
+  signals: string[];
+  platform: string | null;
+}
+
+export interface DomainScoreData {
+  composite: number;
+  grade: string;
+  axes: Record<Axis, AxisScoreData>;
+  archetype: ArchetypeData;
+}
+
+// ─── Subdomain scan types ────────────────────────────────────────────
+
+export interface ResolvedSubdomain {
+  prefix: string;
+  hostname: string;
+  category: string;
+  ips: string[];
+  sameAsApex: boolean;
+}
+
+export interface SubdomainScanResult {
+  domain: string;
+  total_found: number;
+  total_scanned: number;
+  categories: Record<string, ResolvedSubdomain[]>;
+  apex_ips: string[];
+  cached: boolean;
+}
+
+// ─── Structured Data Validation types ────────────────────────────────
+
+export interface FieldValidation {
+  field: string;
+  status: "present" | "missing" | "recommended";
+  value?: string;
+}
+
+export interface SchemaValidationItem {
+  type: string;
+  name: string | null;
+  status: "complete" | "partial" | "missing_required";
+  required_fields: FieldValidation[];
+  recommended_fields: FieldValidation[];
+  extra_fields: string[];
+}
+
+export interface StructuredDataValidationResult {
+  types_found: string[];
+  total_items: number;
+  validations: SchemaValidationItem[];
+  has_issues: boolean;
+}
+
+// ─── Compare types ───────────────────────────────────────────────────
+
+export interface AxisDelta {
+  axis: Axis;
+  score1: number;
+  score2: number;
+  delta: number;
+  absDelta: number;
+}
+
+export interface CompareResult {
+  domain1: AnalysisResult;
+  domain2: AnalysisResult;
+  comparison: {
+    composite: {
+      score1: number | null;
+      score2: number | null;
+      grade1: string | null;
+      grade2: string | null;
+      delta: number;
+    };
+    archetype1: ArchetypeName | null;
+    archetype2: ArchetypeName | null;
+    axes: AxisDelta[];
+    biggest_differences: AxisDelta[];
+  };
+}
+
+// ─── Accessibility types ──────────────────────────────────────────────
+
+export interface AccessibilityCheck {
+  name: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+  impact: "critical" | "serious" | "moderate" | "minor";
+}
+
+export interface AccessibilityData {
+  score: number;
+  checks: AccessibilityCheck[];
+  summary: { passed: number; warnings: number; failures: number };
+}
+
+// ─── Third-Party Scripts types ────────────────────────────────────────
+
+export interface ScriptInfoData {
+  url: string;
+  domain: string;
+  async: boolean;
+  defer: boolean;
+}
+
+export interface ScriptCategoryData {
+  scripts: ScriptInfoData[];
+  count: number;
+}
+
+export interface ThirdPartyScriptsData {
+  total: number;
+  first_party: number;
+  third_party: number;
+  categories: Record<string, ScriptCategoryData>;
+  privacy_concerns: string[];
+  render_blocking: number;
+}
+
+// ─── Cookie Consent types ─────────────────────────────────────────────
+
+export interface CmpDetectionData {
+  name: string;
+  confidence: number;
+}
+
+export interface CookieInfoData {
+  name: string;
+  domain: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite: string | null;
+  expires: string | null;
+  category: "session" | "persistent" | "third-party";
+}
+
+export interface CookieConsentData {
+  cmp_detected: CmpDetectionData | null;
+  cookies_set: CookieInfoData[];
+  pre_consent_cookies: number;
+  has_cookie_policy: boolean;
+  compliance_flags: string[];
+  p3p_present: boolean;
 }

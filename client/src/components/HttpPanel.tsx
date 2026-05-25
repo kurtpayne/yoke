@@ -70,13 +70,13 @@ export function HeadersPanel({ data }: { data: AnalysisResult }) {
       icon={<FileCode size={14} />}
       badge={<StatusBadge status="info" label={`${entries.length} headers`} />}
     >
-      <div style={{ maxHeight: "280px", overflowY: "auto" }}>
+      <div style={{ maxHeight: "280px", overflowY: "auto", overflowX: "auto" }}>
         {entries.map(([key, value], i) => (
           <div key={key} className="data-row" style={{ alignItems: "flex-start" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--accent)", minWidth: "140px", flexShrink: 0 }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--accent)", minWidth: "100px", flexShrink: 0 }}>
               {key}
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all", textAlign: "right" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all", overflowWrap: "anywhere", textAlign: "right", minWidth: 0 }}>
               {value.length > 100 ? value.slice(0, 100) + "…" : value}
             </span>
           </div>

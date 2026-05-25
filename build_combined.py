@@ -21,7 +21,7 @@ css_b64 = base64.b64encode(open(os.path.join(CLIENT_DIR, css_name), "rb").read()
 
 # Find the export pattern in worker and extract the variable name
 # Pattern: export{VARNAME as default}
-export_match = re.search(r'export\{(\w+) as default\}', worker_js)
+export_match = re.search(r'export\{([\w$]+) as default\}', worker_js)
 if export_match:
     var_name = export_match.group(1)
     # Remove the export statement from worker code
@@ -58,6 +58,16 @@ safe_terms = terms_html.replace('\\', '\\\\').replace('`', '\\`').replace('${', 
 
 parts.append(f'const __PRIVACY_HTML__ = `{safe_priv}`;\n')
 parts.append(f'const __TERMS_HTML__ = `{safe_terms}`;\n')
+# Embed logo/favicon image assets as base64
+ASSETS_DIR = os.path.expanduser("~/workspace/yoke-public/assets/logo")
+logo_b64 = base64.b64encode(open(os.path.join(ASSETS_DIR, "mark-transparent-512.png"), "rb").read()).decode()
+favicon_b64 = base64.b64encode(open(os.path.join(ASSETS_DIR, "icon-32.png"), "rb").read()).decode()
+lockup_b64 = base64.b64encode(open(os.path.join(ASSETS_DIR, "lockup-dark.jpg"), "rb").read()).decode()
+
+parts.append(f'const __LOGO_B64__ = "{logo_b64}";\n')
+parts.append(f'const __FAVICON_B64__ = "{favicon_b64}";\n')
+parts.append(f'const __LOCKUP_B64__ = "{lockup_b64}";\n')
+
 parts.append('const __ROBOTS_TXT__ = "User-agent: *\\nAllow: /\\nDisallow: /api/\\n\\nSitemap: https://yoke.lol/sitemap.xml";\n')
 
 # Sitemap XML
@@ -214,6 +224,56 @@ function serveSPA(request) {
   if (__CSS_NAME__ && path === "/" + __CSS_NAME__) {
     return new Response(decodeB64(__CSS_B64__), { headers: { "Content-Type": "text/css;charset=UTF-8", "Cache-Control": "public, max-age=31536000, immutable" } });
   }
+  // Image asset routes for social crawlers, favicon, etc.
+  if (path === "/logo.png") {
+    return new Response(decodeB64(__LOGO_B64__), { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=604800, immutable" } });
+  }
+  if (path === "/favicon.ico") {
+    return new Response(decodeB64(__FAVICON_B64__), { headers: { "Content-Type": "image/x-icon", "Cache-Control": "public, max-age=604800, immutable" } });
+  }
+  if (path === "/lockup.png") {
+    return new Response(decodeB64(__LOCKUP_B64__), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=604800, immutable" } });
+  }
+
+  // Dynamic OG tags for domain permalinks (social preview)
+  const domainOgMatch = path.match(/^\\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\\.[a-zA-Z]{2,})$/);
+  if (domainOgMatch) {
+    const domain = domainOgMatch[1].toLowerCase();
+    const ogTitle = domain + " — Yoke Domain Intelligence";
+    const ogDesc = "Free domain intelligence report for " + domain + " — DNS, SSL, WHOIS, security audit, tech stack, performance, and more.";
+    const ogUrl = "https://yoke.lol/" + domain;
+    let html = __HTML__;
+    html = html.replace(/<title>[^<]*<\\/title>/, "<title>" + ogTitle + "</title>");
+    html = html.replace(/property="og:title" content="[^"]*"/, 'property="og:title" content="' + ogTitle + '"');
+    html = html.replace(/property="og:description" content="[^"]*"/, 'property="og:description" content="' + ogDesc + '"');
+    html = html.replace(/property="og:url" content="[^"]*"/, 'property="og:url" content="' + ogUrl + '"');
+    html = html.replace(/name="twitter:title" content="[^"]*"/, 'name="twitter:title" content="' + ogTitle + '"');
+    html = html.replace(/name="twitter:description" content="[^"]*"/, 'name="twitter:description" content="' + ogDesc + '"');
+    html = html.replace(/name="description" content="[^"]*"/, 'name="description" content="' + ogDesc + '"');
+    html = html.replace(/rel="canonical" href="[^"]*"/, 'rel="canonical" href="' + ogUrl + '"');
+    return new Response(html, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=300" } });
+  }
+
+  // Compare permalinks
+  const compareOgMatch = path.match(/^\\/compare\\/([a-zA-Z0-9][a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})\\/([a-zA-Z0-9][a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})$/);
+  if (compareOgMatch) {
+    const d1 = compareOgMatch[1].toLowerCase();
+    const d2 = compareOgMatch[2].toLowerCase();
+    const ogTitle = d1 + " vs " + d2 + " — Yoke Domain Intelligence";
+    const ogDesc = "Side-by-side domain comparison of " + d1 + " and " + d2 + " — security, performance, reliability, trust, and visibility scores.";
+    const ogUrl = "https://yoke.lol/compare/" + d1 + "/" + d2;
+    let html = __HTML__;
+    html = html.replace(/<title>[^<]*<\\/title>/, "<title>" + ogTitle + "</title>");
+    html = html.replace(/property="og:title" content="[^"]*"/, 'property="og:title" content="' + ogTitle + '"');
+    html = html.replace(/property="og:description" content="[^"]*"/, 'property="og:description" content="' + ogDesc + '"');
+    html = html.replace(/property="og:url" content="[^"]*"/, 'property="og:url" content="' + ogUrl + '"');
+    html = html.replace(/name="twitter:title" content="[^"]*"/, 'name="twitter:title" content="' + ogTitle + '"');
+    html = html.replace(/name="twitter:description" content="[^"]*"/, 'name="twitter:description" content="' + ogDesc + '"');
+    html = html.replace(/name="description" content="[^"]*"/, 'name="description" content="' + ogDesc + '"');
+    html = html.replace(/rel="canonical" href="[^"]*"/, 'rel="canonical" href="' + ogUrl + '"');
+    return new Response(html, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=300" } });
+  }
+
   return new Response(__HTML__, { headers: { "Content-Type": "text/html;charset=UTF-8", "Cache-Control": "public, max-age=300" } });
 }
 
@@ -254,7 +314,8 @@ export default {{
     // Static file routes — must be checked BEFORE domain regex
     // (paths like /sitemap.xml, /llms.txt, /robots.txt match the domain pattern)
     if (path === "/robots.txt" || path === "/sitemap.xml" || path === "/llms.txt" ||
-        path === "/privacy" || path === "/terms" || path === "/api/docs") {{
+        path === "/privacy" || path === "/terms" || path === "/api/docs" ||
+        path === "/logo.png" || path === "/favicon.ico" || path === "/lockup.png") {{
       return serveSPA(request);
     }}
 

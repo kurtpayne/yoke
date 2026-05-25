@@ -2,9 +2,12 @@
 // Replaces Hono with a tiny hand-rolled router for zero-dependency deployment
 
 import { analyzeDomain } from "./actions/analyze";
+import { analyzeDomainStream } from "./actions/analyze-stream";
+import { compareDomains } from "./actions/compare";
 import { checkGlobalAvailability } from "./actions/availability";
 import { getRecentLookups } from "./actions/recent";
 import { getSubdomains } from "./actions/subdomains";
+import { scanSubdomains } from "./actions/subdomain-scan";
 import { getCompanyInfo } from "./actions/company";
 import { getNews } from "./actions/news";
 import { getSocialAccounts } from "./actions/social";
@@ -18,9 +21,10 @@ interface Env {
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   GOOGLE_PAGESPEED_API_KEY?: string;
+  WHOISFREAKS_API_KEY?: string;
 }
 
-import { CORS_HEADERS } from "./helpers";
+import { CORS_HEADERS, normalizeDomain } from "./helpers";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -37,6 +41,12 @@ const DOMAIN_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a
 
 function isValidDomain(domain: string): boolean {
   return DOMAIN_RE.test(domain) && domain.includes(".");
+}
+
+/** Normalize and validate a domain string. Returns the cleaned domain or null if invalid. */
+function cleanDomain(raw: string): string | null {
+  const d = normalizeDomain(raw);
+  return isValidDomain(d) ? d : null;
 }
 
 export default {
@@ -79,8 +89,18 @@ export default {
         if (method === "POST" && path === "/api/analyze") {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
-          if (!isValidDomain(body.domain)) return json({ error: "Invalid domain format" }, 400);
-          return analyzeDomain(body.domain, env);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          // Support SSE streaming when client requests it
+          const wantsStream = request.headers.get("Accept") === "text/event-stream";
+          if (wantsStream) return analyzeDomainStream(domain, env);
+          return analyzeDomain(domain, env);
+        }
+
+        // POST /api/compare
+        if (method === "POST" && path === "/api/compare") {
+          const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
+          return compareDomains(body, env);
         }
 
         // GET /api/recent
@@ -98,12 +118,23 @@ export default {
           return json(result);
         }
 
+        // POST /api/subdomain-scan
+        if (method === "POST" && path === "/api/subdomain-scan") {
+          const body = await parseBody<{ domain?: string }>(request);
+          if (!body.domain) return json({ error: "domain is required" }, 400);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const result = await scanSubdomains(env.DB, domain);
+          return json(result);
+        }
+
         // POST /api/company
         if (method === "POST" && path === "/api/company") {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
-          if (!isValidDomain(body.domain)) return json({ error: "Invalid domain format" }, 400);
-          const result = await getCompanyInfo(env.DB, body.domain);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const result = await getCompanyInfo(env.DB, domain);
           return json(result);
         }
 
@@ -111,8 +142,9 @@ export default {
         if (method === "POST" && path === "/api/news") {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
-          if (!isValidDomain(body.domain)) return json({ error: "Invalid domain format" }, 400);
-          const result = await getNews(env.DB, body.domain);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const result = await getNews(env.DB, domain);
           return json(result);
         }
 
@@ -136,8 +168,12 @@ export default {
         if (method === "POST" && path === "/api/availability") {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
-          if (!isValidDomain(body.domain)) return json({ error: "Invalid domain format" }, 400);
-          const result = await checkGlobalAvailability(body.domain);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const cfColo = (request as any).cf?.colo as string | undefined;
+          const cfCountry = (request as any).cf?.country as string | undefined;
+          const cfCity = (request as any).cf?.city as string | undefined;
+          const result = await checkGlobalAvailability(domain, { colo: cfColo, country: cfCountry, city: cfCity });
           return json(result);
         }
 
@@ -157,8 +193,9 @@ export default {
           if (!isWebUI) return json({ error: "AI analysis is only available via the web UI and Chrome extension" }, 403);
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
-          if (!isValidDomain(body.domain)) return json({ error: "Invalid domain format" }, 400);
-          return getAIAnalysis(body.domain, env);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          return getAIAnalysis(domain, env);
         }
 
         // GET /api/health
@@ -174,6 +211,7 @@ export default {
             endpoints: {
               "GET /{domain}": "Full domain analysis (content negotiation: JSON for curl/API clients, HTML for browsers)",
               "POST /api/analyze": "Full domain analysis (JSON body: {domain: string})",
+              "POST /api/compare": "Compare two domains side-by-side (JSON body: {domain1: string, domain2: string})",
               "POST /api/subdomains": "Subdomain enumeration (JSON body: {domain: string})",
               "POST /api/company": "Company/business info (JSON body: {domain: string})",
               "POST /api/news": "News articles (JSON body: {domain: string})",
@@ -198,7 +236,9 @@ export default {
         return json({ error: "Not found" }, 404);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Internal server error";
-        return json({ error: msg }, 500);
+        // Return 400 for JSON parse errors (malformed request body)
+        const status = (err instanceof SyntaxError) ? 400 : 500;
+        return json({ error: msg }, status);
       }
     }
 

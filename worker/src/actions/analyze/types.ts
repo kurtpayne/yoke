@@ -128,3 +128,12 @@ export interface EmailAuthResult {
   mta_sts: MtaStsResult;
   tls_rpt: TlsRptResult;
 }
+
+// ─── Accessibility types ──────────────────────────────────────────────
+export { type AccessibilityCheck, type AccessibilityResult } from "./accessibility";
+
+// ─── Third-Party Scripts types ────────────────────────────────────────
+export { type ScriptInfo, type ScriptCategory, type ThirdPartyScriptsResult } from "./third-party-scripts";
+
+// ─── Cookie Consent types ─────────────────────────────────────────────
+export { type CmpDetection, type CookieInfo, type CookieConsentResult } from "./cookie-consent";

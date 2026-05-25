@@ -48,7 +48,7 @@ function GoogleNewsPanel({ items }: { items: NewsResult["google_news"] }) {
   );
 }
 
-function HackerNewsPanel({ items }: { items: NewsResult["hacker_news"] }) {
+function HackerNewsPanel({ items, domain }: { items: NewsResult["hacker_news"]; domain: string }) {
   if (items.length === 0) return (
     <Panel title="Hacker News" icon={<MessageSquare size={14} />}>
       <div className="p-4"><StatusBadge status="neutral" label="No HN discussions found" /></div>
@@ -57,7 +57,7 @@ function HackerNewsPanel({ items }: { items: NewsResult["hacker_news"] }) {
   return (
     <Panel title="Hacker News" icon={<MessageSquare size={14} />} badge={<StatusBadge status="info" label={`${items.length} stories`} />}>
       {items.map((item, i) => (
-        <a key={`hn-${item.objectID ?? i}`} href={item.url ?? `https://hn.algolia.com/?q=${encodeURIComponent(domain)}`} target="_blank" rel="noopener noreferrer" className="news-item block" style={{ textDecoration: "none" }}>
+        <a key={`hn-${i}`} href={item.url ?? `https://hn.algolia.com/?q=${encodeURIComponent(domain)}`} target="_blank" rel="noopener noreferrer" className="news-item block" style={{ textDecoration: "none" }}>
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
               <p style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--text)", lineHeight: "20px", fontWeight: 500, margin: 0 }}>

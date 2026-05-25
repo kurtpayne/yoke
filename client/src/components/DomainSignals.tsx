@@ -136,9 +136,13 @@ function buildSignals(data: AnalysisResult): Signal[] {
 
   // ─── Tech ───
   if (data.wordpress) {
-    const wpVersion = data.wordpress.version;
-    signals.push({ type: "info", text: `WordPress${wpVersion ? ` ${wpVersion}` : ""}` });
-    if (data.wordpress.page_builder) signals.push({ type: "info", text: `Page builder: ${data.wordpress.page_builder}` });
+    const wp = data.wordpress;
+    const wpParts = ["WordPress"];
+    if (wp.version) wpParts.push(wp.version);
+    if (wp.theme) wpParts.push(`· ${wp.theme.name} theme`);
+    signals.push({ type: "info", text: wpParts.join(" ") });
+    if (wp.page_builder) signals.push({ type: "info", text: `Page builder: ${wp.page_builder}` });
+    if (wp.plugins && wp.plugins.length > 0) signals.push({ type: "info", text: `${wp.plugins.length} plugin${wp.plugins.length > 1 ? "s" : ""} detected` });
   }
 
   // ─── Tranco Ranking ───
@@ -424,7 +428,7 @@ export function ExternalTools({ data }: { data: AnalysisResult }) {
         <span>External Tools</span>
       </div>
       <div className="p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {categories.map(cat => (
             <div key={cat}>
               <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>

@@ -2,7 +2,7 @@
 // This file coordinates all analysis modules. Individual checks are in
 // the ./analyze/ directory, split by domain (dns, http, network, etc.).
 
-import { type Env, normalizeDomain, fetchWithTimeout, CORS_HEADERS } from "../helpers";
+import { type Env, normalizeDomain, fetchWithTimeout, CORS_HEADERS, maybePruneCache } from "../helpers";
 import { ANALYSIS_CACHE_TTL_MS } from "../config/cache";
 import { analyzeWordPress, type WordPressDetails } from "./wordpress";
 import { checkBreaches, type BreachResult } from "./breaches";
@@ -28,6 +28,11 @@ import {
   extractSocialMeta, detectLegalPages, calculateAiReadiness,
 } from "./analyze/content";
 import { calculateHealthScore, getScreenshotUrl } from "./analyze/scoring";
+import { calculateDomainScore } from "./analyze/contextual-scoring";
+import { validateStructuredData } from "./analyze/structured-data";
+import { analyzeAccessibility } from "./analyze/accessibility";
+import { analyzeThirdPartyScripts } from "./analyze/third-party-scripts";
+import { analyzeCookieConsent } from "./analyze/cookie-consent";
 import {
   checkCertTransparency, checkSecurityTxt, checkGreenHosting,
   checkWellKnownEndpoints, analyzeCaaRecords, checkGreynoise,
@@ -101,13 +106,18 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
         well_known: null,
         caa_analysis: null,
         greynoise: null,
+        domain_score: null,
+        structured_data: null,
+        accessibility: null,
+        third_party_scripts: null,
+        cookie_consent: null,
       };
       // Cache it too
       try {
         await env.DB.prepare("INSERT INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)")
           .bind(domain, JSON.stringify(notRegisteredResult), Date.now()).run();
       } catch { /* ignore */ }
-      return new Response(JSON.stringify(notRegisteredResult), { headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(notRegisteredResult), { headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
     }
   } catch { /* DNS check failed, proceed with full analysis */ }
 
@@ -137,7 +147,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const ip = dnsRecords.find((r) => r.type === "A")?.data;
 
   const phase2Results = await Promise.allSettled([
-    checkRdap(domain),
+    checkRdap(domain, env),
     checkRobotsSitemap(domain),
     checkIpInfo(domain, dnsRecords),
     checkBlocklists(dnsRecords),
@@ -323,6 +333,14 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const cookieSecurity = auditCookies(effectiveHeaders);
   const compression = detectCompression(effectiveHeaders);
   const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta);
+  const structuredDataValidation = validateStructuredData(jsonLd);
+
+  // New feature modules — all synchronous, HTML-only
+  const accessibilityResult = httpProbeSucceeded ? analyzeAccessibility(html) : null;
+  const thirdPartyScriptsResult = httpProbeSucceeded ? analyzeThirdPartyScripts(html, domain) : null;
+  const cookieConsentResult = httpProbeSucceeded
+    ? analyzeCookieConsent(html, effectiveHeaders ?? {}, domain)
+    : null;
 
   // Health score — use re-computed security grade
   // If HTTP was blocked, pass null for secGrade so we don't penalize for missing headers
@@ -344,6 +362,37 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
     finalUrl: httpAnalysis?.final_url ?? null,
     httpBlocked: !httpProbeSucceeded,
     isSubdomain: domainIsSubdomain,
+  });
+
+  // ─── Contextual Domain Score ──────────────────────────────────────
+  const domainScore = calculateDomainScore({
+    ssl: sslResult,
+    securityGrade: httpProbeSucceeded ? finalSecurityGrade : null,
+    securityAudit: finalSecurityAudit,
+    dnssec: dnssecResult,
+    blocklists,
+    emailAuth,
+    performance: pageSpeedResult,
+    compression,
+    httpProtocols,
+    hosting,
+    dnsRecords,
+    rdap: rdapResult,
+    socialMeta,
+    jsonLd: jsonLd,
+    meta,
+    legal,
+    wayback,
+    certTransparency,
+    greynoise: greynoiseResult,
+    techStack: httpProbeSucceeded ? (finalTechStack.length > 0 ? finalTechStack : (httpAnalysis?.tech_stack ?? null)) : null,
+    headers: httpProbeSucceeded ? effectiveHeaders : null,
+    domain,
+    html,
+    httpBlocked: !httpProbeSucceeded,
+    accessibility: accessibilityResult,
+    thirdPartyScripts: thirdPartyScriptsResult,
+    cookieConsent: cookieConsentResult,
   });
 
   const result = {
@@ -398,7 +447,76 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
     well_known: wellKnown,
     caa_analysis: analyzeCaaRecords(dnsRecords),
     greynoise: greynoiseResult,
+    domain_score: domainScore,
+    structured_data: structuredDataValidation,
+    accessibility: accessibilityResult,
+    third_party_scripts: thirdPartyScriptsResult,
+    cookie_consent: cookieConsentResult,
   };
+
+  // ─── Historical Score Logging ───────────────────────────────────────
+  // Store every computed score for trend analysis (store now, UI later)
+  if (domainScore) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        domain,
+        domainScore.composite,
+        domainScore.axes.security.score,
+        domainScore.axes.performance.score,
+        domainScore.axes.reliability.score,
+        domainScore.axes.trust.score,
+        domainScore.axes.visibility.score,
+        domainScore.archetype.detected,
+        domainScore.archetype.confidence,
+        new Date().toISOString(),
+      ).run();
+    } catch {
+      // Table may not exist yet — auto-create on first failure
+      try {
+        await env.DB.prepare(
+          `CREATE TABLE IF NOT EXISTS domain_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain TEXT NOT NULL,
+            composite_score INTEGER NOT NULL,
+            security_score INTEGER NOT NULL,
+            performance_score INTEGER NOT NULL,
+            reliability_score INTEGER NOT NULL,
+            trust_score INTEGER NOT NULL,
+            visibility_score INTEGER NOT NULL,
+            archetype TEXT NOT NULL,
+            archetype_confidence REAL NOT NULL,
+            scored_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(domain, scored_at)
+          )`
+        ).run();
+        await env.DB.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`
+        ).run();
+        await env.DB.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`
+        ).run();
+        // Retry the insert
+        await env.DB.prepare(
+          `INSERT INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          domain,
+          domainScore.composite,
+          domainScore.axes.security.score,
+          domainScore.axes.performance.score,
+          domainScore.axes.reliability.score,
+          domainScore.axes.trust.score,
+          domainScore.axes.visibility.score,
+          domainScore.archetype.detected,
+          domainScore.archetype.confidence,
+          new Date().toISOString(),
+        ).run();
+      } catch { /* auto-migration + retry failed — non-critical */ }
+    }
+  }
 
   // Cache result
   try {
@@ -413,6 +531,9 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
       .bind(domain, JSON.stringify(result), Date.now())
       .run();
   } catch { /* ignore */ }
+
+  // Probabilistic cache cleanup to prevent unbounded D1 growth
+  maybePruneCache(env.DB);
 
   return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
 }

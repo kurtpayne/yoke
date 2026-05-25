@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "./api";
-import { Search, Loader2, RotateCcw } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, analyzeStream, type StreamEvent } from "./api";
+import { Search, Loader2, RotateCcw, ArrowLeftRight, CheckCircle2, Circle } from "lucide-react";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { PanelGrid, ResetLayoutButton, type PanelDef } from "./components/PanelLayout";
+import { CompareView } from "./components/CompareView";
 
 // Components
 import { TabBar, type TabId } from "./components/TabBar";
@@ -34,9 +35,16 @@ import { DomainSignals, ExternalTools } from "./components/DomainSignals";
 import { AIAnalysisPanel } from "./components/AIAnalysisPanel";
 import { LegalPanel } from "./components/LegalPanel";
 import { CurlBar, ApiTeaser } from "./components/CurlShowcase";
-import { DnssecPanel, CookieSecurityPanel, CompressionPanel, HostingPanel, EmailExtrasPanel } from "./components/NewPanels";
+import { ShareBar } from "./components/ShareBar";
+import { DnssecPanel, CompressionPanel, HostingPanel } from "./components/NewPanels";
 import { BreachPanel } from "./components/BreachPanel";
 import { CertTransparencyPanel, SecurityTxtPanel, GreenHostingPanel, WellKnownPanel, CaaPanel, GreynoisePanel } from "./components/Tier1Panels";
+import { DomainScore, AxisScoreBadge } from "./components/DomainScore";
+import { SubdomainScanPanel } from "./components/SubdomainScanPanel";
+import { StructuredDataPanel } from "./components/StructuredDataPanel";
+import { AccessibilityPanel } from "./components/AccessibilityPanel";
+import { ThirdPartyScriptsPanel } from "./components/ThirdPartyScriptsPanel";
+import { CookieConsentPanel } from "./components/CookieConsentPanel";
 import type { AnalysisResult } from "./utils/types";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -55,7 +63,163 @@ function cleanTechStack(data: AnalysisResult): AnalysisResult {
   return { ...data, tech_stack: cleaned.length > 0 ? cleaned : null };
 }
 
+// ─── Streaming Progress Component ──────────────────────────────────
+interface ProgressState {
+  phase: string;
+  label: string;
+  completed: number;
+  total: number;
+  checks: Map<string, { label: string; done: boolean }>;
+}
+
+function StreamingProgress({ progress }: { progress: ProgressState }) {
+  const pct = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+  const sortedChecks = Array.from(progress.checks.entries());
+
+  return (
+    <div className="panel p-4 mt-3 space-y-3">
+      {/* Header with count */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" style={{ color: "var(--accent)" }} />
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>
+            {progress.label || "Analyzing…"}
+          </span>
+        </div>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--dim)" }}>
+          {progress.completed}/{progress.total} checks
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full h-1.5 rounded-full" style={{ background: "var(--border)" }}>
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, background: "var(--accent)", transition: "width 0.3s ease" }}
+        />
+      </div>
+
+      {/* Check grid */}
+      {sortedChecks.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "4px 12px" }}>
+          {sortedChecks.map(([key, { label, done }]) => (
+            <div key={key} className="flex items-center gap-1.5" style={{ opacity: done ? 1 : 0.5 }}>
+              {done
+                ? <CheckCircle2 size={11} style={{ color: "var(--success)", flexShrink: 0 }} />
+                : <Circle size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />}
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: done ? "var(--text)" : "var(--dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Custom Streaming Analysis Hook ─────────────────────────────────
+function useStreamingAnalysis() {
+  const [data, setData] = useState<AnalysisResult | null>(null);
+  const [partialData, setPartialData] = useState<Partial<AnalysisResult> | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [progress, setProgress] = useState<ProgressState>({
+    phase: "", label: "", completed: 0, total: 0, checks: new Map(),
+  });
+  const abortRef = useRef<AbortController | null>(null);
+
+  const mutate = useCallback((domain: string) => {
+    // Abort any in-flight analysis
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setIsPending(true);
+    setError(null);
+    setData(null);
+    setPartialData({ domain });
+    setProgress({ phase: "init", label: "Connecting…", completed: 0, total: 0, checks: new Map() });
+
+    analyzeStream(
+      domain,
+      (evt: StreamEvent) => {
+        if (controller.signal.aborted) return;
+
+        switch (evt.type) {
+          case "phase": {
+            const d = evt.data as { phase: string; status: string; label: string; total?: number };
+            setProgress(prev => ({
+              ...prev,
+              phase: d.phase,
+              label: d.label,
+              total: d.total ?? prev.total,
+            }));
+            break;
+          }
+          case "result": {
+            const d = evt.data as { key: string; value: unknown; completed?: number; total?: number; label?: string };
+            // Merge into partial data
+            if (d.key && !d.key.startsWith("_")) {
+              setPartialData(prev => prev ? { ...prev, [d.key]: d.value } : { [d.key]: d.value });
+            }
+            // Update progress
+            setProgress(prev => {
+              const checks = new Map(prev.checks);
+              if (d.label && d.key) {
+                checks.set(d.key, { label: d.label, done: true });
+              }
+              return {
+                ...prev,
+                completed: d.completed ?? prev.completed,
+                total: d.total ?? prev.total,
+                label: `Analyzing… ${d.completed ?? prev.completed} of ${d.total ?? prev.total} checks complete`,
+              };
+            });
+            break;
+          }
+          case "done": {
+            const result = evt.data as AnalysisResult;
+            setData(result);
+            setPartialData(null);
+            setIsPending(false);
+            break;
+          }
+          case "error": {
+            const d = evt.data as { message: string };
+            setError(new Error(d.message));
+            setIsPending(false);
+            break;
+          }
+        }
+      },
+      controller.signal,
+    ).catch((err) => {
+      if (controller.signal.aborted) return;
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setIsPending(false);
+    });
+  }, []);
+
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    setData(null);
+    setPartialData(null);
+    setIsPending(false);
+    setError(null);
+    setProgress({ phase: "", label: "", completed: 0, total: 0, checks: new Map() });
+  }, []);
+
+  return { data, partialData, isPending, error, progress, mutate, reset };
+}
+
 const sIcon = <div className="w-3.5 h-3.5 rounded" style={{ background: "var(--border)" }} />;
+
+// Check if partial data has enough to render tabs
+function hasEnoughForTabs(partial: Partial<AnalysisResult>): boolean {
+  // Show tabs as soon as we have DNS (phase 1 result)
+  return !!(partial.dns);
+}
 
 function SkeletonResults() {
   return (
@@ -78,17 +242,14 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
 
   const quickInfoPanels: PanelDef[] = [
     { id: "screenshot", node: <ScreenshotPanel data={data} /> },
-    { id: "domain-expiry", node: <DomainExpiryPanel data={data} /> },
     { id: "tranco", node: <TrancoPanel data={data} /> },
-  ];
-
-  const summaryPanels: PanelDef[] = [
-    { id: "whois", node: <WhoisPanel data={data} /> },
-    ...(data.ip_info ? [{ id: "ip-info", node: <IpInfoPanel data={data} /> }] : []),
   ];
 
   return (
     <div className="space-y-3">
+      {/* Domain Score — the headline */}
+      <DomainScore data={data} />
+
       {/* Vitals Strip + Hosting badges */}
       <div className="space-y-2">
         <VitalsStrip data={data} />
@@ -129,8 +290,6 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
       )}
 
       {/* Quick summary cards */}
-      <PanelGrid tabId="overview-summary" panels={summaryPanels} />
-
       {/* External Tools */}
       <ExternalTools data={data} />
     </div>
@@ -149,15 +308,15 @@ function InfrastructureTab({ data }: { data: AnalysisResult }) {
     { id: "green-hosting", node: <GreenHostingPanel data={data} /> },
     { id: "dnssec", node: <DnssecPanel data={data} /> },
     { id: "http-protocols", node: <HttpProtocolsPanel data={data} /> },
-    { id: "compression", node: <CompressionPanel data={data} /> },
+    { id: "availability", node: <AvailabilityPanel domain={domain} /> },
     { id: "shodan", node: <ShodanPanel data={data} /> },
-    { id: "greynoise", node: <GreynoisePanel data={data} /> },
-    { id: "cert-transparency", node: <CertTransparencyPanel data={data} /> },
+    { id: "subdomain-scan", node: <SubdomainScanPanel domain={domain} /> },
     { id: "redirects", node: <RedirectPanel data={data} /> },
   ];
 
   return (
     <div className="space-y-3">
+      <AxisScoreBadge data={data} axis="reliability" />
       <PanelGrid tabId="infrastructure" panels={panels} />
       {/* Contextual external links */}
       <div className="flex flex-wrap gap-2 px-1">
@@ -184,17 +343,17 @@ function SecurityTab({ data }: { data: AnalysisResult }) {
     { id: "security-headers", node: <SecurityHeadersPanel data={data} /> },
     { id: "observatory", node: <ObservatoryPanel data={data} /> },
     { id: "email-auth", node: <EmailAuthPanel data={data} /> },
-    { id: "cookie-security", node: <CookieSecurityPanel data={data} /> },
+    { id: "cookie-consent", node: <CookieConsentPanel data={data} /> },
     { id: "security-txt", node: <SecurityTxtPanel data={data} /> },
     { id: "caa", node: <CaaPanel data={data} /> },
-    { id: "availability", node: <AvailabilityPanel data={data} /> },
-    { id: "ai-readiness", node: <AiReadinessPanel data={data} /> },
+    { id: "greynoise", node: <GreynoisePanel data={data} /> },
+    { id: "cert-transparency", node: <CertTransparencyPanel data={data} /> },
     { id: "blocklist", node: <BlocklistPanel data={data} /> },
-    { id: "email-extras", node: <EmailExtrasPanel data={data} /> },
   ];
 
   return (
     <div className="space-y-3">
+      <AxisScoreBadge data={data} axis="security" />
       <PanelGrid tabId="security" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://observatory.mozilla.org/analyze/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Observatory ↗</a>
@@ -212,14 +371,17 @@ function TechTab({ data }: { data: AnalysisResult }) {
     { id: "tech-stack", node: <TechStackPanel data={data} /> },
     { id: "wordpress", node: <WordPressPanel data={data} />, visible: !!data.wordpress },
     { id: "meta", node: <MetaPanel data={data} /> },
-    { id: "json-ld", node: <JsonLdPanel data={data} /> },
+    { id: "structured-data", node: <StructuredDataPanel data={data} /> },
+    { id: "accessibility", node: <AccessibilityPanel data={data} /> },
     { id: "robots", node: <RobotsDeepPanel data={data} /> },
     { id: "llms-txt", node: <LlmsTxtPanel data={data} /> },
+    { id: "ai-readiness", node: <AiReadinessPanel data={data} /> },
     { id: "well-known", node: <WellKnownPanel data={data} /> },
   ];
 
   return (
     <div className="space-y-3">
+      <AxisScoreBadge data={data} axis="visibility" />
       <PanelGrid tabId="tech" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://builtwith.com/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>BuiltWith ↗</a>
@@ -235,13 +397,14 @@ function PerformanceTab({ data }: { data: AnalysisResult }) {
 
   const panels: PanelDef[] = [
     { id: "pagespeed", node: <PerformancePanel data={data} /> },
+    { id: "third-party-scripts", node: <ThirdPartyScriptsPanel data={data} /> },
     { id: "compression", node: <CompressionPanel data={data} /> },
     { id: "carbon", node: <CarbonPanel data={data} /> },
-    { id: "wayback", node: <WaybackPanel data={data} /> },
   ];
 
   return (
     <div className="space-y-3">
+      <AxisScoreBadge data={data} axis="performance" />
       <PanelGrid tabId="performance" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://pagespeed.web.dev/analysis?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>PageSpeed Insights ↗</a>
@@ -267,15 +430,23 @@ function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
 
   const regPanels: PanelDef[] = [
     { id: "whois", node: <WhoisPanel data={data} /> },
+    { id: "domain-expiry", node: <DomainExpiryPanel data={data} /> },
+  ];
+
+  const historyPanels: PanelDef[] = [
+    { id: "wayback", node: <WaybackPanel data={data} /> },
   ];
 
   return (
     <div className="space-y-3">
+      <AxisScoreBadge data={data} axis="trust" />
       <PanelGrid tabId="business" panels={mainPanels} grid={false} />
       <SectionHeader title="Social Sharing" />
       <PanelGrid tabId="business-social" panels={socialPanels} />
       <SectionHeader title="Registration" />
       <PanelGrid tabId="business-reg" panels={regPanels} />
+      <SectionHeader title="History" />
+      <PanelGrid tabId="business-history" panels={historyPanels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://ahrefs.com/backlink-checker/?input=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Ahrefs Backlinks ↗</a>
         <a href={`https://www.similarweb.com/website/${domain}/`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SimilarWeb ↗</a>
@@ -307,6 +478,9 @@ export function App() {
   const [domain, setDomain] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [autoLoaded, setAutoLoaded] = useState(false);
+  const [compareMode, setCompareMode] = useState(() => {
+    return window.location.pathname.startsWith("/compare");
+  });
   const queryClient = useQueryClient();
 
   const recentLookups = useQuery({
@@ -314,25 +488,28 @@ export function App() {
     queryFn: () => api.getRecentLookups({ limit: 8 }),
   });
 
-  const analyze = useMutation({
-    mutationFn: (d: string) => api.analyzeDomain({ domain: d }),
-    onSuccess: (_data, d) => {
+  const analyze = useStreamingAnalysis();
+
+  // Sync URL and recent lookups on analysis complete
+  const prevDataRef = useRef<AnalysisResult | null>(null);
+  useEffect(() => {
+    if (analyze.data && analyze.data !== prevDataRef.current) {
+      prevDataRef.current = analyze.data;
       queryClient.invalidateQueries({ queryKey: ["recentLookups"] });
-      // Sync URL to match the analyzed domain
-      const clean = d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+      const clean = analyze.data.domain;
       if (clean && window.location.pathname !== `/${clean}`) {
         window.history.pushState(null, "", `/${clean}`);
       }
       document.title = `${clean} — Yoke`;
-    },
-  });
+    }
+  }, [analyze.data, queryClient]);
 
   const doAnalyze = useCallback(() => {
     const d = domain.trim();
     if (!d || analyze.isPending) return;
     setActiveTab("overview");
     analyze.mutate(d);
-  }, [domain, analyze]);
+  }, [domain, analyze.isPending, analyze.mutate]);
 
   const handleNavigate = useCallback(
     (d: string) => {
@@ -340,13 +517,14 @@ export function App() {
       setActiveTab("overview");
       analyze.mutate(d);
     },
-    [analyze],
+    [analyze.mutate],
   );
 
   // URL-based routing: yoke.lol/cloudflare.com → auto-analyze
   useEffect(() => {
-    if (autoLoaded) return;
+    if (autoLoaded || compareMode) return;
     const path = window.location.pathname.slice(1); // strip leading /
+    if (path.startsWith("compare")) return; // compare mode handled separately
     if (path && path.includes(".") && !path.startsWith("api/") && !path.startsWith("assets/")) {
       // URL has a domain in it — analyze it
       setAutoLoaded(true);
@@ -362,77 +540,127 @@ export function App() {
       setDomain(mostRecent.domain);
       analyze.mutate(mostRecent.domain);
     }
-  }, [recentLookups.data, autoLoaded, analyze]);
+  }, [recentLookups.data, autoLoaded, compareMode, analyze.mutate]);
 
   // Handle browser back/forward
   useEffect(() => {
     const onPopState = () => {
-      const path = window.location.pathname.slice(1);
-      if (path && path.includes(".")) {
-        setDomain(path);
+      const path = window.location.pathname;
+      if (path.startsWith("/compare")) {
+        setCompareMode(true);
+        return;
+      }
+      setCompareMode(false);
+      const slug = path.slice(1);
+      if (slug && slug.includes(".")) {
+        setDomain(slug);
         setActiveTab("overview");
-        analyze.mutate(path);
+        analyze.mutate(slug);
       }
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [analyze]);
+  }, [analyze.mutate]);
 
   return (
     <main className="min-h-screen pb-12" style={{ background: "var(--bg)" }}>
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 pt-6">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-5">
-          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFCElEQVR4nO1UX0xTVxj/zjm9/UOL6RzGbRDlYQvtk3OLBE0UkZK58DKzRYxsCWzyIM5YGTNb3JYlOqNhjZBlssYRZMv4ZwgJoJtv0I6OEJw6El2GxlqR8EekTQu3vbfnfHvAskpvx8we9jB+ycm5+e53z/f7fvd8P4BVrOI/BlkeaGtr+8dutxdFo9EFQggBAMAnMjA5gIRSgYiMAAAiAhDy16GUAgoBiIgZJpP52rVrvRUVFV/9LaPr169fMZlMAADAGNNclNKlPbHS5TLGAADAYrGQ0dHR/uX16NJrKBQal2UZ8vLyDAcOHNjMOQdEBM750hJCLO2Jlfw+OefQ+4cKcnNzdZFIBMPh8MyKBCRJ0hNC4IXsbLPT6XTBA2klSUpRIZ0CkiQBIgJjDGqO1jRmZWUZCSFAGZNWJICIgIgwfv9+xGazFZ08eeJ1RARVVVM6TKeAqqpACIGGhoa3N27c+PLExISMiLD8NgEA6JYHhBCcUgr37t1Turq6Pj1+/JPLDkfJ952dneeGh4d/R0T4oLbWyShlljWWdQQJhsPhh7FYbN7lcp0zGAy6goIC+/79+2s3bdr0RnNz88GpqSkuSRIIIXgKg+UY8A5ceHz5wWw2k+7u7s8ePXo0jogYCARu9PT01NXV1e2x2WwGh8ORVVxc/KzNZjM0NjZW9vb2fjk9Mz2OiPhw9qG/tbX1qCQtqq7T6cDn83WtSMD7s/cCAECCRGZmJjl27MMd7e3tH1dXV7966tQXe7S+M5lM4HK5yo84j2zt6Og4XlNTs81sNhNCCBBCgDGmSSDlDgACUEoBEcHhKF7n9Xp/mpiYmJRlObhr167Sysp36/Lz8zMJISBJEiQ63FlU9Fx5efmJbVu3FcqyHJycmpzx+XxXSkpK1iMiUEo1XEeLAAAIIYBSCh6Pd6a/v/9CcbGjuKWlpTMSiSwEg8Hx+vr6c5RS4JxDPB4Hg8EA9fX1HcFQ8P78wnysqampdfdru3d7PJ4fBgYGpgghIITQuoOpBBLSIyIoigJOp7NtaGhocPMrm186f/58U0NDQ20wGJwrLS3NFosuB/v27bP57969cfbs2dqmb5ua8/PzbUNDQ97Dhw+3xGKxRYdMOjsZKVOAyJcIJOB2u39LPNe56o6EQ+H5ubm5aCI2PT0VMhgM1rK9ZRXub9yHBgcHf9FSVgsaCrCUJMYYGI1GoJRCwB+4sX379qqxsbFQwnhuj90OFhYWvnPnzp2rlFIwGo2g06X0Blr/IIUAx9RRTZiLEAIu/3i5R1GVhcnJyXjCeB5MPIgqihLv6+u7IoQAVVUhHo//g/IavyAdOOdACIH2tvY/Cnfs+Nzj8TQFAoFRxhjLzs62ud3ug319fQ8IIcD5yn7z1AQSUBQFzGaL/tKlS9+dPn26X5blyJkzZ97asGHDi5zzpRH+FwQ0J3MJhBDYsmXLmzk5OXnDw8MX4/G4Wlpa+p5erzcDwNdPUzxtNa1xSY6Xle3dKcuyarFY1q9duzZ3dnZ2uqKycm/C9Z7mzNQx5FxN14UQAgAARkauRqqqqqrtdvsziAg3b96cCwQCKgCklZ9zDoILdUUCVqs1R6/Xg6IomgcBLFq13+9X/X7/dHIsQVALRqORWK3W51ckcOvWrQGfz9cdjUbDjDEmhABCCCDi4g4IBAgQQhillAIAIGKcc/5E68mSCyF4RkbGmpFfR7rTMlzFKv63+BOhUKBf8MM3LQAAAABJRU5ErkJggg==" alt="Yoke" style={{ width: "24px", height: "24px" }} />
-          <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "20px", fontWeight: 700, color: "var(--text)", letterSpacing: "-0.02em" }}>
+        <div className="flex items-center gap-2 sm:gap-3 mb-5 min-w-0">
+          <img src="data:image/png;base64,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" alt="Yoke" style={{ width: "24px", height: "24px", flexShrink: 0 }} />
+          <h1 style={{ fontFamily: "var(--font-ui)", fontSize: "20px", fontWeight: 700, color: "var(--text)", letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
             Yoke
           </h1>
-          <div className="h-4 w-px" style={{ background: "var(--border)" }} />
-          <span style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--dim)" }}>
+          <div className="h-4 w-px hidden sm:block" style={{ background: "var(--border)" }} />
+          <span className="hidden sm:inline" style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--dim)", whiteSpace: "nowrap" }}>
             Domain Intelligence
           </span>
           <div className="flex-1" />
           <ThemeToggle />
         </div>
 
-        {/* Search Bar */}
+        {/* Search Bar + Compare toggle */}
         <div className="mb-0">
-          <div className="search-glow flex items-center rounded-lg" style={{ background: "var(--surface)" }}>
-            <div className="pl-4" style={{ color: "var(--dim)" }}>
-              <Search size={16} />
+          <div className="flex items-center gap-2">
+            <div className="search-glow flex items-center rounded-lg flex-1 min-w-0" style={{ background: "var(--surface)" }}>
+              <div className="pl-4" style={{ color: "var(--dim)" }}>
+                <Search size={16} />
+              </div>
+              <input
+                type="text"
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (compareMode) { setCompareMode(false); } doAnalyze(); } }}
+                placeholder="Enter domain name (e.g. example.com)"
+                className="flex-1 bg-transparent px-3 py-3 outline-none min-w-0"
+                style={{ fontFamily: "var(--font-mono)", fontSize: "14px", color: "var(--text)" }}
+                aria-label="Domain name"
+                disabled={analyze.isPending}
+              />
+              <button
+                type="button"
+                onClick={() => { if (compareMode) setCompareMode(false); doAnalyze(); }}
+                disabled={analyze.isPending || !domain.trim()}
+                className="flex items-center gap-2 px-5 py-2 mr-1.5 rounded-md transition-all disabled:opacity-30"
+                style={{
+                  background: "var(--accent)",
+                  color: "var(--accent-fg)",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: analyze.isPending || !domain.trim() ? "default" : "pointer",
+                  border: "none",
+                }}
+                aria-label="Analyze domain"
+              >
+                {analyze.isPending ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                {analyze.isPending ? "Analyzing…" : "Analyze"}
+              </button>
             </div>
-            <input
-              type="text"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); doAnalyze(); } }}
-              placeholder="Enter domain name (e.g. example.com)"
-              className="flex-1 bg-transparent px-3 py-3 outline-none"
-              style={{ fontFamily: "var(--font-mono)", fontSize: "14px", color: "var(--text)" }}
-              aria-label="Domain name"
-              disabled={analyze.isPending}
-            />
+            {/* Compare toggle */}
             <button
               type="button"
-              onClick={() => doAnalyze()}
-              disabled={analyze.isPending || !domain.trim()}
-              className="flex items-center gap-2 px-5 py-2 mr-1.5 rounded-md transition-all disabled:opacity-30"
-              style={{
-                background: "var(--accent)",
-                color: "var(--accent-fg)",
-                fontFamily: "var(--font-ui)",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: analyze.isPending || !domain.trim() ? "default" : "pointer",
-                border: "none",
+              onClick={() => {
+                const next = !compareMode;
+                setCompareMode(next);
+                if (next) {
+                  window.history.pushState(null, "", "/compare");
+                  document.title = "Compare — Yoke";
+                } else if (analyze.data) {
+                  window.history.pushState(null, "", `/${analyze.data.domain}`);
+                  document.title = `${analyze.data.domain} — Yoke`;
+                } else {
+                  window.history.pushState(null, "", "/");
+                  document.title = "Yoke";
+                }
               }}
-              aria-label="Analyze domain"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg transition-all flex-shrink-0"
+              style={{
+                background: compareMode ? "var(--accent)" : "var(--surface)",
+                color: compareMode ? "var(--accent-fg)" : "var(--dim)",
+                border: `1px solid ${compareMode ? "var(--accent)" : "var(--border)"}`,
+                fontFamily: "var(--font-ui)",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              title="Compare two domains"
             >
-              {analyze.isPending ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-              {analyze.isPending ? "Analyzing…" : "Analyze"}
+              <ArrowLeftRight size={14} />
+              <span className="hidden sm:inline">vs</span>
             </button>
           </div>
         </div>
+
+        {/* Compare Mode */}
+        {compareMode && (
+          <div className="mt-4">
+            <CompareView initialDomain={domain || (analyze.data?.domain)} />
+          </div>
+        )}
+
+        {/* Normal Analysis Mode */}
+        {!compareMode && (<>
 
         {/* Tab Bar - shown when we have results or are loading */}
         {(analyze.data || analyze.isPending) && (
@@ -449,7 +677,7 @@ export function App() {
         )}
 
         {/* Error state */}
-        {analyze.error && (
+        {analyze.error && !analyze.isPending && (
           <div className="panel p-4 mb-4 flex items-center gap-3 mt-3" style={{ borderColor: "var(--danger)" }}>
             <span style={{ color: "var(--danger)", fontFamily: "var(--font-ui)", fontSize: "13px" }}>
               Analysis failed: {String(analyze.error)}
@@ -465,10 +693,21 @@ export function App() {
           </div>
         )}
 
-        {/* Loading state */}
-        {analyze.isPending && <SkeletonResults />}
+        {/* Streaming progress + partial results */}
+        {analyze.isPending && (
+          <>
+            <StreamingProgress progress={analyze.progress} />
+            {analyze.partialData && hasEnoughForTabs(analyze.partialData) && (
+              <div className="mt-3">
+                <ErrorBoundary fallbackLabel="This tab encountered an error" key={activeTab + "-streaming"}>
+                  <TabContent tab={activeTab} data={cleanTechStack(analyze.partialData as AnalysisResult)} onNavigate={handleNavigate} />
+                </ErrorBoundary>
+              </div>
+            )}
+          </>
+        )}
 
-        {/* Results */}
+        {/* Final results */}
         {analyze.data && !analyze.isPending && (
           <div className="mt-0">
             {/* Curl API showcase bar — hidden on AI tab (cost control) */}
@@ -477,6 +716,7 @@ export function App() {
                 <CurlBar domain={analyze.data.domain} activeTab={activeTab} />
               </div>
             )}
+            <ShareBar domain={analyze.data.domain} />
             <ErrorBoundary fallbackLabel="This tab encountered an error" key={activeTab}>
               <TabContent tab={activeTab} data={cleanTechStack(analyze.data)} onNavigate={handleNavigate} />
             </ErrorBoundary>
@@ -495,7 +735,7 @@ export function App() {
             <p style={{ fontFamily: "var(--font-ui)", fontSize: "14px", color: "var(--dim)", textAlign: "center", maxWidth: "520px", lineHeight: "22px", marginBottom: "1.5rem" }}>
               Enter any domain to analyze DNS records, SSL certificates, WHOIS data, security headers, tech stack, performance, data breaches, and more — across 9 intelligence tabs.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", width: "100%", maxWidth: "700px", marginBottom: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem", width: "100%", maxWidth: "700px", marginBottom: "1.5rem" }}>
               <div className="panel" style={{ padding: "0.75rem 1rem" }}>
                 <h3 style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--accent)", marginBottom: "0.25rem" }}>🔍 Deep Analysis</h3>
                 <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>DNS, SSL, WHOIS, security headers, email auth, DNSSEC, and certificate transparency</p>
@@ -525,17 +765,20 @@ export function App() {
             </span>
           </div>
         )}
+
+        </>)}
       </div>
 
       {/* Footer */}
       <footer style={{
         borderTop: "1px solid var(--border)",
-        padding: "1rem 0",
+        padding: "1rem 1rem",
         marginTop: "3rem",
         display: "flex",
+        flexWrap: "wrap",
         justifyContent: "center",
         alignItems: "center",
-        gap: "1.25rem",
+        gap: "0.5rem 1.25rem",
         fontFamily: "var(--font-ui)",
         fontSize: "12px",
         color: "var(--dim)",

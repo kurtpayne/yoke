@@ -1,4 +1,4 @@
-import { Gauge, Leaf } from "lucide-react";
+import { Gauge, Leaf, ExternalLink } from "lucide-react";
 import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
 import { CliButton, performanceCliCommands } from "./CliModal";
 import { Tooltip } from "./Tooltip";
@@ -33,40 +33,82 @@ function formatMs(ms: number | null): string {
 
 export function PerformancePanel({ data }: { data: AnalysisResult }) {
   const perf = data.performance;
+  const domain = data.domain;
+  const psiUrl = `https://pagespeed.web.dev/analysis?url=https://${encodeURIComponent(domain)}`;
+
   if (!perf) return (
-    <Panel title="Performance" icon={<Gauge size={14} />}>
+    <Panel title="Google PageSpeed" icon={<Gauge size={14} />}>
       <ErrorState message="Performance data unavailable" />
     </Panel>
   );
 
+  const hasError = !!perf.error;
+  const hasScore = perf.score != null;
+  // TTFB from our own probe is always available even if PageSpeed fails
+  const hasTtfbOnly = !hasScore && perf.ttfb != null;
+
   return (
     <Panel
-      title="Performance"
+      title="Google PageSpeed"
       icon={<Gauge size={14} />}
       badge={
         <div className="flex items-center gap-1.5">
           <CliButton commands={performanceCliCommands(data.domain)} domain={data.domain} />
-          {perf.error
-            ? <StatusBadge status="warn" label={perf.error} />
-            : perf.score != null
-            ? <StatusBadge status={perf.score >= 90 ? "pass" : perf.score >= 50 ? "warn" : "fail"} label={`${perf.score}/100`} />
+          {hasError
+            ? <StatusBadge status="warn" label={perf.error!.length > 40 ? perf.error!.slice(0, 37) + "…" : perf.error!} />
+            : hasScore
+            ? <StatusBadge status={perf.score! >= 90 ? "pass" : perf.score! >= 50 ? "warn" : "fail"} label={`${perf.score}/100`} />
             : undefined}
         </div>
       }
     >
-      {perf.score != null && (
+      {/* Score gauge — only when PageSpeed returned a score */}
+      {hasScore && (
         <div className="flex justify-center gap-4 py-4 px-3" style={{ borderBottom: "1px solid var(--border-muted)" }}>
-          <ScoreGauge score={perf.score} label="Overall" />
+          <ScoreGauge score={perf.score!} label="Overall" />
         </div>
       )}
+
+      {/* Error state — informational, not scary */}
+      {hasError && (
+        <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-muted)" }}>
+          <div className="flex items-start gap-2">
+            <span style={{ color: "var(--warning)", fontSize: "14px", lineHeight: 1, flexShrink: 0 }}>⚠</span>
+            <div>
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--warning)", margin: 0 }}>
+                {perf.error}
+              </p>
+              <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", margin: "4px 0 0" }}>
+                Google's Lighthouse couldn't complete the analysis.{" "}
+                <a href={psiUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>
+                  Try PageSpeed Insights directly ↗
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         {perf.fcp != null && <DataRow label={<span className="flex items-center gap-1">First Contentful Paint <Tooltip text="Time until the first text or image is painted on screen" help /></span>} value={formatMs(perf.fcp)} />}
         {perf.lcp != null && <DataRow label={<span className="flex items-center gap-1">Largest Contentful Paint <Tooltip text="Time until the largest visible element (image or text block) renders. Under 2.5s is good." help /></span>} value={formatMs(perf.lcp)} />}
         {perf.tbt != null && <DataRow label={<span className="flex items-center gap-1">Total Blocking Time <Tooltip text="Total time the main thread was blocked, preventing user interaction. Under 200ms is good." help /></span>} value={formatMs(perf.tbt)} />}
         {perf.cls != null && <DataRow label={<span className="flex items-center gap-1">Cumulative Layout Shift <Tooltip text="Measures visual stability — how much the page layout shifts unexpectedly. Under 0.1 is good." help /></span>} value={perf.cls.toFixed(3)} />}
         {perf.si != null && <DataRow label={<span className="flex items-center gap-1">Speed Index <Tooltip text="How quickly content is visually displayed during page load. Lower is better." help /></span>} value={formatMs(perf.si)} />}
-        {perf.ttfb != null && <DataRow label={<span className="flex items-center gap-1">Time to First Byte <Tooltip text="Time from the browser request to receiving the first byte from the server. Under 800ms is good." help /></span>} value={formatMs(perf.ttfb)} />}
+        {perf.ttfb != null && <DataRow label={<span className="flex items-center gap-1">Time to First Byte <Tooltip text="Time from the browser request to receiving the first byte from the server. Under 800ms is good. Measured by Yoke directly." help /></span>} value={formatMs(perf.ttfb)} />}
         <DataRow label="Strategy" value={perf.strategy} />
+      </div>
+
+      {/* Source attribution */}
+      <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
+        <div className="flex items-center justify-between">
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+            {hasScore ? "Data from" : "TTFB measured by Yoke •"}{" "}
+            <a href={psiUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>
+              Google PageSpeed Insights <ExternalLink size={9} style={{ display: "inline", verticalAlign: "middle" }} />
+            </a>
+          </span>
+        </div>
       </div>
     </Panel>
   );

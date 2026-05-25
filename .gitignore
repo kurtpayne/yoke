@@ -30,3 +30,6 @@ Thumbs.db
 /tmp/worker.js
 build_combined.py
 deploy.sh
+
+# Lockfiles (bun.lock is canonical)
+client/package-lock.json
