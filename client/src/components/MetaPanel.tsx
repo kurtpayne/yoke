@@ -23,7 +23,7 @@ export function MetaPanel({ data }: { data: AnalysisResult }) {
           {meta.og_image && <DataRow label="Image" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{meta.og_image}</span>} />}
         </div>
       )}
-      <DataRow label="Favicon" value={meta.favicon_url ? <span style={{ fontSize: "10px", wordBreak: "break-all" }}>{meta.favicon_url}</span> : <StatusBadge status="warn" label="NOT FOUND" />} />
+      <DataRow label="Favicon" value={meta.favicon_url ? <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><img src={meta.favicon_url} alt="favicon" style={{ width: 16, height: 16, imageRendering: "pixelated" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} /><span style={{ fontSize: "10px", wordBreak: "break-all" }}>{meta.favicon_url.length > 60 ? meta.favicon_url.slice(0, 60) + "…" : meta.favicon_url}</span></span> : <StatusBadge status="warn" label="NOT FOUND" />} />
       <DataRow label="robots.txt" value={meta.robots_txt_exists ? <StatusBadge status="pass" label="PRESENT" /> : <StatusBadge status="warn" label="MISSING" />} />
       <DataRow
         label="Sitemap"

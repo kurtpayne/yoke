@@ -1,5 +1,6 @@
 import { fetchWithTimeout, getFromCache, setCache, MULTI_PART_TLDS } from "../helpers";
 import { BREACH_CATALOG_CACHE_TTL_MS, BREACH_RESULT_CACHE_TTL_MS } from "../config/cache";
+import { logApiError } from "../api-errors";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ async function getBreachCatalog(db: D1Database): Promise<HibpBreach[]> {
 
     if (!res.ok) {
       console.error(`HIBP API returned ${res.status}`);
+      logApiError(db, { api: "hibp", status: res.status, message: `Breach catalog fetch failed` });
       return [];
     }
 
@@ -95,6 +97,7 @@ async function getBreachCatalog(db: D1Database): Promise<HibpBreach[]> {
     return data;
   } catch (err) {
     console.error("Failed to fetch HIBP catalog:", err);
+    logApiError(db, { api: "hibp", status: 0, message: String(err).slice(0, 100) });
     return [];
   }
 }

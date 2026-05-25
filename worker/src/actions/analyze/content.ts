@@ -99,18 +99,32 @@ export async function checkAnsRecords(domain: string): Promise<AnsResult> {
 
 export async function checkWayback(domain: string): Promise<{ first_snapshot: string | null; last_snapshot: string | null; total_snapshots: number | null; archive_url: string } | null> {
   const archiveUrl = `https://web.archive.org/web/*/${domain}`;
+  const formatTs = (ts: string | undefined | null): string | null => { if (!ts || ts.length < 8) return null; return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}`; };
   try {
     const sparklineRes = await fetchWithTimeout(`https://web.archive.org/__wb/sparkline?output=json&url=${encodeURIComponent(domain)}&collection=web`, { timeout: 8000 });
-    if (!sparklineRes.ok) return { first_snapshot: null, last_snapshot: null, total_snapshots: null, archive_url: archiveUrl };
-    const sparkData = await sparklineRes.json() as { years?: Record<string, number[]>; first_ts?: string; last_ts?: string; };
-    let totalSnapshots = 0; let firstYear: string | null = null; let lastYear: string | null = null;
-    if (sparkData.years) {
-      const years = Object.keys(sparkData.years).sort();
-      if (years.length > 0) { firstYear = years[0] ?? null; lastYear = years[years.length - 1] ?? null; }
-      for (const counts of Object.values(sparkData.years)) { for (const c of counts) totalSnapshots += c; }
+    if (sparklineRes.ok) {
+      const sparkData = await sparklineRes.json() as { years?: Record<string, number[]>; first_ts?: string; last_ts?: string; };
+      let totalSnapshots = 0; let firstYear: string | null = null; let lastYear: string | null = null;
+      if (sparkData.years) {
+        const years = Object.keys(sparkData.years).sort();
+        if (years.length > 0) { firstYear = years[0] ?? null; lastYear = years[years.length - 1] ?? null; }
+        for (const counts of Object.values(sparkData.years)) { for (const c of counts) totalSnapshots += c; }
+      }
+      if (totalSnapshots > 0 || sparkData.first_ts) {
+        return { first_snapshot: formatTs(sparkData.first_ts) ?? (firstYear ? `${firstYear}-01-01` : null), last_snapshot: formatTs(sparkData.last_ts) ?? (lastYear ? `${lastYear}-12-31` : null), total_snapshots: totalSnapshots > 0 ? totalSnapshots : null, archive_url: archiveUrl };
+      }
     }
-    const formatTs = (ts: string | undefined | null): string | null => { if (!ts || ts.length < 8) return null; return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}`; };
-    return { first_snapshot: formatTs(sparkData.first_ts) ?? (firstYear ? `${firstYear}-01-01` : null), last_snapshot: formatTs(sparkData.last_ts) ?? (lastYear ? `${lastYear}-12-31` : null), total_snapshots: totalSnapshots > 0 ? totalSnapshots : null, archive_url: archiveUrl };
+    // Sparkline returned 404 or empty (common for very new domains) — fall back to availability API
+    const availRes = await fetchWithTimeout(`https://archive.org/wayback/available?url=${encodeURIComponent(domain)}`, { timeout: 6000 });
+    if (availRes.ok) {
+      const availData = await availRes.json() as { archived_snapshots?: { closest?: { available?: boolean; timestamp?: string } } };
+      const snap = availData.archived_snapshots?.closest;
+      if (snap?.available && snap.timestamp) {
+        const ts = formatTs(snap.timestamp);
+        return { first_snapshot: ts, last_snapshot: ts, total_snapshots: 1, archive_url: archiveUrl };
+      }
+    }
+    return { first_snapshot: null, last_snapshot: null, total_snapshots: null, archive_url: archiveUrl };
   } catch { return { first_snapshot: null, last_snapshot: null, total_snapshots: null, archive_url: archiveUrl }; }
 }
 
@@ -169,9 +183,48 @@ export async function checkEmailAuth(domain: string, dnsRecords: DnsRecord[]): P
       }
     }
   } catch { /* ignore */ }
+  // ── DKIM selector discovery: infer from MX/SPF, then probe ──────────
   const dkimSelectors: string[] = [];
-  const commonSelectors = ["google", "default", "selector1", "selector2", "k1", "mail", "dkim"];
-  await Promise.allSettled(commonSelectors.map(async (sel) => {
+  const selectorSet = new Set<string>(["default", "dkim"]);
+  // Gather MX hostnames and SPF includes to fingerprint the email provider
+  const mxHosts = dnsRecords.filter(r => r.type === "MX").map(r => r.data.toLowerCase());
+  const spfIncludes = (spf.record ?? "").toLowerCase();
+  const providerSelectors: Record<string, string[]> = {
+    "google":      ["google"],
+    "outlook":     ["selector1", "selector2"],
+    "microsoft":   ["selector1", "selector2"],
+    "amazonses":   ["ses", "amazon"],
+    "mailchimp":   ["k1", "k2", "k3"],
+    "mandrill":    ["mandrill"],
+    "mailgun":     ["smtp", "mail", "mg", "k1"],
+    "sendgrid":    ["s1", "s2", "sendgrid", "smtpapi"],
+    "postmark":    ["postmark", "pm"],
+    "mailjet":     ["mailjet"],
+    "sparkpost":   ["sparkpost"],
+    "zoho":        ["zoho", "zmail"],
+    "fastmail":    ["fm1", "fm2", "fm3"],
+    "protonmail":  ["protonmail", "protonmail2", "protonmail3"],
+    "cloudflare":  ["cf2024-1", "cf2024-2", "cf2023-1", "cf2023-2", "cf2025-1", "cf2025-2"],
+    "mimecast":    ["mimecast", "mimecast20190104"],
+    "sendinblue":  ["mail", "sendinblue"],
+    "hover":       ["default", "hoverkey"],
+    "namecheap":   ["default", "mail"],
+    "icloud":      ["sig1"],
+    "yahoo":       ["s1024", "s2048"],
+    "yandex":      ["mail"],
+    "ionos":       ["default", "mail"],
+    "ovh":         ["ovh", "default"],
+    "godaddy":     ["default", "k1"],
+  };
+  const allSignals = [...mxHosts, spfIncludes].join(" ");
+  for (const [provider, selectors] of Object.entries(providerSelectors)) {
+    if (allSignals.includes(provider)) {
+      for (const s of selectors) selectorSet.add(s);
+    }
+  }
+  // Always include a small universal fallback set
+  for (const s of ["google", "selector1", "selector2", "k1", "mail", "s1", "s2"]) selectorSet.add(s);
+  await Promise.allSettled([...selectorSet].map(async (sel) => {
     try {
       const res = await fetchWithTimeout(`https://dns.google/resolve?name=${sel}._domainkey.${encodeURIComponent(domain)}&type=TXT`, { timeout: 3000 });
       const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };

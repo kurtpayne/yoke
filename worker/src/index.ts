@@ -8,6 +8,9 @@ import { checkGlobalAvailability } from "./actions/availability";
 import { getRecentLookups } from "./actions/recent";
 import { getSubdomains } from "./actions/subdomains";
 import { scanSubdomains } from "./actions/subdomain-scan";
+import { getApiHealth } from "./api-errors";
+import { renderStatusPage } from "./status-page";
+import { ALL_THRESHOLDS, SEVERITY_SCORES } from "./config/scoring-thresholds";
 import { getCompanyInfo } from "./actions/company";
 import { getNews } from "./actions/news";
 import { getSocialAccounts } from "./actions/social";
@@ -70,7 +73,7 @@ export default {
 
     if (method === "GET" && path === "/sitemap.xml") {
       return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://yoke.lol</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>https://yoke.lol/api/docs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>\n  <url><loc>https://yoke.lol/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n  <url><loc>https://yoke.lol/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>`,
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://yoke.lol</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>https://yoke.lol/api/docs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>\n  <url><loc>https://yoke.lol/status</loc><changefreq>hourly</changefreq><priority>0.5</priority></url>\\n  <url><loc>https://yoke.lol/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n  <url><loc>https://yoke.lol/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>`,
         { headers: { "Content-Type": "application/xml;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
       );
     }
@@ -80,6 +83,11 @@ export default {
         `# Yoke — Free Domain Intelligence & OSINT Tool\n\n> Yoke is a free, open-source domain intelligence tool at https://yoke.lol\n\n## What Yoke Does\n\nYoke provides instant, comprehensive analysis of any internet domain. Enter a domain name and get detailed intelligence across security, infrastructure, technology, performance, and business dimensions.\n\n## Key Capabilities\n\n- DNS Analysis: A, AAAA, MX, NS, TXT, CNAME, SOA records with DNSSEC validation\n- SSL/TLS: Certificate details, chain validation, SSL Labs grading, CAA records\n- WHOIS/RDAP: Registrar, registration and expiry dates, domain age\n- Security Audit: HTTP security headers, Mozilla Observatory scoring, cookie security\n- Data Breaches: HIBP breach detection\n- Threat Intelligence: Shodan port/vulnerability data, GreyNoise IP classification\n- Technology Detection: Frameworks, CMS, CDN, WAF, deep WordPress fingerprinting\n- Email Authentication: SPF, DKIM, DMARC validation\n- Performance: Google PageSpeed, Core Web Vitals, compression\n- Certificate Transparency: CT log monitoring for subdomain discovery\n- Business Intelligence: Company enrichment via Wikidata, Brandfetch, Crunchbase\n- AI Analysis: LLM-powered analysis from 6 expert personas\n\n## Free JSON API\n\nNo authentication required.\n\ncurl yoke.lol/stripe.com | jq\ncurl "yoke.lol/stripe.com?pretty"\ncurl -s yoke.lol/stripe.com | jq '.ssl'\n\n## Links\n\n- Web UI: https://yoke.lol\n- API Docs: https://yoke.lol/api/docs\n- Chrome Extension: Chrome Web Store\n- Source: https://github.com/kurtpayne/yoke\n- License: MIT`,
         { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
       );
+    }
+
+    // Status page — server-rendered, public
+    if (method === "GET" && path === "/status") {
+      return renderStatusPage(env.DB);
     }
 
     // API routes
@@ -198,6 +206,22 @@ export default {
           return getAIAnalysis(domain, env);
         }
 
+        // GET /api/health — API error observability dashboard
+        if (method === "GET" && path === "/api/health") {
+          const health = await getApiHealth(env.DB);
+          return json(health);
+        }
+
+        // GET /api/scoring — transparent scoring methodology
+        if (method === "GET" && path === "/api/scoring") {
+          return json({
+            description: "Yoke domain scoring methodology. All thresholds, weights, and severity mappings used to calculate the 5-axis composite score.",
+            severity_scores: SEVERITY_SCORES,
+            thresholds: ALL_THRESHOLDS,
+            archetype_note: "Axis weights vary by detected site archetype (commerce, content, application, corporate, infrastructure, institutional, general). See archetype field in analysis response.",
+          }, 200);
+        }
+
         // DELETE /api/cache/:domain — purge cached analysis for a domain
         if (method === "DELETE" && path.startsWith("/api/cache/")) {
           const domain = cleanDomain(path.replace("/api/cache/", ""));
@@ -208,11 +232,6 @@ export default {
           } catch (e) {
             return json({ error: "Failed to clear cache" }, 500);
           }
-        }
-
-        // GET /api/health
-        if (method === "GET" && path === "/api/health") {
-          return json({ status: "ok", timestamp: new Date().toISOString() });
         }
 
         // GET /api/docs — handled by combined worker (serveSPA), but provide JSON fallback here
@@ -234,6 +253,7 @@ export default {
               // AI analysis not listed — restricted to web/extension only
               "GET /api/recent": "Recent lookups (query: ?limit=N)",
               "GET /api/health": "Health check",
+              "GET /api/scoring": "Scoring methodology — all thresholds, weights, and severity bands",
             },
             examples: {
               curl_simple: "curl yoke.lol/stripe.com",
