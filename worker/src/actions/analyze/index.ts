@@ -12,3 +12,4 @@ export * from "./scoring";
 export * from "./tier1";
 export * from "./contextual-scoring";
 export * from "./structured-data";
+export * from "./core";
