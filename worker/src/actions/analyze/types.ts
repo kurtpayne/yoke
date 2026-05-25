@@ -140,3 +140,9 @@ export { type CmpDetection, type CookieInfo, type CookieConsentResult } from "./
 
 // ─── Cache Analysis types ─────────────────────────────────────────────
 export { type CacheAnalysis } from "./cache";
+
+// ─── WAF Detection types ──────────────────────────────────────────────
+export { type WafDetection } from "./waf";
+
+// ─── Trust Signal types ───────────────────────────────────────────────
+export { type TrustSignals, type TrustSignal } from "./trust";

@@ -824,8 +824,8 @@ function KeyDifferences({ data }: { data: CompareResult }) {
   }
 
   // WAF
-  const waf1 = d1.hosting?.waf;
-  const waf2 = d2.hosting?.waf;
+  const waf1 = d1.waf?.detected ? d1.waf.provider : (d1.hosting?.waf ?? null);
+  const waf2 = d2.waf?.detected ? d2.waf.provider : (d2.hosting?.waf ?? null);
   if (waf1 !== waf2) {
     diffs.push({ label: "WAF", domain1: waf1 ?? "None", domain2: waf2 ?? "None" });
   }

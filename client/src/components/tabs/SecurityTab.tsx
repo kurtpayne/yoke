@@ -5,6 +5,7 @@ import { BreachPanel } from "../BreachPanel";
 import { CertTransparencyPanel, SecurityTxtPanel, CaaPanel, GreynoisePanel } from "../Tier1Panels";
 import { BlocklistPanel } from "../NetworkPanel";
 import { CookieConsentPanel } from "../CookieConsentPanel";
+import { ProtectionTrustPanel } from "../ProtectionTrustPanel";
 import { AxisScoreBadge } from "../DomainScore";
 import type { AnalysisResult } from "../../utils/types";
 
@@ -13,6 +14,7 @@ export default function SecurityTab({ data }: { data: AnalysisResult }) {
 
   const panels: PanelDef[] = [
     { id: "breaches", node: <BreachPanel data={data} />, fullWidth: true },
+    { id: "protection-trust", node: <ProtectionTrustPanel data={data} /> },
     { id: "ssl", node: <SslPanel data={data} /> },
     { id: "security-headers", node: <SecurityHeadersPanel data={data} /> },
     { id: "observatory", node: <ObservatoryPanel data={data} /> },

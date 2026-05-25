@@ -203,6 +203,12 @@ export interface AnalysisResult {
 
   // Cookie consent
   cookie_consent: CookieConsentData | null;
+
+  // WAF detection
+  waf: WafDetectionData | null;
+
+  // Trust signals
+  trust_signals: TrustSignalsData | null;
 }
 
 export interface DnsRecord { type: string; name: string; ttl: number; data: string; }
@@ -602,4 +608,33 @@ export interface CookieConsentData {
   has_cookie_policy: boolean;
   compliance_flags: string[];
   p3p_present: boolean;
+}
+
+
+// ─── WAF Detection types ──────────────────────────────────────────────
+
+export interface WafDetectionData {
+  detected: boolean;
+  provider: string | null;
+  confidence: "high" | "medium" | "low";
+  signals: string[];
+}
+
+// ─── Trust Signal types ───────────────────────────────────────────────
+
+export interface TrustSignalData {
+  name: string;
+  category: "security" | "identity" | "reputation" | "transparency" | "operational";
+  present: boolean;
+  value: string | null;
+  severity: "good" | "info" | "low" | "medium";
+}
+
+export interface TrustSignalsData {
+  signals: TrustSignalData[];
+  trust_score_factors: {
+    positive: string[];
+    negative: string[];
+    neutral: string[];
+  };
 }

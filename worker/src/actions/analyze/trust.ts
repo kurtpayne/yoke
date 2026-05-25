@@ -1,0 +1,246 @@
+// ─── Trust Signal Detection ─────────────────────────────────────────
+// Evaluates trust hallmarks from already-captured analysis data.
+// Pure aggregation — no HTTP requests.
+
+export interface TrustSignal {
+  name: string;
+  category: "security" | "identity" | "reputation" | "transparency" | "operational";
+  present: boolean;
+  value: string | null;
+  severity: "good" | "info" | "low" | "medium";
+}
+
+export interface TrustSignals {
+  signals: TrustSignal[];
+  trust_score_factors: {
+    positive: string[];
+    negative: string[];
+    neutral: string[];
+  };
+}
+
+/** Minimal shapes from the pipeline that trust checks need. */
+interface TrustInput {
+  headers: Record<string, string> | null;
+  securityTxt: { found: boolean; has_bug_bounty: boolean; bug_bounty_platform: string | null } | null;
+  emailAuth: {
+    dmarc: { found: boolean; policy: string | null };
+    dkim_selectors_found: string[];
+    bimi: { found: boolean } | null;
+    mta_sts: { policy_found: boolean; mode: string | null } | null;
+  } | null;
+  dnssec: { enabled: boolean; validated: boolean } | null;
+  ssl: { grade: string | null; issuer: string | null } | null;
+  caaRecords: Array<{ tag: string; value: string }> | null;
+  wellKnown: { endpoints: Array<{ path: string; name: string; found: boolean }>; pwa_ready: boolean } | null;
+  waf: { detected: boolean; provider: string | null; confidence: string } | null;
+  html: string;
+  hosting: { provider: string | null; cdn: string | null } | null;
+}
+
+export function checkTrustSignals(input: TrustInput): TrustSignals {
+  const signals: TrustSignal[] = [];
+  const positive: string[] = [];
+  const negative: string[] = [];
+  const neutral: string[] = [];
+
+  // ── Security hallmarks ──────────────────────────────────────────
+
+  // HSTS with long max-age
+  const hstsHeader = input.headers?.["strict-transport-security"] ?? null;
+  if (hstsHeader) {
+    const maxAgeMatch = hstsHeader.match(/max-age\s*=\s*(\d+)/i);
+    const maxAge = maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 0;
+    const hasSubdomains = /includesubdomains/i.test(hstsHeader);
+    const hasPreload = /preload/i.test(hstsHeader);
+
+    if (maxAge >= 31536000 && hasSubdomains) {
+      signals.push({ name: "HSTS (strong)", category: "security", present: true, value: `max-age=${maxAge}${hasSubdomains ? "; includeSubDomains" : ""}${hasPreload ? "; preload" : ""}`, severity: "good" });
+      positive.push("Strong HSTS policy with includeSubDomains");
+    } else if (maxAge > 0) {
+      signals.push({ name: "HSTS", category: "security", present: true, value: `max-age=${maxAge}`, severity: "info" });
+      neutral.push("HSTS present but could be stronger");
+    } else {
+      signals.push({ name: "HSTS", category: "security", present: false, value: null, severity: "low" });
+      negative.push("No HSTS header");
+    }
+
+    // HSTS Preload
+    if (hasPreload && maxAge >= 31536000 && hasSubdomains) {
+      signals.push({ name: "HSTS Preload", category: "security", present: true, value: "Eligible for browser preload list", severity: "good" });
+      positive.push("HSTS preload eligible");
+    }
+  } else {
+    signals.push({ name: "HSTS", category: "security", present: false, value: null, severity: "low" });
+    negative.push("No HSTS header");
+  }
+
+  // Content Security Policy
+  const csp = input.headers?.["content-security-policy"] ?? null;
+  if (csp) {
+    signals.push({ name: "Content Security Policy", category: "security", present: true, value: csp.length > 80 ? csp.slice(0, 77) + "…" : csp, severity: "good" });
+    positive.push("CSP header configured");
+  } else {
+    signals.push({ name: "Content Security Policy", category: "security", present: false, value: null, severity: "low" });
+    negative.push("No Content Security Policy");
+  }
+
+  // Permissions-Policy
+  const permPolicy = input.headers?.["permissions-policy"] ?? null;
+  if (permPolicy) {
+    signals.push({ name: "Permissions Policy", category: "security", present: true, value: permPolicy.length > 80 ? permPolicy.slice(0, 77) + "…" : permPolicy, severity: "good" });
+    positive.push("Permissions-Policy header set");
+  } else {
+    signals.push({ name: "Permissions Policy", category: "security", present: false, value: null, severity: "info" });
+    neutral.push("No Permissions-Policy header");
+  }
+
+  // DNSSEC
+  if (input.dnssec?.enabled) {
+    signals.push({ name: "DNSSEC", category: "security", present: true, value: input.dnssec.validated ? "Validated" : "Enabled", severity: "good" });
+    positive.push("DNSSEC enabled");
+  } else {
+    signals.push({ name: "DNSSEC", category: "security", present: false, value: null, severity: "info" });
+    neutral.push("DNSSEC not enabled");
+  }
+
+  // CAA records
+  if (input.caaRecords && input.caaRecords.length > 0) {
+    const issuers = input.caaRecords.filter(r => r.tag === "issue" || r.tag === "issuewild").map(r => r.value);
+    signals.push({ name: "CAA Records", category: "security", present: true, value: issuers.length > 0 ? `Restricts CAs to: ${issuers.slice(0, 3).join(", ")}` : "Present", severity: "good" });
+    positive.push("CAA DNS records restrict certificate issuance");
+  } else {
+    signals.push({ name: "CAA Records", category: "security", present: false, value: null, severity: "info" });
+    neutral.push("No CAA DNS records");
+  }
+
+  // WAF
+  if (input.waf?.detected) {
+    signals.push({ name: "Web Application Firewall", category: "security", present: true, value: input.waf.provider, severity: "good" });
+    positive.push(`WAF detected: ${input.waf.provider}`);
+  } else {
+    signals.push({ name: "Web Application Firewall", category: "security", present: false, value: null, severity: "info" });
+    neutral.push("No WAF detected");
+  }
+
+  // ── Identity hallmarks ──────────────────────────────────────────
+
+  // SSL certificate quality (EV/OV from issuer/org info)
+  const sslGrade = input.ssl?.grade;
+  const sslIssuer = input.ssl?.issuer;
+  if (sslGrade === "A+" || sslGrade === "A") {
+    signals.push({ name: "SSL Grade", category: "identity", present: true, value: `Grade ${sslGrade}${sslIssuer ? ` (${sslIssuer})` : ""}`, severity: "good" });
+    positive.push(`SSL grade ${sslGrade}`);
+  } else if (sslGrade) {
+    signals.push({ name: "SSL Grade", category: "identity", present: true, value: `Grade ${sslGrade}`, severity: "info" });
+    neutral.push(`SSL grade ${sslGrade}`);
+  }
+
+  // security.txt
+  if (input.securityTxt?.found) {
+    signals.push({ name: "security.txt", category: "identity", present: true, value: "Published", severity: "good" });
+    positive.push("security.txt published");
+  } else {
+    signals.push({ name: "security.txt", category: "identity", present: false, value: null, severity: "info" });
+    neutral.push("No security.txt");
+  }
+
+  // Bug bounty program
+  if (input.securityTxt?.has_bug_bounty) {
+    signals.push({ name: "Bug Bounty", category: "identity", present: true, value: input.securityTxt.bug_bounty_platform ?? "Mentioned in security.txt", severity: "good" });
+    positive.push("Bug bounty program");
+  }
+
+  // DMARC with reject/quarantine policy
+  if (input.emailAuth?.dmarc?.found) {
+    const policy = input.emailAuth.dmarc.policy;
+    if (policy === "reject") {
+      signals.push({ name: "DMARC Enforcement", category: "identity", present: true, value: "policy=reject", severity: "good" });
+      positive.push("DMARC policy=reject (strongest email auth)");
+    } else if (policy === "quarantine") {
+      signals.push({ name: "DMARC Enforcement", category: "identity", present: true, value: "policy=quarantine", severity: "good" });
+      positive.push("DMARC policy=quarantine");
+    } else {
+      signals.push({ name: "DMARC Enforcement", category: "identity", present: true, value: `policy=${policy ?? "none"}`, severity: "info" });
+      neutral.push("DMARC present but not enforcing");
+    }
+  }
+
+  // BIMI
+  if (input.emailAuth?.bimi?.found) {
+    signals.push({ name: "BIMI", category: "identity", present: true, value: "Brand logo verified for email", severity: "good" });
+    positive.push("BIMI brand indicator for email");
+  }
+
+  // MTA-STS
+  if (input.emailAuth?.mta_sts?.policy_found && input.emailAuth.mta_sts.mode === "enforce") {
+    signals.push({ name: "MTA-STS", category: "identity", present: true, value: "mode=enforce", severity: "good" });
+    positive.push("MTA-STS enforcing TLS for email");
+  }
+
+  // ── Transparency hallmarks ──────────────────────────────────────
+
+  // humans.txt
+  const hasHumansTxt = input.wellKnown?.endpoints?.some(e => e.path.includes("humans.txt") && e.found);
+  if (hasHumansTxt) {
+    signals.push({ name: "humans.txt", category: "transparency", present: true, value: "Published", severity: "info" });
+    neutral.push("humans.txt present");
+  }
+
+  // ads.txt
+  const hasAdsTxt = input.wellKnown?.endpoints?.some(e => e.path.includes("ads.txt") && e.found);
+  if (hasAdsTxt) {
+    signals.push({ name: "ads.txt", category: "transparency", present: true, value: "Published", severity: "info" });
+    neutral.push("ads.txt present (ad transparency)");
+  }
+
+  // Open source link
+  const htmlSnippet = input.html.slice(0, 10000);
+  const hasOssLink = /github\.com\/[a-z0-9_-]+\/[a-z0-9_-]+|gitlab\.com\/[a-z0-9_-]+\/[a-z0-9_-]+/i.test(htmlSnippet);
+  if (hasOssLink) {
+    signals.push({ name: "Open Source Link", category: "transparency", present: true, value: "GitHub/GitLab link in page", severity: "info" });
+    neutral.push("Links to source code repository");
+  }
+
+  // ── Operational transparency (scripts, widgets, badges in HTML) ──
+
+  // Scan first 50KB for embedded third-party operational tool references
+  const opsHtml = input.html.slice(0, 50000);
+
+  const OPS_SIGNATURES: Array<{ name: string; group: string; pattern: RegExp }> = [
+    // Status pages
+    { name: "Statuspage", group: "Status Page", pattern: /statuspage\.io/i },
+    { name: "Better Uptime", group: "Status Page", pattern: /betteruptime\.com/i },
+    { name: "Instatus", group: "Status Page", pattern: /instatus\.com/i },
+    { name: "Cachet", group: "Status Page", pattern: /cachethq\.io/i },
+    { name: "Hund", group: "Status Page", pattern: /hund\.io/i },
+    // Uptime monitoring badges
+    { name: "UptimeRobot", group: "Uptime Monitoring", pattern: /uptimerobot\.com/i },
+    { name: "Pingdom", group: "Uptime Monitoring", pattern: /pingdom\.com/i },
+    { name: "StatusCake", group: "Uptime Monitoring", pattern: /statuscake\.com/i },
+    // Feedback & roadmap widgets
+    { name: "Canny", group: "Feedback & Roadmap", pattern: /canny\.io/i },
+    { name: "UserVoice", group: "Feedback & Roadmap", pattern: /uservoice\.com/i },
+    { name: "Productboard", group: "Feedback & Roadmap", pattern: /productboard\.com/i },
+    { name: "Beamer", group: "Changelog Widget", pattern: /getbeamer\.com/i },
+    { name: "Headway", group: "Changelog Widget", pattern: /headwayapp\.co/i },
+    // Trust badges
+    { name: "Trustpilot", group: "Trust Badge", pattern: /trustpilot\.com/i },
+    { name: "BBB", group: "Trust Badge", pattern: /bbb\.org/i },
+  ];
+
+  let opsCount = 0;
+  for (const sig of OPS_SIGNATURES) {
+    if (sig.pattern.test(opsHtml)) {
+      signals.push({ name: sig.name, category: "operational", present: true, value: sig.group, severity: "info" });
+      neutral.push(`${sig.name} (${sig.group}) detected`);
+      opsCount++;
+    }
+  }
+
+  if (opsCount >= 2) {
+    positive.push(`${opsCount} operational transparency tools detected`);
+  }
+
+  return { signals, trust_score_factors: { positive, negative, neutral } };
+}

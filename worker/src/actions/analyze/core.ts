@@ -14,6 +14,7 @@ import type {
   HostingResult, CookieSecurityResult,
   CompressionResult, CertTransparencyResult, SecurityTxtResult, GreenHostingResult,
   WellKnownResult, GreynoiseResult, EmailAuthResult, CacheAnalysis,
+  WafDetection, TrustSignals,
 } from "./types";
 
 import { checkDns, isSubdomain, checkRdap, dohQuery } from "./dns";
@@ -21,6 +22,8 @@ import { auditSecurityHeaders, detectTechStack, analyzeHttp, checkRobotsSitemap 
 import { checkIpInfo, checkBlocklists, checkSsl, checkStatus, checkShodan, checkDnssec } from "./network";
 import { checkPageSpeed, detectCompression, checkCarbon } from "./performance";
 import { checkCacheHeaders } from "./cache";
+import { checkWaf } from "./waf";
+import { checkTrustSignals } from "./trust";
 import { isActuallyCloudflare, sanitizeCfHeaders, detectHosting, auditCookies } from "./security";
 import {
   checkLlmsTxt, checkWayback, checkTranco, checkObservatory,
@@ -105,6 +108,8 @@ export interface AnalysisResult {
   cookie_security: CookieSecurityResult | null;
   compression: CompressionResult | null;
   cache_analysis: CacheAnalysis | null;
+  waf: WafDetection | null;
+  trust_signals: TrustSignals | null;
   ai_readiness: unknown;
   health_score: unknown;
   wordpress: unknown;
@@ -182,6 +187,8 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     cookie_security: null,
     compression: null,
     cache_analysis: null,
+    waf: null,
+    trust_signals: null,
     ai_readiness: null,
     health_score: { score: 0, max_score: 71, grade: "N/A", breakdown: {} },
     wordpress: null,
@@ -523,6 +530,12 @@ export async function runAnalysis(
   const cookieSecurity = auditCookies(effectiveHeaders);
   const compression = detectCompression(effectiveHeaders);
   const cacheAnalysis = checkCacheHeaders(effectiveHeaders);
+
+  // WAF detection: gather set-cookie headers for cookie-based signals
+  const setCookieRaw = effectiveHeaders?.["set-cookie"] ?? "";
+  const setCookieHeaders = setCookieRaw ? setCookieRaw.split(/\n/) : [];
+  const wafDetection = httpProbeSucceeded ? checkWaf(effectiveHeaders, html, setCookieHeaders) : null;
+
   const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta, ansResult as Awaited<ReturnType<typeof checkAnsRecords>> | null);
   const structuredDataValidation = validateStructuredData(jsonLd);
 
@@ -549,6 +562,22 @@ export async function runAnalysis(
     httpBlocked: !httpProbeSucceeded,
     isSubdomain: domainIsSubdomain,
   });
+
+  // Trust signal aggregation
+  const caaAnalysis = analyzeCaaRecords(dnsRecords);
+  const caaRecordsForTrust = (caaAnalysis as { records?: Array<{ tag: string; value: string }> } | null)?.records ?? null;
+  const trustSignals = httpProbeSucceeded ? checkTrustSignals({
+    headers: effectiveHeaders,
+    securityTxt: securityTxt,
+    emailAuth,
+    dnssec: dnssecResult,
+    ssl: sslResult,
+    caaRecords: caaRecordsForTrust,
+    wellKnown: wellKnown,
+    waf: wafDetection,
+    html,
+    hosting,
+  }) : null;
 
   // Contextual domain score
   const domainScore = calculateDomainScore({
@@ -580,6 +609,8 @@ export async function runAnalysis(
     thirdPartyScripts: thirdPartyScriptsResult,
     cookieConsent: cookieConsentResult,
     cacheAnalysis,
+    waf: wafDetection,
+    trustSignals,
   });
 
   const result: AnalysisResult = {
@@ -621,6 +652,8 @@ export async function runAnalysis(
     cookie_security: cookieSecurity,
     compression,
     cache_analysis: cacheAnalysis,
+    waf: wafDetection,
+    trust_signals: trustSignals,
     ai_readiness: aiReadiness,
     health_score: healthScore,
     wordpress: wpDetails,
@@ -629,7 +662,7 @@ export async function runAnalysis(
     security_txt: securityTxt,
     green_hosting: greenHosting,
     well_known: wellKnown,
-    caa_analysis: analyzeCaaRecords(dnsRecords),
+    caa_analysis: caaAnalysis,
     greynoise: greynoiseResult,
     domain_score: domainScore,
     structured_data: structuredDataValidation,
