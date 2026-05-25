@@ -16,7 +16,7 @@ import { getNews } from "./actions/news";
 import { getSocialAccounts } from "./actions/social";
 import { getReverseIP } from "./actions/reverse-ip";
 import { getDomainSuggestions } from "./actions/suggestions";
-import { getAIAnalysis } from "./actions/ai-analysis";
+import { getAIAnalysis, buildAIPrompt, ALLOWED_MODELS, DEFAULT_MODEL } from "./actions/ai-analysis";
 import { trackUsage, getUsageStats } from "./usage-tracking";
 import { renderUsagePage } from "./usage-page";
 
@@ -31,7 +31,7 @@ interface Env {
   ADMIN_KEY?: string;
 }
 
-import { CORS_HEADERS, normalizeDomain, isValidDomain, cleanDomain } from "./helpers";
+import { CORS_HEADERS, normalizeDomain, isValidDomain, cleanDomain, getFromCache } from "./helpers";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
@@ -318,11 +318,27 @@ export default {
         if (method === "POST" && path === "/api/ai-analysis") {
           const byoKey = request.headers.get("x-openrouter-key") || undefined;
           await trackUsage(env.STATS_DB, "ai-analysis");
+          const body = await parseBody<{ domain?: string; model?: string }>(request);
+          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const model = (byoKey && typeof body.model === "string") ? body.model : undefined;
+          return getAIAnalysis(domain, env, { clientIP, byoKey, model });
+        }
+
+        // POST /api/ai-prompt — returns the assembled prompt for the prompt editor (no LLM call)
+        if (method === "POST" && path === "/api/ai-prompt") {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
-          return getAIAnalysis(domain, env, { clientIP, byoKey });
+          const normalized = domain.toLowerCase();
+          const analysisCache = (await getFromCache(env.DB, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
+          if (!analysisCache) {
+            return json({ error: "Domain not yet analyzed. Run a standard analysis first." }, 400);
+          }
+          const prompt = buildAIPrompt(analysisCache);
+          return json({ ...prompt, models: ALLOWED_MODELS, default_model: DEFAULT_MODEL });
         }
 
         // GET /api/health — API error observability dashboard

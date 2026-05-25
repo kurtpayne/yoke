@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
-import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Key, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Key, Copy, Check, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
+import { findReferenceLink } from "./DomainSignals";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -315,6 +316,18 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
 // ─── BYO Key helpers ────────────────────────────────────────────────
 
 const STORAGE_KEY = "yoke_openrouter_key";
+const MODEL_STORAGE_KEY = "yoke_openrouter_model";
+const CUSTOM_PROMPT_KEY = "yoke_custom_prompt";
+const SETTINGS_OPEN_KEY = "yoke_settings_open";
+
+const AVAILABLE_MODELS = [
+  { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", provider: "Anthropic" },
+  { id: "anthropic/claude-opus-4", label: "Claude Opus 4", provider: "Anthropic" },
+  { id: "openai/gpt-4o", label: "GPT-4o", provider: "OpenAI" },
+  { id: "openai/o3", label: "o3", provider: "OpenAI" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "Google" },
+  { id: "meta-llama/llama-4-maverick", label: "Llama 4 Maverick", provider: "Meta" },
+];
 
 function getSavedKey(): string {
   try { return localStorage.getItem(STORAGE_KEY) || ""; } catch { return ""; }
@@ -322,83 +335,309 @@ function getSavedKey(): string {
 function saveKey(key: string) {
   try { if (key) localStorage.setItem(STORAGE_KEY, key); else localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
 }
+function getSavedModel(): string {
+  try { return localStorage.getItem(MODEL_STORAGE_KEY) || "anthropic/claude-sonnet-4"; } catch { return "anthropic/claude-sonnet-4"; }
+}
+function saveModel(model: string) {
+  try { localStorage.setItem(MODEL_STORAGE_KEY, model); } catch { /* noop */ }
+}
+function getCustomPrompt(): string {
+  try { return localStorage.getItem(CUSTOM_PROMPT_KEY) || ""; } catch { return ""; }
+}
+function saveCustomPrompt(prompt: string) {
+  try { if (prompt) localStorage.setItem(CUSTOM_PROMPT_KEY, prompt); else localStorage.removeItem(CUSTOM_PROMPT_KEY); } catch { /* noop */ }
+}
+function getSettingsOpen(): boolean {
+  try { return localStorage.getItem(SETTINGS_OPEN_KEY) === "true"; } catch { return false; }
+}
+function saveSettingsOpen(open: boolean) {
+  try { localStorage.setItem(SETTINGS_OPEN_KEY, String(open)); } catch { /* noop */ }
+}
 
-// ─── BYO Key Settings Popover ───────────────────────────────────────
+// ─── Advanced Settings Panel ────────────────────────────────────────
 
-function KeySettings({ onSave }: { onSave: (key: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(getSavedKey);
-  const [saved, setSaved] = useState(false);
+function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
+  domain: string;
+  onKeyChange: (key: string) => void;
+  onModelChange: (model: string) => void;
+}) {
+  const [open, setOpen] = useState(getSettingsOpen);
+  const [keyValue, setKeyValue] = useState(getSavedKey);
+  const [showKey, setShowKey] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
+  const [model, setModel] = useState(getSavedModel);
+  const [promptText, setPromptText] = useState("");
+  const [defaultPrompt, setDefaultPrompt] = useState("");
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptEdited, setPromptEdited] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const hasKey = !!getSavedKey();
 
-  const handleSave = () => {
-    saveKey(value.trim());
-    onSave(value.trim());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const toggleOpen = () => {
+    const next = !open;
+    setOpen(next);
+    saveSettingsOpen(next);
+    if (next && !promptText && domain) {
+      loadPrompt();
+    }
+  };
+
+  const loadPrompt = async () => {
+    setPromptLoading(true);
+    try {
+      const res = await fetch("/api/ai-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { system: string; user: string };
+        const fullPrompt = `${data.system}\n\n---\n\n${data.user}`;
+        setDefaultPrompt(fullPrompt);
+        const custom = getCustomPrompt();
+        setPromptText(custom || fullPrompt);
+        setPromptEdited(!!custom);
+      }
+    } catch { /* noop */ }
+    setPromptLoading(false);
+  };
+
+  const handleKeySave = () => {
+    const trimmed = keyValue.trim();
+    saveKey(trimmed);
+    onKeyChange(trimmed);
+    setKeySaved(true);
+    setTimeout(() => setKeySaved(false), 2000);
+  };
+
+  const handleKeyRemove = () => {
+    setKeyValue("");
+    saveKey("");
+    onKeyChange("");
+  };
+
+  const handleModelChange = (newModel: string) => {
+    setModel(newModel);
+    saveModel(newModel);
+    onModelChange(newModel);
+  };
+
+  const handlePromptChange = (newText: string) => {
+    setPromptText(newText);
+    setPromptEdited(newText !== defaultPrompt);
+    saveCustomPrompt(newText === defaultPrompt ? "" : newText);
+  };
+
+  const handlePromptReset = () => {
+    setPromptText(defaultPrompt);
+    setPromptEdited(false);
+    saveCustomPrompt("");
+  };
+
+  const handlePromptCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(promptText);
+      setPromptCopied(true);
+      setTimeout(() => setPromptCopied(false), 2000);
+    } catch { /* noop */ }
   };
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ marginBottom: "0" }}>
+      {/* Gear toggle button */}
       <button
-        onClick={() => setOpen(!open)}
-        title={hasKey ? "API key configured" : "Set OpenRouter API key"}
+        onClick={toggleOpen}
+        title="Advanced AI settings"
         style={{
-          display: "flex", alignItems: "center", gap: "4px",
-          padding: "4px 8px", borderRadius: "6px",
+          display: "flex", alignItems: "center", gap: "5px",
+          padding: "4px 10px", borderRadius: "6px",
           border: `1px solid ${hasKey ? "var(--success)" : "var(--border)"}`,
-          background: hasKey ? "rgba(46,160,67,0.1)" : "transparent",
-          color: hasKey ? "var(--success)" : "var(--muted)",
+          background: hasKey ? "rgba(46,160,67,0.08)" : open ? "rgba(88,166,255,0.08)" : "transparent",
+          color: hasKey ? "var(--success)" : open ? "var(--accent)" : "var(--muted)",
           cursor: "pointer", fontSize: "11px",
+          transition: "all 0.15s",
         }}
       >
-        <Key size={12} />
-        {hasKey ? "Key ✓" : "API Key"}
+        <Settings size={12} style={{ transition: "transform 0.3s", transform: open ? "rotate(90deg)" : "none" }} />
+        {hasKey ? "BYO Key ✓" : "Advanced"}
+        {hasKey && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--success)", display: "inline-block" }} />}
       </button>
+
+      {/* Expanded settings panel */}
       {open && (
         <div style={{
-          position: "absolute", top: "100%", right: 0, marginTop: "6px", zIndex: 100,
-          background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "10px",
-          padding: "14px", width: "320px", boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+          marginTop: "10px", background: "var(--card)", border: "1px solid var(--border)",
+          borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "16px",
         }}>
-          <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)", marginBottom: "4px" }}>
-            OpenRouter API Key
+          {/* ── API Key Section ── */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+              <Key size={12} style={{ color: "var(--accent)" }} />
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>OpenRouter API Key</span>
+              <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer"
+                style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "3px", fontSize: "10px", color: "var(--muted)", textDecoration: "none" }}>
+                Get a free key <ExternalLink size={9} />
+              </a>
+            </div>
+            <p style={{ fontSize: "11px", color: "var(--muted)", margin: "0 0 8px 0", lineHeight: 1.5 }}>
+              Stored in your browser only — never sent to Yoke servers. Unlocks unlimited AI analysis and model selection.
+            </p>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={keyValue}
+                  onChange={e => setKeyValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleKeySave(); }}
+                  placeholder="sk-or-v1-..."
+                  style={{
+                    width: "100%", padding: "7px 32px 7px 10px", borderRadius: "6px",
+                    border: "1px solid var(--border)", background: "var(--bg)",
+                    color: "var(--text)", fontSize: "12px", outline: "none",
+                    fontFamily: "monospace", boxSizing: "border-box",
+                  }}
+                />
+                <button
+                  onClick={() => setShowKey(!showKey)}
+                  title={showKey ? "Hide key" : "Show key"}
+                  style={{
+                    position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer",
+                    color: "var(--muted)", padding: "2px", display: "flex",
+                  }}
+                >
+                  {showKey ? <EyeOff size={12} /> : <Eye size={12} />}
+                </button>
+              </div>
+              <button onClick={handleKeySave} style={{
+                padding: "7px 14px", borderRadius: "6px",
+                border: "1px solid var(--accent)", background: "rgba(88,166,255,0.1)",
+                color: "var(--accent)", cursor: "pointer", fontSize: "12px", fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}>
+                {keySaved ? "Saved!" : "Save"}
+              </button>
+            </div>
+            {hasKey && (
+              <button onClick={handleKeyRemove} style={{
+                marginTop: "6px", padding: "3px 8px", borderRadius: "4px",
+                border: "none", background: "transparent",
+                color: "var(--danger)", cursor: "pointer", fontSize: "11px",
+              }}>
+                Remove key
+              </button>
+            )}
           </div>
-          <p style={{ fontSize: "11px", color: "var(--muted)", margin: "0 0 10px 0", lineHeight: 1.5 }}>
-            Bring your own key for unlimited AI analysis. Get one free at{" "}
-            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>openrouter.ai/keys</a>.
-            Stored locally only — never sent to Yoke servers.
-          </p>
-          <div style={{ display: "flex", gap: "6px" }}>
-            <input
-              type="password"
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              placeholder="sk-or-v1-..."
-              style={{
-                flex: 1, padding: "6px 10px", borderRadius: "6px",
-                border: "1px solid var(--border)", background: "var(--card)",
-                color: "var(--text)", fontSize: "12px", outline: "none",
-                fontFamily: "monospace",
-              }}
-            />
-            <button onClick={handleSave} style={{
-              padding: "6px 12px", borderRadius: "6px",
-              border: "1px solid var(--accent)", background: "rgba(88,166,255,0.1)",
-              color: "var(--accent)", cursor: "pointer", fontSize: "12px", fontWeight: 600,
-            }}>
-              {saved ? "Saved!" : "Save"}
-            </button>
-          </div>
-          {value && (
-            <button onClick={() => { setValue(""); saveKey(""); onSave(""); }} style={{
-              marginTop: "8px", padding: "4px 8px", borderRadius: "4px",
-              border: "none", background: "transparent",
-              color: "var(--danger)", cursor: "pointer", fontSize: "11px",
-            }}>
-              Remove key
-            </button>
+
+          {/* ── Model Selector (only visible with BYO key) ── */}
+          {hasKey && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                <Sparkles size={12} style={{ color: "var(--accent)" }} />
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Model</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                {AVAILABLE_MODELS.map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => handleModelChange(m.id)}
+                    style={{
+                      padding: "5px 10px", borderRadius: "6px",
+                      border: `1px solid ${model === m.id ? "var(--accent)" : "var(--border)"}`,
+                      background: model === m.id ? "rgba(88,166,255,0.12)" : "var(--bg)",
+                      color: model === m.id ? "var(--accent)" : "var(--muted)",
+                      cursor: "pointer", fontSize: "11px",
+                      fontWeight: model === m.id ? 600 : 400,
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {m.label}
+                    <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: "4px" }}>{m.provider}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
+
+          {/* ── Prompt Editor (only visible with BYO key) ── */}
+          {hasKey && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+                <Code size={12} style={{ color: "var(--accent)" }} />
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Prompt</span>
+                {promptEdited && (
+                  <span style={{ fontSize: "9px", padding: "1px 6px", borderRadius: "4px", background: "rgba(210,153,34,0.15)", color: "var(--warning)" }}>
+                    edited
+                  </span>
+                )}
+                <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>
+                  {promptEdited && (
+                    <button onClick={handlePromptReset} title="Reset to default" style={{
+                      display: "flex", alignItems: "center", gap: "3px",
+                      padding: "2px 6px", borderRadius: "4px",
+                      border: "1px solid var(--border)", background: "transparent",
+                      color: "var(--muted)", cursor: "pointer", fontSize: "10px",
+                    }}>
+                      <RotateCcw size={9} /> Reset
+                    </button>
+                  )}
+                  <button onClick={handlePromptCopy} title="Copy prompt" style={{
+                    display: "flex", alignItems: "center", gap: "3px",
+                    padding: "2px 6px", borderRadius: "4px",
+                    border: "1px solid var(--border)", background: "transparent",
+                    color: "var(--muted)", cursor: "pointer", fontSize: "10px",
+                  }}>
+                    {promptCopied ? <Check size={9} /> : <Copy size={9} />}
+                    {promptCopied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <p style={{ fontSize: "10px", color: "var(--muted)", margin: "0 0 6px 0", lineHeight: 1.4 }}>
+                This is the exact prompt sent to the AI. Edit it to focus the analysis on what matters to you.
+              </p>
+              {promptLoading ? (
+                <div style={{
+                  height: "200px", display: "flex", alignItems: "center", justifyContent: "center",
+                  border: "1px solid var(--border)", borderRadius: "6px", background: "var(--bg)",
+                }}>
+                  <Loader2 size={14} style={{ color: "var(--muted)", animation: "spin 1s linear infinite" }} />
+                  <span style={{ fontSize: "11px", color: "var(--muted)", marginLeft: "8px" }}>Loading prompt…</span>
+                </div>
+              ) : (
+                <textarea
+                  value={promptText}
+                  onChange={e => handlePromptChange(e.target.value)}
+                  spellCheck={false}
+                  style={{
+                    width: "100%", height: "240px", padding: "10px", borderRadius: "6px",
+                    border: `1px solid ${promptEdited ? "var(--warning)" : "var(--border)"}`,
+                    background: "var(--bg)", color: "var(--text)",
+                    fontSize: "11px", fontFamily: "'SF Mono', Monaco, Consolas, monospace",
+                    lineHeight: 1.5, outline: "none", resize: "vertical",
+                    boxSizing: "border-box",
+                  }}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ── Status footer ── */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            paddingTop: "8px", borderTop: "1px solid var(--border)",
+            fontSize: "10px", color: "var(--muted)",
+          }}>
+            <span>
+              {hasKey ? (
+                <>Using your key · <span style={{ color: "var(--success)" }}>Unlimited analysis</span></>
+              ) : (
+                <>Platform key · 10 analyses/day</>
+              )}
+            </span>
+            <span style={{ opacity: 0.6 }}>
+              {hasKey ? AVAILABLE_MODELS.find(m => m.id === model)?.label || model : "Claude Sonnet 4"}
+            </span>
+          </div>
         </div>
       )}
     </div>
@@ -695,6 +934,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
                 : item.severity === "high" ? "🟠"
                 : item.severity === "medium" ? "🟡"
                 : "🟢";
+              const ref = findReferenceLink(item.title);
               return (
                 <div key={i} style={{
                   display: "flex", flexDirection: "column", gap: "3px",
@@ -703,6 +943,19 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "11px", flexShrink: 0 }}>{severityIcon}</span>
                     <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{item.title}</span>
+                    {ref && (
+                      <a
+                        href={ref.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={ref.label}
+                        style={{ color: "var(--dim)", flexShrink: 0, opacity: 0.5, transition: "opacity 0.15s", display: "flex", alignItems: "center" }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
+                      >
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
                     {item.effort && (
                       <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.effort}</span>
                     )}
