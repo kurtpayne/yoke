@@ -32,7 +32,7 @@ export function calculateHealthScore(opts: {
     breakdown["SSL Certificate"] = sslPoints;
   } else {
     // SSL Labs didn't return — give partial credit if the site serves over HTTPS
-    const servesHttps = opts.finalUrl?.startsWith("https://") || (opts.statusCode != null && opts.statusCode >= 200 && opts.statusCode < 500);
+    const servesHttps = !!opts.finalUrl?.startsWith("https://");
     const fallbackSsl = servesHttps ? 12 : 0;
     score += fallbackSsl;
     breakdown["SSL Certificate"] = fallbackSsl;

@@ -241,7 +241,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
       const wayback = (results.wayback ?? null) as Awaited<ReturnType<typeof checkWayback>>;
       const tranco = (results.tranco_rank ?? null) as number | null;
       const observatory = (results.observatory ?? null) as Awaited<ReturnType<typeof checkObservatory>>;
-      const emailAuth = (results.email_auth ?? { spf: null, dmarc: null, dkim_selector: null, has_mx: false, mx_records: [], dkim_found: false } as any) as EmailAuthResult;
+      const emailAuth = (results.email_auth ?? { spf: { found: false, record: null, mechanisms: [], all_qualifier: null }, dmarc: { found: false, record: null, policy: null, subdomain_policy: null, rua: null, ruf: null }, dkim_selectors_found: [], bimi: { found: false, record: null, logo_url: null, authority_url: null }, mta_sts: { dns_found: false, policy_found: false, mode: null }, tls_rpt: { found: false, record: null, rua: null } }) as EmailAuthResult;
       const carbon = (results.carbon ?? null) as Awaited<ReturnType<typeof checkCarbon>>;
       const shodanResult = (results.shodan ?? null) as ShodanResult | null;
       const dnssecResult = (results.dnssec ?? { enabled: false, valid: null, ds_records: [], dnskey_records: [], nsec_type: null, algorithm: null } as any) as DnssecResult;

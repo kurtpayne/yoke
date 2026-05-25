@@ -216,7 +216,7 @@ export async function checkRobotsSitemap(domain: string): Promise<Pick<MetaResul
   const result = { robots_txt: null as string | null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null as string | null, sitemap_page_count: null as number | null };
   try {
     const res = await fetchWithTimeout(`https://${domain}/robots.txt`, { timeout: 5000 });
-    if (res.ok) { const text = await res.text(); if (text && !text.includes("<!doctype") && !text.includes("<html")) { result.robots_txt = text.slice(0, 2000); result.robots_txt_exists = true; } }
+    if (res.ok) { const text = await res.text(); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.robots_txt = text.slice(0, 2000); result.robots_txt_exists = true; } }
   } catch { /* ignore */ }
   try {
     const res = await fetchWithTimeout(`https://${domain}/sitemap.xml`, { timeout: 5000 });

@@ -11,6 +11,11 @@ binding = "DB"
 database_name = "yoke-cache"
 database_id = "ce2c3c22-a91c-4254-a80c-1cdc95c7ceb7"
 
+[[d1_databases]]
+binding = "STATS_DB"
+database_name = "yoke-stats"
+database_id = "6f29dfb9-b7ff-497f-a4aa-4dbb3b7dd6e1"
+
 [routes]
 pattern = "yoke.lol"
 zone_name = "yoke.lol"
