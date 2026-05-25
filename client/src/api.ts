@@ -28,6 +28,7 @@ export async function analyzeStream(
   domain: string,
   onEvent: (evt: StreamEvent) => void,
   signal?: AbortSignal,
+  force?: boolean,
 ): Promise<void> {
   const res = await fetch("/api/analyze", {
     method: "POST",
@@ -35,7 +36,7 @@ export async function analyzeStream(
       "Content-Type": "application/json",
       "Accept": "text/event-stream",
     },
-    body: JSON.stringify({ domain }),
+    body: JSON.stringify({ domain, ...(force ? { force: true } : {}) }),
     signal,
   });
 

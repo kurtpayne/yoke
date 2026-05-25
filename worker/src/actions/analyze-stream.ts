@@ -44,7 +44,7 @@ function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export async function analyzeDomainStream(domain: string, env: Env): Promise<Response> {
+export async function analyzeDomainStream(domain: string, env: Env, skipCache = false): Promise<Response> {
   domain = normalizeDomain(domain);
   if (!domain || !domain.includes(".")) {
     return new Response(JSON.stringify({ error: "Invalid domain" }), {
@@ -54,6 +54,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
   }
 
   // Check cache — if cached, send the whole thing as a single done event
+  if (!skipCache) {
   try {
     const cached = await env.DB.prepare(
       "SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = 'analysis' ORDER BY cached_at DESC LIMIT 1"
@@ -71,6 +72,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
       });
     }
   } catch { /* cache miss */ }
+  }
 
   // Use a TransformStream for streaming SSE
   const { readable, writable } = new TransformStream();

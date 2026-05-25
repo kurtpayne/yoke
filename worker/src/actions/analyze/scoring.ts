@@ -107,7 +107,7 @@ export function calculateHealthScore(opts: {
   }
 
   const pct = maxScore > 0 ? (score / maxScore) * 100 : 0;
-  const grade = pct >= 90 ? "A" : pct >= 75 ? "B" : pct >= 55 ? "C" : pct >= 35 ? "D" : "F";
+  const grade = pct >= 85 ? "A" : pct >= 70 ? "B" : pct >= 55 ? "C" : pct >= 40 ? "D" : "F";
 
   return { score, max_score: maxScore, grade, breakdown };
 }
