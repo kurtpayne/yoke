@@ -110,9 +110,9 @@ Install from the [Chrome Web Store](https://chromewebstore.google.com/detail/yok
 1. Open `chrome://extensions/`
 2. Enable "Developer mode" (top right)
 3. Click "Load unpacked" → select the `extension/` directory
-4. Click the ⚡ icon on any site to open the side panel
+4. Click the Yoke icon on any site to open the side panel
 
-The extension source lives in [`extension/`](extension/) — it's a lightweight wrapper that loads yoke.lol in a side panel and auto-detects the domain from your current tab. Includes 6 selectable toolbar icons.
+The extension source lives in [`extension/`](extension/) — it's a lightweight wrapper that loads yoke.lol in a side panel and auto-detects the domain from your current tab.
 
 ## Self-Hosting
 
@@ -139,7 +139,7 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
 
 3. **Run migrations:**
    ```bash
-   wrangler d1 execute yoke-cache --file=worker/migrations/001_init.sql
+   wrangler d1 execute yoke-cache --file=worker/migrations/0001_init.sql
    wrangler d1 execute yoke-cache --file=worker/migrations/0002_domain_scores.sql
    ```
 
@@ -183,7 +183,7 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
    - `/probe-status?domain=example.com` — HTTP status check with redirect following, returns `{is_up, status_code, response_time_ms, status_label, error}`
    - `/check-http?host=example.com` — Proxied check-host.net global availability probes (check-host.net blocks CF Worker IPs directly)
 
-   **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`) with zero dependencies. Set the `PROBE_PROXY_URL` environment variable on your worker to point at your deployment, or edit the proxy URL in `worker/src/actions/analyze/network.ts`.
+   **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`) with zero dependencies. Update the proxy URL in `worker/src/actions/analyze/network.ts` and `worker/src/actions/availability.ts` to point at your deployment.
 
    **Without a proxy:** Everything still works — the worker falls back to direct HTTP probes from the Cloudflare edge. Sites that block CF IPs will show as RESTRICTED instead of UP, but DNS, SSL, and all other checks are unaffected.
 
@@ -253,14 +253,16 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
 | `POST` | `/api/subdomains` | CT log subdomain discovery |
 | `POST` | `/api/subdomain-scan` | Active subdomain enumeration (157 prefixes) |
 | `POST` | `/api/availability` | Global HTTP availability check |
-| `POST` | `/api/company` | Company enrichment |
+| `POST` | `/api/company` | Company enrichment + stock data |
 | `POST` | `/api/news` | News aggregation |
 | `POST` | `/api/social` | Social account discovery |
+| `POST` | `/api/suggestions` | Related domain suggestions |
 | `POST` | `/api/reverse-ip` | Reverse IP lookup |
-| `POST` | `/api/ai-analysis` | AI-powered deep analysis |
+| `POST` | `/api/ai-analysis` | AI-powered deep analysis (web/extension only) |
 | `GET` | `/api/recent` | Recent lookups |
 | `GET` | `/api/health` | Health check |
-| `GET` | `/compare/:d1/:d2` | Compare view (HTML) |
+| `GET` | `/api/docs` | API documentation (JSON) |
+| `GET` | `/compare/:d1/:d2` | Compare view (client-side SPA route) |
 
 ## Contributing
 
