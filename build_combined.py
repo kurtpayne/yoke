@@ -62,7 +62,7 @@ parts.append(f'const __TERMS_HTML__ = `{safe_terms}`;\n')
 ASSETS_DIR = os.path.expanduser("~/workspace/yoke-public/assets/logo")
 logo_b64 = base64.b64encode(open(os.path.join(ASSETS_DIR, "mark-transparent-512.png"), "rb").read()).decode()
 favicon_b64 = base64.b64encode(open(os.path.join(ASSETS_DIR, "icon-32.png"), "rb").read()).decode()
-lockup_b64 = base64.b64encode(open(os.path.join(ASSETS_DIR, "lockup-dark.jpg"), "rb").read()).decode()
+lockup_b64 = logo_b64  # Lockup removed; reuse mark for backward compat
 
 parts.append(f'const __LOGO_B64__ = "{logo_b64}";\n')
 parts.append(f'const __FAVICON_B64__ = "{favicon_b64}";\n')

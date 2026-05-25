@@ -31,7 +31,7 @@ Domain expertise context:
 Output ONLY valid JSON in this exact format (no markdown, no explanation outside the JSON):
 {
   "summary": "2-3 sentence overall assessment synthesizing key findings",
-  "risk_level": "low|medium|high|critical",
+  "posture": "strong|fair|poor|critical",
   "key_findings": [
     { "category": "security|infrastructure|performance|trust|seo|email", "finding": "...", "severity": "info|low|medium|high", "action": "..." }
   ],
@@ -43,7 +43,7 @@ Output ONLY valid JSON in this exact format (no markdown, no explanation outside
     "developer": "2-3 sentences on APIs, standards compliance, integration points",
     "seo_professional": "2-3 sentences on technical SEO health"
   },
-  "attack_surface": ["concise list of exposed vectors and risks"],
+  "attack_surface": ["concise list of exposed vectors and areas for improvement"],
   "recommendations": [
     { "priority": 1, "action": "specific actionable step", "impact": "why it matters", "effort": "low|medium|high" }
   ]
@@ -178,8 +178,8 @@ async function callOpenRouter(
   }
 
   // Validate required fields
-  if (!parsed.summary || !parsed.risk_level || !Array.isArray(parsed.key_findings)) {
-    throw new Error("LLM response missing required fields (summary, risk_level, key_findings)");
+  if (!parsed.summary || !parsed.posture || !Array.isArray(parsed.key_findings)) {
+    throw new Error("LLM response missing required fields (summary, posture, key_findings)");
   }
 
   // Attach token usage for transparency
@@ -221,7 +221,7 @@ interface PersonaInsights {
 
 interface AIAnalysisResult {
   summary: string;
-  risk_level: string;
+  posture: string;
   key_findings: KeyFinding[];
   persona_insights: PersonaInsights;
   attack_surface: string[];

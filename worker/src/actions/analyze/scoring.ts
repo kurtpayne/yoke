@@ -27,7 +27,7 @@ export function calculateHealthScore(opts: {
   maxScore += 20;
   const sslGrade = opts.ssl?.grade;
   if (sslGrade) {
-    const sslPoints = sslGrade.startsWith("A") ? 20 : sslGrade.startsWith("B") ? 15 : sslGrade.startsWith("C") ? 10 : sslGrade.startsWith("D") ? 5 : 0;
+    const sslPoints = sslGrade === "Valid" ? 14 : sslGrade.startsWith("A") ? 20 : sslGrade.startsWith("B") ? 15 : sslGrade.startsWith("C") ? 10 : sslGrade.startsWith("D") ? 5 : 0;
     score += sslPoints;
     breakdown["SSL Certificate"] = sslPoints;
   } else {

@@ -117,13 +117,11 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
     };
 
     if (data.status !== "READY" || !data.endpoints?.length) {
-      return {
-        grade: null, issuer: null, valid_from: null, valid_to: null,
-        protocols: [], key_exchange: null,
-        error: data.status === "ERROR"
-          ? "SSL Labs could not assess this domain"
-          : `Assessment ${data.status?.toLowerCase() ?? "unavailable"} — try again later`,
-      };
+      // SSL Labs doesn't have cached data — fall back to direct check
+      const statusMsg = data.status === "ERROR"
+        ? "SSL Labs could not assess this domain"
+        : `Assessment ${data.status?.toLowerCase() ?? "unavailable"}`;
+      return fallbackSslCheck(domain, statusMsg);
     }
 
     const ep = data.endpoints[0];
@@ -160,7 +158,69 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
     return { grade: ep.grade ?? null, issuer, valid_from: validFrom, valid_to: validTo, protocols, key_exchange: keyExchange, error: null };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : "SSL Labs unavailable";
-    return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: errMsg };
+    // Fall back to crt.sh + HTTPS connectivity check
+    return fallbackSslCheck(domain, errMsg);
+  }
+}
+
+// ─── Fallback SSL Check (crt.sh + HTTPS probe) ─────────────────────
+
+async function fallbackSslCheck(domain: string, originalError: string): Promise<SslResult> {
+  try {
+    // Check if HTTPS works at all
+    const httpsRes = await fetchWithTimeout(`https://${domain}/`, {
+      timeout: 8000,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://yoke.lol)" },
+    });
+    const httpsWorks = httpsRes.status > 0;
+
+    if (!httpsWorks) {
+      return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: originalError };
+    }
+
+    // HTTPS works — try crt.sh for certificate details
+    let issuer: string | null = null;
+    let validFrom: string | null = null;
+    let validTo: string | null = null;
+
+    try {
+      const crtRes = await fetchWithTimeout(
+        `https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`,
+        { timeout: 6000 }
+      );
+      if (crtRes.ok) {
+        const certs = (await crtRes.json()) as Array<{
+          issuer_name?: string;
+          not_before?: string;
+          not_after?: string;
+          common_name?: string;
+          name_value?: string;
+        }>;
+        // Find the most recent cert matching this exact domain
+        const matching = certs
+          .filter((c) => c.common_name === domain || c.name_value?.split("\n").includes(domain))
+          .sort((a, b) => new Date(b.not_before ?? 0).getTime() - new Date(a.not_before ?? 0).getTime());
+        const latest = matching[0];
+        if (latest) {
+          issuer = latest.issuer_name ?? null;
+          validFrom = latest.not_before ? new Date(latest.not_before).toISOString() : null;
+          validTo = latest.not_after ? new Date(latest.not_after).toISOString() : null;
+        }
+      }
+    } catch { /* crt.sh unavailable — we still know HTTPS works */ }
+
+    // Report as valid without a letter grade (SSL Labs didn't provide one)
+    return {
+      grade: "Valid",
+      issuer,
+      valid_from: validFrom,
+      valid_to: validTo,
+      protocols: [],
+      key_exchange: null,
+      error: null,
+    };
+  } catch {
+    return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: originalError };
   }
 }
 

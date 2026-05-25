@@ -22,6 +22,69 @@ export async function checkLlmsTxt(domain: string): Promise<LlmsTxtResult> {
   return result;
 }
 
+// ─── ANS / DNS-AID Agent Discovery ──────────────────────────────────
+
+export interface AnsResult {
+  ans_found: boolean;      // _ans.{domain} TXT record exists (ANS v1)
+  ans_records: string[];   // raw TXT record values
+  agents_found: boolean;   // _agents.{domain} records exist (DNS-AID/BANDAID)
+  agents_records: string[];
+  agent_json_found: boolean; // /.well-known/agent.json exists
+}
+
+export async function checkAnsRecords(domain: string): Promise<AnsResult> {
+  const result: AnsResult = {
+    ans_found: false, ans_records: [],
+    agents_found: false, agents_records: [],
+    agent_json_found: false,
+  };
+
+  const [ansRes, agentsRes, agentJsonRes] = await Promise.allSettled([
+    // ANS: _ans.{domain} TXT records
+    fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(`_ans.${domain}`)}&type=TXT`, { timeout: 5000 }),
+    // DNS-AID/BANDAID: _agents.{domain} TXT/SVCB records
+    fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(`_agents.${domain}`)}&type=TXT`, { timeout: 5000 }),
+    // Well-known agent.json endpoint
+    fetchWithTimeout(`https://${domain}/.well-known/agent.json`, { timeout: 5000 }),
+  ]);
+
+  // Parse ANS TXT
+  if (ansRes.status === "fulfilled" && ansRes.value.ok) {
+    try {
+      const data = await ansRes.value.json() as { Status: number; Answer?: Array<{ data: string }> };
+      if (data.Status === 0 && data.Answer?.length) {
+        result.ans_found = true;
+        result.ans_records = data.Answer.map((a) => a.data.replace(/^"|"$/g, ""));
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Parse DNS-AID TXT
+  if (agentsRes.status === "fulfilled" && agentsRes.value.ok) {
+    try {
+      const data = await agentsRes.value.json() as { Status: number; Answer?: Array<{ data: string }> };
+      if (data.Status === 0 && data.Answer?.length) {
+        result.agents_found = true;
+        result.agents_records = data.Answer.map((a) => a.data.replace(/^"|"$/g, ""));
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Parse agent.json
+  if (agentJsonRes.status === "fulfilled" && agentJsonRes.value.ok) {
+    try {
+      const text = await agentJsonRes.value.text();
+      // Verify it's actually JSON, not an HTML error page
+      if (text && !text.includes("<!doctype") && !text.includes("<html")) {
+        JSON.parse(text); // validate JSON
+        result.agent_json_found = true;
+      }
+    } catch { /* not valid JSON */ }
+  }
+
+  return result;
+}
+
 // ─── Wayback Machine ────────────────────────────────────────────────
 
 export async function checkWayback(domain: string): Promise<{ first_snapshot: string | null; last_snapshot: string | null; total_snapshots: number | null; archive_url: string } | null> {
@@ -354,6 +417,7 @@ export function calculateAiReadiness(
   jsonLd: JsonLdItem[],
   html: string,
   ogResult: OgTwitterResult | null,
+  ansResult?: AnsResult | null,
 ): AiReadinessResult {
   const checks: Array<{ name: string; passed: boolean; points: number }> = [];
 
@@ -405,12 +469,22 @@ export function calculateAiReadiness(
   const rssFeed = rssMatch?.[1] ?? null;
   checks.push({ name: "RSS/Atom feed", passed: !!rssFeed, points: rssFeed ? 5 : 0 });
 
-  const maxScore = 100; // theoretical max
+  // ANS / DNS-AID agent discovery (bonus — above base max)
+  const hasAns = !!ansResult?.ans_found;
+  checks.push({ name: "ANS record (_ans.)", passed: hasAns, points: hasAns ? 10 : 0 });
+
+  const hasDnsAid = !!ansResult?.agents_found;
+  checks.push({ name: "DNS-AID record (_agents.)", passed: hasDnsAid, points: hasDnsAid ? 10 : 0 });
+
+  const hasAgentJson = !!ansResult?.agent_json_found;
+  checks.push({ name: "agent.json endpoint", passed: hasAgentJson, points: hasAgentJson ? 5 : 0 });
+
+  const maxScore = 100; // base max — ANS checks are bonus above 100
   const score = Math.max(0, checks.reduce((sum, c) => sum + c.points, 0));
   const pct = (score / maxScore) * 100;
   const grade = pct >= 80 ? "A" : pct >= 60 ? "B" : pct >= 40 ? "C" : pct >= 20 ? "D" : "F";
 
-  return { score, max_score: maxScore, grade, checks, rss_feed: rssFeed };
+  return { score, max_score: maxScore, grade, checks, rss_feed: rssFeed, ans: ansResult ?? null };
 }
 
 // ─── NEW: Domain Health Score ───────────────────────────────────────

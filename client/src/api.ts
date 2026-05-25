@@ -276,7 +276,7 @@ export interface SocialMetaData {
 export interface LegalData { pages_found: Array<{ name: string; url: string }>; cookie_consent_detected: boolean; consent_provider: string | null; }
 export interface CookieSecurityData { cookies: Array<{ name: string; secure: boolean; httponly: boolean; samesite: string | null }>; issues: string[]; }
 export interface CompressionData { encoding: string | null; vary_accept_encoding: boolean; }
-export interface AiReadinessData { score: number; max_score: number; grade: string; checks: Array<{ name: string; passed: boolean; points: number }>; rss_feed: string | null; }
+export interface AiReadinessData { score: number; max_score: number; grade: string; checks: Array<{ name: string; passed: boolean; points: number }>; rss_feed: string | null; ans: { ans_found: boolean; ans_records: string[]; agents_found: boolean; agents_records: string[]; agent_json_found: boolean } | null; }
 export interface HealthScoreData { score: number; max_score: number; grade: string; breakdown: Record<string, number>; }
 
 export interface WordPressPlugin { slug: string; name: string; category: string | null; }
