@@ -1,6 +1,23 @@
-import { Bot, CheckCircle, XCircle, Rss, Cpu } from "lucide-react";
+import { Bot, CheckCircle, XCircle, Rss, Cpu, ExternalLink } from "lucide-react";
 import { Panel, DataRow, GradeBadge, StatusBadge } from "./Panel";
+import { Tooltip } from "./Tooltip";
 import type { AnalysisResult } from "../utils/types";
+
+/** Maps checklist item names to their specification/documentation URLs. */
+const CHECK_DOCS: Record<string, { url: string; label: string }> = {
+  "llms.txt exists": { url: "https://llmstxt.org/", label: "llmstxt.org spec" },
+  "llms-full.txt exists": { url: "https://llmstxt.org/", label: "llmstxt.org spec" },
+  "Allows GPTBot": { url: "https://platform.openai.com/docs/bots", label: "OpenAI crawler docs" },
+  "Allows ClaudeBot": { url: "https://docs.anthropic.com/en/docs/build-with-claude/web-search#how-does-the-web-search-tool-work", label: "Anthropic crawler docs" },
+  "Allows Bingbot": { url: "https://www.bing.com/webmasters/help/which-crawlers-does-bing-use-8c184ec0", label: "Bing crawler docs" },
+  "Structured data (JSON-LD)": { url: "https://schema.org/", label: "schema.org" },
+  "Organization/WebSite schema": { url: "https://schema.org/Organization", label: "schema.org/Organization" },
+  "Open Graph tags": { url: "https://ogp.me/", label: "Open Graph protocol" },
+  "RSS/Atom feed": { url: "https://www.rssboard.org/rss-specification", label: "RSS 2.0 spec" },
+  "ANS record (_ans.)": { url: "https://agentnetworkspec.org/", label: "ANS specification" },
+  "DNS-AID record (_agents.)": { url: "https://agentnetworkspec.org/", label: "ANS specification" },
+  "agent.json endpoint": { url: "https://agentnetworkspec.org/", label: "ANS specification" },
+};
 
 export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
   const ai = data.ai_readiness;
@@ -35,9 +52,11 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
 
       {/* Checklist */}
       <div className="sub-section">Checklist</div>
-      {ai.checks.map((check, i) => (
+      {ai.checks.map((check, i) => {
+        const doc = CHECK_DOCS[check.name];
+        return (
         <div key={check.name} className="data-row" style={{ alignItems: "center" }}>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5" style={{ flex: 1, minWidth: 0 }}>
             {check.passed ? (
               <CheckCircle size={12} style={{ color: "var(--success)", flexShrink: 0 }} />
             ) : (
@@ -49,6 +68,19 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
             }}>
               {check.name}
             </span>
+            {doc && (
+              <Tooltip text={doc.label}>
+                <a
+                  href={doc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <ExternalLink size={9} style={{ color: "var(--muted)", opacity: 0.7 }} />
+                </a>
+              </Tooltip>
+            )}
           </div>
           <span style={{
             fontFamily: "var(--font-mono)", fontSize: "11px",
@@ -57,7 +89,8 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
             {check.points > 0 ? `+${check.points}` : check.points === 0 ? "0" : `${check.points}`}
           </span>
         </div>
-      ))}
+        );
+      })}
 
       {/* RSS Feed */}
       {ai.rss_feed && (
