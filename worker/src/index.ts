@@ -20,18 +20,10 @@ import { getAIAnalysis, buildAIPrompt, ALLOWED_MODELS, DEFAULT_MODEL } from "./a
 import { trackUsage, getUsageStats } from "./usage-tracking";
 import { renderUsagePage } from "./usage-page";
 
-interface Env {
-  DB: D1Database;
-  STATS_DB: D1Database;
-  OPENROUTER_API_KEY?: string;
-  CF_ACCOUNT_ID?: string;
-  CF_API_TOKEN?: string;
-  GOOGLE_PAGESPEED_API_KEY?: string;
-  WHOISFREAKS_API_KEY?: string;
-  ADMIN_KEY?: string;
-}
-
 import { CORS_HEADERS, normalizeDomain, isValidDomain, cleanDomain, getFromCache } from "./helpers";
+import type { Env } from "./helpers";
+import { handleSPARoute, serveAssetOrFallback, HTML_SECURITY_HEADERS } from "./spa";
+import { API_DOCS_HTML } from "./pages";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
@@ -182,6 +174,10 @@ export default {
       if (path === "/api/usage") return json(stats);
       return renderUsagePage(env.STATS_DB, days);
     }
+
+    // ── SPA routes: static pages, domain paths with content negotiation, compare paths ──
+    const spaResponse = await handleSPARoute(request, env, path);
+    if (spaResponse) return spaResponse;
 
     // API routes
     if (path.startsWith("/api/")) {
@@ -393,8 +389,18 @@ export default {
           }
         }
 
-        // GET /api/docs — handled by combined worker (serveSPA), but provide JSON fallback here
+        // GET /api/docs — serve HTML for browsers, JSON for API clients
         if (method === "GET" && path === "/api/docs") {
+          const accept = request.headers.get("Accept") || "";
+          if (accept.includes("text/html")) {
+            return new Response(API_DOCS_HTML, {
+              headers: {
+                "Content-Type": "text/html;charset=UTF-8",
+                "Cache-Control": "public, max-age=3600",
+                ...HTML_SECURITY_HEADERS,
+              },
+            });
+          }
           return json({
             name: "Yoke Domain Intelligence API",
             version: "1.0",
@@ -433,9 +439,9 @@ export default {
       }
     }
 
-    // For non-API routes, Cloudflare Assets will serve static files automatically
-    // (configured in wrangler.toml [assets] directory)
-    // This fallback only fires if no static asset matched
-    return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
+    // ── Non-API routes: serve static assets or SPA fallback ──
+    // With ASSETS binding, all requests come through the worker.
+    // Try serving the exact asset; fall back to index.html for client-side routing.
+    return serveAssetOrFallback(request, env);
   },
 };
