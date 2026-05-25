@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Key, Copy, Check, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Key, Copy, Check, ChevronDown, ChevronUp, Settings, Eye, EyeOff, RotateCcw, ExternalLink } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
 import { findReferenceLink } from "./DomainSignals";
 
@@ -443,8 +443,9 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
   };
 
   return (
-    <div style={{ marginBottom: "0" }}>
+    <div style={{ width: open ? "100%" : "auto" }}>
       {/* Gear toggle button */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
       <button
         onClick={toggleOpen}
         title="Advanced AI settings"
@@ -462,6 +463,7 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
         {hasKey ? "BYO Key ✓" : "Advanced"}
         {hasKey && <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--success)", display: "inline-block" }} />}
       </button>
+      </div>
 
       {/* Expanded settings panel */}
       {open && (
@@ -830,6 +832,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
   const [personaError, setPersonaError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState<RateLimitResponse | null>(null);
   const [, setKeyVersion] = useState(0);
+  const [selectedModel, setSelectedModel] = useState(getSavedModel);
 
   const actionItems = analysisData ? generateActionItems(analysisData) : [];
 
@@ -843,10 +846,13 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
       const savedKey = getSavedKey();
       if (savedKey) headers["X-OpenRouter-Key"] = savedKey;
 
+      const bodyObj: Record<string, string> = { domain };
+      if (savedKey && selectedModel) bodyObj.model = selectedModel;
+
       const res = await fetch("/api/ai-analysis", {
         method: "POST",
         headers,
-        body: JSON.stringify({ domain }),
+        body: JSON.stringify(bodyObj),
       });
 
       if (res.status === 429) {
@@ -877,13 +883,19 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
     } finally {
       setLoadingPersona(null);
     }
-  }, [domain, personaResults]);
+  }, [domain, personaResults, selectedModel]);
 
   const handleKeyChange = (key: string) => {
     setKeyVersion(v => v + 1);
     if (key && rateLimited) {
       setRateLimited(null);
     }
+  };
+
+  const handleModelChange = (model: string) => {
+    setSelectedModel(model);
+    // Clear cached persona results since model changed
+    setPersonaResults({});
   };
 
   const handlePersonaClick = (key: PersonaKey) => {
@@ -903,9 +915,10 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", position: "relative" }}>
-      <div style={{ position: "absolute", top: 0, right: 0, zIndex: 10 }}>
-        <KeySettings onSave={handleKeyChange} />
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* ─── Advanced Settings (gear button + panel) ─── */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+        <AdvancedSettings domain={domain} onKeyChange={handleKeyChange} onModelChange={handleModelChange} />
       </div>
 
       {/* ─── Top Priorities ─── */}
