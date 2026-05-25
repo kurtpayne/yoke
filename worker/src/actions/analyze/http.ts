@@ -117,6 +117,10 @@ export async function analyzeHttp(domain: string): Promise<HttpAnalysis | null> 
       "content-type": "text/html;charset=utf-8",
       "cache-control": "public, max-age=300",
       "server": "cloudflare",
+      "vary": "Accept-Encoding",
+      "content-encoding": "br",
+      "alt-svc": "h3=\":443\"; ma=86400",
+      "cf-ray": "self-analysis",
     };
     const html = __HTML__;
     const { audit, grade } = auditSecurityHeaders(selfHeaders);

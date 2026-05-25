@@ -6,6 +6,7 @@ import { type Env, normalizeDomain, fetchWithTimeout, CORS_HEADERS, maybePruneCa
 import { ANALYSIS_CACHE_TTL_MS } from "../config/cache";
 import { analyzeWordPress, type WordPressDetails } from "./wordpress";
 import { checkBreaches, type BreachResult } from "./breaches";
+import { logApiError, pruneApiErrors } from "../api-errors";
 
 // Import all analysis modules
 import type {
@@ -198,6 +199,17 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const wellKnown = unwrap(phase2Results[19], { change_password: null, security_txt: false, openid_configuration: null, apple_app_site_association: false, assetlinks_json: false, humans_txt: false, dnt_policy: false, nodeinfo: null } as any) as WellKnownResult;
   const greynoiseResult = unwrap(phase2Results[20], null) as GreynoiseResult | null;
   const ansResult = unwrap(phase2Results[21], null) as Awaited<ReturnType<typeof checkAnsRecords>> | null;
+
+  // ─── Log API errors for observability ───────────────────────────────
+  const apiNames = ["rdap","robots","ipinfo","blocklists","ssl","pagespeed","status","llmstxt","wayback","tranco","observatory","emailauth","carbon","shodan","dnssec","breaches","crt","securitytxt","greenhosting","wellknown","greynoise","ans"];
+  for (let i = 0; i < phase2Results.length; i++) {
+    if (phase2Results[i].status === "rejected") {
+      const reason = (phase2Results[i] as PromiseRejectedResult).reason;
+      logApiError(env.DB, { api: apiNames[i] ?? `phase2_${i}`, status: 0, message: String(reason).slice(0, 200), domain });
+    }
+  }
+  // Probabilistic prune of old error rows (~5% of requests)
+  if (Math.random() < 0.05) pruneApiErrors(env.DB);
 
   // Build merged meta — only use HTTP meta if probe succeeded
   const meta: MetaResult = {

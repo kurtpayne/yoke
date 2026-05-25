@@ -43,6 +43,30 @@ const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
   general: "All axes weighted equally for General sites",
 };
 
+// Archetype axis weights — fallback if API response doesn't include them.
+// Canonical source is worker/src/actions/analyze/contextual-scoring.ts;
+// the analysis response includes archetype.weights so the client uses that when available.
+const FALLBACK_ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
+  commerce:       { security: 0.35, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.10 },
+  content:        { security: 0.15, performance: 0.25, reliability: 0.15, trust: 0.15, visibility: 0.30 },
+  application:    { security: 0.30, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.15 },
+  corporate:      { security: 0.20, performance: 0.15, reliability: 0.15, trust: 0.30, visibility: 0.20 },
+  infrastructure: { security: 0.25, performance: 0.20, reliability: 0.30, trust: 0.10, visibility: 0.15 },
+  institutional:  { security: 0.35, performance: 0.10, reliability: 0.25, trust: 0.20, visibility: 0.10 },
+  general:        { security: 0.20, performance: 0.20, reliability: 0.20, trust: 0.20, visibility: 0.20 },
+};
+
+function recomputeScore(axes: Record<Axis, AxisScoreData>, archetype: ArchetypeName, weightsTable?: Record<ArchetypeName, Record<Axis, number>>): { composite: number; grade: string } {
+  const weights = (weightsTable ?? FALLBACK_ARCHETYPE_WEIGHTS)[archetype];
+  let composite = 0;
+  for (const axis of AXES) {
+    composite += axes[axis].score * weights[axis];
+  }
+  composite = Math.round(composite);
+  const grade = composite >= 90 ? "A" : composite >= 80 ? "B" : composite >= 70 ? "C" : composite >= 60 ? "D" : "F";
+  return { composite, grade };
+}
+
 // ─── Radar Plot SVG ──────────────────────────────────────────────────
 
 const SIZE = 200;
@@ -80,9 +104,11 @@ function gridPolygon(level: number): string {
 interface RadarPlotProps {
   axes: Record<Axis, AxisScoreData>;
   archetype: ArchetypeName;
+  weightsTable?: Record<ArchetypeName, Record<Axis, number>>;
 }
 
-export function RadarPlot({ axes, archetype }: RadarPlotProps) {
+export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
+  const weights = (weightsTable ?? FALLBACK_ARCHETYPE_WEIGHTS)[archetype];
   const [animProgress, setAnimProgress] = useState(0);
   const [hoveredAxis, setHoveredAxis] = useState<Axis | null>(null);
   const rafRef = useRef<number>(0);
@@ -263,7 +289,7 @@ export function RadarPlot({ axes, archetype }: RadarPlotProps) {
             {AXIS_LABELS[hoveredAxis]}: {axes[hoveredAxis].score}/100
           </span>
           <span style={{ color: "var(--dim)", marginLeft: 6 }}>
-            ({Math.round(axes[hoveredAxis].weight * 100)}% weight for {ARCHETYPE_LABELS[archetype]})
+            ({Math.round(weights[hoveredAxis] * 100)}% weight for {ARCHETYPE_LABELS[archetype]})
           </span>
         </div>
       )}
@@ -301,6 +327,14 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
   // When auto-detect changes, reset to detected
   const activeArchetype = autoDetect ? ds.archetype.detected : selectedArchetype;
 
+  // Resolve weights table: prefer API response, fall back to hardcoded
+  const weightsTable = ds.archetype.weights ?? FALLBACK_ARCHETYPE_WEIGHTS;
+
+  // Recalculate composite + grade when archetype changes
+  const { composite, grade } = activeArchetype === ds.archetype.detected
+    ? { composite: ds.composite, grade: ds.grade }
+    : recomputeScore(ds.axes, activeArchetype, weightsTable);
+
   return (
     <div className="panel">
       <div className="panel-header flex items-center justify-between">
@@ -335,7 +369,7 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
         <div className="flex flex-col lg:flex-row items-center gap-6">
           {/* Radar Plot */}
           <div className="flex-shrink-0 w-full max-w-[200px]">
-            <RadarPlot axes={ds.axes} archetype={activeArchetype} />
+            <RadarPlot axes={ds.axes} archetype={activeArchetype} weightsTable={weightsTable} />
           </div>
 
           {/* Score + Details */}
@@ -349,10 +383,10 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
                     fontSize: "42px",
                     fontWeight: 700,
                     lineHeight: "1",
-                    color: scoreColor(ds.composite),
+                    color: scoreColor(composite),
                   }}
                 >
-                  {ds.composite}
+                  {composite}
                 </div>
                 <div style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", marginTop: 2 }}>
                   out of 100
@@ -369,12 +403,12 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
                   fontFamily: "var(--font-mono)",
                   fontSize: "24px",
                   fontWeight: 700,
-                  color: gradeColor(ds.grade),
-                  background: `color-mix(in srgb, ${gradeColor(ds.grade)} 10%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${gradeColor(ds.grade)} 20%, transparent)`,
+                  color: gradeColor(grade),
+                  background: `color-mix(in srgb, ${gradeColor(grade)} 10%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${gradeColor(grade)} 20%, transparent)`,
                 }}
               >
-                {ds.grade}
+                {grade}
               </div>
             </div>
 
@@ -509,6 +543,7 @@ function TopFindings({ axes }: { axes: Record<Axis, AxisScoreData> }) {
             <span style={{ fontSize: "10px", flexShrink: 0, marginTop: 1 }}>{severityIcon(f.severity)}</span>
             <span style={{ fontFamily: "var(--font-ui)", color: severityColor(f.severity) }}>
               {f.label}
+              {f.source && <Tooltip text={f.source} help />}
               {f.tradeoff && (
                 <span style={{ color: "var(--dim)", fontSize: "10px", marginLeft: 4 }}>
                   — {f.tradeoff}

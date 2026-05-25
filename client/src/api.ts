@@ -433,6 +433,7 @@ export interface ScoreFinding {
   label: string;
   tradeoff: string | null;
   weight: number;
+  source?: string | null;
 }
 
 export interface AxisScoreData {
@@ -447,6 +448,7 @@ export interface ArchetypeData {
   secondary: ArchetypeName | null;
   signals: string[];
   platform: string | null;
+  weights?: Record<ArchetypeName, Record<Axis, number>>;
 }
 
 export interface DomainScoreData {

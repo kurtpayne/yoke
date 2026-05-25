@@ -53,12 +53,15 @@ const html = `<!DOCTYPE html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Yoke — Free Domain Intelligence &amp; OSINT Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" as="style" />
+    <title>Yoke — Free Domain Intelligence Tool</title>
     <meta name="description" content="Free domain intelligence tool. DNS, SSL, WHOIS, security audit, tech stack detection, performance analysis, breach detection, and AI insights. Web UI, Chrome extension, and curl API." />
     <meta name="robots" content="index, follow" />
     <meta name="keywords" content="domain intelligence, OSINT, DNS lookup, SSL checker, security headers, tech stack detection, WHOIS, domain analysis, website scanner, breach detection" />
     <link rel="canonical" href="https://yoke.lol" />
-    <meta property="og:title" content="Yoke — Free Domain Intelligence &amp; OSINT Tool" />
+    <meta property="og:title" content="Yoke — Free Domain Intelligence Tool" />
     <meta property="og:description" content="Analyze any domain instantly. DNS, SSL, WHOIS, security audit, tech stack, performance, breach detection, and AI-powered insights. Free, no signup required." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://yoke.lol" />
@@ -68,7 +71,7 @@ const html = `<!DOCTYPE html>
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Yoke — Free Domain Intelligence &amp; OSINT Tool" />
+    <meta name="twitter:title" content="Yoke — Free Domain Intelligence Tool" />
     <meta name="twitter:description" content="Analyze any domain instantly. DNS, SSL, WHOIS, security headers, tech stack, performance, and breach detection. Free API: curl yoke.lol/stripe.com" />
     <meta name="twitter:image" content="https://yoke.lol/logo.png" />
     <meta name="impact-site-verification" value="5b874e38-4989-4b8a-8544-3030a7b05ced" />
@@ -118,7 +121,14 @@ const html = `<!DOCTYPE html>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <a href="#main-content" class="sr-only" style="position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden">Skip to main content</a>
+    <div id="root">
+      <noscript>
+        <header role="banner"><nav aria-label="Main"><a href="/">Yoke</a></nav></header>
+        <main id="main-content"><h1>Yoke — Domain Intelligence</h1><p>JavaScript is required to use Yoke. Please enable JavaScript in your browser settings.</p></main>
+        <footer role="contentinfo"><p>&copy; 2026 Yoke</p><nav aria-label="Legal"><a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a></nav></footer>
+      </noscript>
+    </div>
     <script type="module" src="/${jsPath}"></script>
   </body>
 </html>`;

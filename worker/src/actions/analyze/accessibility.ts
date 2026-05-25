@@ -218,7 +218,8 @@ export function analyzeAccessibility(html: string): AccessibilityResult {
 
   // 8. Skip navigation link
   // Look for a link to #main, #content, #main-content near the top of the page
-  const topHtml = html.slice(0, 3000).toLowerCase();
+  // Use a generous slice since base64-encoded favicons can push <body> past 30KB
+  const topHtml = html.slice(0, 50000).toLowerCase();
   const hasSkipNav = /href\s*=\s*["']#(main|content|main-content|maincontent|skip|skip-to-content)["']/i.test(topHtml);
   if (hasSkipNav) {
     checks.push({ name: "Skip navigation", status: "pass", detail: "Skip navigation link found near top of page", impact: "moderate" });

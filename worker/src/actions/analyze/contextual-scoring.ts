@@ -10,6 +10,10 @@ import type {
   HostingResult, TechItem, AccessibilityResult, ThirdPartyScriptsResult,
   CookieConsentResult,
 } from "./types";
+import {
+  PERF_SCORE, LCP, CLS, TTFB, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
+  SEVERITY_SCORES, resolveSeverity,
+} from "../../config/scoring-thresholds";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -24,6 +28,7 @@ export interface Finding {
   label: string;
   tradeoff: string | null;
   weight: number; // relative importance within axis (1-5)
+  source?: string; // citation/rationale for the threshold
 }
 
 export interface ArchetypeResult {
@@ -32,6 +37,7 @@ export interface ArchetypeResult {
   secondary: ArchetypeName | null;
   signals: string[];
   platform: string | null; // managed platform if detected
+  weights: Record<ArchetypeName, Record<Axis, number>>; // all archetype weight profiles for client-side recalc
 }
 
 export interface AxisScore {
@@ -49,9 +55,7 @@ export interface DomainScoreResult {
 
 // ─── Severity → Score mapping ────────────────────────────────────────
 
-const SEVERITY_SCORE: Record<Severity, number> = {
-  critical: 0, high: 25, medium: 50, low: 75, info: 90, good: 100,
-};
+const SEVERITY_SCORE = SEVERITY_SCORES;
 
 // ─── Archetype Weight Profiles ───────────────────────────────────────
 
@@ -213,13 +217,13 @@ export function detectArchetype(opts: {
   const second = ranked[1];
 
   if (!top || top[1].score < 0.3) {
-    return { detected: "general", confidence: 1.0, secondary: null, signals: ["No strong archetype signals"], platform };
+    return { detected: "general", confidence: 1.0, secondary: null, signals: ["No strong archetype signals"], platform, weights: ARCHETYPE_WEIGHTS };
   }
 
   const confidence = Math.min(1.0, top[1].score);
   const secondary = (second && second[1].score > 0.25 && top[1].score - second[1].score < 0.15) ? second[0] : null;
 
-  return { detected: top[0], confidence, secondary, signals: top[1].signals, platform };
+  return { detected: top[0], confidence, secondary, signals: top[1].signals, platform, weights: ARCHETYPE_WEIGHTS };
 }
 
 // ─── Contextual Severity Rules ───────────────────────────────────────
@@ -278,8 +282,12 @@ export function calculateDomainScore(opts: {
 
   // SSL grade
   const sslGrade = opts.ssl?.grade;
+  const sslError = opts.ssl?.error;
   if (sslGrade) {
-    if (sslGrade.startsWith("A")) {
+    if (sslGrade === "Valid") {
+      // Fallback confirmed HTTPS works but SSL Labs didn't provide a letter grade
+      findings.push({ signal: "ssl_grade", axis: "security", severity: "good", label: "SSL certificate valid (detailed grade unavailable)", tradeoff: null, weight: 5 });
+    } else if (sslGrade.startsWith("A")) {
       findings.push({ signal: "ssl_grade", axis: "security", severity: "good", label: `SSL grade ${sslGrade}`, tradeoff: null, weight: 5 });
     } else if (sslGrade.startsWith("B")) {
       findings.push({ signal: "ssl_grade", axis: "security", severity: contextualSeverity("low", arch, { commerce: "medium", institutional: "medium" }), label: `SSL grade ${sslGrade} — room for improvement`, tradeoff: null, weight: 5 });
@@ -288,6 +296,9 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({ signal: "ssl_grade", axis: "security", severity: contextualSeverity("high", arch, { commerce: "critical", institutional: "critical" }), label: `SSL grade ${sslGrade} — significant weaknesses`, tradeoff: null, weight: 5 });
     }
+  } else if (sslError && !opts.httpBlocked) {
+    // SSL Labs couldn't assess but the site was successfully fetched over HTTPS — don't penalize
+    findings.push({ signal: "ssl_grade", axis: "security", severity: "info", label: "SSL present (grade assessment unavailable)", tradeoff: null, weight: 5 });
   } else if (!opts.httpBlocked) {
     findings.push({ signal: "ssl_missing", axis: "security", severity: contextualSeverity("high", arch, { content: "medium" }), label: "No SSL certificate detected", tradeoff: null, weight: 5 });
   }
@@ -396,44 +407,28 @@ export function calculateDomainScore(opts: {
 
   const perf = opts.performance;
   if (perf && perf.score != null) {
-    // Overall performance score
-    if (perf.score >= 90) {
-      findings.push({ signal: "perf_score", axis: "performance", severity: "good", label: `Performance score ${perf.score}/100`, tradeoff: null, weight: 5 });
-    } else if (perf.score >= 50) {
-      findings.push({ signal: "perf_score", axis: "performance", severity: contextualSeverity("medium", arch, { content: "high" }), label: `Performance score ${perf.score}/100`, tradeoff: null, weight: 5 });
-    } else {
-      findings.push({ signal: "perf_score", axis: "performance", severity: contextualSeverity("high", arch, {}), label: `Low performance score ${perf.score}/100`, tradeoff: null, weight: 5 });
-    }
+    // Overall performance score — thresholds from config/scoring-thresholds.ts
+    const ps = resolveSeverity(PERF_SCORE, perf.score);
+    const psSev = perf.score >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, perf.score >= 50 ? { content: "high" } : {});
+    findings.push({ signal: PERF_SCORE.signal, axis: "performance", severity: psSev, label: ps.label, tradeoff: null, weight: PERF_SCORE.weight, source: PERF_SCORE.source });
 
     // LCP
     if (perf.lcp != null) {
       const lcpSec = perf.lcp / 1000;
-      findings.push({
-        signal: "lcp", axis: "performance",
-        severity: lcpSec <= 2.5 ? "good" : lcpSec <= 4.0 ? "medium" : "high",
-        label: `LCP: ${lcpSec.toFixed(1)}s`,
-        tradeoff: null, weight: 4,
-      });
+      const lcp = resolveSeverity(LCP, lcpSec);
+      findings.push({ signal: LCP.signal, axis: "performance", severity: lcp.severity, label: `LCP: ${lcpSec.toFixed(1)}s`, tradeoff: null, weight: LCP.weight, source: LCP.source });
     }
 
     // CLS
     if (perf.cls != null) {
-      findings.push({
-        signal: "cls", axis: "performance",
-        severity: perf.cls <= 0.1 ? "good" : perf.cls <= 0.25 ? "medium" : "high",
-        label: `CLS: ${perf.cls.toFixed(3)}`,
-        tradeoff: null, weight: 3,
-      });
+      const cls = resolveSeverity(CLS, perf.cls);
+      findings.push({ signal: CLS.signal, axis: "performance", severity: cls.severity, label: `CLS: ${perf.cls.toFixed(3)}`, tradeoff: null, weight: CLS.weight, source: CLS.source });
     }
 
     // TTFB
     if (perf.ttfb != null) {
-      findings.push({
-        signal: "ttfb", axis: "performance",
-        severity: perf.ttfb <= 800 ? "good" : perf.ttfb <= 1800 ? "medium" : "high",
-        label: `TTFB: ${perf.ttfb}ms`,
-        tradeoff: null, weight: 3,
-      });
+      const ttfb = resolveSeverity(TTFB, perf.ttfb);
+      findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(perf.ttfb)}ms`, tradeoff: null, weight: TTFB.weight, source: TTFB.source });
     }
   }
 
@@ -510,26 +505,27 @@ export function calculateDomainScore(opts: {
     tradeoff: null, weight: 1,
   });
 
-  // Domain age
-  const ageDays = opts.rdap?.domain_age_days;
-  if (ageDays != null) {
-    findings.push({
-      signal: "domain_age", axis: "reliability",
-      severity: ageDays > 365 * 5 ? "good" : ageDays > 365 ? "info" : ageDays > 90 ? "low" : "medium",
-      label: ageDays > 365 ? `Domain age: ${Math.floor(ageDays / 365)}+ years` : `Domain age: ${ageDays} days`,
-      tradeoff: null, weight: 3,
-    });
-  }
-
   // ─── Trust Axis Findings ─────────────────────────────────────────
 
-  // Domain age (also trust signal)
+  // Domain age (trust signal — graduated NRD thresholds aligned with industry)
+  // Palo Alto: ≤32d = NRD; CF Email: 7d malicious, 30-45d suspicious; NextDNS: 30d block
+  const ageDays = opts.rdap?.domain_age_days;
   if (ageDays != null) {
+    const severity = ageDays > 365 * 3 ? "good"
+      : ageDays > 365 ? "info"
+      : ageDays > 90 ? "low"
+      : ageDays > 30 ? "medium"
+      : ageDays > 7 ? "medium"
+      : "high";
+    const label = ageDays > 365 * 3 ? `Established domain (${Math.floor(ageDays / 365)}+ years)`
+      : ageDays > 365 ? `Domain age: ${Math.floor(ageDays / 365)}+ years`
+      : ageDays > 90 ? `Young domain (${ageDays} days)`
+      : ageDays > 30 ? `Recently registered (${ageDays} days)`
+      : ageDays > 7 ? `Newly registered domain (${ageDays} days) — within NRD window`
+      : `Newly registered domain (${ageDays} days) — high risk NRD`;
     findings.push({
       signal: "domain_age_trust", axis: "trust",
-      severity: ageDays > 365 * 3 ? "good" : ageDays > 365 ? "info" : ageDays > 90 ? "low" : "medium",
-      label: ageDays > 365 ? `Established domain (${Math.floor(ageDays / 365)}+ years)` : `New domain (${ageDays} days)`,
-      tradeoff: null, weight: 4,
+      severity, label, tradeoff: null, weight: 4,
     });
   }
 
@@ -573,14 +569,18 @@ export function calculateDomainScore(opts: {
   }
 
   // Wayback Machine presence
+  // Wayback Machine — informational only, not scored as a penalty.
+  // Archive coverage is arbitrary and not operator-controlled; domain age already captures newness.
   if (opts.wayback) {
     const snapshots = opts.wayback.total_snapshots ?? 0;
-    findings.push({
-      signal: "wayback", axis: "trust",
-      severity: snapshots > 100 ? "good" : snapshots > 10 ? "info" : snapshots > 0 ? "low" : "medium",
-      label: snapshots > 0 ? `${snapshots.toLocaleString()} Wayback snapshots` : "No Wayback Machine history",
-      tradeoff: null, weight: 2,
-    });
+    if (snapshots > 0) {
+      findings.push({
+        signal: "wayback", axis: "trust",
+        severity: snapshots > 100 ? "good" : "info",
+        label: `${snapshots.toLocaleString()} Wayback snapshots`,
+        tradeoff: null, weight: 0,
+      });
+    }
   }
 
   // ─── Visibility Axis Findings ────────────────────────────────────
