@@ -240,7 +240,7 @@ async function tryHttpsCrtsh(domain: string): Promise<SslResult | null> {
 
 // ─── Live Status Check ───────────────────────────────────────────────
 
-export async function checkStatus(domain: string): Promise<{ is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean }> {
+export async function checkStatus(domain: string): Promise<{ is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean; http2?: boolean; http3?: boolean; alt_svc?: string | null }> {
   // Try Fly.io proxy first (avoids CF Worker IP blocks for sites like meta.com)
   try {
     const probeRes = await fetchWithTimeout(
@@ -248,7 +248,7 @@ export async function checkStatus(domain: string): Promise<{ is_up: boolean; sta
       { timeout: 15000, headers: getFlyAuthHeaders() }
     );
     if (probeRes.ok) {
-      const data = await probeRes.json() as { is_up: boolean; status_code: number | null; response_time_ms: number; error: string | null; status_label: string; http_blocked: boolean };
+      const data = await probeRes.json() as { is_up: boolean; status_code: number | null; response_time_ms: number; error: string | null; status_label: string; http_blocked: boolean; http2?: boolean; http3?: boolean; alt_svc?: string | null };
       return {
         is_up: data.is_up,
         status_code: data.status_code ?? null,
@@ -256,6 +256,9 @@ export async function checkStatus(domain: string): Promise<{ is_up: boolean; sta
         error: data.error ?? null,
         status_label: data.status_label ?? "DOWN",
         http_blocked: data.http_blocked ?? false,
+        http2: data.http2 ?? false,
+        http3: data.http3 ?? false,
+        alt_svc: data.alt_svc ?? null,
       };
     }
   } catch { /* Fly proxy unreachable — fall back to direct probe */ }
