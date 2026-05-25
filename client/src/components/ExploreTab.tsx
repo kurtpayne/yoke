@@ -3,7 +3,6 @@ import { Compass, Globe, Server, Link2, Sparkles, ExternalLink, Check, X, HelpCi
 import { api } from "../api";
 import type { DomainSuggestion } from "../api";
 import { Panel, StatusBadge, ErrorState } from "./Panel";
-import { AiReadinessPanel } from "./AiReadinessPanel";
 import type { AnalysisResult } from "../utils/types";
 
 interface ExploreTabProps {
@@ -326,7 +325,6 @@ export function ExploreTab({ domain, data, onNavigate }: ExploreTabProps) {
           Click any domain below to analyze it in Yoke. Discover subdomains, find domains sharing the same IP, and explore related infrastructure.
         </p>
       </div>
-      <AiReadinessPanel data={data} />
       <SuggestionsPanel domain={domain} onNavigate={onNavigate} />
       <SubdomainsPanel domain={domain} onNavigate={onNavigate} />
       {ip && <ReverseIPPanel ip={ip} onNavigate={onNavigate} />}

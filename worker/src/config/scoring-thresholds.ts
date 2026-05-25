@@ -88,7 +88,6 @@ export const SSL_GRADE: ThresholdConfig = {
     { min: 0, severity: "good", label: "SSL grade {value}" },   // A+, A
     // B, C etc handled by string matching in scoring engine
   ],
-  weight: 5,
 };
 
 export const BLOCKLIST: ThresholdConfig = {
@@ -101,7 +100,6 @@ export const BLOCKLIST: ThresholdConfig = {
     { min: 1, severity: "medium", label: "Listed on {value} blocklist" },
     { min: 0, max: 1, severity: "good", label: "Not on any blocklists" },
   ],
-  weight: 5,
 };
 
 // ─── Trust ───────────────────────────────────────────────────────────
@@ -119,7 +117,6 @@ export const DOMAIN_AGE: ThresholdConfig = {
     { min: 7, severity: "medium", label: "Newly registered domain ({value} days) — within NRD window" },  // 7-30d
     { min: 0, severity: "high", label: "Newly registered domain ({value} days) — high risk NRD" },        // <7d
   ],
-  weight: 4,
 };
 
 export const DOMAIN_EXPIRY: ThresholdConfig = {
@@ -132,7 +129,6 @@ export const DOMAIN_EXPIRY: ThresholdConfig = {
     { min: 30, severity: "low", label: "Domain expires in {value} days" },
     { min: 0, severity: "medium", label: "Domain expires in {value} days" },
   ],
-  weight: 2,
 };
 
 // ─── Reliability ─────────────────────────────────────────────────────
@@ -145,7 +141,6 @@ export const NS_COUNT: ThresholdConfig = {
     { min: 2, severity: "info", label: "{value} nameservers" },
     { min: 0, severity: "medium", label: "Only {value} nameserver" },
   ],
-  weight: 3,
 };
 
 // ─── Visibility ──────────────────────────────────────────────────────
@@ -160,7 +155,6 @@ export const A11Y_SCORE: ThresholdConfig = {
     { min: 50, severity: "low", label: "Accessibility score {value}/100" },
     { min: 0, severity: "medium", label: "Accessibility score {value}/100" },
   ],
-  weight: 4,
 };
 
 // ─── All configs for API export ──────────────────────────────────────

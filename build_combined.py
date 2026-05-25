@@ -340,7 +340,7 @@ export default {{
     }}
 
     // API routes go to the original worker
-    if (path.startsWith("/api/") || path === "/status") {{
+    if (path.startsWith("/api/") || path === "/status" || path === "/usage") {{
       // Serve API docs as HTML page when browser requests it
       if (path === "/api/docs" && (request.headers.get("Accept") || "").includes("text/html")) {{
         return serveSPA(request);

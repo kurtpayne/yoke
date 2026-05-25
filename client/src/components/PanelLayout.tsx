@@ -176,7 +176,7 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
 
 export function ResetLayoutButton() {
   const [confirm, setConfirm] = useState(false);
-  const t = useRef<ReturnType<typeof setTimeout>>();
+  const t = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   function click() {
     if (confirm) { resetLayout(); window.location.reload(); }
     else { setConfirm(true); t.current = setTimeout(function() { setConfirm(false); }, 3000); }

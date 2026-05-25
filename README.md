@@ -282,10 +282,4 @@ bun run test
 
 [MIT](LICENSE) — do whatever you want with it.
 
----
 
-<div align="center">
-
-Built by [Kurt Payne](https://github.com/kurtpayne) ⚡
-
-</div>

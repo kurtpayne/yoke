@@ -163,11 +163,51 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
   }
 }
 
-// ─── Fallback SSL Check (crt.sh + HTTPS probe) ─────────────────────
+// ─── Fallback SSL Check (Fly.io TLS probe → crt.sh → HTTPS probe) ──
 
 async function fallbackSslCheck(domain: string, originalError: string): Promise<SslResult> {
+  // Try Fly.io SSL probe first (direct TLS handshake, ~200ms, full cert info)
   try {
-    // Check if HTTPS works at all
+    const probeRes = await fetchWithTimeout(
+      `https://yoke-probe.fly.dev/probe-ssl?domain=${encodeURIComponent(domain)}`,
+      { timeout: 12000 }
+    );
+    if (probeRes.ok) {
+      const data = await probeRes.json() as {
+        grade: string; issuer: string; subject: string;
+        valid_from: string; valid_to: string;
+        key_alg: string; key_size: number;
+        protocols: string[]; chain_depth: number; chain_valid: boolean;
+        sans: string[]; serial: string; error: string | null;
+      };
+      if (data.grade && data.grade !== "T") {
+        return {
+          grade: data.grade,
+          issuer: data.issuer || null,
+          valid_from: data.valid_from || null,
+          valid_to: data.valid_to || null,
+          protocols: data.protocols || [],
+          key_exchange: data.key_alg ? `${data.key_alg} ${data.key_size || ""}`.trim() : null,
+          error: null,
+        };
+      }
+      // Grade "T" means trust issues — still report what we found
+      if (data.grade === "T") {
+        return {
+          grade: "T",
+          issuer: data.issuer || null,
+          valid_from: data.valid_from || null,
+          valid_to: data.valid_to || null,
+          protocols: data.protocols || [],
+          key_exchange: data.key_alg ? `${data.key_alg} ${data.key_size || ""}`.trim() : null,
+          error: data.error || "Certificate trust issue",
+        };
+      }
+    }
+  } catch { /* Fly probe unreachable — continue to legacy fallback */ }
+
+  // Legacy fallback: HTTPS fetch + crt.sh
+  try {
     const httpsRes = await fetchWithTimeout(`https://${domain}/`, {
       timeout: 8000,
       headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://yoke.lol)" },
@@ -178,7 +218,6 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
       return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: originalError };
     }
 
-    // HTTPS works — try crt.sh for certificate details
     let issuer: string | null = null;
     let validFrom: string | null = null;
     let validTo: string | null = null;
@@ -190,13 +229,9 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
       );
       if (crtRes.ok) {
         const certs = (await crtRes.json()) as Array<{
-          issuer_name?: string;
-          not_before?: string;
-          not_after?: string;
-          common_name?: string;
-          name_value?: string;
+          issuer_name?: string; not_before?: string; not_after?: string;
+          common_name?: string; name_value?: string;
         }>;
-        // Find the most recent cert matching this exact domain
         const matching = certs
           .filter((c) => c.common_name === domain || c.name_value?.split("\n").includes(domain))
           .sort((a, b) => new Date(b.not_before ?? 0).getTime() - new Date(a.not_before ?? 0).getTime());
@@ -207,18 +242,9 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
           validTo = latest.not_after ? new Date(latest.not_after).toISOString() : null;
         }
       }
-    } catch { /* crt.sh unavailable — we still know HTTPS works */ }
+    } catch { /* crt.sh unavailable */ }
 
-    // Report as valid without a letter grade (SSL Labs didn't provide one)
-    return {
-      grade: "Valid",
-      issuer,
-      valid_from: validFrom,
-      valid_to: validTo,
-      protocols: [],
-      key_exchange: null,
-      error: null,
-    };
+    return { grade: "Valid", issuer, valid_from: validFrom, valid_to: validTo, protocols: [], key_exchange: null, error: null };
   } catch {
     return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: originalError };
   }

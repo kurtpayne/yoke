@@ -236,7 +236,7 @@ function SkeletonResults() {
 
 // ─── Tab Content Components ────────────────────────────────────
 
-function OverviewTab({ data }: { data: AnalysisResult }) {
+function OverviewTab({ data, streaming }: { data: AnalysisResult; streaming?: boolean }) {
   // Quick tech stack badges
   const techBadges = (data.tech_stack ?? []).slice(0, 8);
 
@@ -263,7 +263,7 @@ function OverviewTab({ data }: { data: AnalysisResult }) {
       </div>
 
       {/* Domain Signals — the main event */}
-      <DomainSignals data={data} />
+      <DomainSignals data={data} streaming={streaming} />
 
       {/* Quick info cards */}
       <PanelGrid tabId="overview-quick" panels={quickInfoPanels} />
@@ -457,9 +457,9 @@ function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
 
 // ─── Main Tab Renderer ─────────────────────────────────────────
 
-function TabContent({ tab, data, onNavigate }: { tab: TabId; data: AnalysisResult; onNavigate: (d: string) => void }) {
+function TabContent({ tab, data, onNavigate, streaming }: { tab: TabId; data: AnalysisResult; onNavigate: (d: string) => void; streaming?: boolean }) {
   switch (tab) {
-    case "overview": return <OverviewTab data={data} />;
+    case "overview": return <OverviewTab data={data} streaming={streaming} />;
     case "infrastructure": return <InfrastructureTab data={data} />;
     case "security": return <SecurityTab data={data} />;
     case "tech": return <TechTab data={data} />;
@@ -700,7 +700,7 @@ export function App() {
             {analyze.partialData && hasEnoughForTabs(analyze.partialData) && (
               <div className="mt-3">
                 <ErrorBoundary fallbackLabel="This tab encountered an error" key={activeTab + "-streaming"}>
-                  <TabContent tab={activeTab} data={cleanTechStack(analyze.partialData as AnalysisResult)} onNavigate={handleNavigate} />
+                  <TabContent tab={activeTab} data={cleanTechStack(analyze.partialData as AnalysisResult)} onNavigate={handleNavigate} streaming />
                 </ErrorBoundary>
               </div>
             )}
@@ -710,8 +710,8 @@ export function App() {
         {/* Final results */}
         {analyze.data && !analyze.isPending && (
           <div className="mt-0">
-            {/* Curl API showcase bar — hidden on AI tab (cost control) */}
-            {activeTab !== 'ai' && (
+            {/* Curl API showcase bar — hidden on tabs without direct API mapping */}
+            {activeTab !== 'ai' && activeTab !== 'explore' && (
               <div className="mb-3">
                 <CurlBar domain={analyze.data.domain} activeTab={activeTab} />
               </div>

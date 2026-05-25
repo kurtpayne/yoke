@@ -58,13 +58,17 @@ export function DnsPanel({ data }: { data: AnalysisResult }) {
               {type}
               {tooltip && <Tooltip text={tooltip} help />}
             </div>
-            {records.map((rec, i) => (
-              <DataRow
-                key={`${type}-${i}`}
-                label={<span className="flex items-center gap-1">TTL {rec.ttl} <Tooltip text={`Time to Live: DNS resolvers cache this record for ${rec.ttl} seconds before re-querying`} help /></span>}
-                value={<span className="break-all" style={{ fontSize: "11px" }}>{rec.data}</span>}
-              />
-            ))}
+            {records.map((rec, i) => {
+              // Show the record name when it differs from the root domain (e.g., _ans.domain, _agents.domain)
+              const isSubdomain = rec.name !== data.domain && rec.name !== data.domain.replace(/\.$/, "");
+              return (
+                <DataRow
+                  key={`${type}-${i}`}
+                  label={<span className="flex items-center gap-1">{isSubdomain && <span style={{ color: "var(--accent)", fontSize: "10px", fontFamily: "var(--font-mono)" }}>{rec.name}</span>}TTL {rec.ttl} <Tooltip text={`Time to Live: DNS resolvers cache this record for ${rec.ttl} seconds before re-querying`} help /></span>}
+                  value={<span className="break-all" style={{ fontSize: "11px" }}>{rec.data}</span>}
+                />
+              );
+            })}
           </div>
         );
       })}

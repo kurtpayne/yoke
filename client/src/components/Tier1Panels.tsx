@@ -271,14 +271,14 @@ export function WellKnownPanel({ data }: { data: AnalysisResult }) {
                   {/* Manifest details */}
                   {ep.name === "Web App Manifest" && (
                     <div className="flex flex-wrap gap-1.5">
-                      {ep.data.name && <span className="badge badge-info" style={{ fontSize: "9px" }}>{ep.data.name as string}</span>}
-                      {ep.data.display && <span className="badge badge-info" style={{ fontSize: "9px" }}>display: {ep.data.display as string}</span>}
-                      {ep.data.theme_color && (
+                      {ep.data.name ? <span className="badge badge-info" style={{ fontSize: "9px" }}>{String(ep.data.name)}</span> : null}
+                      {ep.data.display ? <span className="badge badge-info" style={{ fontSize: "9px" }}>display: {String(ep.data.display)}</span> : null}
+                      {ep.data.theme_color ? (
                         <span className="badge badge-info" style={{ fontSize: "9px" }}>
-                          <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: ep.data.theme_color as string, marginRight: "4px", verticalAlign: "middle" }} />
-                          {ep.data.theme_color as string}
+                          <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", background: String(ep.data.theme_color), marginRight: "4px", verticalAlign: "middle" }} />
+                          {String(ep.data.theme_color)}
                         </span>
-                      )}
+                      ) : null}
                       {(ep.data.icon_count as number) > 0 && <span className="badge badge-info" style={{ fontSize: "9px" }}>{ep.data.icon_count as number} icons</span>}
                     </div>
                   )}
@@ -324,7 +324,7 @@ export function CaaPanel({ data }: { data: AnalysisResult }) {
           : "No CAA records — any Certificate Authority can issue certificates for this domain"
         }>
           <span style={{ cursor: "help" }}>
-            <StatusBadge status={caa.has_caa ? "pass" : "warning"} label={caa.has_caa ? `${caa.records.length} CA${caa.records.length !== 1 ? "s" : ""} authorized` : "No CAA"} />
+            <StatusBadge status={caa.has_caa ? "pass" : "warn"} label={caa.has_caa ? `${caa.records.length} CA${caa.records.length !== 1 ? "s" : ""} authorized` : "No CAA"} />
           </span>
         </Tooltip>
       }
