@@ -79,7 +79,7 @@ function CollapsiblePanel({ title, icon, badge, collapsed, onToggle, children }:
           <span className="opacity-60">{icon}</span>
           <span>{title}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
           {!collapsed && badge}
           <span className="yoke-chevron" style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0)" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

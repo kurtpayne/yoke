@@ -104,7 +104,7 @@ export function SecurityTxtPanel({ data }: { data: AnalysisResult }) {
             </>
           ) : (
             <Tooltip text="No security.txt file found at /.well-known/security.txt — this is the standard way to publish vulnerability disclosure policies (RFC 9116)">
-              <span style={{ cursor: "help" }}><StatusBadge status="warning" label="Not found" /></span>
+              <span style={{ cursor: "help" }}><StatusBadge status="warn" label="Not found" /></span>
             </Tooltip>
           )}
         </div>
@@ -398,7 +398,7 @@ export function GreynoisePanel({ data }: { data: AnalysisResult }) {
           )}
           {gn.noise && (
             <Tooltip text="This IP has been observed scanning or crawling the internet — could be benign (search engine) or malicious (bot)">
-              <StatusBadge status="warning" label="Internet Scanner" />
+              <StatusBadge status="warn" label="Internet Scanner" />
             </Tooltip>
           )}
           <Tooltip text={`GreyNoise classification: ${classLabel} — based on observed internet scanning behavior`}>

@@ -4,7 +4,6 @@ import { api } from "../api";
 import type { DomainSuggestion } from "../api";
 import { Panel, StatusBadge, ErrorState } from "./Panel";
 import { AiReadinessPanel } from "./AiReadinessPanel";
-import { AvailabilityPanel } from "./AvailabilityPanel";
 import type { AnalysisResult } from "../utils/types";
 
 interface ExploreTabProps {
@@ -328,7 +327,6 @@ export function ExploreTab({ domain, data, onNavigate }: ExploreTabProps) {
         </p>
       </div>
       <AiReadinessPanel data={data} />
-      <AvailabilityPanel domain={domain} />
       <SuggestionsPanel domain={domain} onNavigate={onNavigate} />
       <SubdomainsPanel domain={domain} onNavigate={onNavigate} />
       {ip && <ReverseIPPanel ip={ip} onNavigate={onNavigate} />}

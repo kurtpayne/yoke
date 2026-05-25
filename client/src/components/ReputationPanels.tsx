@@ -170,6 +170,30 @@ export function EmailAuthPanel({ data }: { data: AnalysisResult }) {
           </span>
         </div>
       )}
+
+      {/* Extended: BIMI / MTA-STS / TLS-RPT */}
+      {(auth.bimi || auth.mta_sts || auth.tls_rpt) && (
+        <>
+          <div className="sub-section">Extended Email Security</div>
+          <div className="px-4 py-3 flex flex-wrap gap-2">
+            {auth.bimi && (
+              <Tooltip text="BIMI (Brand Indicators for Message Identification) — displays your brand logo in supported email clients next to authenticated messages">
+                <span style={{ cursor: "help" }}><StatusBadge status={auth.bimi.found ? "pass" : "neutral"} label={`BIMI ${auth.bimi.found ? "✓" : "✗"}`} /></span>
+              </Tooltip>
+            )}
+            {auth.mta_sts && (
+              <Tooltip text="MTA-STS (Mail Transfer Agent Strict Transport Security) — forces encrypted TLS connections for incoming email, preventing downgrade attacks">
+                <span style={{ cursor: "help" }}><StatusBadge status={auth.mta_sts.dns_found || auth.mta_sts.policy_found ? "pass" : "neutral"} label={`MTA-STS ${auth.mta_sts.dns_found || auth.mta_sts.policy_found ? "✓" : "✗"}`} /></span>
+              </Tooltip>
+            )}
+            {auth.tls_rpt && (
+              <Tooltip text="TLS-RPT (TLS Reporting) — receives reports about email delivery failures due to TLS issues">
+                <span style={{ cursor: "help" }}><StatusBadge status={auth.tls_rpt.found ? "pass" : "neutral"} label={`TLS-RPT ${auth.tls_rpt.found ? "✓" : "✗"}`} /></span>
+              </Tooltip>
+            )}
+          </div>
+        </>
+      )}
     </Panel>
   );
 }

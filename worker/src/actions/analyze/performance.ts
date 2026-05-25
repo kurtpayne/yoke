@@ -38,7 +38,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
     }
     
     return result;
-  } catch { return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "Check timed out", screenshot: null }; }
+  } catch { return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "PageSpeed timed out — site may block automated testing", screenshot: null }; }
 }
 
 // ─── NEW: Compression Detection ─────────────────────────────────────

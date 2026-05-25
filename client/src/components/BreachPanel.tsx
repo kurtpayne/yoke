@@ -184,7 +184,7 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
 
             {/* Individual breach cards */}
             {items.map((breach, i) => (
-              <BreachCard key={breach.Name} breach={breach} />
+              <BreachCard key={breach.name} breach={breach} />
             ))}
 
             {/* HIBP attribution */}

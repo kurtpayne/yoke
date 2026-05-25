@@ -20,7 +20,7 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
       <Panel title="Global Availability" icon={<Globe size={14} />}>
         <div className="p-4 flex flex-col items-center gap-3">
           <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", textAlign: "center" }}>
-            Test HTTP availability from 20+ worldwide locations via check-host.net
+            HTTP connectivity checks + DNS resolution from multiple providers
           </p>
           <button
             type="button"
@@ -32,7 +32,7 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
               border: "none", cursor: "pointer",
             }}
           >
-            <Globe size={12} /> Run Global Check
+            <Globe size={12} /> Run Availability Check
           </button>
         </div>
       </Panel>
@@ -46,7 +46,7 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
           <div className="inline-flex items-center gap-2">
             <RefreshCw size={14} className="animate-spin" style={{ color: "var(--accent)" }} />
             <span style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)" }}>
-              Testing from global nodes... (takes ~5s)
+              Running availability checks...
             </span>
           </div>
         </div>
@@ -60,9 +60,6 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
       <Panel title="Global Availability" icon={<Globe size={14} />}>
         <div className="p-4 flex flex-col items-center gap-2">
           <StatusBadge status="warn" label="Check returned no results" />
-          <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", textAlign: "center" }}>
-            check-host.net may be temporarily unavailable. Try again in a moment.
-          </p>
           <button
             type="button"
             onClick={() => refetch()}
@@ -80,9 +77,24 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
     );
   }
 
-  const upCount = data.results.filter((r) => r.status === "up").length;
-  const totalCount = data.results.length;
-  const allUp = upCount === totalCount;
+  const httpResults = data.results.filter((r) => r.type !== "dns");
+  const dnsResults = data.results.filter((r) => r.type === "dns");
+  const isGlobal = data.source === "check-host";
+  const edgeColo = data.edge_colo ?? null;
+
+  const httpUp = httpResults.filter((r) => r.status === "up").length;
+  const httpTotal = httpResults.length;
+  const httpPending = httpResults.filter((r) => r.status === "pending").length;
+  const allHttpUp = httpUp === httpTotal && httpPending === 0;
+
+  const dnsUp = dnsResults.filter((r) => r.status === "up").length;
+  const dnsTotal = dnsResults.length;
+
+  const thStyle = {
+    padding: "5px 12px",
+    fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600,
+    color: "var(--dim)", textTransform: "uppercase" as const, letterSpacing: "0.06em",
+  };
 
   return (
     <Panel
@@ -91,7 +103,10 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
       badge={
         <div className="flex items-center gap-1.5">
           <CliButton commands={availabilityCliCommands(domain)} domain={domain} />
-          <StatusBadge status={allUp ? "pass" : upCount > totalCount / 2 ? "warn" : "fail"} label={`${upCount}/${totalCount} UP`} />
+          <StatusBadge
+            status={allHttpUp ? "pass" : httpUp > httpTotal / 2 ? "warn" : "fail"}
+            label={`${httpUp}/${httpTotal} UP`}
+          />
           <button
             type="button"
             onClick={() => refetch()}
@@ -103,55 +118,164 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
         </div>
       }
     >
-      <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+      <div style={{ maxHeight: "500px", overflowY: "auto", overflowX: "auto" }}>
+        {/* HTTP Probes Section Header */}
+        <div style={{
+          padding: "6px 12px",
+          background: "var(--surface-raised)",
+          borderBottom: "1px solid var(--border-muted)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            HTTP Probes
+          </span>
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+            {isGlobal
+              ? `${httpTotal} worldwide locations`
+              : edgeColo
+                ? `from CF edge ${edgeColo}`
+                : `${httpTotal} probes from edge`}
+            {httpPending > 0 ? ` · ${httpPending} pending` : ""}
+          </span>
+        </div>
+
+        {/* HTTP Results Table */}
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border-muted)" }}>
-              <th style={{ padding: "6px 12px", textAlign: "left", fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Location</th>
-              <th style={{ padding: "6px 12px", textAlign: "center", fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Status</th>
-              <th style={{ padding: "6px 12px", textAlign: "right", fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Response</th>
-              <th style={{ padding: "6px 12px", textAlign: "right", fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Code</th>
+              <th style={{ ...thStyle, textAlign: "left" }}>Location</th>
+              <th style={{ ...thStyle, textAlign: "center" }}>Status</th>
+              <th style={{ ...thStyle, textAlign: "right" }}>Response</th>
+              <th style={{ ...thStyle, textAlign: "right" }}>Code</th>
             </tr>
           </thead>
           <tbody>
-            {data.results.map((r, i) => (
-              <tr key={`avail-${i}`} style={{ borderBottom: "1px solid var(--border-muted)" }}>
-                <td style={{ padding: "6px 12px" }}>
+            {httpResults.map((r, i) => (
+              <tr key={`http-${i}`} style={{ borderBottom: "1px solid var(--border-muted)" }}>
+                <td style={{ padding: "5px 12px" }}>
                   <div className="flex items-center gap-2">
                     <span style={{ fontSize: "14px" }}>{countryFlag(r.location.country_code)}</span>
                     <div>
-                      <div style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--text)" }}>{r.location.city || r.location.country}</div>
-                      <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>{r.location.country_code}</div>
+                      <div style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--text)" }}>
+                        {r.location.city || r.location.country}
+                      </div>
+                      {(r.ip || r.location.asn) && (
+                        <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+                          {[r.ip, r.location.asn].filter(Boolean).join(" · ")}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>
-                <td style={{ padding: "6px 12px", textAlign: "center" }}>
-                  <div className="flex items-center justify-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full" style={{ background: r.status === "up" ? "var(--success)" : r.status === "pending" ? "var(--warning)" : "var(--danger)" }} />
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: r.status === "up" ? "var(--success)" : r.status === "pending" ? "var(--warning)" : "var(--danger)", fontWeight: 600 }}>
-                      {r.status.toUpperCase()}
-                    </span>
-                  </div>
+                <td style={{ padding: "5px 12px", textAlign: "center" }}>
+                  <StatusDot status={r.status} />
                 </td>
-                <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "11px", color: r.response_time_ms != null ? (r.response_time_ms < 500 ? "var(--success)" : r.response_time_ms < 2000 ? "var(--warning)" : "var(--danger)") : "var(--dim)" }}>
+                <td style={{
+                  padding: "5px 12px", textAlign: "right",
+                  fontFamily: "var(--font-mono)", fontSize: "11px",
+                  color: r.response_time_ms != null
+                    ? (r.response_time_ms < 300 ? "var(--success)" : r.response_time_ms < 1000 ? "var(--warning)" : "var(--danger)")
+                    : "var(--dim)",
+                }}>
                   {r.response_time_ms != null ? `${r.response_time_ms}ms` : "—"}
                 </td>
-                <td style={{ padding: "6px 12px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>
+                <td style={{ padding: "5px 12px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>
                   {r.status_code ?? "—"}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {/* DNS Resolution Section */}
+        {dnsResults.length > 0 && (
+          <>
+            <div style={{
+              padding: "6px 12px",
+              background: "var(--surface-raised)",
+              borderTop: "1px solid var(--border-muted)",
+              borderBottom: "1px solid var(--border-muted)",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                DNS Resolution
+              </span>
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+                {dnsUp}/{dnsTotal} resolving
+              </span>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <tbody>
+                {dnsResults.map((r, i) => (
+                  <tr key={`dns-${i}`} style={{ borderBottom: "1px solid var(--border-muted)" }}>
+                    <td style={{ padding: "5px 12px" }}>
+                      <div className="flex items-center gap-2">
+                        <span style={{ fontSize: "14px" }}>{countryFlag(r.location.country_code)}</span>
+                        <div>
+                          <div style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--text)" }}>
+                            {r.location.city}
+                          </div>
+                          <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+                            {r.location.country}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: "5px 12px", textAlign: "center" }}>
+                      <StatusDot status={r.status} label={r.status === "up" ? "RESOLVES" : "FAIL"} />
+                    </td>
+                    <td colSpan={2} style={{
+                      padding: "5px 12px", textAlign: "right",
+                      fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)",
+                      maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {r.message ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </div>
-      {data.permanent_link && (
+
+      {/* Footer: link to check-host.net results or edge info */}
+      {data.permanent_link ? (
         <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
-          <a href={data.permanent_link} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--accent)", textDecoration: "none" }}>
+          <a href={data.permanent_link} target="_blank" rel="noopener noreferrer"
+            style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--accent)", textDecoration: "none" }}>
             View full results on check-host.net →
           </a>
         </div>
-      )}
+      ) : !isGlobal && edgeColo ? (
+        <div className="px-3 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
+          <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+            Probed from Cloudflare {edgeColo} edge · Results reflect connectivity from your region
+          </span>
+        </div>
+      ) : null}
     </Panel>
+  );
+}
+
+function StatusDot({ status, label }: { status: string; label?: string }) {
+  const isPending = status === "pending";
+  const isUp = status === "up";
+  const isError = status === "error";
+  const color = isUp ? "var(--success)" : isPending ? "var(--warning)" : isError ? "var(--warning)" : "var(--danger)";
+  const text = label ?? (isUp ? "UP" : isPending ? "..." : isError ? "ERROR" : "DOWN");
+
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      {isPending ? (
+        <RefreshCw size={10} className="animate-spin" style={{ color }} />
+      ) : (
+        <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+      )}
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color, fontWeight: 600 }}>
+        {text}
+      </span>
+    </div>
   );
 }
 

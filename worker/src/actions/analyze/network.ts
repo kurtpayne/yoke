@@ -24,12 +24,42 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[]): Pro
 
 // ─── Blocklist Checks ────────────────────────────────────────────────
 
+// ─── Blocklist Configuration ─────────────────────────────────────────
+// Reliability notes (verified 2026-05-24):
+//
+// KEEP:
+//   Barracuda (b.barracudacentral.org) — reliable, no false positives on major domains
+//   SpamCop (bl.spamcop.net) — reliable, low false positive rate
+//   SORBS (dnsbl.sorbs.net) — reliable, no false positives on major domains
+//
+// FIXED (were returning false positives):
+//   Spamhaus ZEN (zen.spamhaus.org) — returns 127.255.255.254 when queried via
+//     public resolvers (dns.google). This is NOT a real listing — it means
+//     "query blocked, use Spamhaus DQS instead". Code now filters this out.
+//
+// REMOVED:
+//   CBL (cbl.abuseat.org) — redundant with Spamhaus ZEN. CBL is the data source
+//     for Spamhaus XBL, which is already included in ZEN. Also returns
+//     127.255.255.254 via public resolvers (same issue as Spamhaus).
+//
+// DNSBL error response codes (NOT real listings):
+//   127.255.255.254 = "query via public/open resolver — blocked"
+//   127.255.255.255 = "query used incorrect DNSBL name"
+//
+// Spamhaus legitimate listing codes (these ARE real listings):
+//   127.0.0.2    = SBL (Spamhaus Block List)
+//   127.0.0.3    = SBL CSS
+//   127.0.0.4-7  = XBL (Exploits Block List / CBL data)
+//   127.0.0.10-11 = PBL (Policy Block List)
+// ─────────────────────────────────────────────────────────────────────
+
+const DNSBL_ERROR_CODES = new Set(["127.255.255.254", "127.255.255.255"]);
+
 export const BLOCKLISTS = [
   { name: "Spamhaus ZEN", zone: "zen.spamhaus.org" },
   { name: "Barracuda", zone: "b.barracudacentral.org" },
   { name: "SpamCop", zone: "bl.spamcop.net" },
   { name: "SORBS", zone: "dnsbl.sorbs.net" },
-  { name: "CBL", zone: "cbl.abuseat.org" },
 ] as const;
 
 export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<BlocklistResult[]> {
@@ -41,8 +71,20 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
     try {
       const res = await fetchWithTimeout(`https://dns.google/resolve?name=${reversed}.${bl.zone}&type=A`, { timeout: 4000 });
       const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
-      const listed = data.Status === 0 && !!data.Answer?.length;
-      results.push({ name: bl.name, zone: bl.zone, listed, detail: listed ? (data.Answer?.[0]?.data ?? null) : null });
+      const returnIp = data.Answer?.[0]?.data ?? null;
+
+      // Filter out DNSBL error responses — these are NOT real listings.
+      // 127.255.255.254 = "queried via public resolver, blocked"
+      // 127.255.255.255 = "incorrect DNSBL name"
+      const isErrorResponse = returnIp !== null && DNSBL_ERROR_CODES.has(returnIp);
+      const listed = data.Status === 0 && !!data.Answer?.length && !isErrorResponse;
+
+      results.push({
+        name: bl.name,
+        zone: bl.zone,
+        listed,
+        detail: isErrorResponse ? "query blocked (public resolver)" : listed ? returnIp : null,
+      });
     } catch { results.push({ name: bl.name, zone: bl.zone, listed: false, detail: "check failed" }); }
   });
   await Promise.allSettled(checks);
