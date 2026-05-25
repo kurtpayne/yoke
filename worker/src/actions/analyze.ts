@@ -139,7 +139,6 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   // We must NOT use those for security/tech/CDN analysis.
   const httpStatusCode = httpAnalysis?.status_code ?? 0;
   const httpProbeSucceeded = httpStatusCode >= 200 && httpStatusCode < 400;
-  const httpProbeBlocked = httpStatusCode === 403 || httpStatusCode === 502 || httpStatusCode === 503 || httpStatusCode === 530;
 
   // Only trust HTML + headers if we got a real response
   const html = httpProbeSucceeded ? (httpAnalysis?.html ?? "") : "";
@@ -188,7 +187,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const wayback = unwrap(phase2Results[8], null) as Awaited<ReturnType<typeof checkWayback>>;
   const tranco = unwrap(phase2Results[9], null) as number | null;
   const observatory = unwrap(phase2Results[10], null) as Awaited<ReturnType<typeof checkObservatory>>;
-  const emailAuth = unwrap(phase2Results[11], { spf: null, dmarc: null, dkim_selector: null, has_mx: false, mx_records: [], dkim_found: false } as any) as EmailAuthResult;
+  const emailAuth = unwrap(phase2Results[11], { spf: { found: false, record: null, mechanisms: [], all_qualifier: null }, dmarc: { found: false, record: null, policy: null, subdomain_policy: null, rua: null, ruf: null }, dkim_selectors_found: [], bimi: { found: false, record: null, logo_url: null, authority_url: null }, mta_sts: { dns_found: false, policy_found: false, mode: null }, tls_rpt: { found: false, record: null, rua: null } }) as EmailAuthResult;
   const carbon = unwrap(phase2Results[12], null) as Awaited<ReturnType<typeof checkCarbon>>;
   const shodanResult = unwrap(phase2Results[13], null) as ShodanResult | null;
   const dnssecResult = unwrap(phase2Results[14], { enabled: false, valid: null, ds_records: [], dnskey_records: [], nsec_type: null, algorithm: null } as any) as DnssecResult;
@@ -196,7 +195,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   const certTransparency = unwrap(phase2Results[16], { certificates: [], total_found: 0 } as any) as CertTransparencyResult;
   const securityTxt = unwrap(phase2Results[17], { exists: false, url: null, contact: null, encryption: null, policy: null, acknowledgements: null, preferred_languages: null, canonical: null, expires: null, hiring: null } as any) as SecurityTxtResult;
   const greenHosting = unwrap(phase2Results[18], { green: null, hosted_by: null, supporting_documents: [] } as any) as GreenHostingResult;
-  const wellKnown = unwrap(phase2Results[19], { change_password: null, security_txt: false, openid_configuration: null, apple_app_site_association: false, assetlinks_json: false, humans_txt: false, dnt_policy: false, nodeinfo: null } as any) as WellKnownResult;
+  const wellKnown = unwrap(phase2Results[19], { endpoints: [], pwa_ready: false, has_mobile_apps: false, ads_partner_count: null }) as WellKnownResult;
   const greynoiseResult = unwrap(phase2Results[20], null) as GreynoiseResult | null;
   const ansResult = unwrap(phase2Results[21], null) as Awaited<ReturnType<typeof checkAnsRecords>> | null;
 

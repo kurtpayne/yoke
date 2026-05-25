@@ -24,10 +24,10 @@ export async function checkLlmsTxt(domain: string): Promise<LlmsTxtResult> {
     fetchWithTimeout(`https://${domain}/llms-full.txt`, { timeout: 5000 }),
   ]);
   if (r1.status === "fulfilled" && r1.value.ok) {
-    try { const text = await r1.value.text(); if (text && !text.includes("<!doctype") && !text.includes("<html")) { result.found = true; result.content = text.slice(0, 3000); } } catch { /* ignore */ }
+    try { const text = await r1.value.text(); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.found = true; result.content = text.slice(0, 3000); } } catch { /* ignore */ }
   }
   if (r2.status === "fulfilled" && r2.value.ok) {
-    try { const text = await r2.value.text(); if (text && !text.includes("<!doctype") && !text.includes("<html")) { result.full_found = true; result.full_content = text.slice(0, 5000); } } catch { /* ignore */ }
+    try { const text = await r2.value.text(); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.full_found = true; result.full_content = text.slice(0, 5000); } } catch { /* ignore */ }
   }
   return result;
 }
@@ -85,7 +85,7 @@ export async function checkAnsRecords(domain: string): Promise<AnsResult> {
     try {
       const text = await agentJsonRes.value.text();
       // Verify it's actually JSON, not an HTML error page
-      if (text && !text.includes("<!doctype") && !text.includes("<html")) {
+      if (text && !text.toLowerCase().includes("<!doctype") && !text.toLowerCase().includes("<html")) {
         JSON.parse(text); // validate JSON
         result.agent_json_found = true;
       }
@@ -508,15 +508,30 @@ export function calculateAiReadiness(
   // Check robots.txt for AI bots
   const aiAgents: Record<string, { allow: number; deny: number }> = {};
   const aiBotNames = ["GPTBot", "ClaudeBot", "CCBot", "Bingbot", "Google-Extended", "anthropic-ai", "ChatGPT-User"];
+
+  // First pass: collect wildcard defaults
+  let wildcardDeny = false;
+  let wildcardAllow = false;
+  for (const block of robotsParsed.blocks) {
+    if (block.user_agent === "*") {
+      if (block.disallow.includes("/")) wildcardDeny = true;
+      else wildcardAllow = true;
+    }
+  }
+  // Apply wildcard as default for all bots
+  if (wildcardDeny || wildcardAllow) {
+    for (const bot of aiBotNames) {
+      aiAgents[bot] = { allow: wildcardAllow ? 1 : 0, deny: wildcardDeny ? 1 : 0 };
+    }
+  }
+  // Second pass: bot-specific rules override wildcard
   for (const block of robotsParsed.blocks) {
     const ua = block.user_agent.toLowerCase();
     for (const bot of aiBotNames) {
-      if (ua === bot.toLowerCase() || ua === "*") {
-        if (!aiAgents[bot]) aiAgents[bot] = { allow: 0, deny: 0 };
-        if (ua === bot.toLowerCase()) {
-          if (block.disallow.includes("/")) aiAgents[bot]!.deny++;
-          else aiAgents[bot]!.allow++;
-        }
+      if (ua === bot.toLowerCase()) {
+        aiAgents[bot] = { allow: 0, deny: 0 }; // reset wildcard for this bot
+        if (block.disallow.includes("/")) aiAgents[bot].deny++;
+        else aiAgents[bot].allow++;
       }
     }
   }

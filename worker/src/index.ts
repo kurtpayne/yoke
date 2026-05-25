@@ -50,6 +50,43 @@ function isValidDomain(domain: string): boolean {
   return DOMAIN_RE.test(domain) && domain.includes(".");
 }
 
+/** Constant-time string comparison to prevent timing side-channels. */
+function timingSafeEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+
+/** Verify admin Basic auth. Returns null if valid, or a Response to return if invalid. */
+function checkAdminAuth(request: Request, adminKey: string | undefined): Response | null {
+  if (!adminKey) return new Response("Admin key not configured", { status: 503 });
+  const authHeader = request.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Basic ")) {
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+    });
+  }
+  let pass: string;
+  try {
+    const decoded = atob(authHeader.slice(6));
+    [, pass] = decoded.split(":");
+  } catch {
+    return new Response("Malformed credentials", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+    });
+  }
+  if (!pass || !timingSafeEq(pass, adminKey)) {
+    return new Response("Invalid credentials", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+    });
+  }
+  return null; // auth passed
+}
+
 /** Normalize and validate a domain string. Returns the cleaned domain or null if invalid. */
 function cleanDomain(raw: string): string | null {
   const d = normalizeDomain(raw);
@@ -77,7 +114,7 @@ export default {
 
     if (method === "GET" && path === "/sitemap.xml") {
       return new Response(
-        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://yoke.lol</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>https://yoke.lol/api/docs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>\n  <url><loc>https://yoke.lol/status</loc><changefreq>hourly</changefreq><priority>0.5</priority></url>\\n  <url><loc>https://yoke.lol/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n  <url><loc>https://yoke.lol/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>`,
+        `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://yoke.lol</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>https://yoke.lol/api/docs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>\n  <url><loc>https://yoke.lol/status</loc><changefreq>hourly</changefreq><priority>0.5</priority></url>\n  <url><loc>https://yoke.lol/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n  <url><loc>https://yoke.lol/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>`,
         { headers: { "Content-Type": "application/xml;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
       );
     }
@@ -96,23 +133,8 @@ export default {
 
     // Usage dashboard — admin-only, basic auth with ADMIN_KEY secret
     if (path === "/usage" || path === "/api/usage") {
-      if (!env.ADMIN_KEY) return new Response("Admin key not configured", { status: 503 });
-      // Check basic auth
-      const authHeader = request.headers.get("Authorization") || "";
-      if (!authHeader.startsWith("Basic ")) {
-        return new Response("Unauthorized", {
-          status: 401,
-          headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
-        });
-      }
-      const decoded = atob(authHeader.slice(6));
-      const [, pass] = decoded.split(":");
-      if (pass !== env.ADMIN_KEY) {
-        return new Response("Invalid credentials", {
-          status: 401,
-          headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
-        });
-      }
+      const authErr = checkAdminAuth(request, env.ADMIN_KEY);
+      if (authErr) return authErr;
       const days = parseInt(url.searchParams.get("days") ?? "30");
       const stats = await getUsageStats(env.STATS_DB, days);
       if (path === "/api/usage") return json(stats);
@@ -138,8 +160,12 @@ export default {
         // POST /api/compare
         if (method === "POST" && path === "/api/compare") {
           const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
+          if (!body.domain1 || !body.domain2) return json({ error: "domain1 and domain2 are required" }, 400);
+          const d1 = cleanDomain(body.domain1);
+          const d2 = cleanDomain(body.domain2);
+          if (!d1 || !d2) return json({ error: "Invalid domain format" }, 400);
           await trackUsage(env.STATS_DB, "compare");
-          return compareDomains(body, env);
+          return compareDomains({ domain1: d1, domain2: d2 }, env);
         }
 
         // GET /api/recent
@@ -153,7 +179,9 @@ export default {
         if (method === "POST" && path === "/api/subdomains") {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
-          const result = await getSubdomains(env.DB, body.domain);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const result = await getSubdomains(env.DB, domain);
           await trackUsage(env.STATS_DB, "subdomains");
           return json(result);
         }
@@ -195,7 +223,9 @@ export default {
         if (method === "POST" && path === "/api/social") {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
-          const result = await getSocialAccounts(env.DB, body.domain);
+          const domain = cleanDomain(body.domain);
+          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          const result = await getSocialAccounts(env.DB, domain);
           await trackUsage(env.STATS_DB, "social");
           return json(result);
         }
@@ -262,8 +292,10 @@ export default {
           }, 200);
         }
 
-        // DELETE /api/cache/:domain — purge cached analysis for a domain
+        // DELETE /api/cache/:domain — purge cached analysis for a domain (admin-only)
         if (method === "DELETE" && path.startsWith("/api/cache/")) {
+          const authErr = checkAdminAuth(request, env.ADMIN_KEY);
+          if (authErr) return authErr;
           const domain = cleanDomain(path.replace("/api/cache/", ""));
           if (!domain) return json({ error: "Invalid domain" }, 400);
           try {
