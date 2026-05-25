@@ -28,12 +28,21 @@ Domain expertise context:
 - HTTP/2 is standard; sites without it are running outdated infra
 - WordPress sites should have up-to-date core, themes, and plugins; version disclosure is a minor risk
 
+New signal interpretation:
+- WAF detection: presence is a positive security signal; note the specific provider; "high" confidence = definitive, "medium" = likely, "low" = possible
+- Trust signals: 5 categories (security, identity, transparency, operational, reputation); more "good" signals = stronger trust posture; cross-reference with other analysis data to find gaps
+- Cache analysis: proper caching (CDN, long TTLs for static assets) = better performance; no-cache directives on static resources is a missed optimization; identify the CDN provider if detected
+- Network health: DNS inconsistency across resolvers = misconfiguration or CDN geo-routing (context matters); slow TLS handshakes (>100ms) suggest certificate chain issues or distant servers; RIPE BGP visibility <50% = fragile routing; high BGP update churn = instability
+- Accessibility: WCAG compliance is both legal obligation (ADA/EAA) and UX quality; score <50 is poor; missing alt text on images and missing form labels are most impactful failures
+- Third-party scripts: >10 third-party scripts = significant performance/privacy overhead; render-blocking scripts delay page load; note categories (analytics, ads, social) for privacy implications
+- Cookie consent: CMP detection indicates GDPR compliance effort; cookies set before consent = compliance violation risk; p3p_present suggests legacy IE-era configuration
+
 Output ONLY valid JSON in this exact format (no markdown, no explanation outside the JSON):
 {
   "summary": "2-3 sentence overall assessment synthesizing key findings",
   "posture": "strong|fair|poor|critical",
   "key_findings": [
-    { "category": "security|infrastructure|performance|trust|seo|email", "finding": "...", "severity": "info|low|medium|high", "action": "..." }
+    { "category": "security|infrastructure|performance|trust|seo|email|network|privacy|accessibility", "finding": "...", "severity": "info|low|medium|high", "action": "..." }
   ],
   "persona_insights": {
     "site_owner": "2-3 sentences of actionable advice",
@@ -103,6 +112,69 @@ function sanitizeForLLM(data: Record<string, unknown>): Record<string, unknown> 
     const m = { ...(sanitized.meta as Record<string, unknown>) };
     delete m.robots_txt; // raw text, already parsed in robots_parsed
     sanitized.meta = m;
+  }
+
+  // Strip verbose third-party script URLs — keep counts, categories, and flags
+  if (sanitized.third_party_scripts && typeof sanitized.third_party_scripts === "object") {
+    const tps = { ...(sanitized.third_party_scripts as Record<string, unknown>) };
+    if (tps.categories && typeof tps.categories === "object") {
+      const cats: Record<string, unknown> = {};
+      for (const [cat, val] of Object.entries(tps.categories as Record<string, unknown>)) {
+        if (val && typeof val === "object" && "count" in (val as Record<string, unknown>)) {
+          cats[cat] = { count: (val as Record<string, unknown>).count };
+        }
+      }
+      tps.categories = cats;
+    }
+    sanitized.third_party_scripts = tps;
+  }
+
+  // Strip verbose accessibility check details — keep name, status, and impact
+  if (sanitized.accessibility && typeof sanitized.accessibility === "object") {
+    const a11y = { ...(sanitized.accessibility as Record<string, unknown>) };
+    if (Array.isArray(a11y.checks)) {
+      a11y.checks = (a11y.checks as Array<Record<string, unknown>>).map(check => ({
+        name: check.name,
+        status: check.status,
+        impact: check.impact,
+      }));
+    }
+    sanitized.accessibility = a11y;
+  }
+
+  // Strip verbose cookie details — keep category counts and compliance flags
+  if (sanitized.cookie_consent && typeof sanitized.cookie_consent === "object") {
+    const cc = { ...(sanitized.cookie_consent as Record<string, unknown>) };
+    if (Array.isArray(cc.cookies_set)) {
+      const cookies = cc.cookies_set as Array<Record<string, unknown>>;
+      cc.cookie_count = cookies.length;
+      cc.cookie_categories = cookies.reduce((acc: Record<string, number>, c) => {
+        const cat = String(c.category || "unknown");
+        acc[cat] = (acc[cat] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      cc.insecure_cookies = cookies.filter(c => !c.secure).length;
+      delete cc.cookies_set;
+    }
+    sanitized.cookie_consent = cc;
+  }
+
+  // Strip per-resolver IPs from DNS propagation — keep consistency summary
+  if (sanitized.network_health && typeof sanitized.network_health === "object") {
+    const nh = { ...(sanitized.network_health as Record<string, unknown>) };
+    if (nh.dns_propagation && typeof nh.dns_propagation === "object") {
+      const dns = { ...(nh.dns_propagation as Record<string, unknown>) };
+      if (Array.isArray(dns.resolvers)) {
+        dns.resolvers = (dns.resolvers as Array<Record<string, unknown>>).map(r => ({
+          name: r.name,
+          status: r.status,
+          response_time_ms: r.response_time_ms,
+          ip_count: Array.isArray(r.ips) ? (r.ips as string[]).length : 0,
+        }));
+      }
+      nh.dns_propagation = dns;
+    }
+    sanitized.network_health = nh;
   }
 
   return sanitized;
