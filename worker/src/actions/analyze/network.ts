@@ -1,4 +1,4 @@
-import { fetchWithTimeout, FLY_PROBE_URL } from "../../helpers";
+import { fetchWithTimeout, getFlyProbeUrl } from "../../helpers";
 import type { DnsRecord, IpInfo, BlocklistResult, SslResult, ShodanResult, DnssecResult } from "./types";
 
 // ─── IP Geolocation ──────────────────────────────────────────────────
@@ -169,7 +169,7 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
   // Try Fly.io SSL probe first (direct TLS handshake, ~200ms, full cert info)
   try {
     const probeRes = await fetchWithTimeout(
-      `${FLY_PROBE_URL}/probe-ssl?domain=${encodeURIComponent(domain)}`,
+      `${getFlyProbeUrl()}/probe-ssl?domain=${encodeURIComponent(domain)}`,
       { timeout: 12000 }
     );
     if (probeRes.ok) {
@@ -210,7 +210,7 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
   try {
     const httpsRes = await fetchWithTimeout(`https://${domain}/`, {
       timeout: 8000,
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://yoke.lol)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/kurtpayne/yoke)" },
     });
     const httpsWorks = httpsRes.status > 0;
 
@@ -256,7 +256,7 @@ export async function checkStatus(domain: string): Promise<{ is_up: boolean; sta
   // Try Fly.io proxy first (avoids CF Worker IP blocks for sites like meta.com)
   try {
     const probeRes = await fetchWithTimeout(
-      `${FLY_PROBE_URL}/probe-status?domain=${encodeURIComponent(domain)}`,
+      `${getFlyProbeUrl()}/probe-status?domain=${encodeURIComponent(domain)}`,
       { timeout: 15000 }
     );
     if (probeRes.ok) {

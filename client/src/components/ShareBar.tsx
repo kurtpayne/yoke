@@ -7,7 +7,7 @@ interface ShareBarProps {
 
 export function ShareBar({ domain }: ShareBarProps) {
   const [copied, setCopied] = useState(false);
-  const url = `https://yoke.lol/${domain}`;
+  const url = `${window.location.origin}/${domain}`;
 
   const copyLink = useCallback(async () => {
     try {

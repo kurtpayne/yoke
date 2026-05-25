@@ -66,7 +66,7 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-export async function renderStatusPage(db: D1Database): Promise<Response> {
+export async function renderStatusPage(db: D1Database, baseUrl = "https://yoke.lol"): Promise<Response> {
   const data = await getStatusPageData(db);
 
   const totalErrors24h = data.apis.reduce((s, a) => s + a.errors_24h, 0);
@@ -137,7 +137,7 @@ export async function renderStatusPage(db: D1Database): Promise<Response> {
 <body>
   <div class="container">
     <header>
-      <div class="logo"><a href="https://yoke.lol">⚡ yoke<span>.lol</span></a></div>
+      <div class="logo"><a href="${baseUrl}">⚡ yoke<span>.lol</span></a></div>
       <h1>API Status</h1>
       <div class="overall"><span class="dot" style="background:${overallColor}"></span>${escHtml(overallLabel)}</div>
       <p class="subtitle">Real-time health of external APIs that Yoke depends on. Each bar = 1 hour over the last 24h. <a href="/api/health" class="json-link">JSON</a></p>
@@ -145,7 +145,7 @@ export async function renderStatusPage(db: D1Database): Promise<Response> {
     ${rows}
     <footer>
       <span>Updated ${escHtml(data.generated_at)} · Errors auto-prune after 7 days</span>
-      <span><a href="https://yoke.lol">yoke.lol</a> · <a href="https://github.com/kurtpayne/yoke">GitHub</a></span>
+      <span><a href="${baseUrl}">${escHtml(new URL(baseUrl).hostname)}</a> · <a href="https://github.com/kurtpayne/yoke">GitHub</a></span>
     </footer>
   </div>
 </body>

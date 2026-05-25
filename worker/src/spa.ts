@@ -2,29 +2,36 @@
 // Handles: content negotiation, OG tag injection, security headers, static pages, asset passthrough
 
 import type { Env } from "./helpers";
-import { PRIVACY_HTML, TERMS_HTML, SECURITY_TXT, API_DOCS_HTML } from "./pages";
+import { getBaseUrl } from "./helpers";
+import { PRIVACY_HTML, TERMS_HTML, SECURITY_TXT } from "./pages";
 
 // ─── Security Headers ────────────────────────────────────────────────
 // Applied to all HTML responses served by the worker.
 
-export const HTML_SECURITY_HEADERS: Record<string, string> = {
-  "X-Content-Type-Options": "nosniff",
-  "X-XSS-Protection": "0",
-  "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
-  "Content-Security-Policy":
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; connect-src 'self' https://yoke.lol https://*.googleapis.com; " +
-    "font-src 'self'; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
-  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
-  "Cross-Origin-Opener-Policy": "same-origin",
-};
+export function getHtmlSecurityHeaders(baseUrl?: string): Record<string, string> {
+  const connectSrc = baseUrl ? `'self' ${baseUrl}` : "'self'";
+  return {
+    "X-Content-Type-Options": "nosniff",
+    "X-XSS-Protection": "0",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Content-Security-Policy":
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+      `img-src 'self' data: https:; connect-src ${connectSrc} https://*.googleapis.com; ` +
+      "font-src 'self'; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+    "Cross-Origin-Opener-Policy": "same-origin",
+  };
+}
 
-function htmlResponse(body: string, extra?: Record<string, string>): Response {
+// Default headers for backward compat (used by serveAssetOrFallback before request context is available)
+export const HTML_SECURITY_HEADERS: Record<string, string> = getHtmlSecurityHeaders();
+
+function htmlResponse(body: string, extra?: Record<string, string>, baseUrl?: string): Response {
   return new Response(body, {
     headers: {
       "Content-Type": "text/html;charset=UTF-8",
-      ...HTML_SECURITY_HEADERS,
+      ...getHtmlSecurityHeaders(baseUrl),
       ...extra,
     },
   });
@@ -114,16 +121,17 @@ export async function handleSPARoute(
   path: string,
 ): Promise<Response | null> {
   const method = request.method;
+  const baseUrl = getBaseUrl(request, env);
 
   // ── Static pages ──
   if (method === "GET" && (path === "/.well-known/security.txt" || path === "/security.txt")) {
     return textResponse(SECURITY_TXT, "text/plain;charset=UTF-8");
   }
   if (method === "GET" && path === "/privacy") {
-    return htmlResponse(PRIVACY_HTML, { "Cache-Control": "public, max-age=86400" });
+    return htmlResponse(PRIVACY_HTML, { "Cache-Control": "public, max-age=86400" }, baseUrl);
   }
   if (method === "GET" && path === "/terms") {
-    return htmlResponse(TERMS_HTML, { "Cache-Control": "public, max-age=86400" });
+    return htmlResponse(TERMS_HTML, { "Cache-Control": "public, max-age=86400" }, baseUrl);
   }
 
   // ── Domain path: content negotiation ──
@@ -146,9 +154,9 @@ export async function handleSPARoute(
     const ogHtml = injectOgTags(indexHtml, {
       title: `${domain} — Yoke Domain Intelligence`,
       description: `Free domain intelligence report for ${domain} — DNS, SSL, WHOIS, security audit, tech stack, performance, and more.`,
-      url: `https://yoke.lol/${domain}`,
+      url: `${baseUrl}/${domain}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300" });
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300" }, baseUrl);
   }
 
   // ── Compare path: SPA with OG tags ──
@@ -159,9 +167,9 @@ export async function handleSPARoute(
     const ogHtml = injectOgTags(indexHtml, {
       title: `${d1} vs ${d2} — Yoke Domain Intelligence`,
       description: `Side-by-side domain comparison of ${d1} and ${d2} — security, performance, reliability, trust, and visibility scores.`,
-      url: `https://yoke.lol/compare/${d1}/${d2}`,
+      url: `${baseUrl}/compare/${d1}/${d2}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300" });
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300" }, baseUrl);
   }
 
   // Not a SPA route we handle — return null to let caller continue
@@ -173,6 +181,7 @@ export async function handleSPARoute(
 async function serveDomainJSON(request: Request, env: Env, domain: string): Promise<Response> {
   const url = new URL(request.url);
   const pretty = url.searchParams.has("pretty");
+  const baseUrl = getBaseUrl(request, env);
 
   try {
     // Reuse the existing analyze endpoint by synthesizing a POST request.
@@ -194,8 +203,8 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
     (data as Record<string, unknown>)._meta = {
       api_version: "1.0",
       analyzed_at: new Date().toISOString(),
-      docs: "https://yoke.lol/api/docs",
-      source: "yoke.lol",
+      docs: `${baseUrl}/api/docs`,
+      source: new URL(baseUrl).hostname,
     };
 
     const body = pretty ? JSON.stringify(data, null, 2) : JSON.stringify(data);
@@ -210,14 +219,14 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
         "Access-Control-Allow-Headers": "Content-Type",
         "X-Yoke-Cache": isCached ? "HIT" : "MISS",
         "X-Yoke-Version": "1.0",
-        "X-Yoke-Docs": "https://yoke.lol/api/docs",
+        "X-Yoke-Docs": `${baseUrl}/api/docs`,
         "Cache-Control": "public, max-age=300",
       },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analysis failed";
     return jsonResponse(
-      { error: msg, _meta: { api_version: "1.0", docs: "https://yoke.lol/api/docs" } },
+      { error: msg, _meta: { api_version: "1.0", docs: `${baseUrl}/api/docs` } },
       500,
     );
   }

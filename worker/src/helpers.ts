@@ -9,6 +9,8 @@ export interface Env {
   GOOGLE_PAGESPEED_API_KEY?: string;
   WHOISFREAKS_API_KEY?: string;
   ADMIN_KEY?: string;
+  BASE_URL?: string;
+  FLY_PROBE_URL?: string;
 }
 
 // ─── Shared Helpers ──────────────────────────────────────────────────
@@ -76,7 +78,34 @@ export const MULTI_PART_TLDS = ["co.uk", "com.au", "co.nz", "co.jp", "com.br", "
 
 // ─── External Service URLs ───────────────────────────────────────────
 
-export const FLY_PROBE_URL = "https://yoke-probe.fly.dev";
+export const DEFAULT_FLY_PROBE_URL = "https://yoke-probe.fly.dev";
+
+// Module-level probe URL, set from env at request start via initFlyProbeUrl()
+let _flyProbeUrl = DEFAULT_FLY_PROBE_URL;
+
+/** Set the Fly probe URL for the current request. Call from the worker entry point. */
+export function initFlyProbeUrl(env: Env): void {
+  _flyProbeUrl = env.FLY_PROBE_URL || DEFAULT_FLY_PROBE_URL;
+}
+
+/** Get the current Fly probe URL. */
+export function getFlyProbeUrl(): string {
+  return _flyProbeUrl;
+}
+
+/** Derive the instance base URL from a request, with optional env override. */
+export function getBaseUrl(request: Request, env?: Env): string {
+  if (env?.BASE_URL) return env.BASE_URL.replace(/\/$/, "");
+  return new URL(request.url).origin;
+}
+
+/** Get the instance hostname (e.g. "yoke.lol") from request or env. */
+export function getInstanceHost(request: Request, env?: Env): string {
+  if (env?.BASE_URL) {
+    try { return new URL(env.BASE_URL).hostname; } catch { /* fall through */ }
+  }
+  return new URL(request.url).hostname;
+}
 
 // ─── SSRF Protection ─────────────────────────────────────────────────
 // Block fetches to private/reserved IP ranges from the Worker.
