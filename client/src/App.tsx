@@ -1,52 +1,33 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, analyzeStream, type StreamEvent } from "./api";
 import { Search, Loader2, RotateCcw, ArrowLeftRight, CheckCircle2, Circle } from "lucide-react";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { PanelGrid, ResetLayoutButton, type PanelDef } from "./components/PanelLayout";
-import { CompareView } from "./components/CompareView";
 
-// Components
+// Eagerly loaded components (needed for Overview tab and landing page)
 import { TabBar, type TabId } from "./components/TabBar";
 import { VitalsStrip } from "./components/VitalsStrip";
-import { DnsPanel } from "./components/DnsPanel";
-import { WhoisPanel, DomainExpiryPanel } from "./components/WhoisPanel";
-import { SslPanel, SecurityHeadersPanel, ObservatoryPanel } from "./components/SecurityPanel";
-import { TechStackPanel } from "./components/TechStackPanel";
-import { WordPressPanel } from "./components/WordPressPanel";
-import { IpInfoPanel, BlocklistPanel, HttpProtocolsPanel } from "./components/NetworkPanel";
-import { RedirectPanel, HeadersPanel } from "./components/HttpPanel";
-import { PerformancePanel, CarbonPanel } from "./components/PerformancePanel";
-import { MetaPanel, RobotsDeepPanel, LlmsTxtPanel } from "./components/MetaPanel";
-import { WaybackPanel, TrancoPanel, EmailAuthPanel, ScreenshotPanel } from "./components/ReputationPanels";
+import { TrancoPanel, ScreenshotPanel } from "./components/ReputationPanels";
 import { RecentLookups } from "./components/RecentLookups";
 import { SkeletonPanel, SectionHeader } from "./components/Panel";
-import { IpMap } from "./components/IpMap";
-import { BusinessTab } from "./components/BusinessTab";
-import { NewsTab } from "./components/NewsTab";
-import { ExploreTab } from "./components/ExploreTab";
-import { JsonLdPanel } from "./components/JsonLdPanel";
-// New v2 components
-import { ShodanPanel } from "./components/ShodanPanel";
-import { AvailabilityPanel } from "./components/AvailabilityPanel";
-import { OgPreviewPanel } from "./components/OgPreviewPanel";
-import { AiReadinessPanel } from "./components/AiReadinessPanel";
 import { DomainSignals, ExternalTools } from "./components/DomainSignals";
-import { AIAnalysisPanel } from "./components/AIAnalysisPanel";
-import { LegalPanel } from "./components/LegalPanel";
 import { CurlBar, ApiTeaser } from "./components/CurlShowcase";
 import { ShareBar } from "./components/ShareBar";
-import { DnssecPanel, CompressionPanel, HostingPanel } from "./components/NewPanels";
-import { BreachPanel } from "./components/BreachPanel";
-import { CertTransparencyPanel, SecurityTxtPanel, GreenHostingPanel, WellKnownPanel, CaaPanel, GreynoisePanel } from "./components/Tier1Panels";
-import { DomainScore, AxisScoreBadge } from "./components/DomainScore";
-import { SubdomainScanPanel } from "./components/SubdomainScanPanel";
-import { StructuredDataPanel } from "./components/StructuredDataPanel";
-import { AccessibilityPanel } from "./components/AccessibilityPanel";
-import { ThirdPartyScriptsPanel } from "./components/ThirdPartyScriptsPanel";
-import { CookieConsentPanel } from "./components/CookieConsentPanel";
+import { DomainScore } from "./components/DomainScore";
 import type { AnalysisResult } from "./utils/types";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+
+// Lazy-loaded tab components (code-split into separate chunks)
+const CompareView = lazy(() => import("./components/CompareView").then(m => ({ default: m.CompareView })));
+const InfrastructureTab = lazy(() => import("./components/tabs/InfrastructureTab"));
+const SecurityTab = lazy(() => import("./components/tabs/SecurityTab"));
+const TechTab = lazy(() => import("./components/tabs/TechTab"));
+const PerformanceTab = lazy(() => import("./components/tabs/PerformanceTab"));
+const BusinessTabWrapper = lazy(() => import("./components/tabs/BusinessTabWrapper"));
+const NewsTab = lazy(() => import("./components/NewsTab").then(m => ({ default: m.NewsTab })));
+const ExploreTab = lazy(() => import("./components/ExploreTab").then(m => ({ default: m.ExploreTab })));
+const AIAnalysisPanel = lazy(() => import("./components/AIAnalysisPanel").then(m => ({ default: m.AIAnalysisPanel })));
 
 // Known false-positive e-commerce detections: WooCommerce & Magento pattern-match
 // on pages that merely *mention* those names (e.g. Stripe lists them as integrations).
@@ -296,180 +277,42 @@ function OverviewTab({ data, streaming }: { data: AnalysisResult; streaming?: bo
   );
 }
 
-function InfrastructureTab({ data }: { data: AnalysisResult }) {
-  const domain = data.domain;
-  const ip = data.ip_info?.ip;
 
-  const panels: PanelDef[] = [
-    { id: "ip-map", node: <IpMap data={data} />, fullWidth: true },
-    { id: "dns", node: <DnsPanel data={data} /> },
-    { id: "ip-info", node: <IpInfoPanel data={data} /> },
-    { id: "hosting", node: <HostingPanel data={data} /> },
-    { id: "green-hosting", node: <GreenHostingPanel data={data} /> },
-    { id: "dnssec", node: <DnssecPanel data={data} /> },
-    { id: "http-protocols", node: <HttpProtocolsPanel data={data} /> },
-    { id: "availability", node: <AvailabilityPanel domain={domain} /> },
-    { id: "shodan", node: <ShodanPanel data={data} /> },
-    { id: "subdomain-scan", node: <SubdomainScanPanel domain={domain} /> },
-    { id: "redirects", node: <RedirectPanel data={data} /> },
-  ];
-
-  return (
-    <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="reliability" />
-      <PanelGrid tabId="infrastructure" panels={panels} />
-      {/* Contextual external links */}
-      <div className="flex flex-wrap gap-2 px-1">
-        {ip && <a href={`https://www.shodan.io/host/${ip}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Shodan ↗</a>}
-        {ip && <a href={`https://search.censys.io/hosts/${ip}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Censys ↗</a>}
-        <a href={`https://dnsviz.net/d/${domain}/dnssec/`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>DNSViz ↗</a>
-        <a href={`https://lookup.icann.org/en/lookup?name=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>ICANN ↗</a>
-        <a href={`https://who.is/whois/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>who.is ↗</a>
-      </div>
-      <SectionHeader title="Raw Headers" />
-      <PanelGrid tabId="infrastructure-headers" panels={[
-        { id: "headers", node: <HeadersPanel data={data} /> },
-      ]} grid={false} />
-    </div>
-  );
-}
-
-function SecurityTab({ data }: { data: AnalysisResult }) {
-  const domain = data.domain;
-
-  const panels: PanelDef[] = [
-    { id: "breaches", node: <BreachPanel data={data} />, fullWidth: true },
-    { id: "ssl", node: <SslPanel data={data} /> },
-    { id: "security-headers", node: <SecurityHeadersPanel data={data} /> },
-    { id: "observatory", node: <ObservatoryPanel data={data} /> },
-    { id: "email-auth", node: <EmailAuthPanel data={data} /> },
-    { id: "cookie-consent", node: <CookieConsentPanel data={data} /> },
-    { id: "security-txt", node: <SecurityTxtPanel data={data} /> },
-    { id: "caa", node: <CaaPanel data={data} /> },
-    { id: "greynoise", node: <GreynoisePanel data={data} /> },
-    { id: "cert-transparency", node: <CertTransparencyPanel data={data} /> },
-    { id: "blocklist", node: <BlocklistPanel data={data} /> },
-  ];
-
-  return (
-    <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="security" />
-      <PanelGrid tabId="security" panels={panels} />
-      <div className="flex flex-wrap gap-2 px-1">
-        <a href={`https://observatory.mozilla.org/analyze/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Observatory ↗</a>
-        <a href={`https://securityheaders.com/?q=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SecurityHeaders.com ↗</a>
-        <a href={`https://haveibeenpwned.com/DomainSearch/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>HIBP ↗</a>
-      </div>
-    </div>
-  );
-}
-
-function TechTab({ data }: { data: AnalysisResult }) {
-  const domain = data.domain;
-
-  const panels: PanelDef[] = [
-    { id: "tech-stack", node: <TechStackPanel data={data} /> },
-    { id: "wordpress", node: <WordPressPanel data={data} />, visible: !!data.wordpress },
-    { id: "meta", node: <MetaPanel data={data} /> },
-    { id: "structured-data", node: <StructuredDataPanel data={data} /> },
-    { id: "accessibility", node: <AccessibilityPanel data={data} /> },
-    { id: "robots", node: <RobotsDeepPanel data={data} /> },
-    { id: "llms-txt", node: <LlmsTxtPanel data={data} /> },
-    { id: "ai-readiness", node: <AiReadinessPanel data={data} /> },
-    { id: "well-known", node: <WellKnownPanel data={data} /> },
-  ];
-
-  return (
-    <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="visibility" />
-      <PanelGrid tabId="tech" panels={panels} />
-      <div className="flex flex-wrap gap-2 px-1">
-        <a href={`https://builtwith.com/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>BuiltWith ↗</a>
-        <a href={`https://www.wappalyzer.com/lookup/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Wappalyzer ↗</a>
-        <a href={`https://search.google.com/test/rich-results?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Rich Results Test ↗</a>
-      </div>
-    </div>
-  );
-}
-
-function PerformanceTab({ data }: { data: AnalysisResult }) {
-  const domain = data.domain;
-
-  const panels: PanelDef[] = [
-    { id: "pagespeed", node: <PerformancePanel data={data} /> },
-    { id: "third-party-scripts", node: <ThirdPartyScriptsPanel data={data} /> },
-    { id: "compression", node: <CompressionPanel data={data} /> },
-    { id: "carbon", node: <CarbonPanel data={data} /> },
-  ];
-
-  return (
-    <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="performance" />
-      <PanelGrid tabId="performance" panels={panels} />
-      <div className="flex flex-wrap gap-2 px-1">
-        <a href={`https://pagespeed.web.dev/analysis?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>PageSpeed Insights ↗</a>
-        <a href={`https://www.webpagetest.org/?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>WebPageTest ↗</a>
-        <a href={`https://gtmetrix.com/?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>GTmetrix ↗</a>
-        <a href={`https://web.archive.org/web/*/https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Wayback Machine ↗</a>
-      </div>
-    </div>
-  );
-}
-
-function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
-  const domain = data.domain;
-
-  const mainPanels: PanelDef[] = [
-    { id: "business-info", node: <BusinessTab domain={domain} />, fullWidth: true },
-  ];
-
-  const socialPanels: PanelDef[] = [
-    { id: "og-preview", node: <OgPreviewPanel data={data} /> },
-    { id: "legal", node: <LegalPanel data={data} /> },
-  ];
-
-  const regPanels: PanelDef[] = [
-    { id: "whois", node: <WhoisPanel data={data} /> },
-    { id: "domain-expiry", node: <DomainExpiryPanel data={data} /> },
-  ];
-
-  const historyPanels: PanelDef[] = [
-    { id: "wayback", node: <WaybackPanel data={data} /> },
-  ];
-
-  return (
-    <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="trust" />
-      <PanelGrid tabId="business" panels={mainPanels} grid={false} />
-      <SectionHeader title="Social Sharing" />
-      <PanelGrid tabId="business-social" panels={socialPanels} />
-      <SectionHeader title="Registration" />
-      <PanelGrid tabId="business-reg" panels={regPanels} />
-      <SectionHeader title="History" />
-      <PanelGrid tabId="business-history" panels={historyPanels} />
-      <div className="flex flex-wrap gap-2 px-1">
-        <a href={`https://ahrefs.com/backlink-checker/?input=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Ahrefs Backlinks ↗</a>
-        <a href={`https://www.similarweb.com/website/${domain}/`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SimilarWeb ↗</a>
-      </div>
-    </div>
-  );
-}
 
 // ─── Main Tab Renderer ─────────────────────────────────────────
 
+// ─── Lazy Tab Loading Fallback ─────────────────────────────────
+function TabLoadingFallback() {
+  return (
+    <div className="space-y-3 mt-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <SkeletonPanel title="Loading…" icon={sIcon} rows={5} />
+        <SkeletonPanel title="Loading…" icon={sIcon} rows={5} />
+      </div>
+    </div>
+  );
+}
+
 function TabContent({ tab, data, onNavigate, streaming }: { tab: TabId; data: AnalysisResult; onNavigate: (d: string) => void; streaming?: boolean }) {
-  switch (tab) {
-    case "overview": return <OverviewTab data={data} streaming={streaming} />;
-    case "infrastructure": return <InfrastructureTab data={data} />;
-    case "security": return <SecurityTab data={data} />;
-    case "tech": return <TechTab data={data} />;
-    case "performance": return <PerformanceTab data={data} />;
-    case "business": return <BusinessTabWrapper data={data} />;
-    case "news": return <NewsTab domain={data.domain} />;
-    case "explore": return <ExploreTab domain={data.domain} data={data} onNavigate={onNavigate} />;
-    case "ai": return <AIAnalysisPanel domain={data.domain} analysisData={data} />;
-    default: return null;
-  }
+  // Overview is eagerly loaded — no Suspense needed
+  if (tab === "overview") return <OverviewTab data={data} streaming={streaming} />;
+
+  // All other tabs are lazy-loaded
+  const lazyContent = (() => {
+    switch (tab) {
+      case "infrastructure": return <InfrastructureTab data={data} />;
+      case "security": return <SecurityTab data={data} />;
+      case "tech": return <TechTab data={data} />;
+      case "performance": return <PerformanceTab data={data} />;
+      case "business": return <BusinessTabWrapper data={data} />;
+      case "news": return <NewsTab domain={data.domain} />;
+      case "explore": return <ExploreTab domain={data.domain} data={data} onNavigate={onNavigate} />;
+      case "ai": return <AIAnalysisPanel domain={data.domain} analysisData={data} />;
+      default: return null;
+    }
+  })();
+
+  return lazyContent ? <Suspense fallback={<TabLoadingFallback />}>{lazyContent}</Suspense> : null;
 }
 
 // ─── Main App ──────────────────────────────────────────────────
@@ -545,15 +388,8 @@ export function App() {
       analyze.mutate(path);
       return;
     }
-    // No domain in URL — fall back to most recent lookup
-    if (!recentLookups.data?.lookups?.length) return;
-    const mostRecent = recentLookups.data.lookups[0];
-    if (mostRecent) {
-      setAutoLoaded(true);
-      setDomain(mostRecent.domain);
-      analyze.mutate(mostRecent.domain);
-    }
-  }, [recentLookups.data, autoLoaded, compareMode, analyze.mutate]);
+    // No domain in URL — show clean landing page (no auto-analyze)
+  }, [autoLoaded, compareMode, analyze.mutate]);
 
   // Handle browser back/forward
   useEffect(() => {
@@ -668,7 +504,9 @@ export function App() {
         {/* Compare Mode */}
         {compareMode && (
           <div className="mt-4">
-            <CompareView initialDomain={domain || (analyze.data?.domain)} />
+            <Suspense fallback={<TabLoadingFallback />}>
+              <CompareView initialDomain={domain || (analyze.data?.domain)} />
+            </Suspense>
           </div>
         )}
 
