@@ -204,7 +204,7 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
    - `/probe-status?domain=example.com` — HTTP status check with redirect following, returns `{is_up, status_code, response_time_ms, status_label, error}`
    - `/check-http?host=example.com` — Proxied check-host.net global availability probes (check-host.net blocks CF Worker IPs directly)
 
-   **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`) with zero dependencies. Update the proxy URL in `worker/src/actions/analyze/network.ts` and `worker/src/actions/availability.ts` to point at your deployment.
+   **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`) with zero dependencies. Set the `FLY_PROBE_URL` environment variable to point at your deployment.
 
    **Without a proxy:** Everything still works — the worker falls back to direct HTTP probes from the Cloudflare edge. Sites that block CF IPs will show as RESTRICTED instead of UP, but DNS, SSL, and all other checks are unaffected.
 
@@ -217,6 +217,8 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 | `GOOGLE_PAGESPEED_API_KEY` | No | Google PageSpeed Insights API key — unlocks Lighthouse scores and Core Web Vitals. Without it, PageSpeed requests are unauthenticated and rate-limited. Free tier: 25K req/day. Get one at [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (enable "PageSpeed Insights API"). |
 | `CF_ACCOUNT_ID` | No | Cloudflare account ID (for some API features) |
 | `CF_API_TOKEN` | No | Cloudflare API token (for DNS-over-HTTPS fallback) |
+| `BASE_URL` | No | Override the instance base URL (e.g. `https://yoke.example.com`). Auto-detected from incoming requests — only needed if behind a reverse proxy that rewrites the Host header. |
+| `FLY_PROBE_URL` | No | URL of the Fly.io HTTP probe service (defaults to `https://yoke-probe.fly.dev`). Set this if you deploy your own probe, or leave unset to use direct probes from the Cloudflare edge. |
 
 ## Architecture
 

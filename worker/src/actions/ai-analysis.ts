@@ -151,7 +151,8 @@ interface OpenRouterResponse {
 async function callOpenRouter(
   apiKey: string,
   analysisData: Record<string, unknown>,
-  model?: string
+  model?: string,
+  referer?: string,
 ): Promise<AIAnalysisResult> {
   const { system, user } = buildAIPrompt(analysisData);
   const useModel = (model && isAllowedModel(model)) ? model : DEFAULT_MODEL;
@@ -162,7 +163,7 @@ async function callOpenRouter(
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://yoke.lol",
+      "HTTP-Referer": referer || "https://yoke.lol",
       "X-Title": "Yoke Domain Intelligence",
     },
     body: JSON.stringify({
@@ -386,7 +387,7 @@ export async function getAIAnalysis(
   const apiKey = byoKey || env.OPENROUTER_API_KEY!;
 
   try {
-    const result = await callOpenRouter(apiKey, analysisCache, options?.model);
+    const result = await callOpenRouter(apiKey, analysisCache, options?.model, env.BASE_URL);
 
     // Build prompt metadata for BYO key users (for the prompt editor)
     const promptMeta = byoKey ? buildAIPrompt(analysisCache) : undefined;

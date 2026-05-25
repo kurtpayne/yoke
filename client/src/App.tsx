@@ -601,7 +601,7 @@ export function App() {
               </div>
               <div className="panel" style={{ padding: "0.75rem 1rem" }}>
                 <h3 style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--accent)", marginBottom: "0.25rem" }}>🤖 AI &amp; API</h3>
-                <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>AI-powered analysis with expert personas. Free JSON API: <code style={{ fontSize: "10px", color: "var(--text)" }}>curl yoke.lol/stripe.com</code></p>
+                <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>AI-powered analysis with expert personas. Free JSON API: <code style={{ fontSize: "10px", color: "var(--text)" }}>curl {window.location.host}/stripe.com</code></p>
               </div>
             </div>
             <ApiTeaser />

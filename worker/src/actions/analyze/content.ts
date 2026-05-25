@@ -1,4 +1,4 @@
-import { fetchWithTimeout, boundedText, FLY_PROBE_URL } from "../../helpers";
+import { fetchWithTimeout, boundedText, getFlyProbeUrl } from "../../helpers";
 import type {
   DnsRecord, LlmsTxtResult, RobotsParsed, JsonLdItem,
   OgTwitterResult, LegalResult, AiReadinessResult,
@@ -340,7 +340,7 @@ export function detectHttpProtocols(headers: Record<string, string> | null): { h
 /** Probe HTTP/2 and HTTP/3 support via Fly.io (bypasses CF Worker fetch limitations) */
 export async function probeHttpProtocols(domain: string): Promise<{ http2: boolean; http3: boolean; alt_svc: string | null }> {
   try {
-    const res = await fetch(`${FLY_PROBE_URL}/probe-protocols?domain=${encodeURIComponent(domain)}`, {
+    const res = await fetch(`${getFlyProbeUrl()}/probe-protocols?domain=${encodeURIComponent(domain)}`, {
       signal: AbortSignal.timeout(10000),
     });
     if (res.ok) {

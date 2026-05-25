@@ -49,14 +49,15 @@ export function CurlBar({ domain, activeTab = "overview" }: { domain: string; ac
   const [expanded, setExpanded] = useState(false);
 
   const tabFilter = TAB_FILTERS[activeTab];
+  const host = window.location.host;
   const mainCmd = tabFilter
-    ? `curl -s yoke.lol/${domain} | jq ${tabFilter.filter}`
-    : `curl yoke.lol/${domain} | jq`;
+    ? `curl -s ${host}/${domain} | jq ${tabFilter.filter}`
+    : `curl ${host}/${domain} | jq`;
 
   const extraCmds = [
-    { label: "Full output", cmd: `curl yoke.lol/${domain} | jq` },
-    ...(tabFilter ? [{ label: tabFilter.label, cmd: `curl -s yoke.lol/${domain} | jq ${tabFilter.filter}` }] : []),
-    { label: "Pretty print", cmd: `curl "yoke.lol/${domain}?pretty"` },
+    { label: "Full output", cmd: `curl ${host}/${domain} | jq` },
+    ...(tabFilter ? [{ label: tabFilter.label, cmd: `curl -s ${host}/${domain} | jq ${tabFilter.filter}` }] : []),
+    { label: "Pretty print", cmd: `curl "${host}/${domain}?pretty"` },
   ];
 
   return (
@@ -164,7 +165,8 @@ export function CurlBar({ domain, activeTab = "overview" }: { domain: string; ac
 // ─── Home page: API teaser below search ────────────────────────
 
 export function ApiTeaser() {
-  const cmd = "curl yoke.lol/any-domain.com | jq";
+  const host = window.location.host;
+  const cmd = `curl ${host}/any-domain.com | jq`;
   const [copied, setCopied] = useState(false);
 
   return (
