@@ -76,7 +76,8 @@ if $DEPLOY_FLY; then
   fi
 
   echo "🚀 Deploying Fly probe..."
-  if ! fly deploy --local-only -a yoke-probe -c fly-proxy/fly.toml fly-proxy/; then
+  FLY_APP=$(grep '^app' fly-proxy/fly.toml | head -1 | sed 's/app *= *"\(.*\)"/\1/')
+  if ! fly deploy --local-only -a "$FLY_APP" -c fly-proxy/fly.toml fly-proxy/; then
     echo "❌ Fly probe deploy failed"
     exit 1
   fi
