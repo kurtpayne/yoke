@@ -60,8 +60,8 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string): Pro
         limit: config.limit,
         window: `${config.windowSecs / 3600} hour`,
         retry_after: config.windowSecs,
-        self_host: "https://github.com/kurtpayne/yoke/blob/main/QUICKSTART.md",
-        message: "For heavy usage, self-host Yoke with no limits. See our quickstart guide.",
+        self_host: "https://github.com/kurtpayne/yoke#self-hosting",
+        message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
       }), { status: 429, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
     }
     // Record this request
