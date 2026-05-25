@@ -76,12 +76,10 @@ if $DEPLOY_FLY; then
   fi
 
   echo "🚀 Deploying Fly probe..."
-  cd fly-proxy
-  if ! fly deploy --local-only; then
+  if ! fly deploy --local-only -a yoke-probe -c fly-proxy/fly.toml fly-proxy/; then
     echo "❌ Fly probe deploy failed"
     exit 1
   fi
-  cd ..
 
   echo "✅ Fly probe deployed"
 fi
