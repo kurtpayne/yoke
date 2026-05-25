@@ -108,6 +108,14 @@ function sanitizeForLLM(data: Record<string, unknown>): Record<string, unknown> 
   return sanitized;
 }
 
+// ─── Prompt Builder (shared by AI call and DIY copy) ────────────────
+
+export function buildAIPrompt(analysisData: Record<string, unknown>): { system: string; user: string } {
+  const sanitized = sanitizeForLLM(analysisData);
+  const userMessage = `<domain_data>\n${JSON.stringify(sanitized, null, 0)}\n</domain_data>\n\nAnalyze this domain and provide your structured assessment.`;
+  return { system: SYSTEM_PROMPT, user: userMessage };
+}
+
 // ─── OpenRouter API Call ────────────────────────────────────────────
 
 interface OpenRouterResponse {
@@ -127,8 +135,7 @@ async function callOpenRouter(
   apiKey: string,
   analysisData: Record<string, unknown>
 ): Promise<AIAnalysisResult> {
-  const sanitized = sanitizeForLLM(analysisData);
-  const userMessage = `<domain_data>\n${JSON.stringify(sanitized, null, 0)}\n</domain_data>\n\nAnalyze this domain and provide your structured assessment.`;
+  const { system, user } = buildAIPrompt(analysisData);
 
   const response = await fetchWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -142,8 +149,8 @@ async function callOpenRouter(
     body: JSON.stringify({
       model: "anthropic/claude-sonnet-4",
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userMessage },
+        { role: "system", content: system },
+        { role: "user", content: user },
       ],
       temperature: 0.3,
       max_tokens: 2500,
@@ -239,19 +246,57 @@ interface CachedAIResult {
   domain: string;
 }
 
+// ─── Rate Limiting ──────────────────────────────────────────────────
+
+const AI_DAILY_LIMIT = 10;
+
+async function ensureRateLimitTable(db: D1Database): Promise<void> {
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS ai_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, date TEXT NOT NULL)"
+  ).run();
+}
+
+async function getRateLimitCount(db: D1Database, ip: string): Promise<number> {
+  const row = await db.prepare(
+    "SELECT COUNT(*) as cnt FROM ai_rate_limits WHERE ip = ? AND date = date('now')"
+  ).bind(ip).first<{ cnt: number }>();
+  return row?.cnt ?? 0;
+}
+
+async function recordRateLimitHit(db: D1Database, ip: string): Promise<void> {
+  await db.prepare(
+    "INSERT INTO ai_rate_limits (ip, date) VALUES (?, date('now'))"
+  ).bind(ip).run();
+}
+
+async function cleanupOldRateLimits(db: D1Database): Promise<void> {
+  // Probabilistic cleanup: 5% chance per request, delete entries older than 7 days
+  if (Math.random() > 0.05) return;
+  try {
+    await db.prepare("DELETE FROM ai_rate_limits WHERE date < date('now', '-7 days')").run();
+  } catch { /* cleanup failure is non-critical */ }
+}
+
 // ─── Main Export ────────────────────────────────────────────────────
 
-export async function getAIAnalysis(domain: string, env: Env): Promise<Response> {
+export async function getAIAnalysis(
+  domain: string,
+  env: Env,
+  options?: { clientIP?: string; byoKey?: string }
+): Promise<Response> {
   const normalized = normalizeDomain(domain);
+  const byoKey = options?.byoKey;
+  const clientIP = options?.clientIP || "unknown";
 
-  if (!env.OPENROUTER_API_KEY) {
+  // Must have either platform key or BYO key
+  if (!env.OPENROUTER_API_KEY && !byoKey) {
     return new Response(JSON.stringify({ error: "AI analysis not configured" }), {
       status: 503,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   }
 
-  // Check cache first
+  // Check cache first (shared across all tiers)
   const cached = (await getFromCache(env.DB, normalized, "ai_analysis", AI_CACHE_TTL_MS)) as CachedAIResult | null;
   if (cached) {
     return new Response(JSON.stringify({ ...cached, cached: true }), {
@@ -260,7 +305,6 @@ export async function getAIAnalysis(domain: string, env: Env): Promise<Response>
   }
 
   // Get the analysis data for this domain (from cache or fresh)
-  // We fetch from our own analyze endpoint internally
   const analysisCache = (await getFromCache(env.DB, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
 
   if (!analysisCache) {
@@ -270,8 +314,38 @@ export async function getAIAnalysis(domain: string, env: Env): Promise<Response>
     );
   }
 
+  // Rate limiting — skip if BYO key provided
+  if (!byoKey) {
+    try {
+      await ensureRateLimitTable(env.STATS_DB);
+      const count = await getRateLimitCount(env.STATS_DB, clientIP);
+      if (count >= AI_DAILY_LIMIT) {
+        // Build the DIY prompt for the rate-limited user
+        const { system, user } = buildAIPrompt(analysisCache);
+        const diyPrompt = `${system}\n\n---\n\n${user}`;
+        return new Response(JSON.stringify({
+          rate_limited: true,
+          limit: AI_DAILY_LIMIT,
+          used: count,
+          reset: "tomorrow",
+          diy_prompt: diyPrompt,
+          model_suggestion: "anthropic/claude-sonnet-4",
+          instructions: "Copy the prompt below and paste it into ChatGPT, Claude, Gemini, or any AI assistant. Or enter your own OpenRouter API key in the settings above for unlimited analysis.",
+        }), {
+          status: 429,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+    } catch {
+      // If rate limit check fails, allow the request (fail-open for usability)
+    }
+  }
+
+  // Determine which API key to use
+  const apiKey = byoKey || env.OPENROUTER_API_KEY!;
+
   try {
-    const result = await callOpenRouter(env.OPENROUTER_API_KEY, analysisCache);
+    const result = await callOpenRouter(apiKey, analysisCache);
 
     const responseData: CachedAIResult = {
       result,
@@ -279,8 +353,16 @@ export async function getAIAnalysis(domain: string, env: Env): Promise<Response>
       domain: normalized,
     };
 
-    // Cache the result
+    // Cache the result (benefits everyone, even BYO key users)
     await setCache(env.DB, normalized, "ai_analysis", responseData);
+
+    // Record rate limit hit (only for non-BYO key requests)
+    if (!byoKey) {
+      try {
+        await recordRateLimitHit(env.STATS_DB, clientIP);
+        await cleanupOldRateLimits(env.STATS_DB);
+      } catch { /* non-critical */ }
+    }
 
     return new Response(JSON.stringify({ ...responseData, cached: false }), {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },

@@ -48,12 +48,39 @@ export async function fetchWithTimeout(
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-OpenRouter-Key",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
 };
 
 export const MULTI_PART_TLDS = ["co.uk", "com.au", "co.nz", "co.jp", "com.br", "co.in", "org.uk", "net.au", "ac.uk"];
+
+// ─── Bounded Text Reader ─────────────────────────────────────────────
+// Reads response body up to maxBytes to prevent unbounded memory usage
+// from malicious or oversized target-controlled responses.
+
+export async function boundedText(response: Response, maxBytes: number = 2 * 1024 * 1024): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        reader.cancel();
+        break;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    // Read error — return what we have
+  }
+  const decoder = new TextDecoder();
+  return chunks.map(c => decoder.decode(c, { stream: true })).join("") + decoder.decode();
+}
 
 // ─── D1 Cache Helpers ────────────────────────────────────────────────
 

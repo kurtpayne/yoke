@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../../helpers";
+import { fetchWithTimeout, boundedText } from "../../helpers";
 import type {
   DnsRecord, CertTransparencyResult, SecurityTxtResult,
   GreenHostingResult, WellKnownEndpoint, WellKnownResult,
@@ -81,7 +81,7 @@ export async function checkSecurityTxt(domain: string): Promise<SecurityTxtResul
     try {
       const res = await fetchWithTimeout(url, { timeout: 6000, headers: { "User-Agent": ua }, redirect: "follow" });
       if (!res.ok) continue;
-      const body = await res.text();
+      const body = await boundedText(res);
       if (body.includes("Contact:") || body.includes("contact:")) { text = body; break; }
     } catch { /* try next */ }
   }
@@ -170,7 +170,7 @@ export async function checkWellKnownEndpoints(domain: string): Promise<WellKnown
       }
 
       const contentType = res.headers.get("content-type") ?? "";
-      const text = await res.text();
+      const text = await boundedText(res);
 
       // Skip HTML error pages returned as 200
       if (contentType.includes("text/html") && !ep.path.includes("apple-app-site-association")) {

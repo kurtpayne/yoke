@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../../helpers";
+import { fetchWithTimeout, boundedText } from "../../helpers";
 import type {
   DnsRecord, LlmsTxtResult, RobotsParsed, JsonLdItem,
   OgTwitterResult, LegalResult, AiReadinessResult,
@@ -24,10 +24,10 @@ export async function checkLlmsTxt(domain: string): Promise<LlmsTxtResult> {
     fetchWithTimeout(`https://${domain}/llms-full.txt`, { timeout: 5000 }),
   ]);
   if (r1.status === "fulfilled" && r1.value.ok) {
-    try { const text = await r1.value.text(); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.found = true; result.content = text.slice(0, 3000); } } catch { /* ignore */ }
+    try { const text = await boundedText(r1.value); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.found = true; result.content = text.slice(0, 3000); } } catch { /* ignore */ }
   }
   if (r2.status === "fulfilled" && r2.value.ok) {
-    try { const text = await r2.value.text(); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.full_found = true; result.full_content = text.slice(0, 5000); } } catch { /* ignore */ }
+    try { const text = await boundedText(r2.value); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.full_found = true; result.full_content = text.slice(0, 5000); } } catch { /* ignore */ }
   }
   return result;
 }
@@ -83,7 +83,7 @@ export async function checkAnsRecords(domain: string): Promise<AnsResult> {
   // Parse agent.json
   if (agentJsonRes.status === "fulfilled" && agentJsonRes.value.ok) {
     try {
-      const text = await agentJsonRes.value.text();
+      const text = await boundedText(agentJsonRes.value);
       // Verify it's actually JSON, not an HTML error page
       if (text && !text.toLowerCase().includes("<!doctype") && !text.toLowerCase().includes("<html")) {
         JSON.parse(text); // validate JSON
@@ -268,7 +268,7 @@ export async function checkEmailAuth(domain: string, dnsRecords: DnsRecord[]): P
   try {
     const policyRes = await fetchWithTimeout(`https://mta-sts.${domain}/.well-known/mta-sts.txt`, { timeout: 5000 });
     if (policyRes.ok) {
-      const text = await policyRes.text();
+      const text = await boundedText(policyRes);
       if (text && text.includes("mode:")) {
         mtaSts.policy_found = true;
         const modeMatch = text.match(/mode:\s*(enforce|testing|none)/i);

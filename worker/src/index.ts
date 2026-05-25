@@ -262,18 +262,16 @@ export default {
           return json(result);
         }
 
-        // POST /api/ai-analysis — restricted to web/extension only (cost control)
+        // POST /api/ai-analysis — tiered access: free pool (10/day), BYO key, or DIY prompt
         if (method === "POST" && path === "/api/ai-analysis") {
-          const referer = request.headers.get("referer") || "";
-          const origin = request.headers.get("origin") || "";
-          const isWebUI = referer.includes("yoke.lol") || origin.includes("yoke.lol") || origin.includes("chrome-extension://");
-          if (!isWebUI) return json({ error: "AI analysis is only available via the web UI and Chrome extension" }, 403);
+          const clientIP = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+          const byoKey = request.headers.get("x-openrouter-key") || undefined;
           await trackUsage(env.STATS_DB, "ai-analysis");
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
-          return getAIAnalysis(domain, env);
+          return getAIAnalysis(domain, env, { clientIP, byoKey });
         }
 
         // GET /api/health — API error observability dashboard
