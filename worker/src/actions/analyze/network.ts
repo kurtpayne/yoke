@@ -94,13 +94,66 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
 // ─── SSL Labs + Direct TLS ───────────────────────────────────────────
 
 export async function checkSsl(domain: string): Promise<SslResult | null> {
+  // Priority 1: Fly probe — direct TLS handshake, most reliable, works for any domain
+  const probeResult = await tryFlyProbe(domain);
+  if (probeResult && probeResult.grade) return probeResult;
+
+  // Priority 2: SSL Labs — enrichment with grade/protocols when cached results exist
+  const labsResult = await trySslLabs(domain);
+  if (labsResult && labsResult.grade) return labsResult;
+
+  // Priority 3: HTTPS connectivity + crt.sh cert lookup
+  const httpsResult = await tryHttpsCrtsh(domain);
+  if (httpsResult && httpsResult.grade) return httpsResult;
+
+  // If all 3 fail, return what we got (prefer probe error > labs error > generic)
+  return probeResult ?? labsResult ?? httpsResult ?? {
+    grade: null, issuer: null, valid_from: null, valid_to: null,
+    protocols: [], key_exchange: null, error: "SSL check unavailable — all providers failed",
+  };
+}
+
+// ─── SSL: Fly Probe (direct TLS handshake) ──────────────────────────
+
+async function tryFlyProbe(domain: string): Promise<SslResult | null> {
+  try {
+    const probeRes = await fetchWithTimeout(
+      `${getFlyProbeUrl()}/probe-ssl?domain=${encodeURIComponent(domain)}`,
+      { timeout: 12000, headers: getFlyAuthHeaders() }
+    );
+    if (!probeRes.ok) return null;
+
+    const data = await probeRes.json() as {
+      grade: string; issuer: string; subject: string;
+      valid_from: string; valid_to: string;
+      key_alg: string; key_size: number;
+      protocols: string[]; chain_depth: number; chain_valid: boolean;
+      sans: string[]; serial: string; error: string | null;
+    };
+
+    if (!data.grade) return null;
+
+    return {
+      grade: data.grade,
+      issuer: data.issuer || null,
+      valid_from: data.valid_from || null,
+      valid_to: data.valid_to || null,
+      protocols: data.protocols || [],
+      key_exchange: data.key_alg ? `${data.key_alg} ${data.key_size || ""}`.trim() : null,
+      error: data.grade === "T" ? (data.error || "Certificate trust issue") : null,
+    };
+  } catch { return null; }
+}
+
+// ─── SSL: SSL Labs (cached grade + protocol details) ────────────────
+
+async function trySslLabs(domain: string): Promise<SslResult | null> {
   try {
     const url = `https://api.ssllabs.com/api/v3/analyze?host=${encodeURIComponent(domain)}&fromCache=on&maxAge=72&all=done`;
     const res = await fetchWithTimeout(url, { timeout: 10000 });
-    if (!res.ok) return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: `HTTP ${res.status}` };
+    if (!res.ok) return null;
 
-    const rawText = await res.text();
-    const data = JSON.parse(rawText) as {
+    const data = JSON.parse(await res.text()) as {
       status: string;
       endpoints?: Array<{
         grade?: string;
@@ -116,16 +169,11 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
       }>;
     };
 
-    if (data.status !== "READY" || !data.endpoints?.length) {
-      // SSL Labs doesn't have cached data — fall back to direct check
-      const statusMsg = data.status === "ERROR"
-        ? "SSL Labs could not assess this domain"
-        : `Assessment ${data.status?.toLowerCase() ?? "unavailable"}`;
-      return fallbackSslCheck(domain, statusMsg);
-    }
+    // SSL Labs only useful when it has cached READY results
+    if (data.status !== "READY" || !data.endpoints?.length) return null;
 
     const ep = data.endpoints[0];
-    if (!ep) return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: "No endpoint data available" };
+    if (!ep) return null;
 
     const protocols = (ep.details?.protocols ?? []).map((p) => `${p.name} ${p.version}`);
 
@@ -136,88 +184,30 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
 
     const leafCertId = ep.details?.certChains?.[0]?.certIds?.[0];
     const certs = data.certs ?? [];
+    const leafCert = (leafCertId ? certs.find((c) => c.id === leafCertId) : null) ?? certs[0];
 
-    if (leafCertId && certs.length > 0) {
-      const leafCert = certs.find((c) => c.id === leafCertId) ?? certs[0];
-      if (leafCert) {
-        issuer = leafCert.issuerSubject ?? null;
-        validFrom = leafCert.notBefore ? new Date(leafCert.notBefore).toISOString() : null;
-        validTo = leafCert.notAfter ? new Date(leafCert.notAfter).toISOString() : null;
-        keyExchange = leafCert.keyAlg ? `${leafCert.keyAlg} ${leafCert.keySize ?? ""}`.trim() : null;
-      }
-    } else if (certs.length > 0) {
-      const leafCert = certs[0];
-      if (leafCert) {
-        issuer = leafCert.issuerSubject ?? null;
-        validFrom = leafCert.notBefore ? new Date(leafCert.notBefore).toISOString() : null;
-        validTo = leafCert.notAfter ? new Date(leafCert.notAfter).toISOString() : null;
-        keyExchange = leafCert.keyAlg ? `${leafCert.keyAlg} ${leafCert.keySize ?? ""}`.trim() : null;
-      }
+    if (leafCert) {
+      issuer = leafCert.issuerSubject ?? null;
+      validFrom = leafCert.notBefore ? new Date(leafCert.notBefore).toISOString() : null;
+      validTo = leafCert.notAfter ? new Date(leafCert.notAfter).toISOString() : null;
+      keyExchange = leafCert.keyAlg ? `${leafCert.keyAlg} ${leafCert.keySize ?? ""}`.trim() : null;
     }
 
     return { grade: ep.grade ?? null, issuer, valid_from: validFrom, valid_to: validTo, protocols, key_exchange: keyExchange, error: null };
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : "SSL Labs unavailable";
-    // Fall back to crt.sh + HTTPS connectivity check
-    return fallbackSslCheck(domain, errMsg);
-  }
+  } catch { return null; }
 }
 
-// ─── Fallback SSL Check (Fly.io TLS probe → crt.sh → HTTPS probe) ──
+// ─── SSL: HTTPS fetch + crt.sh cert lookup ──────────────────────────
 
-async function fallbackSslCheck(domain: string, originalError: string): Promise<SslResult> {
-  // Try Fly.io SSL probe first (direct TLS handshake, ~200ms, full cert info)
-  try {
-    const probeRes = await fetchWithTimeout(
-      `${getFlyProbeUrl()}/probe-ssl?domain=${encodeURIComponent(domain)}`,
-      { timeout: 12000, headers: getFlyAuthHeaders() }
-    );
-    if (probeRes.ok) {
-      const data = await probeRes.json() as {
-        grade: string; issuer: string; subject: string;
-        valid_from: string; valid_to: string;
-        key_alg: string; key_size: number;
-        protocols: string[]; chain_depth: number; chain_valid: boolean;
-        sans: string[]; serial: string; error: string | null;
-      };
-      if (data.grade && data.grade !== "T") {
-        return {
-          grade: data.grade,
-          issuer: data.issuer || null,
-          valid_from: data.valid_from || null,
-          valid_to: data.valid_to || null,
-          protocols: data.protocols || [],
-          key_exchange: data.key_alg ? `${data.key_alg} ${data.key_size || ""}`.trim() : null,
-          error: null,
-        };
-      }
-      // Grade "T" means trust issues — still report what we found
-      if (data.grade === "T") {
-        return {
-          grade: "T",
-          issuer: data.issuer || null,
-          valid_from: data.valid_from || null,
-          valid_to: data.valid_to || null,
-          protocols: data.protocols || [],
-          key_exchange: data.key_alg ? `${data.key_alg} ${data.key_size || ""}`.trim() : null,
-          error: data.error || "Certificate trust issue",
-        };
-      }
-    }
-  } catch { /* Fly probe unreachable — continue to legacy fallback */ }
-
-  // Legacy fallback: HTTPS fetch + crt.sh
+async function tryHttpsCrtsh(domain: string): Promise<SslResult | null> {
   try {
     const httpsRes = await fetchWithTimeout(`https://${domain}/`, {
       timeout: 8000,
       headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/kurtpayne/yoke)" },
     });
-    const httpsWorks = httpsRes.status > 0;
+    if (!httpsRes.ok && httpsRes.status === 0) return null;
 
-    if (!httpsWorks) {
-      return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: originalError };
-    }
-
+    // HTTPS responded (any status code means TLS succeeded)
     let issuer: string | null = null;
     let validFrom: string | null = null;
     let validTo: string | null = null;
@@ -242,12 +232,10 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
           validTo = latest.not_after ? new Date(latest.not_after).toISOString() : null;
         }
       }
-    } catch { /* crt.sh unavailable */ }
+    } catch { /* crt.sh unavailable — we still know HTTPS works */ }
 
     return { grade: "Valid", issuer, valid_from: validFrom, valid_to: validTo, protocols: [], key_exchange: null, error: null };
-  } catch {
-    return { grade: null, issuer: null, valid_from: null, valid_to: null, protocols: [], key_exchange: null, error: originalError };
-  }
+  } catch { return null; }
 }
 
 // ─── Live Status Check ───────────────────────────────────────────────

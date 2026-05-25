@@ -66,14 +66,8 @@ const DOH_RESOLVERS: Array<{ name: string; url: (domain: string) => string; head
     headers: { Accept: "application/dns-json" },
   },
   {
-    name: "Quad9",
-    url: (d) => `https://dns.quad9.net:5053/dns-query?name=${encodeURIComponent(d)}&type=A`,
-    headers: { Accept: "application/dns-json" },
-  },
-  {
-    name: "OpenDNS",
-    url: (d) => `https://doh.opendns.com/dns-query?name=${encodeURIComponent(d)}&type=A`,
-    headers: { Accept: "application/dns-json" },
+    name: "AdGuard",
+    url: (d) => `https://dns.adguard-dns.com/resolve?name=${encodeURIComponent(d)}&type=A`,
   },
 ];
 

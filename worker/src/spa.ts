@@ -16,9 +16,10 @@ export function getHtmlSecurityHeaders(baseUrl?: string): Record<string, string>
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "Content-Security-Policy":
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; " +
       `img-src 'self' data: https:; connect-src ${connectSrc} https://*.googleapis.com; ` +
-      "font-src 'self'; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
+      "font-src 'self' https://fonts.gstatic.com; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
     "Cross-Origin-Opener-Policy": "same-origin",
   };
