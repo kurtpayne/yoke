@@ -67,4 +67,10 @@ export type {
   WafDetectionData,
   TrustSignalData,
   TrustSignalsData,
+  NetworkHealthData,
+  DnsPropagationData,
+  RipeRoutingData,
+  ConnectionTimingData,
+  OutageLinksData,
+  DnsResolverResultData,
 } from "../api";

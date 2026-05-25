@@ -851,6 +851,28 @@ function KeyDifferences({ data }: { data: CompareResult }) {
     diffs.push({ label: "Tranco Rank", domain1: tr1 ? `#${tr1.toLocaleString()}` : "Unranked", domain2: tr2 ? `#${tr2.toLocaleString()}` : "Unranked" });
   }
 
+  // Connection timing
+  const ct1 = d1.network_health?.connection_timing;
+  const ct2 = d2.network_health?.connection_timing;
+  if (ct1 && ct2 && Math.abs(ct1.total_ms - ct2.total_ms) >= 50) {
+    diffs.push({ label: "Connection Time", domain1: `${Math.round(ct1.total_ms)}ms`, domain2: `${Math.round(ct2.total_ms)}ms` });
+  }
+
+  // Routing stability
+  const rs1 = d1.network_health?.ripe_routing?.routing_stability;
+  const rs2 = d2.network_health?.ripe_routing?.routing_stability;
+  if (rs1 && rs2 && rs1 !== rs2) {
+    const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    diffs.push({ label: "BGP Stability", domain1: label(rs1), domain2: label(rs2) });
+  }
+
+  // DNS consistency
+  const dc1 = d1.network_health?.dns_propagation?.consistent;
+  const dc2 = d2.network_health?.dns_propagation?.consistent;
+  if (dc1 != null && dc2 != null && dc1 !== dc2) {
+    diffs.push({ label: "DNS Consistency", domain1: dc1 ? "Consistent" : "Inconsistent", domain2: dc2 ? "Consistent" : "Inconsistent" });
+  }
+
   if (diffs.length === 0) return null;
 
   return (

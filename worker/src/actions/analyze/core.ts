@@ -33,6 +33,7 @@ import {
 } from "./content";
 import { calculateHealthScore, getScreenshotUrl } from "./scoring";
 import { calculateDomainScore } from "./contextual-scoring";
+import { checkDnsPropagation, checkRipeRouting, checkOutagePages, checkConnectionTiming, type NetworkHealth } from "./network-health";
 import { validateStructuredData } from "./structured-data";
 import { analyzeAccessibility } from "./accessibility";
 import { analyzeThirdPartyScripts } from "./third-party-scripts";
@@ -373,6 +374,10 @@ export async function runAnalysis(
     { key: "well_known", promise: checkWellKnownEndpoints(domain), label: "Well-Known" },
     { key: "greynoise", promise: ip ? checkGreynoise(ip) : Promise.resolve(null), label: "GreyNoise" },
     { key: "ans", promise: checkAnsRecords(domain), label: "ANS / DNS-AID" },
+    { key: "dns_propagation", promise: checkDnsPropagation(domain), label: "DNS Propagation" },
+    { key: "ripe_routing", promise: ip ? checkRipeRouting(ip) : Promise.resolve(null), label: "RIPE Routing" },
+    { key: "outage_links", promise: checkOutagePages(domain), label: "Outage Pages" },
+    { key: "connection_timing", promise: checkConnectionTiming(domain, env), label: "Connection Timing" },
   ];
 
   await onPhase("phase2", "running", `Running ${checks.length} checks…`, checks.length);
@@ -447,6 +452,10 @@ export async function runAnalysis(
   const wellKnown = (results.well_known ?? DEFAULT_WELL_KNOWN) as WellKnownResult;
   const greynoiseResult = (results.greynoise ?? null) as GreynoiseResult | null;
   const ansResult = results.ans ?? null;
+  const dnsPropagation = (results.dns_propagation ?? null) as import("./network-health").DnsPropagation | null;
+  const ripeRouting = (results.ripe_routing ?? null) as import("./network-health").RipeRouting | null;
+  const outageLinks = (results.outage_links ?? null) as import("./network-health").OutageLinks | null;
+  const connectionTimingResult = (results.connection_timing ?? null) as import("./network-health").ConnectionTiming | null;
 
   // Build merged meta
   const meta: MetaResult = {
@@ -579,6 +588,14 @@ export async function runAnalysis(
     hosting,
   }) : null;
 
+  // Network health aggregation
+  const networkHealth: NetworkHealth | null = (dnsPropagation || ripeRouting || connectionTimingResult || outageLinks) ? {
+    dns_propagation: dnsPropagation,
+    ripe_routing: ripeRouting,
+    connection_timing: connectionTimingResult,
+    outage_links: outageLinks,
+  } : null;
+
   // Contextual domain score
   const domainScore = calculateDomainScore({
     ssl: sslResult,
@@ -611,6 +628,7 @@ export async function runAnalysis(
     cacheAnalysis,
     waf: wafDetection,
     trustSignals,
+    networkHealth,
   });
 
   const result: AnalysisResult = {
@@ -669,6 +687,7 @@ export async function runAnalysis(
     accessibility: accessibilityResult,
     third_party_scripts: thirdPartyScriptsResult,
     cookie_consent: cookieConsentResult,
+    network_health: networkHealth,
   };
 
   // ── Post-analysis: score logging, caching, cleanup ───────────────

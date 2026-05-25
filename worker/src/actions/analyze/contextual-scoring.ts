@@ -10,6 +10,7 @@ import type {
   HostingResult, TechItem, AccessibilityResult, ThirdPartyScriptsResult,
   CookieConsentResult, CacheAnalysis, WafDetection, TrustSignals,
 } from "./types";
+import type { NetworkHealth } from "./network-health";
 import {
   PERF_SCORE, LCP, CLS, TTFB, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
   SEVERITY_SCORES, resolveSeverity,
@@ -291,6 +292,7 @@ export function calculateDomainScore(opts: {
   cacheAnalysis: CacheAnalysis | null;
   waf: WafDetection | null;
   trustSignals: TrustSignals | null;
+  networkHealth: NetworkHealth | null;
 }): DomainScoreResult {
   // Step 1: Detect archetype
   const archetype = detectArchetype({
@@ -843,6 +845,68 @@ export function calculateDomainScore(opts: {
         severity: cc.compliance_flags.length >= 3 ? "medium" : "low",
         label: `${cc.compliance_flags.length} cookie compliance flag(s)`,
         tradeoff: null, weight: 2,
+      });
+    }
+  }
+
+  // ─── Network Health ──────────────────────────────────────────────
+  if (opts.networkHealth) {
+    const nh = opts.networkHealth;
+
+    // DNS inconsistency
+    if (nh.dns_propagation && !nh.dns_propagation.consistent) {
+      findings.push({
+        signal: "dns_inconsistent", axis: "reliability",
+        severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
+        label: "DNS records inconsistent across resolvers",
+        tradeoff: "DNS propagation may still be in progress, or you're using geo-DNS.",
+        weight: 3,
+      });
+    } else if (nh.dns_propagation?.consistent) {
+      findings.push({
+        signal: "dns_consistent", axis: "reliability",
+        severity: "good", label: "DNS records consistent across all resolvers",
+        tradeoff: null, weight: 3,
+      });
+    }
+
+    // BGP stability
+    if (nh.ripe_routing?.routing_stability === "unstable") {
+      findings.push({
+        signal: "bgp_unstable", axis: "reliability",
+        severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
+        label: `BGP route unstable (${nh.ripe_routing.bgp_updates_24h} updates in 24h)`,
+        tradeoff: null, weight: 4,
+      });
+    } else if (nh.ripe_routing?.routing_stability === "stable") {
+      findings.push({
+        signal: "bgp_stable", axis: "reliability",
+        severity: "good", label: "BGP route stable",
+        tradeoff: null, weight: 2,
+      });
+    }
+
+    // Route visibility
+    if (nh.ripe_routing?.visibility) {
+      const vis = nh.ripe_routing.visibility.percentage;
+      if (vis < 70) {
+        findings.push({
+          signal: "low_visibility", axis: "reliability",
+          severity: contextualSeverity("low", arch, { commerce: "medium" }),
+          label: `Low route visibility (${vis}% of peers)`,
+          tradeoff: null, weight: 2,
+        });
+      }
+    }
+
+    // Slow connection
+    if (nh.connection_timing && nh.connection_timing.total_ms > 500) {
+      findings.push({
+        signal: "slow_connection", axis: "performance",
+        severity: "info",
+        label: `Slow connection setup (${Math.round(nh.connection_timing.total_ms)}ms total)`,
+        tradeoff: "Connection timing depends on server location relative to the probe.",
+        weight: 2,
       });
     }
   }

@@ -265,3 +265,17 @@ export function availabilityCliCommands(domain: string): CliCommand[] {
     { label: "Global HTTP Check", platforms: { linux: `curl -sH "Accept: application/json" "https://check-host.net/check-http?host=https://${domain}&max_nodes=10"`, windows: `curl -sH "Accept: application/json" "https://check-host.net/check-http?host=https://${domain}&max_nodes=10"` } },
   ];
 }
+
+export function networkHealthCliCommands(domain: string, ip?: string): CliCommand[] {
+  const cmds: CliCommand[] = [
+    { label: "Yoke Network Health", platforms: { linux: `curl -s yoke.lol/${domain} | jq '.network_health'`, windows: `curl -s yoke.lol/${domain} | jq ".network_health"` } },
+    { label: "DNS Propagation (Google)", platforms: { linux: `curl -s "https://dns.google/resolve?name=${domain}&type=A" | jq '.Answer'`, windows: `curl -s "https://dns.google/resolve?name=${domain}&type=A" | jq ".Answer"` } },
+    { label: "DNS Propagation (Cloudflare)", platforms: { linux: `curl -s -H "Accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=${domain}&type=A" | jq '.Answer'`, windows: `curl -s -H "Accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=${domain}&type=A" | jq ".Answer"` } },
+    { label: "Connection Timing", platforms: { linux: `curl -sI -o /dev/null -w 'DNS: %{time_namelookup}s\\nTCP: %{time_connect}s\\nTLS: %{time_appconnect}s\\nTotal: %{time_total}s\\n' https://${domain}`, windows: `curl -sI -o nul -w "DNS: %{time_namelookup}s\\nTCP: %{time_connect}s\\nTLS: %{time_appconnect}s\\nTotal: %{time_total}s\\n" https://${domain}` } },
+  ];
+  if (ip) {
+    cmds.push({ label: "RIPE Prefix Overview", platforms: { linux: `curl -s "https://stat.ripe.net/data/prefix-overview/data.json?resource=${ip}" | jq '.data'`, windows: `curl -s "https://stat.ripe.net/data/prefix-overview/data.json?resource=${ip}" | jq ".data"` } });
+    cmds.push({ label: "RIPE Routing Status", platforms: { linux: `curl -s "https://stat.ripe.net/data/routing-status/data.json?resource=${ip}" | jq '.data.visibility'`, windows: `curl -s "https://stat.ripe.net/data/routing-status/data.json?resource=${ip}" | jq ".data.visibility"` } });
+  }
+  return cmds;
+}

@@ -146,3 +146,5 @@ export { type WafDetection } from "./waf";
 
 // ─── Trust Signal types ───────────────────────────────────────────────
 export { type TrustSignals, type TrustSignal } from "./trust";
+
+export { type NetworkHealth, type DnsPropagation, type RipeRouting, type ConnectionTiming, type OutageLinks, type DnsResolverResult } from "./network-health";

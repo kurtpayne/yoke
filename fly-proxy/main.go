@@ -243,6 +243,21 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Connection timing probe — DNS, TCP, TLS breakdown
+	if r.URL.Path == "/probe-timing" {
+		host := r.URL.Query().Get("host")
+		if host == "" || !domainRe.MatchString(host) {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"invalid or missing host parameter"}`, 400)
+			return
+		}
+		result := probeTiming(host)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
 	http.Error(w, `{"error":"not found"}`, 404)
 }
 
@@ -603,4 +618,101 @@ func probeProtocols(domain string) ProtocolResult {
 		HTTP3:  http3,
 		AltSvc: altSvcPtr,
 	}
+}
+
+// ─── Connection Timing Probe ────────────────────────────────────────
+
+type TimingResult struct {
+	DnsMs      float64 `json:"dns_ms"`
+	TcpMs      float64 `json:"tcp_ms"`
+	TlsMs      float64 `json:"tls_ms"`
+	TotalMs    float64 `json:"total_ms"`
+	IP         *string `json:"ip"`
+	TLSVersion *string `json:"tls_version"`
+	Error      *string `json:"error"`
+}
+
+func probeTiming(host string) TimingResult {
+	var result TimingResult
+
+	// Phase 1: DNS lookup
+	resolver := &net.Resolver{}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	dnsStart := time.Now()
+	ips, err := resolver.LookupHost(ctx, host)
+	result.DnsMs = float64(time.Since(dnsStart).Microseconds()) / 1000.0
+
+	if err != nil {
+		errStr := fmt.Sprintf("DNS lookup failed: %s", err.Error())
+		result.Error = &errStr
+		result.TotalMs = result.DnsMs
+		return result
+	}
+
+	// Find first non-private IP
+	var chosenIP string
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip != nil && !isPrivateIP(ip) {
+			chosenIP = ipStr
+			break
+		}
+	}
+	if chosenIP == "" {
+		errStr := "no valid IPs found (SSRF protection)"
+		result.Error = &errStr
+		result.TotalMs = result.DnsMs
+		return result
+	}
+	result.IP = &chosenIP
+
+	// Phase 2: TCP handshake
+	addr := net.JoinHostPort(chosenIP, "443")
+	tcpStart := time.Now()
+	tcpConn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	result.TcpMs = float64(time.Since(tcpStart).Microseconds()) / 1000.0
+
+	if err != nil {
+		errStr := fmt.Sprintf("TCP connect failed: %s", err.Error())
+		result.Error = &errStr
+		result.TotalMs = result.DnsMs + result.TcpMs
+		return result
+	}
+	defer tcpConn.Close()
+
+	// Phase 3: TLS handshake
+	tlsConn := tls.Client(tcpConn, &tls.Config{ServerName: host})
+	tlsStart := time.Now()
+	err = tlsConn.Handshake()
+	result.TlsMs = float64(time.Since(tlsStart).Microseconds()) / 1000.0
+
+	if err != nil {
+		errStr := fmt.Sprintf("TLS handshake failed: %s", err.Error())
+		result.Error = &errStr
+		result.TotalMs = result.DnsMs + result.TcpMs + result.TlsMs
+		return result
+	}
+	defer tlsConn.Close()
+
+	// Extract TLS version
+	state := tlsConn.ConnectionState()
+	var tlsVersion string
+	switch state.Version {
+	case tls.VersionTLS10:
+		tlsVersion = "TLS 1.0"
+	case tls.VersionTLS11:
+		tlsVersion = "TLS 1.1"
+	case tls.VersionTLS12:
+		tlsVersion = "TLS 1.2"
+	case tls.VersionTLS13:
+		tlsVersion = "TLS 1.3"
+	default:
+		tlsVersion = fmt.Sprintf("unknown (0x%04x)", state.Version)
+	}
+	result.TLSVersion = &tlsVersion
+
+	result.TotalMs = result.DnsMs + result.TcpMs + result.TlsMs
+	return result
 }
