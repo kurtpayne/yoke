@@ -130,11 +130,11 @@ export default {
 
         // POST /api/company
         if (method === "POST" && path === "/api/company") {
-          const body = await parseBody<{ domain?: string }>(request);
+          const body = await parseBody<{ domain?: string; force?: boolean }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
-          const result = await getCompanyInfo(env.DB, domain);
+          const result = await getCompanyInfo(env.DB, domain, body.force);
           return json(result);
         }
 

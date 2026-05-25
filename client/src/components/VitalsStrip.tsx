@@ -10,6 +10,7 @@ const STATUS_TOOLTIPS: Record<string, string> = {
 };
 
 export function VitalsStrip({ data }: { data: AnalysisResult }) {
+  const hasStatus = data.status != null;
   const isUp = data.status?.is_up ?? false;
   const statusLabel = data.status?.status_label ?? (isUp ? "UP" : "DOWN");
   const isNotRegistered = data.not_registered === true || statusLabel === "NOT REGISTERED";
@@ -32,12 +33,14 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="flex flex-wrap gap-2 px-1">
+      {hasStatus && (
       <Tooltip text={statusTooltip + statusCodeNote}>
         <div className="vital-pill" style={{ cursor: "help" }}>
           <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: statusColor }} />
           <span style={{ color: statusColor, fontWeight: 600 }}>{statusText}</span>
         </div>
       </Tooltip>
+      )}
 
       {httpBlocked && !isNotRegistered && (
         <Tooltip text="Our automated HTTP probe was blocked by this site's bot protection. Data shown is based on DNS, SSL, and other non-HTTP sources. The site itself is accessible to regular browsers.">

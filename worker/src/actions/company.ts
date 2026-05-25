@@ -16,6 +16,7 @@ interface StockData {
   price: number | null; change: number | null; change_percent: number | null;
   market_cap: number | null; volume: number | null;
   high_52w: number | null; low_52w: number | null; currency: string | null;
+  sparkline: number[] | null;
 }
 
 interface CrunchbaseData {
@@ -78,7 +79,7 @@ async function enrichFromWikidata(domain: string): Promise<CompanyData | null> {
   ];
   const urlFilter = variants.map(u => `{ ?item wdt:P856 ${u} }`).join(" UNION ");
 
-  const sparql = `SELECT ?item ?itemLabel ?itemDescription ?inception ?ceoLabel ?hqLabel ?industryLabel ?employees ?exchangeLabel ?ticker ?logo ?parentLabel ?revenue WHERE {
+  const sparql = `SELECT ?item ?itemLabel ?itemDescription ?inception ?ceoLabel ?hqLabel ?industryLabel ?employees ?exchangeLabel ?ticker ?bloombergTicker ?cashtag ?logo ?parentLabel ?revenue WHERE {
   ${urlFilter}
   OPTIONAL { ?item wdt:P571 ?inception }
   OPTIONAL { ?item wdt:P169 ?ceo . ?ceo rdfs:label ?ceoLabel . FILTER(LANG(?ceoLabel)="en") }
@@ -87,6 +88,8 @@ async function enrichFromWikidata(domain: string): Promise<CompanyData | null> {
   OPTIONAL { ?item wdt:P1128 ?employees }
   OPTIONAL { ?item wdt:P414 ?exchangeEntity . ?exchangeEntity rdfs:label ?exchangeLabel . FILTER(LANG(?exchangeLabel)="en") }
   OPTIONAL { ?item wdt:P249 ?ticker }
+  OPTIONAL { ?item wdt:P3377 ?bloombergTicker }
+  OPTIONAL { ?item wdt:P11137 ?cashtag }
   OPTIONAL { ?item wdt:P154 ?logo }
   OPTIONAL { ?item wdt:P749 ?parent . ?parent rdfs:label ?parentLabel . FILTER(LANG(?parentLabel)="en") }
   OPTIONAL { ?item wdt:P2139 ?revenue }
@@ -152,7 +155,13 @@ async function enrichFromWikidata(domain: string): Promise<CompanyData | null> {
       industry: binding.industryLabel?.value ?? null,
       employees: binding.employees?.value ? parseInt(binding.employees.value) : null,
       exchange: binding.exchangeLabel?.value ?? null,
-      ticker: binding.ticker?.value ?? null,
+      ticker: binding.ticker?.value
+        ?? (binding.bloombergTicker?.value ? binding.bloombergTicker.value.split(":")[0] : null)
+        ?? (() => {
+          // Only use cashtag if it looks like a real ticker symbol (1-5 uppercase letters)
+          const raw = binding.cashtag?.value?.replace(/^\$/, "").toUpperCase();
+          return raw && /^[A-Z]{1,5}$/.test(raw) ? raw : null;
+        })(),
       logo_url: binding.logo?.value ?? null,
       wikidata_id: wikidataId,
       revenue: binding.revenue?.value ?? null,
@@ -206,15 +215,17 @@ async function searchWikidataByName(domain: string): Promise<CompanyData | null>
   return null;
 }
 
-export async function getCompanyInfo(db: D1Database, rawDomain: string) {
+export async function getCompanyInfo(db: D1Database, rawDomain: string, force?: boolean) {
   const domain = normalizeDomain(rawDomain);
 
   // Check company cache (24h)
+  if (!force) {
   const cachedCompany = await getFromCache(db, domain, "company_info", 24 * 60 * 60 * 1000);
   if (cachedCompany) {
     const c = cachedCompany as { company: CompanyData | null; stock: StockData | null; crunchbase_url: string | null };
     const cachedStock = await getFromCache(db, domain, "stock_quote", 15 * 60 * 1000) as StockData | null;
     return { company: c.company, stock: cachedStock ?? c.stock, crunchbase_url: c.crunchbase_url, cached: true };
+  }
   }
 
   // Parallel: Wikidata + Brandfetch
@@ -251,25 +262,46 @@ export async function getCompanyInfo(db: D1Database, rawDomain: string) {
 
   let stock: StockData | null = null;
 
+  // If we have an exchange but no ticker, try Yahoo Finance search by company name
+  if (company && !company.ticker && company.exchange && company.name) {
+    try {
+      const searchRes = await fetchWithTimeout(
+        `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(company.name)}&quotesCount=5&newsCount=0`,
+        { timeout: 5000, headers: { "User-Agent": "Mozilla/5.0" } }
+      );
+      if (searchRes.ok) {
+        const searchData = await searchRes.json() as { quotes?: Array<{ symbol?: string; shortname?: string; exchDisp?: string; quoteType?: string }> };
+        const equity = searchData.quotes?.find(q => q.quoteType === "EQUITY" && q.symbol && !q.symbol.includes("."));
+        if (equity?.symbol) {
+          company.ticker = equity.symbol;
+        }
+      }
+    } catch { /* Yahoo search failed */ }
+  }
+
   // Fetch stock quote if ticker found
   if (company?.ticker) {
     try {
       const symbol = company.ticker;
       const yfRes = await fetchWithTimeout(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`, { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0" } });
       if (yfRes.ok) {
-        const yfData = await yfRes.json() as { chart?: { result?: Array<{ meta?: { regularMarketPrice?: number; previousClose?: number; fiftyTwoWeekHigh?: number; fiftyTwoWeekLow?: number; regularMarketVolume?: number; marketCap?: number; currency?: string } }> } };
-        const meta = yfData.chart?.result?.[0]?.meta;
+        const yfData = await yfRes.json() as { chart?: { result?: Array<{ meta?: { regularMarketPrice?: number; previousClose?: number; fiftyTwoWeekHigh?: number; fiftyTwoWeekLow?: number; regularMarketVolume?: number; marketCap?: number; currency?: string }; indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> } };
+        const chartResult = yfData.chart?.result?.[0];
+        const meta = chartResult?.meta;
         if (meta) {
           const price = meta.regularMarketPrice ?? null;
           const prevClose = meta.previousClose ?? null;
           const change = price != null && prevClose != null ? price - prevClose : null;
           const changePct = change != null && prevClose ? (change / prevClose) * 100 : null;
+          const rawClose = chartResult?.indicators?.quote?.[0]?.close;
+          const sparkline = rawClose ? rawClose.filter((v): v is number => v != null) : null;
           stock = {
             price, change: change ? parseFloat(change.toFixed(2)) : null,
             change_percent: changePct ? parseFloat(changePct.toFixed(2)) : null,
             market_cap: meta.marketCap ?? null, volume: meta.regularMarketVolume ?? null,
             high_52w: meta.fiftyTwoWeekHigh ?? null, low_52w: meta.fiftyTwoWeekLow ?? null,
             currency: meta.currency ?? null,
+            sparkline: sparkline && sparkline.length >= 2 ? sparkline : null,
           };
           await setCache(db, domain, "stock_quote", stock);
         }
