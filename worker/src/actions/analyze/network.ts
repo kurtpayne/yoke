@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "../../helpers";
+import { fetchWithTimeout, FLY_PROBE_URL } from "../../helpers";
 import type { DnsRecord, IpInfo, BlocklistResult, SslResult, ShodanResult, DnssecResult } from "./types";
 
 // ─── IP Geolocation ──────────────────────────────────────────────────
@@ -8,9 +8,9 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[]): Pro
   if (!aRecord) return null;
   const ip = aRecord.data;
   try {
-    const res = await fetchWithTimeout(`http://ip-api.com/json/${ip}?fields=66846719`, { timeout: 5000 });
-    const data = await res.json() as { status: string; country?: string; countryCode?: string; city?: string; isp?: string; org?: string; as?: string; lat?: number; lon?: number; };
-    if (data.status !== "success") return null;
+    const res = await fetchWithTimeout(`https://ipwho.is/${ip}`, { timeout: 5000 });
+    const data = await res.json() as { success: boolean; country?: string; country_code?: string; city?: string; connection?: { isp?: string; org?: string; asn?: number; }; latitude?: number; longitude?: number; };
+    if (!data.success) return null;
     const aaaaRecord = dnsRecords.find((r) => r.type === "AAAA");
     let reverseDns: string | null = null;
     try {
@@ -18,7 +18,7 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[]): Pro
       const revData = await revRes.json() as { Answer?: Array<{ data: string }> };
       if (revData.Answer?.[0]) reverseDns = revData.Answer[0].data.replace(/\.$/, "");
     } catch { /* ignore */ }
-    return { ip, isp: data.isp ?? null, org: data.org ?? null, asn: data.as ?? null, city: data.city ?? null, country: data.country ?? null, country_code: data.countryCode ?? null, lat: data.lat ?? null, lon: data.lon ?? null, reverse_dns: reverseDns, ipv6: aaaaRecord?.data ?? null };
+    return { ip, isp: data.connection?.isp ?? null, org: data.connection?.org ?? null, asn: data.connection?.asn ? `AS${data.connection.asn}` : null, city: data.city ?? null, country: data.country ?? null, country_code: data.country_code ?? null, lat: data.latitude ?? null, lon: data.longitude ?? null, reverse_dns: reverseDns, ipv6: aaaaRecord?.data ?? null };
   } catch { return null; }
 }
 
@@ -169,7 +169,7 @@ async function fallbackSslCheck(domain: string, originalError: string): Promise<
   // Try Fly.io SSL probe first (direct TLS handshake, ~200ms, full cert info)
   try {
     const probeRes = await fetchWithTimeout(
-      `https://yoke-probe.fly.dev/probe-ssl?domain=${encodeURIComponent(domain)}`,
+      `${FLY_PROBE_URL}/probe-ssl?domain=${encodeURIComponent(domain)}`,
       { timeout: 12000 }
     );
     if (probeRes.ok) {
@@ -256,7 +256,7 @@ export async function checkStatus(domain: string): Promise<{ is_up: boolean; sta
   // Try Fly.io proxy first (avoids CF Worker IP blocks for sites like meta.com)
   try {
     const probeRes = await fetchWithTimeout(
-      `https://yoke-probe.fly.dev/probe-status?domain=${encodeURIComponent(domain)}`,
+      `${FLY_PROBE_URL}/probe-status?domain=${encodeURIComponent(domain)}`,
       { timeout: 15000 }
     );
     if (probeRes.ok) {

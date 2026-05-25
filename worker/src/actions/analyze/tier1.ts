@@ -1,4 +1,4 @@
-import { fetchWithTimeout, boundedText } from "../../helpers";
+import { fetchWithTimeout, boundedText, safeFetchWithRedirects } from "../../helpers";
 import type {
   DnsRecord, CertTransparencyResult, SecurityTxtResult,
   GreenHostingResult, WellKnownEndpoint, WellKnownResult,
@@ -79,7 +79,7 @@ export async function checkSecurityTxt(domain: string): Promise<SecurityTxtResul
   let text: string | null = null;
   for (const url of urls) {
     try {
-      const res = await fetchWithTimeout(url, { timeout: 6000, headers: { "User-Agent": ua }, redirect: "follow" });
+      const res = await safeFetchWithRedirects(url, { timeout: 6000, headers: { "User-Agent": ua } });
       if (!res.ok) continue;
       const body = await boundedText(res);
       if (body.includes("Contact:") || body.includes("contact:")) { text = body; break; }
@@ -156,10 +156,9 @@ export async function checkWellKnownEndpoints(domain: string): Promise<WellKnown
 
   const checks = endpoints.map(async (ep) => {
     try {
-      const res = await fetchWithTimeout(`https://${domain}${ep.path}`, {
+      const res = await safeFetchWithRedirects(`https://${domain}${ep.path}`, {
         timeout: 6000,
         headers: { "User-Agent": ua },
-        redirect: "follow",
       });
       if (!res.ok) {
         // Only add non-manifest-webmanifest if manifest.json wasn't found

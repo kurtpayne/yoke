@@ -1,4 +1,4 @@
-import { normalizeDomain, fetchWithTimeout, getFromCache, setCache } from "../helpers";
+import { normalizeDomain, fetchWithTimeout, getFromCache, setCache, boundedText, safeFetchWithRedirects } from "../helpers";
 
 export async function getSocialAccounts(db: D1Database, rawDomain: string) {
   const domain = normalizeDomain(rawDomain);
@@ -56,12 +56,12 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string) {
 
   // Strategy 1: Parse homepage HTML for social links
   try {
-    const res = await fetchWithTimeout(`https://${domain}`, {
+    const res = await safeFetchWithRedirects(`https://${domain}`, {
       timeout: 8000,
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" },
     });
     if (res.ok) {
-      const html = await res.text();
+      const html = await boundedText(res);
       // Extract all hrefs
       const hrefRegex = /href=["']([^"']+)["']/gi;
       let hrefMatch: RegExpExecArray | null;

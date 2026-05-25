@@ -50,10 +50,82 @@ export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-OpenRouter-Key",
   "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
+  "Content-Security-Policy": "frame-ancestors 'self' https://*.chromiumapp.org chrome-extension://*",
 };
 
 export const MULTI_PART_TLDS = ["co.uk", "com.au", "co.nz", "co.jp", "com.br", "co.in", "org.uk", "net.au", "ac.uk"];
+
+// ─── External Service URLs ───────────────────────────────────────────
+
+export const FLY_PROBE_URL = "https://yoke-probe.fly.dev";
+
+// ─── SSRF Protection ─────────────────────────────────────────────────
+// Block fetches to private/reserved IP ranges from the Worker.
+// The Fly probe has its own Go-level IP check; this protects Worker-side fetches.
+
+const PRIVATE_IP_PATTERNS = [
+  /^127\./,                     // loopback
+  /^10\./,                      // RFC1918
+  /^172\.(1[6-9]|2\d|3[01])\./,// RFC1918
+  /^192\.168\./,                // RFC1918
+  /^169\.254\./,                // link-local
+  /^0\./,                       // unspecified
+  /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, // carrier-grade NAT
+  /^192\.0\.0\./,               // IETF protocol
+  /^192\.0\.2\./,               // documentation (TEST-NET-1)
+  /^198\.51\.100\./,            // documentation (TEST-NET-2)
+  /^203\.0\.113\./,             // documentation (TEST-NET-3)
+  /^198\.1[89]\./,              // benchmarking
+  /^2[45]\d\./,                 // multicast + reserved (240-255)
+];
+
+/** Check if a URL points to a private/reserved IP or localhost. */
+export function isBlockedUrl(urlStr: string): boolean {
+  try {
+    const u = new URL(urlStr);
+    const host = u.hostname.replace(/^\[|\]$/g, ""); // strip IPv6 brackets
+    // Block localhost variants
+    if (host === "localhost" || host === "::1" || host === "0.0.0.0") return true;
+    // Block IPv6 private
+    if (host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80") || host.startsWith("ff")) return true;
+    // Block IPv4 private
+    for (const pat of PRIVATE_IP_PATTERNS) {
+      if (pat.test(host)) return true;
+    }
+    return false;
+  } catch {
+    return true; // malformed URL = block
+  }
+}
+
+/**
+ * Follow redirects manually with SSRF protection.
+ * Checks each redirect Location against private IP ranges before following.
+ * Returns the final response. Max 5 hops.
+ */
+export async function safeFetchWithRedirects(
+  url: string,
+  opts: RequestInit & { timeout?: number; maxRedirects?: number } = {},
+): Promise<Response> {
+  const { maxRedirects = 5, ...fetchOpts } = opts;
+  let currentUrl = url;
+
+  for (let i = 0; i <= maxRedirects; i++) {
+    if (isBlockedUrl(currentUrl)) {
+      throw new Error(`Blocked: private/reserved IP in URL ${currentUrl}`);
+    }
+    const res = await fetchWithTimeout(currentUrl, { ...fetchOpts, redirect: "manual" });
+    if (res.status >= 300 && res.status < 400 && i < maxRedirects) {
+      const location = res.headers.get("location");
+      if (location) {
+        currentUrl = location.startsWith("http") ? location : new URL(location, currentUrl).href;
+        continue;
+      }
+    }
+    return res;
+  }
+  throw new Error("Too many redirects");
+}
 
 // ─── Bounded Text Reader ─────────────────────────────────────────────
 // Reads response body up to maxBytes to prevent unbounded memory usage

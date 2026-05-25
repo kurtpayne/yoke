@@ -33,3 +33,4 @@ deploy.sh
 # Lockfiles (bun.lock is canonical)
 client/package-lock.json
 HATCH-NOTES.md
+*.zip

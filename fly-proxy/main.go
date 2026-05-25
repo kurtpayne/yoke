@@ -25,24 +25,24 @@ var privateRanges []*net.IPNet
 
 func init() {
 	cidrs := []string{
-		"127.0.0.0/8",      // IPv4 loopback
-		"10.0.0.0/8",       // RFC1918
-		"172.16.0.0/12",    // RFC1918
-		"192.168.0.0/16",   // RFC1918
-		"169.254.0.0/16",   // link-local
-		"224.0.0.0/4",      // multicast
-		"0.0.0.0/8",        // unspecified
-		"100.64.0.0/10",    // carrier-grade NAT
-		"192.0.0.0/24",     // IETF protocol
-		"192.0.2.0/24",     // documentation (TEST-NET-1)
-		"198.51.100.0/24",  // documentation (TEST-NET-2)
-		"203.0.113.0/24",   // documentation (TEST-NET-3)
-		"198.18.0.0/15",    // benchmarking
-		"240.0.0.0/4",      // reserved
-		"::1/128",          // IPv6 loopback
-		"fc00::/7",         // IPv6 unique local
-		"fe80::/10",        // IPv6 link-local
-		"ff00::/8",         // IPv6 multicast
+		"127.0.0.0/8",     // IPv4 loopback
+		"10.0.0.0/8",      // RFC1918
+		"172.16.0.0/12",   // RFC1918
+		"192.168.0.0/16",  // RFC1918
+		"169.254.0.0/16",  // link-local
+		"224.0.0.0/4",     // multicast
+		"0.0.0.0/8",       // unspecified
+		"100.64.0.0/10",   // carrier-grade NAT
+		"192.0.0.0/24",    // IETF protocol
+		"192.0.2.0/24",    // documentation (TEST-NET-1)
+		"198.51.100.0/24", // documentation (TEST-NET-2)
+		"203.0.113.0/24",  // documentation (TEST-NET-3)
+		"198.18.0.0/15",   // benchmarking
+		"240.0.0.0/4",     // reserved
+		"::1/128",         // IPv6 loopback
+		"fc00::/7",        // IPv6 unique local
+		"fe80::/10",       // IPv6 link-local
+		"ff00::/8",        // IPv6 multicast
 	}
 	for _, cidr := range cidrs {
 		_, network, err := net.ParseCIDR(cidr)
@@ -558,7 +558,7 @@ func probeProtocols(domain string) ProtocolResult {
 
 	// Go's default HTTP client negotiates HTTP/2 via ALPN when available
 	http2 := resp.ProtoMajor == 2
-	
+
 	// Check alt-svc header for HTTP/3 advertisement
 	altSvc := resp.Header.Get("Alt-Svc")
 	var altSvcPtr *string

@@ -254,6 +254,9 @@ async function ensureRateLimitTable(db: D1Database): Promise<void> {
   await db.prepare(
     "CREATE TABLE IF NOT EXISTS ai_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, date TEXT NOT NULL)"
   ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_ai_rate_ip_date ON ai_rate_limits(ip, date)"
+  ).run();
 }
 
 async function getRateLimitCount(db: D1Database, ip: string): Promise<number> {
@@ -336,8 +339,17 @@ export async function getAIAnalysis(
           headers: { "Content-Type": "application/json", ...CORS_HEADERS },
         });
       }
-    } catch {
-      // If rate limit check fails, allow the request (fail-open for usability)
+    } catch (rateLimitErr) {
+      // Rate limit check failed (STATS_DB issue)
+      console.error("[AI rate-limit] STATS_DB error:", rateLimitErr instanceof Error ? rateLimitErr.message : rateLimitErr);
+      // Fail-closed for platform key — protect the API key budget
+      return new Response(JSON.stringify({
+        error: "AI analysis temporarily unavailable",
+        retry_after: 60,
+      }), {
+        status: 503,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      });
     }
   }
 

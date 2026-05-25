@@ -1,4 +1,4 @@
-import { fetchWithTimeout, boundedText } from "../../helpers";
+import { fetchWithTimeout, boundedText, isBlockedUrl } from "../../helpers";
 import { fingerprints } from "../../fingerprints";
 import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectHop } from "./types";
 
@@ -162,7 +162,12 @@ export async function analyzeHttp(domain: string): Promise<HttpAnalysis | null> 
 
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get("location");
-        if (location) { currentUrl = location.startsWith("http") ? location : new URL(location, currentUrl).href; continue; }
+        if (location) {
+          const nextUrl = location.startsWith("http") ? location : new URL(location, currentUrl).href;
+          if (isBlockedUrl(nextUrl)) break; // SSRF protection: don't follow redirects to private IPs
+          currentUrl = nextUrl;
+          continue;
+        }
       }
       finalStatusCode = res.status;
       finalHeaders = {};
