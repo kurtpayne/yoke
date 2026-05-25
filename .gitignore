@@ -28,7 +28,6 @@ Thumbs.db
 # Build intermediates
 /tmp/index.js
 /tmp/worker.js
-build_combined.py
 deploy.sh
 
 # Lockfiles (bun.lock is canonical)
