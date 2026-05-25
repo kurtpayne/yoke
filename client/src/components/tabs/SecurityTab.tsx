@@ -1,0 +1,39 @@
+import { SslPanel, SecurityHeadersPanel, ObservatoryPanel } from "../SecurityPanel";
+import { EmailAuthPanel } from "../ReputationPanels";
+import { PanelGrid, type PanelDef } from "../PanelLayout";
+import { BreachPanel } from "../BreachPanel";
+import { CertTransparencyPanel, SecurityTxtPanel, CaaPanel, GreynoisePanel } from "../Tier1Panels";
+import { BlocklistPanel } from "../NetworkPanel";
+import { CookieConsentPanel } from "../CookieConsentPanel";
+import { AxisScoreBadge } from "../DomainScore";
+import type { AnalysisResult } from "../../utils/types";
+
+export default function SecurityTab({ data }: { data: AnalysisResult }) {
+  const domain = data.domain;
+
+  const panels: PanelDef[] = [
+    { id: "breaches", node: <BreachPanel data={data} />, fullWidth: true },
+    { id: "ssl", node: <SslPanel data={data} /> },
+    { id: "security-headers", node: <SecurityHeadersPanel data={data} /> },
+    { id: "observatory", node: <ObservatoryPanel data={data} /> },
+    { id: "email-auth", node: <EmailAuthPanel data={data} /> },
+    { id: "cookie-consent", node: <CookieConsentPanel data={data} /> },
+    { id: "security-txt", node: <SecurityTxtPanel data={data} /> },
+    { id: "caa", node: <CaaPanel data={data} /> },
+    { id: "greynoise", node: <GreynoisePanel data={data} /> },
+    { id: "cert-transparency", node: <CertTransparencyPanel data={data} /> },
+    { id: "blocklist", node: <BlocklistPanel data={data} /> },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <AxisScoreBadge data={data} axis="security" />
+      <PanelGrid tabId="security" panels={panels} />
+      <div className="flex flex-wrap gap-2 px-1">
+        <a href={`https://observatory.mozilla.org/analyze/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Observatory ↗</a>
+        <a href={`https://securityheaders.com/?q=${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>SecurityHeaders.com ↗</a>
+        <a href={`https://haveibeenpwned.com/DomainSearch/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>HIBP ↗</a>
+      </div>
+    </div>
+  );
+}

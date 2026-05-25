@@ -13,7 +13,7 @@ const result = await Bun.build({
   outdir,
   target: "browser",
   minify: true,
-  splitting: false,
+  splitting: true,
   plugins: [tailwind],
   define: {
     "process.env.NODE_ENV": '"production"',
@@ -35,16 +35,23 @@ if (!result.success) {
 }
 
 // Find outputs
-const jsOutput = result.outputs.find(o => o.path.endsWith(".js"));
+const jsOutputs = result.outputs.filter(o => o.path.endsWith(".js"));
 const cssOutput = result.outputs.find(o => o.path.endsWith(".css"));
 
-if (!jsOutput) {
-  console.error("No JS output found");
+// Entry point is the one matching the entrypoint name pattern
+const jsEntry = jsOutputs.find(o => o.path.includes("/main-")) ?? jsOutputs[0];
+
+if (!jsEntry) {
+  console.error("No JS entry output found");
   process.exit(1);
 }
 
-const jsPath = jsOutput.path.replace(outdir + "/", "");
+const jsPath = jsEntry.path.replace(outdir + "/", "");
 const cssPath = cssOutput ? cssOutput.path.replace(outdir + "/", "") : null;
+
+// Report all chunks
+const jsChunks = jsOutputs.filter(o => o !== jsEntry);
+console.log(`  Chunks: ${jsChunks.length} lazy-loaded chunk(s)`);
 
 // Generate index.html
 const cssLink = cssPath ? `<link rel="stylesheet" href="/${cssPath}" />` : "";
