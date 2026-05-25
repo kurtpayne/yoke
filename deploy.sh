@@ -77,7 +77,7 @@ if $DEPLOY_FLY; then
 
   echo "🚀 Deploying Fly probe..."
   cd fly-proxy
-  if ! fly deploy; then
+  if ! fly deploy --local-only; then
     echo "❌ Fly probe deploy failed"
     exit 1
   fi
