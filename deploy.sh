@@ -77,7 +77,14 @@ if $DEPLOY_FLY; then
 
   echo "🚀 Deploying Fly probe..."
   FLY_APP=$(grep '^app' fly-proxy/fly.toml | head -1 | sed 's/app *= *"\(.*\)"/\1/')
-  if ! fly deploy -a "$FLY_APP" -c fly-proxy/fly.toml fly-proxy/; then
+
+  # Pass MaxMind license key as build arg if available
+  BUILD_ARGS=""
+  if [ -n "${MAXMIND_LICENSE_KEY:-}" ]; then
+    BUILD_ARGS="--build-arg MAXMIND_LICENSE_KEY=$MAXMIND_LICENSE_KEY"
+  fi
+
+  if ! fly deploy -a "$FLY_APP" -c fly-proxy/fly.toml $BUILD_ARGS fly-proxy/; then
     echo "❌ Fly probe deploy failed"
     exit 1
   fi

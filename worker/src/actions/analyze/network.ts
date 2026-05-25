@@ -7,6 +7,29 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[]): Pro
   const aRecord = dnsRecords.find((r) => r.type === "A");
   if (!aRecord) return null;
   const ip = aRecord.data;
+
+  // Try Fly probe first (MaxMind local DB + API fallbacks, no rate limits)
+  try {
+    const probeRes = await fetchWithTimeout(
+      `${getFlyProbeUrl()}/probe-geo?ip=${encodeURIComponent(ip)}`,
+      { timeout: 8000, headers: getFlyAuthHeaders() }
+    );
+    if (probeRes.ok) {
+      const data = await probeRes.json() as { ip: string; city?: string | null; country?: string | null; country_code?: string | null; lat?: number | null; lon?: number | null; isp?: string | null; org?: string | null; asn?: string | null; source?: string; error?: string | null };
+      if (!data.error) {
+        const aaaaRecord = dnsRecords.find((r) => r.type === "AAAA");
+        let reverseDns: string | null = null;
+        try {
+          const revRes = await fetchWithTimeout(`https://dns.google/resolve?name=${ip.split(".").reverse().join(".")}.in-addr.arpa&type=PTR`, { timeout: 3000 });
+          const revData = await revRes.json() as { Answer?: Array<{ data: string }> };
+          if (revData.Answer?.[0]) reverseDns = revData.Answer[0].data.replace(/\.$/, "");
+        } catch { /* ignore */ }
+        return { ip, isp: data.isp ?? null, org: data.org ?? null, asn: data.asn ?? null, city: data.city ?? null, country: data.country ?? null, country_code: data.country_code ?? null, lat: data.lat ?? null, lon: data.lon ?? null, reverse_dns: reverseDns, ipv6: aaaaRecord?.data ?? null };
+      }
+    }
+  } catch { /* probe unreachable */ }
+
+  // Fallback: direct ipwho.is from Worker
   try {
     const res = await fetchWithTimeout(`https://ipwho.is/${ip}`, { timeout: 5000 });
     const data = await res.json() as { success: boolean; country?: string; country_code?: string; city?: string; connection?: { isp?: string; org?: string; asn?: number; }; latitude?: number; longitude?: number; };
