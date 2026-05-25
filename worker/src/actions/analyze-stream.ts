@@ -194,8 +194,27 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
           (value) => {
             results[key] = value;
             completed++;
-            // Don't await send — fire-and-forget to avoid blocking other promises
-            return send("result", { key, value, completed, total: checks.length, label });
+            const sendResult = send("result", { key, value, completed, total: checks.length, label });
+            // When _status arrives, immediately compute and send the enhanced status
+            // (DNS data is available from Phase 1, SSL may not be yet — that's fine)
+            if (key === "_status") {
+              const sr = value as { is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean } | null;
+              const statusVal = sr ?? { is_up: false, status_code: null, response_time_ms: null, error: "Check failed", status_label: "DOWN", http_blocked: false };
+              const dnsOk = dnsRecords.some((r) => r.type === "A" || r.type === "AAAA");
+              let earlyStatus = { ...statusVal };
+              if (httpProbeSucceeded && httpAnalysis) {
+                const fc = httpAnalysis.redirects?.[httpAnalysis.redirects.length - 1]?.status_code;
+                if (fc && fc >= 200 && fc < 400) {
+                  earlyStatus = { ...statusVal, is_up: true, status_code: fc, status_label: "UP", http_blocked: false, error: null };
+                }
+              } else if (!statusVal.is_up && dnsOk) {
+                earlyStatus = { ...statusVal, is_up: true, status_label: "RESTRICTED", http_blocked: true, error: "Site is online (DNS resolves) but blocked our HTTP probe" };
+              } else if (statusVal.http_blocked && dnsOk) {
+                earlyStatus = { ...statusVal, is_up: true, status_label: "RESTRICTED", error: `Site returned HTTP ${statusVal.status_code} — blocking automated requests` };
+              }
+              return sendResult.then(() => send("result", { key: "status", value: earlyStatus }));
+            }
+            return sendResult;
           },
           (err) => {
             results[key] = null;

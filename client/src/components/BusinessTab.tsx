@@ -119,6 +119,34 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
   );
 }
 
+function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
+  const w = 200, h = 40, pad = 2;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const points = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+    const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const color = positive ? "var(--success)" : "var(--danger)";
+  // Build fill polygon: line points + bottom-right + bottom-left
+  const firstX = pad, lastX = pad + (w - pad * 2);
+  const fillPoints = `${points} ${lastX.toFixed(1)},${h} ${firstX.toFixed(1)},${h}`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", maxWidth: 200, height: 40, display: "block" }} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`spark-fill-${positive ? "up" : "dn"}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.15" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={fillPoints} fill={`url(#spark-fill-${positive ? "up" : "dn"})`} />
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function StockCard({ stock, ticker }: { stock: NonNullable<CompanyInfoResult["stock"]>; ticker: string }) {
   const isPositive = (stock.change ?? 0) >= 0;
   const Icon = isPositive ? TrendingUp : TrendingDown;
@@ -139,6 +167,12 @@ function StockCard({ stock, ticker }: { stock: NonNullable<CompanyInfoResult["st
             </div>
           )}
         </div>
+        {stock.sparkline && stock.sparkline.length >= 2 && (
+          <div className="mb-3">
+            <Sparkline data={stock.sparkline} positive={isPositive} />
+            <span style={{ fontFamily: "var(--font-ui)", fontSize: "9px", color: "var(--dim)", marginTop: 2, display: "block" }}>5-day</span>
+          </div>
+        )}
         <div className="space-y-0">
           {stock.market_cap != null && (
             <DataRow

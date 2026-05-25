@@ -167,6 +167,26 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
 // ─── Live Status Check ───────────────────────────────────────────────
 
 export async function checkStatus(domain: string): Promise<{ is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean }> {
+  // Try Fly.io proxy first (avoids CF Worker IP blocks for sites like meta.com)
+  try {
+    const probeRes = await fetchWithTimeout(
+      `https://yoke-probe.fly.dev/probe-status?domain=${encodeURIComponent(domain)}`,
+      { timeout: 15000 }
+    );
+    if (probeRes.ok) {
+      const data = await probeRes.json() as { is_up: boolean; status_code: number | null; response_time_ms: number; error: string | null; status_label: string; http_blocked: boolean };
+      return {
+        is_up: data.is_up,
+        status_code: data.status_code ?? null,
+        response_time_ms: data.response_time_ms,
+        error: data.error ?? null,
+        status_label: data.status_label ?? "DOWN",
+        http_blocked: data.http_blocked ?? false,
+      };
+    }
+  } catch { /* Fly proxy unreachable — fall back to direct probe */ }
+
+  // Fallback: direct probe from CF Worker
   const start = Date.now();
   try {
     // Use a realistic browser User-Agent and follow redirects manually to track final status

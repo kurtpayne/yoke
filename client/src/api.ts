@@ -247,6 +247,7 @@ export interface CompanyInfoResult {
     price: number | null; change: number | null; change_percent: number | null;
     market_cap: number | null; volume: number | null;
     high_52w: number | null; low_52w: number | null; currency: string | null;
+    sparkline?: number[] | null;
   } | null;
   crunchbase_url: string | null;
   cached: boolean;
