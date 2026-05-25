@@ -163,7 +163,7 @@ async function callOpenRouter(
     headers: {
       "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": referer || "https://yoke.lol",
+      "HTTP-Referer": referer || "https://github.com/kurtpayne/yoke",
       "X-Title": "Yoke Domain Intelligence",
     },
     body: JSON.stringify({

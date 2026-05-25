@@ -41,7 +41,7 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
 
 // ─── Tier 1: security.txt Discovery ─────────────────────────────────
 
-export async function checkSecurityTxt(domain: string): Promise<SecurityTxtResult> {
+export async function checkSecurityTxt(domain: string, instanceHost?: string): Promise<SecurityTxtResult> {
   const empty: SecurityTxtResult = {
     found: false, contact: [], encryption: null, acknowledgments: null, policy: null,
     hiring: null, canonical: null, preferred_languages: null, expires: null,
@@ -49,7 +49,7 @@ export async function checkSecurityTxt(domain: string): Promise<SecurityTxtResul
   };
 
   // Self-analysis bypass: use embedded security.txt
-  if (domain === "yoke.lol" && typeof __SECURITY_TXT__ !== "undefined") {
+  if (instanceHost && domain === instanceHost && typeof __SECURITY_TXT__ !== "undefined") {
     const text = __SECURITY_TXT__.replace(/\\n/g, "\n");
     const result: SecurityTxtResult = { ...empty, found: true, raw: text.slice(0, 2000) };
     for (const line of text.split("\n")) {

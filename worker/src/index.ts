@@ -27,12 +27,14 @@ import { getApiDocsHtml } from "./pages";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
-const RATE_LIMITS: Record<string, { limit: number; windowSecs: number }> = {
-  "/api/analyze": { limit: 30, windowSecs: 3600 },
-  "/api/compare": { limit: 15, windowSecs: 3600 },
-  "/api/subdomain-scan": { limit: 20, windowSecs: 3600 },
-  "/api/availability": { limit: 60, windowSecs: 3600 },
-};
+function getRateLimits(env: Env): Record<string, { limit: number; windowSecs: number }> {
+  return {
+    "/api/analyze": { limit: parseInt(env.RATE_LIMIT_ANALYZE || "30"), windowSecs: 3600 },
+    "/api/compare": { limit: parseInt(env.RATE_LIMIT_COMPARE || "15"), windowSecs: 3600 },
+    "/api/subdomain-scan": { limit: parseInt(env.RATE_LIMIT_SUBDOMAIN || "20"), windowSecs: 3600 },
+    "/api/availability": { limit: parseInt(env.RATE_LIMIT_AVAILABILITY || "60"), windowSecs: 3600 },
+  };
+}
 
 let rateLimitTableReady = false;
 
@@ -45,9 +47,10 @@ async function ensureRateLimitTable(db: D1Database): Promise<void> {
   rateLimitTableReady = true;
 }
 
-async function checkRateLimit(db: D1Database, ip: string, endpoint: string): Promise<Response | null> {
-  const config = RATE_LIMITS[endpoint];
-  if (!config) return null;
+async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env: Env): Promise<Response | null> {
+  const limits = getRateLimits(env);
+  const config = limits[endpoint];
+  if (!config || config.limit === 0) return null; // limit=0 disables rate limiting
   try {
     await ensureRateLimitTable(db);
     const cutoff = Math.floor(Date.now() / 1000) - config.windowSecs;
@@ -193,7 +196,7 @@ export default {
       try {
         // POST /api/analyze
         if (method === "POST" && path === "/api/analyze") {
-          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze");
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
@@ -209,7 +212,7 @@ export default {
 
         // POST /api/compare
         if (method === "POST" && path === "/api/compare") {
-          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/compare");
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/compare", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
           if (!body.domain1 || !body.domain2) return json({ error: "domain1 and domain2 are required" }, 400);
@@ -240,7 +243,7 @@ export default {
 
         // POST /api/subdomain-scan
         if (method === "POST" && path === "/api/subdomain-scan") {
-          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/subdomain-scan");
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/subdomain-scan", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
@@ -295,7 +298,7 @@ export default {
 
         // POST /api/availability
         if (method === "POST" && path === "/api/availability") {
-          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/availability");
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/availability", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);

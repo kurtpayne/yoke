@@ -11,10 +11,10 @@ declare const __SECURITY_TXT__: string;
 
 // ─── llms.txt ────────────────────────────────────────────────────────
 
-export async function checkLlmsTxt(domain: string): Promise<LlmsTxtResult> {
+export async function checkLlmsTxt(domain: string, instanceHost?: string): Promise<LlmsTxtResult> {
   const result: LlmsTxtResult = { found: false, content: null, full_found: false, full_content: null };
   // Self-analysis bypass: use embedded llms.txt
-  if (domain === "yoke.lol" && typeof __LLMS_TXT__ !== "undefined") {
+  if (instanceHost && domain === instanceHost && typeof __LLMS_TXT__ !== "undefined") {
     result.found = true;
     result.content = __LLMS_TXT__.slice(0, 3000);
     return result;
