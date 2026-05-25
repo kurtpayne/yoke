@@ -1,6 +1,7 @@
 // Cloudflare Worker environment bindings
 export interface Env {
   DB: D1Database;
+  STATS_DB: D1Database;
   OPENROUTER_API_KEY?: string;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { analyzeStream, type StreamEvent } from "../api";
 import { Search, Loader2, ArrowLeftRight, X, CheckCircle2, Circle } from "lucide-react";
-import type { CompareResult, AnalysisResult, Axis, AxisScoreData, ArchetypeName } from "../utils/types";
+import type { CompareResult, AnalysisResult, Axis, AxisScoreData, DomainScoreData, ArchetypeName } from "../utils/types";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -40,8 +40,8 @@ function emptyProgress(): DomainProgress {
 }
 
 function buildCompareResult(d1: AnalysisResult, d2: AnalysisResult): CompareResult {
-  const score1 = d1.domain_score as AxisScoreData | undefined;
-  const score2 = d2.domain_score as AxisScoreData | undefined;
+  const score1 = d1.domain_score as DomainScoreData | undefined;
+  const score2 = d2.domain_score as DomainScoreData | undefined;
 
   const axes: CompareResult["comparison"]["axes"] = AXES.map(axis => {
     const s1 = score1?.axes?.[axis]?.score ?? 0;

@@ -8,7 +8,7 @@ interface Signal {
   detail?: string;
 }
 
-function buildSignals(data: AnalysisResult): Signal[] {
+function buildSignals(data: AnalysisResult, streaming?: boolean): Signal[] {
   const signals: Signal[] = [];
   const httpBlocked = data.http_probe_blocked === true;
 
@@ -21,7 +21,7 @@ function buildSignals(data: AnalysisResult): Signal[] {
       signals.push({ type: "notice", text: `SSL Grade ${sslGrade}`, detail: "Good but not optimal — consider upgrading configuration" });
     else
       signals.push({ type: "issue", text: `SSL Grade ${sslGrade}`, detail: "Weak SSL configuration detected" });
-  } else if (!data.not_registered) {
+  } else if (!data.not_registered && !streaming) {
     signals.push({ type: "issue", text: "SSL certificate not detected" });
   }
 
@@ -353,8 +353,8 @@ const tooltipMap: Record<string, string> = {
   info: "Neutral facts about this domain's infrastructure, hosting, and configuration",
 };
 
-export function DomainSignals({ data }: { data: AnalysisResult }) {
-  const signals = buildSignals(data);
+export function DomainSignals({ data, streaming }: { data: AnalysisResult; streaming?: boolean }) {
+  const signals = buildSignals(data, streaming);
   if (signals.length === 0) return null;
 
   const groups: Record<string, Signal[]> = { strength: [], notice: [], issue: [], info: [] };

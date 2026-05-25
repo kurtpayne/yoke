@@ -17,14 +17,18 @@ import { getSocialAccounts } from "./actions/social";
 import { getReverseIP } from "./actions/reverse-ip";
 import { getDomainSuggestions } from "./actions/suggestions";
 import { getAIAnalysis } from "./actions/ai-analysis";
+import { trackUsage, getUsageStats } from "./usage-tracking";
+import { renderUsagePage } from "./usage-page";
 
 interface Env {
   DB: D1Database;
+  STATS_DB: D1Database;
   OPENROUTER_API_KEY?: string;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   GOOGLE_PAGESPEED_API_KEY?: string;
   WHOISFREAKS_API_KEY?: string;
+  ADMIN_KEY?: string;
 }
 
 import { CORS_HEADERS, normalizeDomain } from "./helpers";
@@ -90,6 +94,31 @@ export default {
       return renderStatusPage(env.DB);
     }
 
+    // Usage dashboard — admin-only, basic auth with ADMIN_KEY secret
+    if (path === "/usage" || path === "/api/usage") {
+      if (!env.ADMIN_KEY) return new Response("Admin key not configured", { status: 503 });
+      // Check basic auth
+      const authHeader = request.headers.get("Authorization") || "";
+      if (!authHeader.startsWith("Basic ")) {
+        return new Response("Unauthorized", {
+          status: 401,
+          headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+        });
+      }
+      const decoded = atob(authHeader.slice(6));
+      const [, pass] = decoded.split(":");
+      if (pass !== env.ADMIN_KEY) {
+        return new Response("Invalid credentials", {
+          status: 401,
+          headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+        });
+      }
+      const days = parseInt(url.searchParams.get("days") ?? "30");
+      const stats = await getUsageStats(env.STATS_DB, days);
+      if (path === "/api/usage") return json(stats);
+      return renderUsagePage(env.STATS_DB, days);
+    }
+
     // API routes
     if (path.startsWith("/api/")) {
       try {
@@ -99,6 +128,7 @@ export default {
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
+          await trackUsage(env.STATS_DB, "analyze");
           // Support SSE streaming when client requests it
           const wantsStream = request.headers.get("Accept") === "text/event-stream";
           if (wantsStream) return analyzeDomainStream(domain, env);
@@ -108,6 +138,7 @@ export default {
         // POST /api/compare
         if (method === "POST" && path === "/api/compare") {
           const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
+          await trackUsage(env.STATS_DB, "compare");
           return compareDomains(body, env);
         }
 
@@ -123,6 +154,7 @@ export default {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
           const result = await getSubdomains(env.DB, body.domain);
+          await trackUsage(env.STATS_DB, "subdomains");
           return json(result);
         }
 
@@ -133,6 +165,7 @@ export default {
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
           const result = await scanSubdomains(env.DB, domain);
+          await trackUsage(env.STATS_DB, "subdomain-scan");
           return json(result);
         }
 
@@ -143,6 +176,7 @@ export default {
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
           const result = await getCompanyInfo(env.DB, domain, body.force);
+          await trackUsage(env.STATS_DB, "company");
           return json(result);
         }
 
@@ -153,6 +187,7 @@ export default {
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format" }, 400);
           const result = await getNews(env.DB, domain);
+          await trackUsage(env.STATS_DB, "news");
           return json(result);
         }
 
@@ -161,6 +196,7 @@ export default {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
           const result = await getSocialAccounts(env.DB, body.domain);
+          await trackUsage(env.STATS_DB, "social");
           return json(result);
         }
 
@@ -169,6 +205,7 @@ export default {
           const body = await parseBody<{ ip?: string }>(request);
           if (!body.ip) return json({ error: "ip is required" }, 400);
           const result = await getReverseIP(env.DB, body.ip);
+          await trackUsage(env.STATS_DB, "reverse-ip");
           return json(result);
         }
 
@@ -182,6 +219,7 @@ export default {
           const cfCountry = (request as any).cf?.country as string | undefined;
           const cfCity = (request as any).cf?.city as string | undefined;
           const result = await checkGlobalAvailability(domain, { colo: cfColo, country: cfCountry, city: cfCity });
+          await trackUsage(env.STATS_DB, "availability");
           return json(result);
         }
 
@@ -190,6 +228,7 @@ export default {
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
           const result = await getDomainSuggestions(body.domain, env);
+          await trackUsage(env.STATS_DB, "suggestions");
           return json(result);
         }
 
@@ -199,6 +238,7 @@ export default {
           const origin = request.headers.get("origin") || "";
           const isWebUI = referer.includes("yoke.lol") || origin.includes("yoke.lol") || origin.includes("chrome-extension://");
           if (!isWebUI) return json({ error: "AI analysis is only available via the web UI and Chrome extension" }, 403);
+          await trackUsage(env.STATS_DB, "ai-analysis");
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);

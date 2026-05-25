@@ -25,7 +25,7 @@ import { checkPageSpeed, detectCompression, checkCarbon } from "./analyze/perfor
 import { isActuallyCloudflare, sanitizeCfHeaders, detectHosting, auditCookies } from "./analyze/security";
 import {
   checkLlmsTxt, checkWayback, checkTranco, checkObservatory,
-  checkEmailAuth, parseRobotsDeep, detectHttpProtocols, extractJsonLd,
+  checkEmailAuth, parseRobotsDeep, detectHttpProtocols, probeHttpProtocols, extractJsonLd,
   extractSocialMeta, detectLegalPages, calculateAiReadiness,
   checkAnsRecords,
 } from "./analyze/content";
@@ -205,11 +205,11 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   for (let i = 0; i < phase2Results.length; i++) {
     if (phase2Results[i].status === "rejected") {
       const reason = (phase2Results[i] as PromiseRejectedResult).reason;
-      logApiError(env.DB, { api: apiNames[i] ?? `phase2_${i}`, status: 0, message: String(reason).slice(0, 200), domain });
+      logApiError(env.STATS_DB, { api: apiNames[i] ?? `phase2_${i}`, status: 0, message: String(reason).slice(0, 200), domain });
     }
   }
   // Probabilistic prune of old error rows (~5% of requests)
-  if (Math.random() < 0.05) pruneApiErrors(env.DB);
+  if (Math.random() < 0.05) pruneApiErrors(env.STATS_DB);
 
   // Build merged meta — only use HTTP meta if probe succeeded
   const meta: MetaResult = {
@@ -274,8 +274,16 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
     ? sanitizeCfHeaders(rawHeadersOriginal)
     : rawHeadersOriginal;
 
-  // Detect HTTP protocols (use effective headers to avoid CF alt-svc pollution)
-  const httpProtocols = detectHttpProtocols(effectiveHeaders);
+  // Detect HTTP protocols — try Fly.io probe first (CF Workers can't see real HTTP/2 or alt-svc)
+  // Fall back to header-based detection if probe is unavailable
+  let httpProtocols = detectHttpProtocols(effectiveHeaders);
+  if (!httpProtocols.http2 && !httpProtocols.http3) {
+    // Header detection found nothing — likely CF Worker limitation. Try the probe.
+    const probed = await probeHttpProtocols(domain);
+    if (probed.http2 || probed.http3) {
+      httpProtocols = probed;
+    }
+  }
 
   // Re-run security audit + tech stack with cleaned headers if we sanitized
   let finalSecurityAudit = httpAnalysis?.headers?.security_audit ?? [];
@@ -473,7 +481,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
   // Store every computed score for trend analysis (store now, UI later)
   if (domainScore) {
     try {
-      await env.DB.prepare(
+      await env.STATS_DB.prepare(
         `INSERT INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(
@@ -491,7 +499,7 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
     } catch {
       // Table may not exist yet — auto-create on first failure
       try {
-        await env.DB.prepare(
+        await env.STATS_DB.prepare(
           `CREATE TABLE IF NOT EXISTS domain_scores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             domain TEXT NOT NULL,
@@ -507,14 +515,14 @@ export async function analyzeDomain(domain: string, env: Env): Promise<Response>
             UNIQUE(domain, scored_at)
           )`
         ).run();
-        await env.DB.prepare(
+        await env.STATS_DB.prepare(
           `CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`
         ).run();
-        await env.DB.prepare(
+        await env.STATS_DB.prepare(
           `CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`
         ).run();
         // Retry the insert
-        await env.DB.prepare(
+        await env.STATS_DB.prepare(
           `INSERT INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(

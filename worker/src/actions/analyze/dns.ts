@@ -8,6 +8,8 @@ export const DNS_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "CAA"]
 
 export async function checkDns(domain: string): Promise<DnsRecord[]> {
   const results: DnsRecord[] = [];
+  
+  // Standard record types for the root domain
   const queries = DNS_TYPES.map(async (type) => {
     try {
       const res = await fetchWithTimeout(
@@ -25,7 +27,30 @@ export async function checkDns(domain: string): Promise<DnsRecord[]> {
       }
     } catch { /* individual type failure is fine */ }
   });
-  await Promise.allSettled(queries);
+
+  // Agent discovery records (ANS + DNS-AID subdomains)
+  const agentQueries = [
+    { prefix: "_ans", label: "TXT" },
+    { prefix: "_agents", label: "TXT" },
+  ].map(async ({ prefix, label }) => {
+    try {
+      const res = await fetchWithTimeout(
+        `https://dns.google/resolve?name=${encodeURIComponent(`${prefix}.${domain}`)}&type=${label}`,
+        { timeout: 5000 },
+      );
+      const data = await res.json() as {
+        Status: number;
+        Answer?: Array<{ name: string; type: number; TTL: number; data: string }>;
+      };
+      if (data.Status === 0 && data.Answer) {
+        for (const ans of data.Answer) {
+          results.push({ type: label, name: ans.name.replace(/\.$/, ""), ttl: ans.TTL, data: ans.data });
+        }
+      }
+    } catch { /* agent record lookup failure is fine */ }
+  });
+
+  await Promise.allSettled([...queries, ...agentQueries]);
   return results;
 }
 

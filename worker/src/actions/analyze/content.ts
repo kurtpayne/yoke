@@ -337,6 +337,20 @@ export function detectHttpProtocols(headers: Record<string, string> | null): { h
   return { http2: !!altSvc || !!headers["x-firefox-spdy"] || !!headers[":status"], http3: altSvc ? /h3(?:=|-)/.test(altSvc) : false, alt_svc: altSvc };
 }
 
+/** Probe HTTP/2 and HTTP/3 support via Fly.io (bypasses CF Worker fetch limitations) */
+export async function probeHttpProtocols(domain: string): Promise<{ http2: boolean; http3: boolean; alt_svc: string | null }> {
+  try {
+    const res = await fetch(`https://yoke-probe.fly.dev/probe-protocols?domain=${encodeURIComponent(domain)}`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      const data = await res.json() as { http2: boolean; http3: boolean; alt_svc: string | null; error?: string };
+      if (!data.error) return { http2: data.http2, http3: data.http3, alt_svc: data.alt_svc };
+    }
+  } catch { /* probe unreachable */ }
+  return { http2: false, http3: false, alt_svc: null };
+}
+
 // ─── Schema.org / JSON-LD Extraction ────────────────────────────────
 
 export function extractJsonLd(html: string): JsonLdItem[] {

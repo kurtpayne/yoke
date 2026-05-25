@@ -24,7 +24,7 @@ import { checkPageSpeed, detectCompression, checkCarbon } from "./analyze/perfor
 import { isActuallyCloudflare, sanitizeCfHeaders, detectHosting, auditCookies } from "./analyze/security";
 import {
   checkLlmsTxt, checkWayback, checkTranco, checkObservatory,
-  checkEmailAuth, parseRobotsDeep, detectHttpProtocols, extractJsonLd,
+  checkEmailAuth, parseRobotsDeep, detectHttpProtocols, probeHttpProtocols, extractJsonLd,
   extractSocialMeta, detectLegalPages, calculateAiReadiness,
   checkAnsRecords,
 } from "./analyze/content";
@@ -292,7 +292,11 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
       const siteIsCloudflareRefined = isActuallyCloudflare(dnsRecords, ipInfo);
       const effectiveHeaders = (rawHeadersOriginal && !siteIsCloudflareRefined)
         ? sanitizeCfHeaders(rawHeadersOriginal) : rawHeadersOriginal;
-      const httpProtocols = detectHttpProtocols(effectiveHeaders);
+      let httpProtocols = detectHttpProtocols(effectiveHeaders);
+      if (!httpProtocols.http2 && !httpProtocols.http3) {
+        const probed = await probeHttpProtocols(domain);
+        if (probed.http2 || probed.http3) httpProtocols = probed;
+      }
 
       let finalSecurityAudit = httpAnalysis?.headers?.security_audit ?? [];
       let finalSecurityGrade = httpAnalysis?.headers?.security_grade ?? "F";
@@ -398,7 +402,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
       // Historical score logging
       if (domainScore) {
         try {
-          await env.DB.prepare(
+          await env.STATS_DB.prepare(
             `INSERT INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ).bind(
@@ -410,7 +414,7 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
           ).run();
         } catch {
           try {
-            await env.DB.prepare(
+            await env.STATS_DB.prepare(
               `CREATE TABLE IF NOT EXISTS domain_scores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
                 composite_score INTEGER NOT NULL, security_score INTEGER NOT NULL,
@@ -421,9 +425,9 @@ export async function analyzeDomainStream(domain: string, env: Env): Promise<Res
                 UNIQUE(domain, scored_at)
               )`
             ).run();
-            await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`).run();
-            await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`).run();
-            await env.DB.prepare(
+            await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`).run();
+            await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`).run();
+            await env.STATS_DB.prepare(
               `INSERT INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(
