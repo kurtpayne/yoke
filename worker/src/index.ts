@@ -33,6 +33,60 @@ interface Env {
 
 import { CORS_HEADERS, normalizeDomain } from "./helpers";
 
+// ─── Rate Limiting ──────────────────────────────────────────────────
+
+const RATE_LIMITS: Record<string, { limit: number; windowSecs: number }> = {
+  "/api/analyze": { limit: 30, windowSecs: 3600 },
+  "/api/compare": { limit: 15, windowSecs: 3600 },
+  "/api/subdomain-scan": { limit: 20, windowSecs: 3600 },
+  "/api/availability": { limit: 60, windowSecs: 3600 },
+};
+
+let rateLimitTableReady = false;
+
+async function ensureRateLimitTable(db: D1Database): Promise<void> {
+  if (rateLimitTableReady) return;
+  await db.batch([
+    db.prepare("CREATE TABLE IF NOT EXISTS endpoint_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, endpoint TEXT NOT NULL, ts INTEGER NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_endpoint_rate_ip_ts ON endpoint_rate_limits(ip, endpoint, ts)"),
+  ]);
+  rateLimitTableReady = true;
+}
+
+async function checkRateLimit(db: D1Database, ip: string, endpoint: string): Promise<Response | null> {
+  const config = RATE_LIMITS[endpoint];
+  if (!config) return null;
+  try {
+    await ensureRateLimitTable(db);
+    const cutoff = Math.floor(Date.now() / 1000) - config.windowSecs;
+    const row = await db.prepare(
+      "SELECT COUNT(*) as cnt FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?"
+    ).bind(ip, endpoint, cutoff).first<{ cnt: number }>();
+    if (row && row.cnt >= config.limit) {
+      return new Response(JSON.stringify({
+        error: "Rate limit exceeded",
+        limit: config.limit,
+        window: `${config.windowSecs / 3600} hour`,
+        retry_after: config.windowSecs,
+        self_host: "https://github.com/kurtpayne/yoke/blob/main/QUICKSTART.md",
+        message: "For heavy usage, self-host Yoke with no limits. See our quickstart guide.",
+      }), { status: 429, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
+    }
+    // Record this request
+    const now = Math.floor(Date.now() / 1000);
+    await db.prepare("INSERT INTO endpoint_rate_limits (ip, endpoint, ts) VALUES (?, ?, ?)").bind(ip, endpoint, now).run();
+    // Probabilistic cleanup: 2% chance, delete entries older than 2 hours
+    if (Math.random() < 0.02) {
+      const old = now - 7200;
+      await db.prepare("DELETE FROM endpoint_rate_limits WHERE ts < ?").bind(old).run().catch(() => {});
+    }
+  } catch (err) {
+    console.error("[rate-limit] STATS_DB error:", err instanceof Error ? err.message : err);
+    // Fail-open for general endpoints (they don't cost money)
+  }
+  return null;
+}
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -90,6 +144,9 @@ function checkAdminAuth(request: Request, adminKey: string | undefined): Respons
 /** Normalize and validate a domain string. Returns the cleaned domain or null if invalid. */
 function cleanDomain(raw: string): string | null {
   const d = normalizeDomain(raw);
+  // Reject IP literals (IPv4 and IPv6)
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(d)) return null;
+  if (/^\[.*\]$/.test(d) || d === "::1" || d.includes(":")) return null;
   return isValidDomain(d) ? d : null;
 }
 
@@ -143,9 +200,12 @@ export default {
 
     // API routes
     if (path.startsWith("/api/")) {
+      const clientIP = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
       try {
         // POST /api/analyze
         if (method === "POST" && path === "/api/analyze") {
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze");
+          if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
@@ -160,6 +220,8 @@ export default {
 
         // POST /api/compare
         if (method === "POST" && path === "/api/compare") {
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/compare");
+          if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
           if (!body.domain1 || !body.domain2) return json({ error: "domain1 and domain2 are required" }, 400);
           const d1 = cleanDomain(body.domain1);
@@ -189,6 +251,8 @@ export default {
 
         // POST /api/subdomain-scan
         if (method === "POST" && path === "/api/subdomain-scan") {
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/subdomain-scan");
+          if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
@@ -242,6 +306,8 @@ export default {
 
         // POST /api/availability
         if (method === "POST" && path === "/api/availability") {
+          const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/availability");
+          if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required" }, 400);
           const domain = cleanDomain(body.domain);
@@ -265,7 +331,6 @@ export default {
 
         // POST /api/ai-analysis — tiered access: free pool (10/day), BYO key, or DIY prompt
         if (method === "POST" && path === "/api/ai-analysis") {
-          const clientIP = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
           const byoKey = request.headers.get("x-openrouter-key") || undefined;
           await trackUsage(env.STATS_DB, "ai-analysis");
           const body = await parseBody<{ domain?: string }>(request);

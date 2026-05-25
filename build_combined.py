@@ -198,11 +198,10 @@ function decodeB64(b64) {
 
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
   "X-XSS-Protection": "0",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://yoke.lol https://*.googleapis.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://yoke.lol https://*.googleapis.com; font-src 'self'; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
   "Cross-Origin-Opener-Policy": "same-origin",
 };
