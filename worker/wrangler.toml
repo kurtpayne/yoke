@@ -16,6 +16,6 @@ binding = "STATS_DB"
 database_name = "yoke-stats"
 database_id = "6f29dfb9-b7ff-497f-a4aa-4dbb3b7dd6e1"
 
-[routes]
-pattern = "yoke.lol"
+[[routes]]
+pattern = "yoke.lol/*"
 zone_name = "yoke.lol"
