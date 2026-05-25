@@ -16,7 +16,7 @@ import type {
   WellKnownResult, GreynoiseResult, EmailAuthResult,
 } from "./types";
 
-import { checkDns, isSubdomain, checkRdap } from "./dns";
+import { checkDns, isSubdomain, checkRdap, dohQuery } from "./dns";
 import { auditSecurityHeaders, detectTechStack, analyzeHttp, checkRobotsSitemap } from "./http";
 import { checkIpInfo, checkBlocklists, checkSsl, checkStatus, checkShodan, checkDnssec } from "./network";
 import { checkPageSpeed, detectCompression, checkCarbon } from "./performance";
@@ -285,12 +285,8 @@ export async function runAnalysis(
 
   // ── Phase 0: Quick NXDOMAIN check ────────────────────────────────
   try {
-    const quickDns = await fetchWithTimeout(
-      `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`,
-      { timeout: 5000 },
-    );
-    const quickData = await quickDns.json() as { Status: number; Answer?: unknown[] };
-    if (quickData.Status === 3) {
+    const quickData = await dohQuery(domain, "A");
+    if (quickData && quickData.Status === 3) {
       const nxResult = makeNxdomainResult(domain);
       try {
         await env.DB.prepare(
