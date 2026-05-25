@@ -365,7 +365,6 @@ export function App() {
     // Strip protocol and path — extract hostname from pasted URLs
     d = d.replace(/^https?:\/\//, "");
     d = d.replace(/[/?#].*$/, "");
-    d = d.replace(/^www\./, "");
     if (!d || analyze.isPending) return;
     setDomain(d);
     setActiveTab("overview");
@@ -374,7 +373,7 @@ export function App() {
 
   const handleNavigate = useCallback(
     (raw: string) => {
-      let d = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/?#].*$/, "").replace(/^www\./, "");
+      let d = raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/?#].*$/, "");
       setDomain(d);
       setActiveTab("overview");
       analyze.mutate(d);
@@ -388,7 +387,7 @@ export function App() {
     let path = window.location.pathname.slice(1); // strip leading /
     if (path.startsWith("compare")) return; // compare mode handled separately
     // Clean pasted URLs from path: yoke.lol/https://example.com/foo → example.com
-    path = path.replace(/^https?:\/\//, "").replace(/[/?#].*$/, "").replace(/^www\./, "");
+    path = path.replace(/^https?:\/\//, "").replace(/[/?#].*$/, "");
     if (path && path.includes(".") && !path.startsWith("api/") && !path.startsWith("assets/")) {
       // URL has a domain in it — analyze it
       setAutoLoaded(true);

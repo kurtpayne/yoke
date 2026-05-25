@@ -43,7 +43,6 @@ export function normalizeDomain(input: string): string {
   let d = input.trim().toLowerCase();
   d = d.replace(/^https?:\/\//, "");
   d = d.replace(/\/.*$/, "");
-  d = d.replace(/^www\./, "");
   // Convert IDN (Unicode) domains to punycode via the URL API
   try {
     const url = new URL(`http://${d}`);
