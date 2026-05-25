@@ -5,6 +5,7 @@ All notable changes to Yoke are documented here.
 ## [1.3.0] — 2026-05-28
 
 ### Features
+- **Network Health panel** — Infrastructure tab gains DNS propagation (multi-resolver consistency), TCP connection timing (DNS/TCP/TLS breakdown via Fly probe), RIPE RIS routing data (ASN, prefix, BGP visibility & stability), and outage monitoring links (Downdetector, IsItDownRightNow). Surfaces DNS inconsistency and routing instability as domain signals and scoring findings. Compare view shows connection timing and routing stability differences. New external links to bgp.tools, HE BGP, and Downdetector on the Infrastructure tab.
 - **Top Priorities engine** — replaced Key Findings with a ranked, actionable fix-it list with effort estimates and cross-axis insights
 - **BYO API Key panel** — gear icon on AI tab opens advanced settings: API key input, model picker (Claude Sonnet 4, Opus 4, GPT-4o, o3, Gemini 2.5 Pro, Llama 4 Maverick), and live prompt editor; controls visible but disabled without a key to improve discoverability
 - **BYO key UX copy** — clear "Why?" and "Privacy:" explanations in the panel; expanded `/privacy` page with full BYO key data handling details

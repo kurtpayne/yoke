@@ -122,6 +122,45 @@ export const api = {
 
 // ─── Type definitions (matching server response shapes) ──────────────
 
+// ─── Network Health Types ───────────────────────────────────────────
+export interface DnsResolverResultData {
+  name: string;
+  ips: string[];
+  response_time_ms: number;
+  status: "ok" | "timeout" | "error";
+}
+export interface DnsPropagationData {
+  resolvers: DnsResolverResultData[];
+  consistent: boolean;
+  unique_ips: string[];
+}
+export interface RipeRoutingData {
+  asn: number | null;
+  asn_name: string | null;
+  prefix: string | null;
+  visibility: { seen_by: number; total: number; percentage: number } | null;
+  bgp_updates_24h: number | null;
+  routing_stability: "stable" | "moderate" | "unstable" | null;
+}
+export interface ConnectionTimingData {
+  dns_ms: number;
+  tcp_ms: number;
+  tls_ms: number;
+  total_ms: number;
+  ip: string | null;
+  tls_version: string | null;
+}
+export interface OutageLinksData {
+  downdetector: { exists: boolean; url: string };
+  isitdown: { exists: boolean; url: string };
+}
+export interface NetworkHealthData {
+  dns_propagation: DnsPropagationData | null;
+  ripe_routing: RipeRoutingData | null;
+  connection_timing: ConnectionTimingData | null;
+  outage_links: OutageLinksData | null;
+}
+
 export interface AnalysisResult {
   domain: string;
   cached: boolean;
@@ -209,6 +248,9 @@ export interface AnalysisResult {
 
   // Trust signals
   trust_signals: TrustSignalsData | null;
+
+  // Network health
+  network_health: NetworkHealthData | null;
 }
 
 export interface DnsRecord { type: string; name: string; ttl: number; data: string; }

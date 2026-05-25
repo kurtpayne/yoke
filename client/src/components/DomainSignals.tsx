@@ -309,6 +309,33 @@ function buildSignals(data: AnalysisResult, streaming?: boolean): Signal[] {
     }
   }
 
+  // ─── Network Health ───
+  if (data.network_health) {
+    const nh = data.network_health;
+    if (nh.dns_propagation) {
+      if (nh.dns_propagation.consistent) {
+        signals.push({ type: "strength", text: "DNS consistent across resolvers", detail: `${nh.dns_propagation.unique_ips.length} unique IP${nh.dns_propagation.unique_ips.length !== 1 ? "s" : ""} across ${nh.dns_propagation.resolvers.length} resolvers` });
+      } else {
+        signals.push({ type: "notice", text: "DNS inconsistent across resolvers", detail: "Different resolvers return different IP addresses — propagation may be in progress" });
+      }
+    }
+    if (nh.ripe_routing) {
+      if (nh.ripe_routing.routing_stability === "unstable") {
+        signals.push({ type: "issue", text: `Unstable BGP routing (${nh.ripe_routing.bgp_updates_24h} updates/24h)`, detail: "Frequent route changes may cause intermittent reachability issues" });
+      } else if (nh.ripe_routing.routing_stability === "stable") {
+        signals.push({ type: "strength", text: "Stable BGP routing" });
+      }
+      if (nh.ripe_routing.visibility && nh.ripe_routing.visibility.percentage < 70) {
+        signals.push({ type: "notice", text: `Low route visibility (${nh.ripe_routing.visibility.percentage}%)`, detail: "Route not seen by many BGP peers — may indicate reachability issues" });
+      }
+    }
+    if (nh.connection_timing) {
+      const total = Math.round(nh.connection_timing.total_ms);
+      if (total < 200) signals.push({ type: "strength", text: `Fast connection setup (${total}ms)` });
+      else if (total > 500) signals.push({ type: "notice", text: `Slow connection setup (${total}ms)`, detail: "DNS + TCP + TLS handshake combined" });
+    }
+  }
+
   return signals;
 }
 
@@ -358,6 +385,18 @@ function buildExternalLinks(data: AnalysisResult): ExternalLink[] {
   links.push({ name: "BuiltWith", url: `https://builtwith.com/${domain}`, category: "Tech" });
   links.push({ name: "Rich Results Test", url: `https://search.google.com/test/rich-results?url=https://${domain}`, category: "SEO" });
   links.push({ name: "Ahrefs Backlinks", url: `https://ahrefs.com/backlink-checker/?input=${domain}`, category: "SEO" });
+
+  // Network Health
+  if (data.network_health?.ripe_routing?.asn) {
+    links.push({ name: "bgp.tools", url: `https://bgp.tools/as/${data.network_health.ripe_routing.asn}`, category: "Routing" });
+    links.push({ name: "HE BGP", url: `https://bgp.he.net/AS${data.network_health.ripe_routing.asn}`, category: "Routing" });
+  }
+  if (ip) {
+    links.push({ name: "HE BGP (IP)", url: `https://bgp.he.net/ip/${ip}`, category: "Routing" });
+  }
+  if (data.network_health?.outage_links?.downdetector?.exists) {
+    links.push({ name: "Downdetector", url: data.network_health.outage_links.downdetector.url, category: "Monitoring" });
+  }
 
   return links;
 }

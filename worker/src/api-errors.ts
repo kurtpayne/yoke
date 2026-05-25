@@ -116,6 +116,10 @@ const API_REGISTRY: { api: string; label: string; url: string }[] = [
   { api: "blocklists", label: "DNS Blocklists", url: "various DNSBL" },
   { api: "greenhosting", label: "Green Web Foundation", url: "api.thegreenwebfoundation.org" },
   { api: "ipinfo", label: "IP Geolocation", url: "dns.google" },
+  { api: "dns_propagation", label: "DNS Propagation", url: "multiple DoH resolvers" },
+  { api: "ripe_routing", label: "RIPE RIS Routing", url: "stat.ripe.net" },
+  { api: "outage_links", label: "Outage Pages", url: "downdetector.com / isitdownrightnow.com" },
+  { api: "connection_timing", label: "Connection Timing", url: "Fly probe /probe-timing" },
 ];
 
 export async function getStatusPageData(db: D1Database): Promise<{ apis: ApiStatusRow[]; generated_at: string }> {
