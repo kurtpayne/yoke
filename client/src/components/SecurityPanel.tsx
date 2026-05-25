@@ -1,8 +1,22 @@
-import { Lock, ShieldCheck, Shield } from "lucide-react";
+import { Lock, ShieldCheck, Shield, ExternalLink } from "lucide-react";
 import { Panel, DataRow, GradeBadge, StatusBadge, ErrorState } from "./Panel";
 import { CliButton, sslCliCommands, headersCliCommands } from "./CliModal";
 import { Tooltip } from "./Tooltip";
 import type { AnalysisResult } from "../utils/types";
+
+/** Links to MDN documentation for each security header. */
+const HEADER_DOCS: Record<string, string> = {
+  "strict-transport-security": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security",
+  "content-security-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy",
+  "x-frame-options": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Frame-Options",
+  "x-content-type-options": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-Content-Type-Options",
+  "referrer-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Referrer-Policy",
+  "permissions-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Permissions-Policy",
+  "x-xss-protection": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/X-XSS-Protection",
+  "cross-origin-opener-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cross-Origin-Opener-Policy",
+  "cross-origin-embedder-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cross-Origin-Embedder-Policy",
+  "cross-origin-resource-policy": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cross-Origin-Resource-Policy",
+};
 
 const HEADER_TOOLTIPS: Record<string, string> = {
   "strict-transport-security": "HSTS forces browsers to only connect via HTTPS, preventing downgrade attacks and cookie hijacking",
@@ -139,6 +153,7 @@ export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
       {headers.security_audit.map((check, i) => {
         const headerKey = check.header.toLowerCase();
         const tooltip = HEADER_TOOLTIPS[headerKey];
+        const docUrl = HEADER_DOCS[headerKey];
         return (
           <div key={check.header} className="data-row" style={{ alignItems: "flex-start" }}>
             <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
@@ -165,6 +180,17 @@ export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
                 }}>
                   {check.header}
                 </span>
+              )}
+              {docUrl && (
+                <a
+                  href={docUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <ExternalLink size={9} style={{ color: "var(--muted)", opacity: 0.7 }} />
+                </a>
               )}
             </div>
             <div className="text-right flex-shrink-0 ml-3" style={{ maxWidth: "50%" }}>
