@@ -8,7 +8,7 @@ import type {
   RobotsParsed, MetaResult, HttpAnalysis, SecurityHeaderCheck,
   EmailAuthResult, CertTransparencyResult, GreynoiseResult,
   HostingResult, TechItem, AccessibilityResult, ThirdPartyScriptsResult,
-  CookieConsentResult, CacheAnalysis,
+  CookieConsentResult, CacheAnalysis, WafDetection, TrustSignals,
 } from "./types";
 import {
   PERF_SCORE, LCP, CLS, TTFB, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
@@ -289,6 +289,8 @@ export function calculateDomainScore(opts: {
   thirdPartyScripts: ThirdPartyScriptsResult | null;
   cookieConsent: CookieConsentResult | null;
   cacheAnalysis: CacheAnalysis | null;
+  waf: WafDetection | null;
+  trustSignals: TrustSignals | null;
 }): DomainScoreResult {
   // Step 1: Detect archetype
   const archetype = detectArchetype({
@@ -436,6 +438,60 @@ export function calculateDomainScore(opts: {
         label: `Missing email auth: ${missing.join(", ")}`,
         tradeoff: null, weight: 3,
       });
+    }
+  }
+
+  // WAF detection
+  if (opts.waf?.detected) {
+    if (opts.waf.confidence === "high") {
+      findings.push({ signal: "waf_detected", axis: "security", severity: "good", label: `WAF detected: ${opts.waf.provider}`, tradeoff: null, weight: 4 });
+    } else if (opts.waf.confidence === "medium") {
+      findings.push({ signal: "waf_detected", axis: "security", severity: "good", label: `WAF likely: ${opts.waf.provider}`, tradeoff: null, weight: 2 });
+    } else {
+      findings.push({ signal: "waf_detected", axis: "security", severity: "good", label: `WAF possible: ${opts.waf.provider}`, tradeoff: null, weight: 1 });
+    }
+  }
+
+  // CSP header (trust signal: strong security posture)
+  if (opts.headers && !opts.httpBlocked) {
+    const csp = opts.headers["content-security-policy"];
+    if (csp) {
+      findings.push({ signal: "csp_header", axis: "security", severity: "good", label: "Content Security Policy configured", tradeoff: null, weight: 3 });
+    }
+  }
+
+  // HSTS preload
+  if (opts.headers && !opts.httpBlocked) {
+    const hsts = opts.headers["strict-transport-security"] ?? "";
+    if (/preload/i.test(hsts) && /max-age\s*=\s*(\d{8,})/i.test(hsts) && /includesubdomains/i.test(hsts)) {
+      findings.push({ signal: "hsts_preload", axis: "security", severity: "good", label: "HSTS preload eligible", tradeoff: null, weight: 3 });
+    }
+  }
+
+  // CAA records
+  if (opts.dnsRecords.some(r => r.type === "CAA")) {
+    findings.push({ signal: "caa_records", axis: "security", severity: "good", label: "CAA records restrict certificate issuance", tradeoff: null, weight: 2 });
+  }
+
+  // Trust signals: composite bonus for strong trust posture
+  if (opts.trustSignals) {
+    const positiveCount = opts.trustSignals.trust_score_factors.positive.length;
+    if (positiveCount >= 5) {
+      findings.push({ signal: "trust_strong", axis: "trust", severity: "good", label: `${positiveCount} positive trust signals`, tradeoff: null, weight: 4 });
+    } else if (positiveCount >= 3) {
+      findings.push({ signal: "trust_moderate", axis: "trust", severity: "good", label: `${positiveCount} positive trust signals`, tradeoff: null, weight: 3 });
+    }
+
+    // DMARC reject → trust bonus (not double-counted from security)
+    const dmarcRejecting = opts.trustSignals.signals.some(s => s.name === "DMARC Enforcement" && s.present && s.value?.includes("reject"));
+    if (dmarcRejecting) {
+      findings.push({ signal: "dmarc_reject", axis: "trust", severity: "good", label: "DMARC policy=reject prevents email spoofing", tradeoff: null, weight: 2 });
+    }
+
+    // Operational transparency bonus
+    const opsSignals = opts.trustSignals.signals.filter(s => s.category === "operational" && s.present);
+    if (opsSignals.length >= 2) {
+      findings.push({ signal: "ops_transparency", axis: "trust", severity: "good", label: `${opsSignals.length} operational transparency tools (status page, monitoring, etc.)`, tradeoff: null, weight: 2 });
     }
   }
 

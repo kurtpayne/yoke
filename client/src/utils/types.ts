@@ -64,4 +64,7 @@ export type {
   CookieConsentData,
   CmpDetectionData,
   CookieInfoData,
+  WafDetectionData,
+  TrustSignalData,
+  TrustSignalsData,
 } from "../api";

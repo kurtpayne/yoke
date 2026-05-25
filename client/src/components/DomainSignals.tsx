@@ -174,7 +174,11 @@ function buildSignals(data: AnalysisResult, streaming?: boolean): Signal[] {
   // ─── Hosting / Infrastructure ───
   if (data.hosting?.provider) signals.push({ type: "info", text: `Hosted on ${data.hosting.provider}` });
   if (data.hosting?.cdn) signals.push({ type: "info", text: `CDN: ${data.hosting.cdn}` });
-  if (data.hosting?.waf) signals.push({ type: "strength", text: `WAF: ${data.hosting.waf}` });
+  if (data.waf?.detected) {
+    signals.push({ type: "strength", text: `WAF: ${data.waf.provider}`, detail: `${data.waf.confidence} confidence` });
+  } else if (data.hosting?.waf) {
+    signals.push({ type: "strength", text: `WAF: ${data.hosting.waf}` });
+  }
 
   // ─── Tech ───
   if (data.wordpress) {
