@@ -274,7 +274,129 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Path == "/probe-geo" {
+		ip := r.URL.Query().Get("ip")
+		if ip == "" {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"missing ip parameter"}`, 400)
+			return
+		}
+		result := probeGeoIP(ip)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
 	http.Error(w, `{"error":"not found"}`, 404)
+}
+
+// ─── IP Geolocation Probe ───────────────────────────────────────────
+
+type GeoResult struct {
+	IP          string   `json:"ip"`
+	City        *string  `json:"city"`
+	Country     *string  `json:"country"`
+	CountryCode *string  `json:"country_code"`
+	Lat         *float64 `json:"lat"`
+	Lon         *float64 `json:"lon"`
+	ISP         *string  `json:"isp"`
+	Org         *string  `json:"org"`
+	ASN         *string  `json:"asn"`
+	Source      string   `json:"source"`
+	Error       *string  `json:"error"`
+}
+
+func probeGeoIP(ip string) GeoResult {
+	// Try ip-api.com first (45 req/min, no key needed, good data)
+	if result := tryIpApi(ip); result != nil {
+		return *result
+	}
+	// Fall back to ipwho.is
+	if result := tryIpWhois(ip); result != nil {
+		return *result
+	}
+	errStr := "all geolocation providers failed"
+	return GeoResult{IP: ip, Error: &errStr}
+}
+
+func tryIpApi(ip string) *GeoResult {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://ip-api.com/json/" + ip + "?fields=status,country,countryCode,city,lat,lon,isp,org,as")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil
+	}
+
+	var data struct {
+		Status      string  `json:"status"`
+		Country     string  `json:"country"`
+		CountryCode string  `json:"countryCode"`
+		City        string  `json:"city"`
+		Lat         float64 `json:"lat"`
+		Lon         float64 `json:"lon"`
+		ISP         string  `json:"isp"`
+		Org         string  `json:"org"`
+		AS          string  `json:"as"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil || data.Status != "success" {
+		return nil
+	}
+
+	// Parse ASN from "AS13335 Cloudflare, Inc." format
+	asn := ""
+	if parts := strings.SplitN(data.AS, " ", 2); len(parts) > 0 {
+		asn = parts[0]
+	}
+
+	return &GeoResult{
+		IP: ip, City: &data.City, Country: &data.Country,
+		CountryCode: &data.CountryCode, Lat: &data.Lat, Lon: &data.Lon,
+		ISP: &data.ISP, Org: &data.Org, ASN: &asn, Source: "ip-api.com",
+	}
+}
+
+func tryIpWhois(ip string) *GeoResult {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://ipwho.is/" + ip)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil
+	}
+
+	var data struct {
+		Success     bool    `json:"success"`
+		Country     string  `json:"country"`
+		CountryCode string  `json:"country_code"`
+		City        string  `json:"city"`
+		Latitude    float64 `json:"latitude"`
+		Longitude   float64 `json:"longitude"`
+		Connection  struct {
+			ISP string `json:"isp"`
+			Org string `json:"org"`
+			ASN int    `json:"asn"`
+		} `json:"connection"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil || !data.Success {
+		return nil
+	}
+
+	asn := ""
+	if data.Connection.ASN > 0 {
+		asn = "AS" + strings.TrimLeft(fmt.Sprintf("%d", data.Connection.ASN), "0")
+	}
+
+	return &GeoResult{
+		IP: ip, City: &data.City, Country: &data.Country,
+		CountryCode: &data.CountryCode, Lat: &data.Latitude, Lon: &data.Longitude,
+		ISP: &data.Connection.ISP, Org: &data.Connection.Org, ASN: &asn, Source: "ipwho.is",
+	}
 }
 
 // ─── SSL Probe ──────────────────────────────────────────────────────
@@ -495,6 +617,9 @@ type StatusResult struct {
 	Error          *string `json:"error"`
 	StatusLabel    string  `json:"status_label"`
 	HttpBlocked    bool    `json:"http_blocked"`
+	HTTP2          bool    `json:"http2"`
+	HTTP3          bool    `json:"http3"`
+	AltSvc         *string `json:"alt_svc"`
 }
 
 func probeStatus(domain string) StatusResult {
@@ -503,6 +628,9 @@ func probeStatus(domain string) StatusResult {
 	currentURL := "https://" + domain
 	var finalStatus int
 	var lastErr error
+	var http2Detected bool
+	var http3Detected bool
+	var altSvcPtr *string
 
 	noRedirectClient := &http.Client{
 		Timeout:   10 * time.Second,
@@ -527,6 +655,18 @@ func probeStatus(domain string) StatusResult {
 		}
 		resp.Body.Close()
 		finalStatus = resp.StatusCode
+
+		// Detect HTTP/2 from the final response (not redirects)
+		if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+			http2Detected = resp.ProtoMajor == 2
+			altSvc := resp.Header.Get("Alt-Svc")
+			if altSvc != "" {
+				altSvcPtr = &altSvc
+				if strings.Contains(altSvc, "h3=") || strings.Contains(altSvc, "h3-") {
+					http3Detected = true
+				}
+			}
+		}
 
 		if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 			loc := resp.Header.Get("Location")
@@ -553,6 +693,9 @@ func probeStatus(domain string) StatusResult {
 			Error:          &errStr,
 			StatusLabel:    "DOWN",
 			HttpBlocked:    false,
+			HTTP2:          false,
+			HTTP3:          false,
+			AltSvc:         nil,
 		}
 	}
 
@@ -578,6 +721,10 @@ func probeStatus(domain string) StatusResult {
 		ResponseTimeMs: elapsed,
 		Error:          errMsg,
 		StatusLabel:    label,
+		HttpBlocked:    isBlocked,
+		HTTP2:          http2Detected,
+		HTTP3:          http3Detected,
+		AltSvc:         altSvcPtr,
 	}
 }
 
