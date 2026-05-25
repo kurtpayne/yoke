@@ -2,7 +2,7 @@
 // Single source of truth for all analysis logic.
 // Both the JSON endpoint and the SSE streaming endpoint use this.
 
-import { type Env, normalizeDomain, fetchWithTimeout, maybePruneCache, backgroundWork } from "../../helpers";
+import { type Env, normalizeDomain, maybePruneCache, backgroundWork } from "../../helpers";
 import { ANALYSIS_CACHE_TTL_MS } from "../../config/cache";
 import { analyzeWordPress } from "../wordpress";
 import { checkBreaches, type BreachResult } from "../breaches";

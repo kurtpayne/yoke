@@ -10,7 +10,7 @@ import { TabBar, type TabId } from "./components/TabBar";
 import { VitalsStrip } from "./components/VitalsStrip";
 import { TrancoPanel, ScreenshotPanel } from "./components/ReputationPanels";
 import { RecentLookups } from "./components/RecentLookups";
-import { SkeletonPanel, SectionHeader } from "./components/Panel";
+import { SkeletonPanel } from "./components/Panel";
 import { DomainSignals, ExternalTools } from "./components/DomainSignals";
 import { CurlBar, ApiTeaser } from "./components/CurlShowcase";
 import { ShareBar } from "./components/ShareBar";

@@ -92,7 +92,7 @@ async function cfSearch(query: string, env: Env, limit = 15): Promise<DomainSugg
         : null,
       source: "cf_search" as const,
     }));
-  } catch {
+  } catch { /* search failed */
     return [];
   }
 }
@@ -173,7 +173,7 @@ async function dohCheck(domain: string): Promise<boolean | null> {
       return true;
     }
     return null;
-  } catch {
+  } catch { /* enrichment failed */
     return null;
   }
 }

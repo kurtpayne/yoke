@@ -1,10 +1,10 @@
 import { DnsPanel } from "../DnsPanel";
-import { IpInfoPanel, BlocklistPanel, HttpProtocolsPanel } from "../NetworkPanel";
+import { IpInfoPanel, HttpProtocolsPanel } from "../NetworkPanel";
 import { RedirectPanel, HeadersPanel } from "../HttpPanel";
 import { PanelGrid, type PanelDef } from "../PanelLayout";
 import { SectionHeader } from "../Panel";
 import { IpMap } from "../IpMap";
-import { DnssecPanel, CompressionPanel, HostingPanel } from "../NewPanels";
+import { DnssecPanel, HostingPanel } from "../NewPanels";
 import { ShodanPanel } from "../ShodanPanel";
 import { AvailabilityPanel } from "../AvailabilityPanel";
 import { SubdomainScanPanel } from "../SubdomainScanPanel";

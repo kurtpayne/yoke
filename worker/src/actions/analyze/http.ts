@@ -174,7 +174,7 @@ export async function analyzeHttp(domain: string): Promise<HttpAnalysis | null> 
       res.headers.forEach((v, k) => { finalHeaders[k.toLowerCase()] = v; });
       try { html = await boundedText(res); } catch { html = ""; }
       break;
-    } catch {
+    } catch { /* redirect or network error */
       if (i === 0 && currentUrl.startsWith("https://")) { currentUrl = `http://${domain}`; continue; }
       break;
     }
