@@ -33,130 +33,283 @@ interface RateLimitResponse {
   instructions: string;
 }
 
-// ─── Deterministic Key Findings ─────────────────────────────────────
+// ─── Top Priorities Engine ──────────────────────────────────────────
 
-interface DetFinding {
-  icon: string;
-  text: string;
-  severity: "critical" | "warning" | "info" | "good";
+interface ActionItem {
+  title: string;
+  reason: string;
+  effort: string;
+  axis: string;
+  severity: "critical" | "high" | "medium" | "low";
+  impact: number; // 0-100, used for sorting
 }
 
-function generateKeyFindings(data: AnalysisResult): DetFinding[] {
-  const findings: DetFinding[] = [];
+type AxisName = "security" | "performance" | "reliability" | "trust" | "visibility";
 
-  // SSL issues
-  if (data.ssl) {
-    if (data.ssl.error && !data.ssl.grade) {
-      findings.push({ icon: "🔴", text: "SSL certificate issue: " + (data.ssl.error || "not detected"), severity: "critical" });
-    } else if (data.ssl.grade) {
-      if (data.ssl.grade.startsWith("A")) {
-        findings.push({ icon: "✅", text: `SSL grade ${data.ssl.grade}`, severity: "good" });
-      } else if (data.ssl.grade === "T") {
-        findings.push({ icon: "🔴", text: "SSL certificate has trust issues", severity: "critical" });
-      } else {
-        findings.push({ icon: "🟡", text: `SSL grade ${data.ssl.grade} — room for improvement`, severity: "warning" });
-      }
-    }
-    if (data.ssl.valid_to) {
-      const daysLeft = Math.floor((new Date(data.ssl.valid_to).getTime() - Date.now()) / 86400000);
-      if (daysLeft < 0) {
-        findings.push({ icon: "🔴", text: "SSL certificate has expired", severity: "critical" });
-      } else if (daysLeft <= 14) {
-        findings.push({ icon: "🔴", text: `SSL certificate expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`, severity: "critical" });
-      } else if (daysLeft <= 30) {
-        findings.push({ icon: "🟡", text: `SSL certificate expires in ${daysLeft} days`, severity: "warning" });
-      }
-    }
+function generateActionItems(data: AnalysisResult): ActionItem[] {
+  const items: ActionItem[] = [];
+  const axes = data.domain_score?.axes;
+
+  // ─── Critical: Site down ──────────────────────────────────────────
+  if (data.status && !data.status.is_up) {
+    items.push({ title: "Site appears to be down", reason: "Users and search engines can't reach your site. Everything else is secondary until this is resolved.", effort: "Investigate immediately", axis: "reliability", severity: "critical", impact: 100 });
   }
 
-  // Domain expiration
-  if (data.rdap?.days_until_expiry != null) {
-    if (data.rdap.days_until_expiry <= 30) {
-      findings.push({ icon: "🔴", text: `Domain expires in ${data.rdap.days_until_expiry} day${data.rdap.days_until_expiry === 1 ? "" : "s"}`, severity: "critical" });
-    } else if (data.rdap.days_until_expiry <= 90) {
-      findings.push({ icon: "🟡", text: `Domain expires in ${data.rdap.days_until_expiry} days`, severity: "warning" });
-    }
-  }
-
-  // Security headers
-  if (data.headers) {
-    const missing = data.headers.security_audit.filter(h => h.status === "fail").map(h => h.header);
-    const critical = ["content-security-policy", "strict-transport-security"];
-    const missingCritical = missing.filter(h => critical.includes(h.toLowerCase()));
-    if (missingCritical.length > 0) {
-      findings.push({ icon: "🟡", text: `Missing security header${missingCritical.length > 1 ? "s" : ""}: ${missingCritical.join(", ")}`, severity: "warning" });
-    }
-  }
-
-  // Email auth
-  if (data.email_auth) {
-    const missing: string[] = [];
-    if (!data.email_auth.spf?.found) missing.push("SPF");
-    if (data.email_auth.dkim_selectors_found?.length === 0) missing.push("DKIM");
-    if (!data.email_auth.dmarc?.found) missing.push("DMARC");
-    if (missing.length > 0) {
-      findings.push({ icon: "🟡", text: `Missing email authentication: ${missing.join(", ")}`, severity: "warning" });
-    } else {
-      const dmarcPolicy = data.email_auth.dmarc?.policy;
-      if (dmarcPolicy === "reject" || dmarcPolicy === "quarantine") {
-        findings.push({ icon: "✅", text: `Full email authentication (SPF + DKIM + DMARC ${dmarcPolicy})`, severity: "good" });
-      }
-    }
-  }
-
-  // Performance
-  if (data.performance) {
-    if (data.performance.score != null && data.performance.score < 50) {
-      findings.push({ icon: "🔴", text: `Low performance score: ${data.performance.score}/100`, severity: "critical" });
-    }
-    if (data.performance.lcp != null && data.performance.lcp > 4000) {
-      findings.push({ icon: "🟡", text: `Slow Largest Contentful Paint: ${(data.performance.lcp / 1000).toFixed(1)}s`, severity: "warning" });
-    }
-  }
-
-  // DNSSEC
-  if (data.dnssec) {
-    if (!data.dnssec.enabled) {
-      findings.push({ icon: "ℹ️", text: "DNSSEC not enabled", severity: "info" });
-    }
-  }
-
-  // Accessibility
-  if (data.accessibility) {
-    const score = (data.accessibility as { score?: number }).score;
-    if (score != null && score < 70) {
-      findings.push({ icon: "🟡", text: `Accessibility score ${score}/100 — needs improvement`, severity: "warning" });
-    }
-  }
-
-  // Blocklists
+  // ─── Critical: Blocklisted ────────────────────────────────────────
   if (data.blocklists) {
     const listed = data.blocklists.filter(b => b.listed);
     if (listed.length > 0) {
-      findings.push({ icon: "🔴", text: `Listed on ${listed.length} blocklist${listed.length > 1 ? "s" : ""}: ${listed.map(b => b.name).join(", ")}`, severity: "critical" });
+      items.push({ title: `Listed on ${listed.length} blocklist${listed.length > 1 ? "s" : ""}`, reason: "Blocklist presence can cause email rejection and browser warnings. Investigate and request delisting.", effort: "Varies — may take days", axis: "trust", severity: "critical", impact: 95 });
     }
   }
 
-  // Breaches
-  if (data.breaches && data.breaches.items && data.breaches.items.length > 0) {
-    findings.push({ icon: "🟡", text: `${data.breaches.items.length} known data breach${data.breaches.items.length > 1 ? "es" : ""} associated with this domain`, severity: "warning" });
+  // ─── Critical: SSL expired or expiring ────────────────────────────
+  if (data.ssl) {
+    if (data.ssl.valid_to) {
+      const daysLeft = Math.floor((new Date(data.ssl.valid_to).getTime() - Date.now()) / 86400000);
+      if (daysLeft < 0) {
+        items.push({ title: "Renew expired SSL certificate", reason: "Browsers are showing security warnings to every visitor. Enable auto-renewal to prevent recurrence.", effort: "~15 min with your cert provider", axis: "security", severity: "critical", impact: 98 });
+      } else if (daysLeft <= 14) {
+        items.push({ title: `Renew SSL certificate — expires in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`, reason: "An expired cert will trigger browser warnings and break trust. Check auto-renewal or renew manually.", effort: "~15 min", axis: "security", severity: "critical", impact: 92 });
+      } else if (daysLeft <= 30) {
+        items.push({ title: `SSL certificate expires in ${daysLeft} days`, reason: "Coming up soon — make sure auto-renewal is configured or renew manually.", effort: "~15 min", axis: "security", severity: "high", impact: 70 });
+      }
+    }
+    if (data.ssl.grade === "T") {
+      items.push({ title: "Fix SSL certificate trust chain", reason: "The certificate has trust issues — browsers may show warnings. Usually means a missing intermediate certificate.", effort: "~30 min — reconfigure cert chain", axis: "security", severity: "critical", impact: 90 });
+    } else if (data.ssl.grade && !data.ssl.grade.startsWith("A") && data.ssl.grade !== "T") {
+      items.push({ title: "Upgrade TLS configuration for grade A", reason: "Enable TLS 1.3 and modern cipher suites. Improves both security and performance (TLS 1.3 has faster handshakes).", effort: "Server config change, ~30 min", axis: "security", severity: "medium", impact: 40 });
+    }
   }
 
-  // Status
-  if (data.status && !data.status.is_up) {
-    findings.push({ icon: "🔴", text: "Site appears to be down", severity: "critical" });
+  // ─── Critical: Domain expiring ────────────────────────────────────
+  if (data.rdap?.days_until_expiry != null) {
+    if (data.rdap.days_until_expiry <= 30) {
+      items.push({ title: `Renew domain — expires in ${data.rdap.days_until_expiry} day${data.rdap.days_until_expiry === 1 ? "" : "s"}`, reason: "If the domain expires, someone else can register it. Enable auto-renewal with your registrar.", effort: "~5 min at your registrar", axis: "trust", severity: "critical", impact: 96 });
+    } else if (data.rdap.days_until_expiry <= 90) {
+      items.push({ title: `Domain registration expires in ${data.rdap.days_until_expiry} days`, reason: "Consider renewing early and enabling auto-renewal to avoid any risk of losing the domain.", effort: "~5 min", axis: "trust", severity: "high", impact: 55 });
+    }
   }
 
-  // Sort: critical first, then warning, info, good
-  const order: Record<string, number> = { critical: 0, warning: 1, info: 2, good: 3 };
-  findings.sort((a, b) => order[a.severity] - order[b.severity]);
+  // ─── High: Email authentication gaps ──────────────────────────────
+  if (data.email_auth) {
+    const missingSpf = !data.email_auth.spf?.found;
+    const missingDkim = data.email_auth.dkim_selectors_found?.length === 0;
+    const missingDmarc = !data.email_auth.dmarc?.found;
+    const dmarcNone = data.email_auth.dmarc?.found && data.email_auth.dmarc.policy === "none";
 
-  // If no issues found, add a positive message
-  if (findings.length === 0) {
-    findings.push({ icon: "✅", text: "No critical issues detected — looking good!", severity: "good" });
+    if (missingSpf && missingDkim && missingDmarc) {
+      items.push({ title: "Set up email authentication (SPF + DKIM + DMARC)", reason: "Without any email auth, anyone can send emails pretending to be your domain. This hurts deliverability and enables phishing.", effort: "~1 hour — DNS records + email provider config", axis: "security", severity: "high", impact: 75 });
+    } else {
+      if (missingDkim) {
+        items.push({ title: "Add DKIM to email authentication", reason: "You have SPF" + (data.email_auth.dmarc?.found ? " and DMARC" : "") + " but without DKIM, emails can still be spoofed. Most email providers have a setup wizard.", effort: "~30 min with your email provider", axis: "security", severity: "high", impact: 60 });
+      }
+      if (missingDmarc) {
+        items.push({ title: "Add a DMARC policy", reason: "DMARC tells receiving servers what to do with unauthenticated email from your domain. Start with p=none to monitor.", effort: "~15 min — one DNS TXT record", axis: "trust", severity: "high", impact: 55 });
+      }
+      if (missingSpf) {
+        items.push({ title: "Add SPF record", reason: "SPF lists which servers can send email for your domain. Without it, spam filters are more likely to reject your mail.", effort: "~10 min — one DNS TXT record", axis: "security", severity: "high", impact: 50 });
+      }
+      if (dmarcNone) {
+        items.push({ title: "Strengthen DMARC policy from \"none\" to \"quarantine\" or \"reject\"", reason: "DMARC p=none only monitors — it doesn't actually protect against spoofing. Upgrade once you've verified legitimate senders.", effort: "~5 min DNS change, but audit senders first", axis: "trust", severity: "medium", impact: 35 });
+      }
+    }
   }
 
-  return findings.slice(0, 7);
+  // ─── High: Missing critical security headers ──────────────────────
+  if (data.headers) {
+    const failedHeaders = data.headers.security_audit.filter(h => h.status === "fail").map(h => h.header.toLowerCase());
+    if (failedHeaders.includes("strict-transport-security") && !failedHeaders.includes("content-security-policy")) {
+      items.push({ title: "Enable HSTS (HTTP Strict Transport Security)", reason: "Forces browsers to use HTTPS. Without it, users can be downgraded to insecure HTTP via man-in-the-middle attacks.", effort: "One response header — ~10 min", axis: "security", severity: "high", impact: 55 });
+    }
+    if (failedHeaders.includes("content-security-policy")) {
+      items.push({ title: "Add a Content Security Policy", reason: "CSP is the strongest defense against cross-site scripting (XSS). Start with report-only mode to avoid breaking anything.", effort: "Moderate — requires auditing your scripts and styles", axis: "security", severity: "medium", impact: 45 });
+    }
+    if (failedHeaders.includes("x-content-type-options")) {
+      items.push({ title: "Add X-Content-Type-Options: nosniff", reason: "Prevents browsers from MIME-sniffing responses, blocking a class of attacks. Trivial to add, no risk of breakage.", effort: "One-line header — ~5 min", axis: "security", severity: "low", impact: 15 });
+    }
+  }
+
+  // ─── High: Performance issues ─────────────────────────────────────
+  if (data.performance) {
+    if (data.performance.score != null && data.performance.score < 50) {
+      items.push({ title: `Improve page performance (currently ${data.performance.score}/100)`, reason: "Below 50 means significant loading issues. Affects user experience, bounce rates, and search rankings.", effort: "Run Lighthouse for specific recommendations", axis: "performance", severity: "high", impact: 70 });
+    } else if (data.performance.score != null && data.performance.score < 80) {
+      items.push({ title: `Tune page performance (currently ${data.performance.score}/100)`, reason: "Moderate performance — optimizing images, scripts, and server response time would help.", effort: "Varies — check Lighthouse report", axis: "performance", severity: "medium", impact: 35 });
+    }
+    if (data.performance.lcp != null && data.performance.lcp > 4000) {
+      const lcpSec = (data.performance.lcp / 1000).toFixed(1);
+      items.push({ title: `Reduce Largest Contentful Paint (${lcpSec}s → under 2.5s)`, reason: "LCP above 4s means the main content takes too long to appear. Usually caused by large images, slow fonts, or server delay.", effort: "Image optimization + lazy loading — ~1-2 hours", axis: "performance", severity: "high", impact: 60 });
+    }
+  }
+
+  // ─── Medium: Third-party script bloat ─────────────────────────────
+  if (data.third_party_scripts && data.third_party_scripts.third_party > 30) {
+    items.push({ title: `Reduce third-party scripts (${data.third_party_scripts.third_party} detected)`, reason: "Each external script adds latency, privacy risk, and potential breakage. Audit and remove unused ones, lazy-load the rest.", effort: "~2-3 hours to audit and optimize", axis: "performance", severity: "medium", impact: 40 });
+  }
+
+  // ─── Medium: No compression ───────────────────────────────────────
+  if (data.compression && !data.compression.encoding && !data.compression.vary_accept_encoding) {
+    items.push({ title: "Enable response compression (gzip or brotli)", reason: "Uncompressed responses waste bandwidth and slow page loads. Most servers and CDNs support this with a config toggle.", effort: "~15 min — server/CDN config", axis: "performance", severity: "medium", impact: 35 });
+  }
+
+  // ─── Medium: HTTP/1.1 only ────────────────────────────────────────
+  if (data.http_protocols && !data.http_protocols.http2 && !data.http_protocols.http3) {
+    items.push({ title: "Upgrade to HTTP/2 or HTTP/3", reason: "HTTP/1.1 can't multiplex requests — browsers open 6+ connections instead. HTTP/2 is a server config change with no code impact.", effort: "Server/CDN config — ~30 min", axis: "performance", severity: "medium", impact: 30 });
+  }
+
+  // ─── Medium: DNSSEC ───────────────────────────────────────────────
+  if (data.dnssec && !data.dnssec.enabled) {
+    items.push({ title: "Enable DNSSEC", reason: "Prevents DNS spoofing attacks that can redirect your users to malicious sites. Most registrars offer one-click setup.", effort: "~30 min through your registrar", axis: "security", severity: "low", impact: 25 });
+  }
+
+  // ─── Low: No IPv6 ─────────────────────────────────────────────────
+  if (data.dns?.records) {
+    const hasAAAA = data.dns.records.some(r => r.type === "AAAA");
+    if (!hasAAAA) {
+      items.push({ title: "Add IPv6 (AAAA) records", reason: "A growing share of mobile and international users connect over IPv6. Some networks are IPv6-only.", effort: "DNS config — ~15 min", axis: "reliability", severity: "low", impact: 15 });
+    }
+  }
+
+  // ─── Low: No CAA records ──────────────────────────────────────────
+  if (data.caa_analysis && (!data.caa_analysis.records || data.caa_analysis.records.length === 0)) {
+    items.push({ title: "Add CAA DNS records", reason: "CAA restricts which Certificate Authorities can issue certs for your domain, preventing unauthorized issuance.", effort: "~10 min — DNS records", axis: "security", severity: "low", impact: 15 });
+  }
+
+  // ─── Medium: Pre-consent cookies ──────────────────────────────────
+  if (data.cookie_consent && data.cookie_consent.pre_consent_cookies > 0) {
+    items.push({ title: `Review ${data.cookie_consent.pre_consent_cookies} pre-consent tracking cookie${data.cookie_consent.pre_consent_cookies > 1 ? "s" : ""}`, reason: "Cookies set before user consent can violate GDPR/CCPA. Review your cookie implementation and consent flow.", effort: "~1-2 hours to audit", axis: "trust", severity: "medium", impact: 35 });
+  }
+
+  // ─── Visibility quick wins ────────────────────────────────────────
+  if (data.json_ld && data.json_ld.length === 0) {
+    items.push({ title: "Add structured data (JSON-LD)", reason: "Organization or WebSite schema helps search engines understand your site and enables rich results in search.", effort: "~15 min — copy-paste template", axis: "visibility", severity: "low", impact: 25 });
+  }
+
+  if (data.social_meta) {
+    const sm = data.social_meta as { og_complete?: boolean; twitter_complete?: boolean; score?: number };
+    if (sm.score != null && sm.score < 30) {
+      items.push({ title: "Add Open Graph and Twitter Card meta tags", reason: "Without social meta, shared links won't show rich previews on social media — just a bare URL.", effort: "~10 min — a few <meta> tags", axis: "visibility", severity: "low", impact: 20 });
+    }
+  }
+
+  if (data.meta && !data.meta.sitemap_detected) {
+    items.push({ title: "Add a sitemap.xml", reason: "Sitemaps help search engines discover and index all your pages. Most frameworks can auto-generate one.", effort: "~15 min", axis: "visibility", severity: "low", impact: 15 });
+  }
+
+  if (data.accessibility) {
+    const score = (data.accessibility as { score?: number }).score;
+    if (score != null && score < 50) {
+      items.push({ title: `Improve accessibility (score: ${score}/100)`, reason: "Low accessibility limits your audience and may create legal exposure. Focus on alt text, contrast, and keyboard navigation.", effort: "Ongoing — start with automated fixes", axis: "visibility", severity: "high", impact: 55 });
+    } else if (score != null && score < 70) {
+      items.push({ title: `Improve accessibility (score: ${score}/100)`, reason: "Room for improvement on WCAG compliance. Common fixes: add alt text, improve contrast ratios, ensure keyboard navigation.", effort: "~2-4 hours for quick wins", axis: "visibility", severity: "medium", impact: 30 });
+    }
+  }
+
+  // ─── Data breaches ────────────────────────────────────────────────
+  if (data.breaches?.items && data.breaches.items.length > 0) {
+    items.push({ title: `${data.breaches.items.length} known data breach${data.breaches.items.length > 1 ? "es" : ""} on record`, reason: "Past breaches affect user trust. Ensure affected users were notified and credentials were reset.", effort: "Review breach details in Security tab", axis: "trust", severity: "medium", impact: 30 });
+  }
+
+  // ─── Cross-axis insights (the differentiator) ─────────────────────
+  if (axes) {
+    const measured = (Object.entries(axes) as [AxisName, typeof axes[AxisName]][])
+      .filter(([, v]) => !v.not_measured && v.score != null);
+
+    if (measured.length >= 2) {
+      const sorted = [...measured].sort((a, b) => (a[1].score ?? 0) - (b[1].score ?? 0));
+      const weakest = sorted[0];
+      const strongest = sorted[sorted.length - 1];
+
+      const axisLabels: Record<AxisName, string> = {
+        security: "Security", performance: "Performance", reliability: "Reliability",
+        trust: "Trust", visibility: "Visibility",
+      };
+      const axisAdvice: Record<AxisName, string> = {
+        security: "headers, email auth, and TLS configuration",
+        performance: "page speed, compression, and script optimization",
+        reliability: "DNS redundancy, IPv6, and uptime",
+        trust: "email authentication, domain registration, and compliance",
+        visibility: "structured data, social meta, and accessibility",
+      };
+
+      // Only add cross-axis insight if there's a meaningful gap
+      if (weakest[1].score != null && strongest[1].score != null && strongest[1].score - weakest[1].score >= 15) {
+        items.push({
+          title: `Biggest opportunity: ${axisLabels[weakest[0]]}`,
+          reason: `${axisLabels[weakest[0]]} (${weakest[1].score}) is your lowest axis while ${axisLabels[strongest[0]]} (${strongest[1].score}) is strong. Focus on ${axisAdvice[weakest[0]]} for the most impact on your overall score.`,
+          effort: "See recommendations above",
+          axis: weakest[0],
+          severity: "medium",
+          impact: 80, // high impact for cross-axis — always show near top
+        });
+      }
+
+      // Special insight: security strong but performance weak
+      const secScore = axes.security?.score ?? 0;
+      const perfScore = axes.performance?.score ?? 0;
+      if (secScore >= 85 && perfScore < 70 && weakest[0] !== "performance") {
+        items.push({
+          title: "Security is solid — performance is the bottleneck",
+          reason: `Security scores well (${secScore}) but performance (${perfScore}) is holding back the overall grade. Optimization effort here has the best ROI.`,
+          effort: "Focus on performance items above",
+          axis: "performance",
+          severity: "medium",
+          impact: 65,
+        });
+      }
+
+      // Special insight: email auth dragging two axes
+      if (axes.security?.score != null && axes.trust?.score != null) {
+        const secFindings = axes.security.findings || [];
+        const trustFindings = axes.trust.findings || [];
+        const emailSecIssue = secFindings.some(f => f.signal?.includes("email") || f.label?.toLowerCase().includes("dkim") || f.label?.toLowerCase().includes("spf"));
+        const emailTrustIssue = trustFindings.some(f => f.label?.toLowerCase().includes("email") || f.label?.toLowerCase().includes("authentication"));
+        if (emailSecIssue && emailTrustIssue) {
+          items.push({
+            title: "Email auth impacts both security and trust scores",
+            reason: "Incomplete email authentication is dragging down two axes at once. Completing SPF + DKIM + DMARC is the highest-leverage single fix.",
+            effort: "~1 hour total",
+            axis: "security",
+            severity: "medium",
+            impact: 72,
+          });
+        }
+      }
+    }
+
+    // Not-measured warning
+    const notMeasured = (Object.entries(axes) as [AxisName, typeof axes[AxisName]][])
+      .filter(([, v]) => v.not_measured);
+    if (notMeasured.length > 0) {
+      const names = notMeasured.map(([k]) => k).join(", ");
+      items.push({
+        title: "Some checks couldn't complete",
+        reason: `${names} could not be measured — results may be incomplete. This can happen when the site blocks automated requests.`,
+        effort: "",
+        axis: "info",
+        severity: "low",
+        impact: 10,
+      });
+    }
+  }
+
+  // ─── Sort by impact, dedup by axis-severity ───────────────────────
+  items.sort((a, b) => b.impact - a.impact);
+
+  // Return top 5 max, but ensure at least one cross-axis insight if available
+  const top = items.slice(0, 5);
+  const hasCrossAxis = top.some(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
+  if (!hasCrossAxis) {
+    const crossAxis = items.find(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
+    if (crossAxis && top.length >= 5) {
+      top[4] = crossAxis;
+    } else if (crossAxis) {
+      top.push(crossAxis);
+    }
+  }
+
+  return top;
 }
 
 // ─── BYO Key helpers ────────────────────────────────────────────────
@@ -439,7 +592,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
   const [rateLimited, setRateLimited] = useState<RateLimitResponse | null>(null);
   const [, setKeyVersion] = useState(0);
 
-  const keyFindings = analysisData ? generateKeyFindings(analysisData) : [];
+  const actionItems = analysisData ? generateActionItems(analysisData) : [];
 
   const generateForPersona = useCallback(async (personaKey: PersonaKey) => {
     if (personaResults[personaKey]) return; // already cached
@@ -516,31 +669,50 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
         <KeySettings onSave={handleKeyChange} />
       </div>
 
-      {/* ─── Deterministic Key Findings ─── */}
+      {/* ─── Top Priorities ─── */}
       <div style={{
         background: "var(--card)", border: "1px solid var(--border)", borderRadius: "10px",
         padding: "16px",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-          <Zap size={14} style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Key Findings</span>
-          <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto" }}>based on scan data</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+          <Target size={14} style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Top Priorities</span>
+          <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto" }}>ranked by impact</span>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          {keyFindings.map((f, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", fontSize: "13px", lineHeight: 1.5 }}>
-              <span style={{ flexShrink: 0, fontSize: "12px" }}>{f.icon}</span>
-              <span style={{
-                color: f.severity === "critical" ? "var(--danger)"
-                  : f.severity === "warning" ? "var(--warning)"
-                  : f.severity === "good" ? "var(--success)"
-                  : "var(--text)",
-              }}>
-                {f.text}
-              </span>
-            </div>
-          ))}
-        </div>
+        {actionItems.length === 0 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 0 4px", fontSize: "13px", color: "var(--success)" }}>
+            <CheckCircle2 size={14} />
+            <span>This domain is well-configured. No critical issues found.</span>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "10px" }}>
+            {actionItems.map((item, i) => {
+              const severityColor = item.severity === "critical" ? "var(--danger)"
+                : item.severity === "high" ? "#f59e0b"
+                : item.severity === "medium" ? "var(--warning)"
+                : "var(--muted)";
+              const severityIcon = item.severity === "critical" ? "🔴"
+                : item.severity === "high" ? "🟠"
+                : item.severity === "medium" ? "🟡"
+                : "🟢";
+              return (
+                <div key={i} style={{
+                  display: "flex", flexDirection: "column", gap: "3px",
+                  paddingLeft: "12px", borderLeft: `2px solid ${severityColor}`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "11px", flexShrink: 0 }}>{severityIcon}</span>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{item.title}</span>
+                    {item.effort && (
+                      <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.effort}</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: "12px", color: "var(--muted)", lineHeight: 1.4, paddingLeft: "17px" }}>{item.reason}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ─── AI Deep Dive — Persona Pills ─── */}
