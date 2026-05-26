@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Newspaper, MessageSquare, ExternalLink, ThumbsUp, Share2, CheckCircle2, HelpCircle } from "lucide-react";
 import { api } from "../api";
 import { Panel, StatusBadge, ErrorState } from "./Panel";
+import { Tooltip } from "./Tooltip";
 import type { NewsResult } from "../utils/types";
 
 function timeAgo(dateStr: string): string {
@@ -105,17 +106,27 @@ function SocialAccountsPanel({ domain }: { domain: string }) {
           {accounts.map((acc, i) => {
             const isVerified = acc.found_via === "homepage";
             return (
-              <a key={acc.url} href={acc.url} target="_blank" rel="noopener noreferrer" className="social-badge" title={isVerified ? "Found on the site itself" : "Discovered via pattern matching"}>
-                {isVerified ? (
-                  <CheckCircle2 size={10} style={{ color: "var(--success)", flexShrink: 0 }} />
-                ) : (
-                  <HelpCircle size={10} style={{ color: "var(--warning)", flexShrink: 0 }} />
-                )}
-                <span style={{ fontWeight: 600, fontSize: "11px" }}>{acc.platform}</span>
-                {acc.username && (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>@{acc.username}</span>
-                )}
-              </a>
+              <Tooltip key={acc.url} text={isVerified ? "Linked from site — this social profile is referenced in the site's own HTML" : "Username match — discovered by probing common social URL patterns"}>
+                <a href={acc.url} target="_blank" rel="noopener noreferrer" className="social-badge">
+                  {isVerified ? (
+                    <CheckCircle2 size={10} style={{ color: "var(--success)", flexShrink: 0 }} />
+                  ) : (
+                    <HelpCircle size={10} style={{ color: "var(--warning)", flexShrink: 0 }} />
+                  )}
+                  <span style={{ fontWeight: 600, fontSize: "11px" }}>{acc.platform}</span>
+                  {acc.username && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>@{acc.username}</span>
+                  )}
+                  <span style={{
+                    fontSize: "8px", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+                    padding: "1px 4px", borderRadius: "3px", lineHeight: 1.3,
+                    background: isVerified ? "color-mix(in srgb, var(--success) 15%, transparent)" : "color-mix(in srgb, var(--warning) 15%, transparent)",
+                    color: isVerified ? "var(--success)" : "var(--warning)",
+                  }}>
+                    {isVerified ? "verified" : "probable"}
+                  </span>
+                </a>
+              </Tooltip>
             );
           })}
         </div>
