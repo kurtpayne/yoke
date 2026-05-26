@@ -170,6 +170,12 @@ export async function handleSPARoute(
   if (method === "GET" && (path === "/.well-known/security.txt" || path === "/security.txt")) {
     return textResponse(SECURITY_TXT, "text/plain;charset=UTF-8");
   }
+  if (method === "GET" && path === "/install.sh") {
+    return new Response("", {
+      status: 302,
+      headers: { "Location": "https://raw.githubusercontent.com/kurtpayne/yoke/main/cli/install.sh" },
+    });
+  }
   if (method === "GET" && path === "/privacy") {
     return htmlResponse(PRIVACY_HTML, { "Cache-Control": "public, max-age=86400" }, baseUrl);
   }

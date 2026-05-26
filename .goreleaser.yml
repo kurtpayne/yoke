@@ -1,0 +1,49 @@
+version: 2
+
+project_name: yoke
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: yoke
+    dir: cli
+    main: .
+    binary: yoke
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "yoke_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  github:
+    owner: kurtpayne
+    name: yoke
+  draft: false
+  prerelease: auto
