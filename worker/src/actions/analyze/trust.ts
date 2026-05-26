@@ -114,13 +114,10 @@ export function checkTrustSignals(input: TrustInput): TrustSignals {
     neutral.push("No CAA DNS records");
   }
 
-  // WAF
+  // WAF — only surface when detected (absence isn't a concern)
   if (input.waf?.detected) {
     signals.push({ name: "Web Application Firewall", category: "security", present: true, value: input.waf.provider, severity: "good" });
     positive.push(`WAF detected: ${input.waf.provider}`);
-  } else {
-    signals.push({ name: "Web Application Firewall", category: "security", present: false, value: null, severity: "info" });
-    neutral.push("No WAF detected");
   }
 
   // ── Identity hallmarks ──────────────────────────────────────────
