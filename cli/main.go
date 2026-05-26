@@ -1036,48 +1036,36 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	// We render two progress rows: line 1 for d1, line 2 for d2
 	// Protected by a mutex since both goroutines update the display
 	var mu sync.Mutex
-	var d1checks []sseCheck
-	var d2checks []sseCheck
+	var d1done, d2done bool
 	var d1completed, d1total int
 	var d2completed, d2total int
 	printedLines := 0
 
+	renderDomainLine := func(domain string, completed, total int, done bool) {
+		barWidth := 20
+		if done {
+			// Completed — show full green bar with ✓
+			bar := good.Render(strings.Repeat("█", barWidth))
+			fmt.Printf("  %s %s %s %s\n", good.Render("✓"), dim.Render(fmt.Sprintf("%-20s", domain)),
+				bar, good.Render("done"))
+		} else if total == 0 {
+			// Not started yet
+			bar := dim.Render(strings.Repeat("░", barWidth))
+			fmt.Printf("  %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", domain)), bar)
+		} else {
+			filled := completed * barWidth / total
+			if filled > barWidth { filled = barWidth }
+			bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
+			fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", domain)),
+				bar, dim.Render(fmt.Sprintf("%d/%d", completed, total)))
+		}
+	}
+
 	renderCompareProgress := func() {
-		// Clear previous output
 		clearProgress(printedLines)
-		lines := 0
-
-		// Domain 1 progress
-		if d1total == 0 {
-			line := fmt.Sprintf("  %s %s", accent.Render("⚡"), dim.Render(d1+"..."))
-			fmt.Println(line)
-			lines++
-		} else {
-			barWidth := 20
-			filled := d1completed * barWidth / d1total
-			if filled > barWidth { filled = barWidth }
-			bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
-			fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", d1)),
-				bar, dim.Render(fmt.Sprintf("%d/%d", d1completed, d1total)))
-			lines++
-		}
-
-		// Domain 2 progress
-		if d2total == 0 {
-			line := fmt.Sprintf("  %s %s", accent.Render("⚡"), dim.Render(d2+"..."))
-			fmt.Println(line)
-			lines++
-		} else {
-			barWidth := 20
-			filled := d2completed * barWidth / d2total
-			if filled > barWidth { filled = barWidth }
-			bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
-			fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", d2)),
-				bar, dim.Render(fmt.Sprintf("%d/%d", d2completed, d2total)))
-			lines++
-		}
-
-		printedLines = lines
+		renderDomainLine(d1, d1completed, d1total, d1done)
+		renderDomainLine(d2, d2completed, d2total, d2done)
+		printedLines = 2
 	}
 
 	// Initial render
@@ -1087,12 +1075,15 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	go func() {
 		result, err := fetchAnalysisStreamWithProgress(d1, func(checks []sseCheck, completed, total int) {
 			mu.Lock()
-			d1checks = checks
 			d1completed = completed
 			d1total = total
 			renderCompareProgress()
 			mu.Unlock()
 		})
+		mu.Lock()
+		d1done = true
+		renderCompareProgress()
+		mu.Unlock()
 		ch1 <- streamResult{result, err}
 	}()
 
@@ -1100,19 +1091,20 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	go func() {
 		result, err := fetchAnalysisStreamWithProgress(d2, func(checks []sseCheck, completed, total int) {
 			mu.Lock()
-			d2checks = checks
 			d2completed = completed
 			d2total = total
 			renderCompareProgress()
 			mu.Unlock()
 		})
+		mu.Lock()
+		d2done = true
+		renderCompareProgress()
+		mu.Unlock()
 		ch2 <- streamResult{result, err}
 	}()
 
 	r1 := <-ch1
 	r2 := <-ch2
-	_ = d1checks
-	_ = d2checks
 
 	mu.Lock()
 	clearProgress(printedLines)
