@@ -1,5 +1,6 @@
 import { fetchWithTimeout, boundedText, isBlockedUrl } from "../../helpers";
 import { fingerprints } from "../../fingerprints";
+import { getHtmlSecurityHeaders } from "../../spa";
 import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectHop } from "./types";
 
 // Build-time globals injected by build_combined.py — available in the combined worker scope
@@ -109,11 +110,14 @@ export function detectTechStack(headers: Record<string, string>, html: string): 
 export async function analyzeHttp(domain: string, instanceHost?: string): Promise<HttpAnalysis | null> {
   // ─── Self-analysis bypass ────────────────────────────────────────────
   // CF Workers can't fetch their own domain (recursive request protection).
-  // We have __HTML__ and SECURITY_HEADERS embedded at build time, so synthesize
-  // the HTTP analysis directly from the known response.
-  if (instanceHost && domain === instanceHost && typeof __HTML__ !== "undefined") {
+  // Synthesize HTTP analysis from known security headers.
+  if (instanceHost && domain === instanceHost) {
+    // Use build-time globals if available, otherwise fall back to runtime security headers
+    const runtimeHeaders = getHtmlSecurityHeaders(`https://${instanceHost}`);
     const selfHeaders: Record<string, string> = {
-      ...(typeof SECURITY_HEADERS !== "undefined" ? Object.fromEntries(Object.entries(SECURITY_HEADERS).map(([k, v]) => [k.toLowerCase(), v])) : {}),
+      ...(typeof SECURITY_HEADERS !== "undefined"
+        ? Object.fromEntries(Object.entries(SECURITY_HEADERS).map(([k, v]) => [k.toLowerCase(), v]))
+        : Object.fromEntries(Object.entries(runtimeHeaders).map(([k, v]) => [k.toLowerCase(), v]))),
       "content-type": "text/html;charset=utf-8",
       "cache-control": "public, max-age=300",
       "server": "cloudflare",
@@ -122,9 +126,11 @@ export async function analyzeHttp(domain: string, instanceHost?: string): Promis
       "alt-svc": "h3=\":443\"; ma=86400",
       "cf-ray": "self-analysis",
     };
-    const html = __HTML__;
+    const html = typeof __HTML__ !== "undefined" ? __HTML__ : "";
     const { audit, grade } = auditSecurityHeaders(selfHeaders);
-    const techStack = detectTechStack(selfHeaders, html);
+    const techStack = html ? detectTechStack(selfHeaders, html) : [
+      { category: "Web Server", name: "Cloudflare Workers", version: null, confidence: "high" },
+    ];
     const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] ?? null;
     const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]

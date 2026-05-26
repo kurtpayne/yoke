@@ -3,6 +3,10 @@ main = "dist/worker.js"
 compatibility_date = "2024-12-01"
 # account_id = "your-cloudflare-account-id"
 
+[vars]
+# Set to your production URL so the worker can analyze itself (CF Workers can't fetch their own domain)
+# BASE_URL = "https://yourdomain.com"
+
 [assets]
 directory = "../client/dist"
 binding = "ASSETS"
