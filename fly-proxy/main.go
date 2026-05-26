@@ -217,7 +217,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auth check — reject unauthorized requests for all endpoints except health
-	if !checkAuth(r) && r.URL.Path != "/pagespeed" {
+	if !checkAuth(r) {
 		http.Error(w, `{"error":"unauthorized"}`, 403)
 		return
 	}
