@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -21,10 +22,10 @@ var apiBase string
 // ─── Config ─────────────────────────────────────────────────────────
 
 type Config struct {
-	OpenRouterKey  string `json:"openrouter_key"`
-	SuppressAIHint bool   `json:"suppress_ai_hint"`
-	DefaultModel   string `json:"default_model,omitempty"`
-	BaseURL        string `json:"base_url,omitempty"`
+	OpenRouterKey  string `toml:"openrouter_key,omitempty"`
+	SuppressAIHint bool   `toml:"suppress_ai_hint,omitempty"`
+	DefaultModel   string `toml:"default_model,omitempty"`
+	BaseURL        string `toml:"base_url,omitempty"`
 }
 
 const defaultBaseURL = "https://yoke.lol"
@@ -45,21 +46,46 @@ func resolveBaseURL(cfg Config) string {
 
 func configPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".yokerc")
+	return filepath.Join(home, ".yoke.toml")
 }
 
 func loadConfig() Config {
 	var cfg Config
 	data, err := os.ReadFile(configPath())
 	if err != nil {
+		// Try legacy .yokerc (JSON) and migrate if found
+		home, _ := os.UserHomeDir()
+		legacy := filepath.Join(home, ".yokerc")
+		data, err = os.ReadFile(legacy)
+		if err != nil {
+			return cfg
+		}
+		// Parse legacy JSON config using a JSON-tagged struct
+		var legacyCfg struct {
+			OpenRouterKey  string `json:"openrouter_key"`
+			SuppressAIHint bool   `json:"suppress_ai_hint"`
+			DefaultModel   string `json:"default_model"`
+			BaseURL        string `json:"base_url"`
+		}
+		if json.Unmarshal(data, &legacyCfg) == nil && legacyCfg.OpenRouterKey != "" {
+			cfg = Config{
+				OpenRouterKey:  legacyCfg.OpenRouterKey,
+				SuppressAIHint: legacyCfg.SuppressAIHint,
+				DefaultModel:   legacyCfg.DefaultModel,
+				BaseURL:        legacyCfg.BaseURL,
+			}
+			// Migrate to TOML
+			saveConfig(cfg)
+			os.Remove(legacy)
+		}
 		return cfg
 	}
-	json.Unmarshal(data, &cfg)
+	toml.Unmarshal(data, &cfg)
 	return cfg
 }
 
 func saveConfig(cfg Config) {
-	data, _ := json.MarshalIndent(cfg, "", "  ")
+	data, _ := toml.Marshal(cfg)
 	os.WriteFile(configPath(), data, 0600)
 }
 
@@ -164,7 +190,7 @@ type HTTPProto struct {
 // ─── API Client ─────────────────────────────────────────────────────
 
 func fetchJSON(url string) ([]byte, error) {
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{Timeout: 90 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -214,6 +240,8 @@ func severityIcon(s string) string {
 		return warn.Render("~")
 	case "low":
 		return warn.Render("·")
+	case "info":
+		return info.Render("ℹ")
 	default:
 		return dim.Render("·")
 	}
@@ -295,7 +323,12 @@ func printAnalysis(r *AnalysisResult) {
 		facts = append(facts, r.Hosting.CDN)
 	}
 	if r.Performance != nil && r.Performance.LCP > 0 {
-		facts = append(facts, fmt.Sprintf("LCP %.1fs", r.Performance.LCP))
+		lcpSec := r.Performance.LCP / 1000
+		if lcpSec >= 1 {
+			facts = append(facts, fmt.Sprintf("LCP %.1fs", lcpSec))
+		} else {
+			facts = append(facts, fmt.Sprintf("LCP %dms", int(r.Performance.LCP)))
+		}
 	}
 	if len(facts) > 0 {
 		lines = append(lines, dim.Render(strings.Join(facts, " · ")))
@@ -303,7 +336,7 @@ func printAnalysis(r *AnalysisResult) {
 	}
 
 	// Key findings
-	var goods, issues []Finding
+	var goods, issues, infos []Finding
 	for _, name := range sortedAxes(r.Score.Axes) {
 		for _, f := range r.Score.Axes[name].Findings {
 			switch f.Severity {
@@ -311,13 +344,18 @@ func printAnalysis(r *AnalysisResult) {
 				goods = append(goods, f)
 			case "critical", "high", "medium":
 				issues = append(issues, f)
+			case "low", "info":
+				infos = append(infos, f)
 			}
 		}
 	}
 
-	if len(issues) > 0 || len(goods) > 0 {
+	if len(issues) > 0 || len(infos) > 0 || len(goods) > 0 {
 		lines = append(lines, title.Render("Findings"))
 		for _, f := range issues {
+			lines = append(lines, fmt.Sprintf("%s %s", severityIcon(f.Severity), f.Label))
+		}
+		for _, f := range infos {
 			lines = append(lines, fmt.Sprintf("%s %s", severityIcon(f.Severity), f.Label))
 		}
 		cap := 5
@@ -374,6 +412,22 @@ func sortedAxes(axes map[string]AxisVal) []string {
 
 // ─── Text Helpers ───────────────────────────────────────────────────
 
+// normalizeDomain extracts a clean domain from user input, stripping
+// schemes (http/https), paths, port numbers, and whitespace.
+func normalizeDomain(raw string) string {
+	d := strings.ToLower(strings.TrimSpace(raw))
+	// Strip common URL schemes
+	d = strings.TrimPrefix(d, "https://")
+	d = strings.TrimPrefix(d, "http://")
+	// Strip paths and fragments
+	if i := strings.IndexAny(d, "/?#"); i != -1 {
+		d = d[:i]
+	}
+	// Strip trailing dots and slashes
+	d = strings.TrimRight(d, "./")
+	return d
+}
+
 func wrapText(text string, width int) []string {
 	var lines []string
 	for _, para := range strings.Split(text, "\n") {
@@ -412,6 +466,7 @@ func main() {
 		Version: version,
 		Args:    cobra.ExactArgs(1),
 		RunE:    runAnalyze,
+		SilenceUsage: true,
 		Example: `  yoke stripe.com
   yoke stripe.com --json
   yoke stripe.com --json | jq .ssl
@@ -465,7 +520,7 @@ func main() {
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
-	domain := strings.ToLower(strings.TrimSpace(args[0]))
+	domain := normalizeDomain(args[0])
 
 	if jsonOutput {
 		return printRawJSON(apiBase + "/" + domain)
@@ -480,7 +535,12 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 }
 
 func runScore(cmd *cobra.Command, args []string) error {
-	domain := strings.ToLower(strings.TrimSpace(args[0]))
+	domain := normalizeDomain(args[0])
+
+	if jsonOutput {
+		return printRawJSON(apiBase + "/" + domain)
+	}
+
 	result, err := fetchAnalysis(domain)
 	if err != nil {
 		return err
@@ -495,10 +555,10 @@ func runScore(cmd *cobra.Command, args []string) error {
 }
 
 func runCompare(cmd *cobra.Command, args []string) error {
-	d1 := strings.ToLower(strings.TrimSpace(args[0]))
-	d2 := strings.ToLower(strings.TrimSpace(args[1]))
+	d1 := normalizeDomain(args[0])
+	d2 := normalizeDomain(args[1])
 
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{Timeout: 120 * time.Second}
 	payload := fmt.Sprintf(`{"domain1":"%s","domain2":"%s"}`, d1, d2)
 	req, _ := http.NewRequest("POST", apiBase+"/api/compare", strings.NewReader(payload))
 	req.Header.Set("Accept", "application/json")
@@ -581,7 +641,7 @@ func runAI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("domain required: yoke ai <domain>")
 	}
 
-	domain := strings.ToLower(strings.TrimSpace(args[0]))
+	domain := normalizeDomain(args[0])
 	cfg := loadConfig()
 
 	if cfg.OpenRouterKey == "" {
@@ -834,7 +894,10 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	fmt.Println(title.Render("  Configuration") + "  " + dim.Render(configPath()))
 	fmt.Println()
 	if cfg.OpenRouterKey != "" {
-		masked := cfg.OpenRouterKey[:8] + "..." + cfg.OpenRouterKey[len(cfg.OpenRouterKey)-4:]
+		masked := cfg.OpenRouterKey
+		if len(masked) > 12 {
+			masked = masked[:8] + "..." + masked[len(masked)-4:]
+		}
 		fmt.Printf("  OpenRouter key:  %s\n", masked)
 	} else {
 		fmt.Printf("  OpenRouter key:  %s\n", dim.Render("not set"))
@@ -858,7 +921,7 @@ func runConfig(cmd *cobra.Command, args []string) error {
 }
 
 func printRawJSON(url string) error {
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{Timeout: 90 * time.Second}
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
@@ -868,6 +931,17 @@ func printRawJSON(url string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	_, err = io.Copy(os.Stdout, resp.Body)
-	return err
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	os.Stdout.Write(body)
+	// Ensure output ends with newline
+	if len(body) > 0 && body[len(body)-1] != '\n' {
+		fmt.Println()
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("API error %d", resp.StatusCode)
+	}
+	return nil
 }

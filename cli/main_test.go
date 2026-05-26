@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +37,7 @@ func TestConfigRoundTrip(t *testing.T) {
 func TestConfigPath(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
-	want := filepath.Join(dir, ".yokerc")
+	want := filepath.Join(dir, ".yoke.toml")
 	if got := configPath(); got != want {
 		t.Errorf("configPath() = %q, want %q", got, want)
 	}
@@ -70,7 +69,7 @@ func TestLoadConfigMissingFile(t *testing.T) {
 func TestLoadConfigCorruptFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
-	os.WriteFile(filepath.Join(dir, ".yokerc"), []byte("{not valid json"), 0600)
+	os.WriteFile(filepath.Join(dir, ".yoke.toml"), []byte("not valid toml [[["), 0600)
 	// Should not panic; returns best-effort zero config.
 	got := loadConfig()
 	if got.OpenRouterKey != "" {
@@ -79,7 +78,10 @@ func TestLoadConfigCorruptFile(t *testing.T) {
 }
 
 func TestDefaultModelOmitEmpty(t *testing.T) {
-	data, _ := json.Marshal(Config{OpenRouterKey: "k"})
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	saveConfig(Config{OpenRouterKey: "k"})
+	data, _ := os.ReadFile(configPath())
 	if strings.Contains(string(data), "default_model") {
 		t.Errorf("empty default_model should be omitted, got %s", data)
 	}
@@ -368,5 +370,60 @@ func TestAIFlagsExist(t *testing.T) {
 	}
 	if ai.Flags().Lookup("model") == nil {
 		t.Error("ai --model flag not found")
+	}
+}
+
+// ─── Legacy Migration ───────────────────────────────────────────────
+
+func TestLegacyMigration(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+
+	// Write a legacy .yokerc JSON file
+	legacy := filepath.Join(dir, ".yokerc")
+	os.WriteFile(legacy, []byte(`{"openrouter_key":"sk-old","suppress_ai_hint":true}`), 0600)
+
+	// loadConfig should read it and migrate
+	cfg := loadConfig()
+	if cfg.OpenRouterKey != "sk-old" {
+		t.Errorf("legacy migration: key = %q, want %q", cfg.OpenRouterKey, "sk-old")
+	}
+	if !cfg.SuppressAIHint {
+		t.Error("legacy migration: suppress_ai_hint should be true")
+	}
+
+	// Legacy file should be removed
+	if _, err := os.Stat(legacy); err == nil {
+		t.Error("legacy .yokerc should have been removed after migration")
+	}
+
+	// New .yoke.toml should exist
+	if _, err := os.Stat(filepath.Join(dir, ".yoke.toml")); err != nil {
+		t.Error(".yoke.toml should exist after migration")
+	}
+}
+
+// ─── normalizeDomain ────────────────────────────────────────────────
+
+func TestNormalizeDomain(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"example.com", "example.com"},
+		{"  EXAMPLE.COM  ", "example.com"},
+		{"https://example.com", "example.com"},
+		{"http://example.com", "example.com"},
+		{"https://example.com/", "example.com"},
+		{"https://example.com/path?q=1", "example.com"},
+		{"https://example.com/path#frag", "example.com"},
+		{"HTTPS://Example.COM/Path", "example.com"},
+		{"example.com.", "example.com"},
+		{"example.com/", "example.com"},
+	}
+	for _, tt := range tests {
+		if got := normalizeDomain(tt.input); got != tt.want {
+			t.Errorf("normalizeDomain(%q) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }

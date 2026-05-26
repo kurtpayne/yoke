@@ -164,7 +164,7 @@ yoke config --set-model <model>  # Set AI model for BYO key mode
 yoke config --set-base-url <url> # Set custom API endpoint
 ```
 
-The CLI uses the same API as the web app and supports custom endpoints via config file (`~/.yokerc`) or `YOKE_BASE_URL` env var.
+The CLI uses the same API as the web app and supports custom endpoints via config file (`~/.yoke.toml`) or `YOKE_BASE_URL` env var.
 
 ---
 
