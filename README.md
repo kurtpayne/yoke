@@ -146,21 +146,30 @@ brew install kurtpayne/tap/yoke
 curl -sSL https://yoke.lol/install.sh | bash
 
 # Analyze a domain
+yoke stripe.com
+yoke stripe.com --json | jq .ssl
 yoke score stripe.com
-yoke analyze example.com --json
 yoke compare github.com gitlab.com
 
-# Configure custom API endpoint (for self-hosting)
+# AI-powered analysis (requires OpenRouter key)
+yoke ai stripe.com
+yoke ai --setup
+
+# Configure
 yoke config --set-base-url https://your-instance.com
-yoke config --set-model openai/gpt-4
+yoke config --set-model openai/gpt-4o
 export YOKE_BASE_URL=https://your-instance.com  # ephemeral override
 
 # Commands
+yoke <domain>                    # Full analysis card
+yoke <domain> --json             # Raw JSON output
 yoke score <domain>              # Quick score (e.g., "92/100 A")
-yoke analyze <domain>            # Full analysis
 yoke compare <d1> <d2>           # Side-by-side comparison
+yoke ai <domain>                 # AI-powered analysis
+yoke ai --setup                  # Configure OpenRouter API key
 yoke config                      # Show current config
-yoke config --set-model <model>  # Set AI model for BYO key mode
+yoke config --set-key <key>      # Set OpenRouter API key
+yoke config --set-model <model>  # Set default AI model
 yoke config --set-base-url <url> # Set custom API endpoint
 ```
 
