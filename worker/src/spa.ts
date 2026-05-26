@@ -73,6 +73,25 @@ export function wantsJSON(request: Request): boolean {
     ua.includes("php")
   )
     return true;
+  // Link-preview fetchers (Signal, WhatsApp, Slack, etc.) send Accept: */*
+  // but need HTML with OG tags — catch them before the programmatic fallback
+  if (
+    ua.includes("signal") ||
+    ua.includes("whatsapp") ||
+    ua.includes("slackbot") ||
+    ua.includes("slack-imgproxy") ||
+    ua.includes("telegrambot") ||
+    ua.includes("discordbot") ||
+    ua.includes("linkedinbot") ||
+    ua.includes("twitterbot") ||
+    ua.includes("facebookexternalhit") ||
+    ua.includes("facebot") ||
+    ua.includes("applebot") ||
+    ua.includes("iframely") ||
+    ua.includes("embedly") ||
+    ua.includes("preview")
+  )
+    return false;
   // */* with no text/html preference = likely programmatic
   if (accept === "*/*" || accept === "") return true;
   return false;
