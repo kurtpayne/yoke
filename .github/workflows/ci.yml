@@ -99,7 +99,6 @@ jobs:
           name = "yoke"
           main = "dist/worker.js"
           compatibility_date = "2024-12-01"
-          account_id = "${{ secrets.CF_ACCOUNT_ID }}"
 
           [vars]
           BASE_URL = "https://yoke.lol"
@@ -117,10 +116,6 @@ jobs:
           binding = "STATS_DB"
           database_name = "yoke-stats"
           database_id = "6f29dfb9-b7ff-497f-a4aa-4dbb3b7dd6e1"
-
-          [[routes]]
-          pattern = "yoke.lol/*"
-          zone_name = "yoke.lol"
           EOF
           # Remove leading whitespace from heredoc
           sed -i 's/^          //' wrangler.toml
