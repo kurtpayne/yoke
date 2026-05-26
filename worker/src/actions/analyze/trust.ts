@@ -30,7 +30,7 @@ interface TrustInput {
     mta_sts: { policy_found: boolean; mode: string | null } | null;
   } | null;
   dnssec: { enabled: boolean; validated: boolean } | null;
-  ssl: { grade: string | null; issuer: string | null } | null;
+  ssl: { grade: string | null; issuer: string | null; subject: string | null } | null;
   caaRecords: Array<{ tag: string; value: string }> | null;
   wellKnown: { endpoints: Array<{ path: string; name: string; found: boolean }>; pwa_ready: boolean } | null;
   waf: { detected: boolean; provider: string | null; confidence: string } | null;
@@ -134,6 +134,26 @@ export function checkTrustSignals(input: TrustInput): TrustSignals {
   } else if (sslGrade) {
     signals.push({ name: "SSL Grade", category: "identity", present: true, value: `Grade ${sslGrade}`, severity: "info" });
     neutral.push(`SSL grade ${sslGrade}`);
+  }
+
+  // Certificate validation type (EV/OV/DV)
+  const sslSubject = input.ssl?.subject ?? "";
+  if (sslSubject) {
+    const hasOrg = /,?\s*O\s*=/.test(sslSubject);
+    const isEV = hasOrg && (/SERIALNUMBER\s*=/.test(sslSubject) || /2\.5\.4\.15/.test(sslSubject) || /1\.3\.6\.1\.4\.1\.311\.60\.2\.1/.test(sslSubject));
+    const orgMatch = sslSubject.match(/,?\s*O\s*=\s*([^,]+)/);
+    const orgName = orgMatch ? orgMatch[1].replace(/\\\\/g, "").trim() : null;
+
+    if (isEV && orgName) {
+      signals.push({ name: "Certificate Type", category: "identity", present: true, value: `Extended Validation (EV) — ${orgName}`, severity: "good" });
+      positive.push(`EV certificate issued to ${orgName}`);
+    } else if (hasOrg && orgName) {
+      signals.push({ name: "Certificate Type", category: "identity", present: true, value: `Organization Validated (OV) — ${orgName}`, severity: "good" });
+      positive.push(`OV certificate issued to ${orgName}`);
+    } else {
+      signals.push({ name: "Certificate Type", category: "identity", present: true, value: "Domain Validated (DV)", severity: "info" });
+      neutral.push("DV certificate (domain-only validation)");
+    }
   }
 
   // security.txt
