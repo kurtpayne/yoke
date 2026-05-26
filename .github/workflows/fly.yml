@@ -31,20 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Build binary
-        working-directory: fly-proxy
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o yoke-probe .
-
       - name: Setup Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io
         working-directory: fly-proxy
-        run: flyctl deploy --local-only
+        run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
