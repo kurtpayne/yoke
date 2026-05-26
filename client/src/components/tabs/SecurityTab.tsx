@@ -6,7 +6,6 @@ import { CertTransparencyPanel, SecurityTxtPanel, CaaPanel, GreynoisePanel } fro
 import { BlocklistPanel } from "../NetworkPanel";
 import { CookieConsentPanel } from "../CookieConsentPanel";
 import { ProtectionTrustPanel } from "../ProtectionTrustPanel";
-import { AxisScoreBadge } from "../DomainScore";
 import type { AnalysisResult } from "../../utils/types";
 
 export default function SecurityTab({ data }: { data: AnalysisResult }) {
@@ -29,7 +28,6 @@ export default function SecurityTab({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="security" />
       <PanelGrid tabId="security" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://observatory.mozilla.org/analyze/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Observatory ↗</a>

@@ -99,7 +99,7 @@ function buildSignals(data: AnalysisResult, streaming?: boolean): Signal[] {
       const hasPreload = hsts.includes("preload");
       const hasSubdomains = hsts.includes("includeSubDomains") || hsts.includes("includeSubdomains");
       if (hasPreload && hasSubdomains) signals.push({ type: "strength", text: "HSTS with preload enabled" });
-      else if (hsts) signals.push({ type: "strength", text: "HSTS enabled", detail: !hasPreload ? "Consider adding preload directive" : undefined });
+      else if (hsts) signals.push({ type: "strength", text: "HSTS enabled" });
     } else {
       signals.push({ type: "notice", text: "No HSTS header" });
     }

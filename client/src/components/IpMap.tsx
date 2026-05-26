@@ -73,6 +73,14 @@ export function IpMap({ data }: { data: AnalysisResult }) {
 
   if (lat == null || lon == null) return null;
 
+  // Suppress map for generic country-center coordinates (e.g. US center 37.75/-97.82 for anycast IPs)
+  const isGenericLocation = !data.ip_info?.city && (
+    (Math.abs(lat - 37.751) < 0.5 && Math.abs(lon - (-97.822)) < 0.5) || // US center
+    (Math.abs(lat - 51.5) < 0.5 && Math.abs(lon - (-0.13)) < 0.5 && !data.ip_info?.city) || // UK center
+    (Math.abs(lat) < 1 && Math.abs(lon) < 1) // null island
+  );
+  if (isGenericLocation) return null;
+
   return (
     <Panel title="IP Geolocation Map" icon={<MapPin size={14} />}>
       <div className="p-3">

@@ -593,7 +593,7 @@ export function App() {
             <p style={{ fontFamily: "var(--font-ui)", fontSize: "14px", color: "var(--dim)", textAlign: "center", maxWidth: "520px", lineHeight: "22px", marginBottom: "1.5rem" }}>
               Enter any domain to analyze DNS records, SSL certificates, WHOIS data, security headers, tech stack, performance, data breaches, and more — across 9 intelligence tabs.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))", gap: "0.75rem", width: "100%", maxWidth: "700px", marginBottom: "1.5rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem", width: "100%", maxWidth: "700px", marginBottom: "1.5rem" }}>
               <div className="panel" style={{ padding: "0.75rem 1rem" }}>
                 <h3 style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--accent)", marginBottom: "0.25rem" }}>🔍 Deep Analysis</h3>
                 <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>DNS, SSL, WHOIS, security headers, email auth, DNSSEC, and certificate transparency</p>

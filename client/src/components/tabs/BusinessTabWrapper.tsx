@@ -5,7 +5,6 @@ import { SectionHeader } from "../Panel";
 import { BusinessTab } from "../BusinessTab";
 import { OgPreviewPanel } from "../OgPreviewPanel";
 import { LegalPanel } from "../LegalPanel";
-import { AxisScoreBadge } from "../DomainScore";
 import type { AnalysisResult } from "../../utils/types";
 
 export default function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
@@ -31,7 +30,6 @@ export default function BusinessTabWrapper({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="trust" />
       <PanelGrid tabId="business" panels={mainPanels} grid={false} />
       <SectionHeader title="Social Sharing" />
       <PanelGrid tabId="business-social" panels={socialPanels} />

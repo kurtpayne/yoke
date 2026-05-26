@@ -59,15 +59,19 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
       }
     >
       {/* Company logo + name header */}
-      {(company.logo_url || company.name) && (
+      {company.name && (
         <div className="px-4 pt-3 pb-2 flex items-center gap-3">
-          {company.logo_url && (
+          {company.logo_url ? (
             <img
               src={company.logo_url}
               alt={company.name ?? "Company logo"}
               style={{ width: 36, height: 36, borderRadius: 6, objectFit: "contain", background: "var(--bg)" }}
               onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
+          ) : (
+            <div style={{ width: 36, height: 36, borderRadius: 6, background: "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-ui)", fontSize: "16px", fontWeight: 700, color: "var(--accent)" }}>
+              {company.name.charAt(0).toUpperCase()}
+            </div>
           )}
           {company.name && (
             <span style={{ fontFamily: "var(--font-ui)", fontSize: "16px", fontWeight: 600, color: "var(--text)" }}>

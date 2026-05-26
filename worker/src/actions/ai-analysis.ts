@@ -229,68 +229,93 @@ async function callOpenRouter(
   const { system, user } = buildAIPrompt(analysisData);
   const useModel = (model && isAllowedModel(model)) ? model : DEFAULT_MODEL;
 
-  const response = await fetchWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    timeout: 25000,
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": referer || "https://github.com/kurtpayne/yoke",
-      "X-Title": "Yoke Domain Intelligence",
-    },
-    body: JSON.stringify({
-      model: useModel,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      temperature: 0.3,
-      max_tokens: 2500,
-    }),
-  });
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenRouter API error ${response.status}: ${errText.slice(0, 200)}`);
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      // Exponential backoff: 1s, 2s, 4s
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+
+    try {
+      const response = await fetchWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        timeout: 25000,
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": referer || "https://github.com/kurtpayne/yoke",
+          "X-Title": "Yoke Domain Intelligence",
+        },
+        body: JSON.stringify({
+          model: useModel,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+          ],
+          temperature: 0.3,
+          max_tokens: 2500,
+        }),
+      });
+
+      // Don't retry on 4xx (auth errors, bad request) — only on 5xx/network
+      if (!response.ok) {
+        const errText = await response.text();
+        if (response.status >= 400 && response.status < 500) {
+          throw new Error(`OpenRouter API error ${response.status}: ${errText.slice(0, 200)}`);
+        }
+        lastError = new Error(`OpenRouter API error ${response.status}: ${errText.slice(0, 200)}`);
+        console.warn(`[AI] OpenRouter attempt ${attempt + 1}/${maxRetries} failed: ${response.status}`);
+        continue;
+      }
+
+      const data = (await response.json()) as OpenRouterResponse;
+
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error("Empty response from LLM");
+      }
+
+      const content = data.choices[0].message.content.trim();
+
+      // Parse JSON from the response — handle potential markdown wrapping
+      let jsonStr = content;
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1].trim();
+      }
+
+      let parsed: AIAnalysisResult;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch { /* invalid JSON */
+        throw new Error(`Failed to parse LLM response as JSON: ${content.slice(0, 200)}`);
+      }
+
+      // Validate required fields
+      if (!parsed.summary || !parsed.posture || !Array.isArray(parsed.key_findings)) {
+        throw new Error("LLM response missing required fields (summary, posture, key_findings)");
+      }
+
+      // Attach token usage for transparency
+      if (data.usage) {
+        parsed._usage = {
+          prompt_tokens: data.usage.prompt_tokens,
+          completion_tokens: data.usage.completion_tokens,
+          total_tokens: data.usage.total_tokens,
+        };
+      }
+
+      return parsed;
+    } catch (err) {
+      // 4xx and parse errors bubble up immediately (already thrown above)
+      if (lastError === null) throw err;
+      console.warn(`[AI] Attempt ${attempt + 1}/${maxRetries} error:`, err instanceof Error ? err.message : err);
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
   }
 
-  const data = (await response.json()) as OpenRouterResponse;
-
-  if (!data.choices?.[0]?.message?.content) {
-    throw new Error("Empty response from LLM");
-  }
-
-  const content = data.choices[0].message.content.trim();
-
-  // Parse JSON from the response — handle potential markdown wrapping
-  let jsonStr = content;
-  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1].trim();
-  }
-
-  let parsed: AIAnalysisResult;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch { /* invalid JSON */
-    throw new Error(`Failed to parse LLM response as JSON: ${content.slice(0, 200)}`);
-  }
-
-  // Validate required fields
-  if (!parsed.summary || !parsed.posture || !Array.isArray(parsed.key_findings)) {
-    throw new Error("LLM response missing required fields (summary, posture, key_findings)");
-  }
-
-  // Attach token usage for transparency
-  if (data.usage) {
-    parsed._usage = {
-      prompt_tokens: data.usage.prompt_tokens,
-      completion_tokens: data.usage.completion_tokens,
-      total_tokens: data.usage.total_tokens,
-    };
-  }
-
-  return parsed;
+  throw lastError || new Error("AI analysis failed after retries");
 }
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -446,14 +471,8 @@ export async function getAIAnalysis(
     } catch (rateLimitErr) {
       // Rate limit check failed (STATS_DB issue)
       console.error("[AI rate-limit] STATS_DB error:", rateLimitErr instanceof Error ? rateLimitErr.message : rateLimitErr);
-      // Fail-closed for platform key — protect the API key budget
-      return new Response(JSON.stringify({
-        error: "AI analysis temporarily unavailable",
-        retry_after: 60,
-      }), {
-        status: 503,
-        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-      });
+      // Fail-open with logging — D1 hiccups shouldn't block AI analysis entirely
+      console.warn("[AI rate-limit] Proceeding without rate limit check due to STATS_DB error");
     }
   }
 
