@@ -28,9 +28,33 @@ type Config struct {
 	SuppressAIHint bool   `toml:"suppress_ai_hint,omitempty"`
 	DefaultModel   string `toml:"default_model,omitempty"`
 	BaseURL        string `toml:"base_url,omitempty"`
+	PromptFile     string `toml:"prompt_file,omitempty"`
+	Prompt         string `toml:"prompt,omitempty"`
 }
 
 const defaultBaseURL = "https://yoke.lol"
+
+// resolveCustomPrompt returns the effective custom prompt from config, or "" for server default.
+// Priority: prompt_file (read from disk) > prompt (inline in config) > "" (use server default).
+// If both are set, prompt_file wins.
+func resolveCustomPrompt(cfg Config) (string, error) {
+	if cfg.PromptFile != "" {
+		p := cfg.PromptFile
+		if strings.HasPrefix(p, "~/") {
+			home, _ := os.UserHomeDir()
+			p = filepath.Join(home, p[2:])
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return "", fmt.Errorf("reading prompt file %s: %w", cfg.PromptFile, err)
+		}
+		return strings.TrimSpace(string(data)), nil
+	}
+	if cfg.Prompt != "" {
+		return strings.TrimSpace(cfg.Prompt), nil
+	}
+	return "", nil
+}
 
 // maxResponseBytes caps the maximum API response body size (10 MB).
 const maxResponseBytes = 10 << 20
@@ -795,6 +819,9 @@ func main() {
 	configCmd.Flags().String("set-key", "", "set OpenRouter API key")
 	configCmd.Flags().String("set-model", "", "set default AI model (e.g. openai/gpt-4o, google/gemini-2.5-pro)")
 	configCmd.Flags().String("set-base-url", "", "set Yoke instance URL for self-hosting (default: https://yoke.lol)")
+	configCmd.Flags().String("set-prompt", "", "set custom AI prompt file path (see: github.com/kurtpayne/yoke/blob/main/prompts/ai-analysis.txt)")
+	configCmd.Flags().String("set-prompt-inline", "", "set custom AI prompt as inline text in config")
+	configCmd.Flags().Bool("clear-prompt", false, "remove custom prompt, revert to server default")
 	configCmd.Flags().Bool("suppress-ai-hint", false, "hide the AI hint from analyze output")
 	configCmd.Flags().Bool("show-ai-hint", false, "re-enable the AI hint")
 
@@ -971,11 +998,20 @@ func runAI(cmd *cobra.Command, args []string) error {
 		model = cfg.DefaultModel
 	}
 
+	// Resolve custom prompt from config (prompt_file > prompt > server default)
+	customPrompt, err := resolveCustomPrompt(cfg)
+	if err != nil {
+		return err
+	}
+
 	// POST /api/ai-analysis with BYO key
 	client := &http.Client{Timeout: 120 * time.Second}
 	payload := map[string]string{"domain": domain}
 	if model != "" {
 		payload["model"] = model
+	}
+	if customPrompt != "" {
+		payload["custom_prompt"] = customPrompt
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
@@ -1175,6 +1211,9 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	setKey, _ := cmd.Flags().GetString("set-key")
 	setModel, _ := cmd.Flags().GetString("set-model")
 	setBaseURL, _ := cmd.Flags().GetString("set-base-url")
+	setPrompt, _ := cmd.Flags().GetString("set-prompt")
+	setPromptInline, _ := cmd.Flags().GetString("set-prompt-inline")
+	clearPrompt, _ := cmd.Flags().GetBool("clear-prompt")
 	suppressHint, _ := cmd.Flags().GetBool("suppress-ai-hint")
 	showHint, _ := cmd.Flags().GetBool("show-ai-hint")
 
@@ -1196,6 +1235,33 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		changed = true
 		fmt.Println(good.Render("✓ Base URL set to " + cfg.BaseURL))
 		fmt.Println(dim.Render("  Restart CLI or set YOKE_BASE_URL env var to apply immediately"))
+	}
+	if setPrompt != "" {
+		// Verify the file exists
+		absPath := setPrompt
+		if strings.HasPrefix(absPath, "~/") {
+			home, _ := os.UserHomeDir()
+			absPath = filepath.Join(home, absPath[2:])
+		}
+		if _, err := os.Stat(absPath); err != nil {
+			return fmt.Errorf("prompt file not found: %s", absPath)
+		}
+		cfg.PromptFile = setPrompt
+		cfg.Prompt = "" // file takes precedence, clear inline
+		changed = true
+		fmt.Println(good.Render("✓ Prompt file set to " + setPrompt))
+	}
+	if setPromptInline != "" {
+		cfg.Prompt = setPromptInline
+		cfg.PromptFile = "" // inline takes precedence when explicitly set, clear file
+		changed = true
+		fmt.Println(good.Render("✓ Custom inline prompt saved"))
+	}
+	if clearPrompt {
+		cfg.PromptFile = ""
+		cfg.Prompt = ""
+		changed = true
+		fmt.Println(good.Render("✓ Custom prompt cleared, using server default"))
 	}
 	if suppressHint {
 		cfg.SuppressAIHint = true
@@ -1240,6 +1306,23 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  (env override:  %s)\n", envURL)
 	}
 	fmt.Printf("  AI hint:         %s\n", map[bool]string{true: "suppressed", false: "shown"}[cfg.SuppressAIHint])
+	if cfg.PromptFile != "" {
+		fmt.Printf("  Prompt:          %s %s\n", cfg.PromptFile, dim.Render("(file)"))
+	} else if cfg.Prompt != "" {
+		preview := cfg.Prompt
+		if len(preview) > 60 {
+			preview = preview[:57] + "..."
+		}
+		fmt.Printf("  Prompt:          %s %s\n", preview, dim.Render("(inline)"))
+	} else {
+		fmt.Printf("  Prompt:          %s\n", dim.Render("built-in (default)"))
+	}
+	fmt.Println()
+	fmt.Println(dim.Render("  # Default prompt: https://github.com/kurtpayne/yoke/blob/main/prompts/ai-analysis.txt"))
+	fmt.Println(dim.Render("  # Customize via file or inline:"))
+	fmt.Println(dim.Render("  #   yoke config --set-prompt ~/my-prompt.txt"))
+	fmt.Println(dim.Render("  #   yoke config --set-prompt-inline \"You are a security auditor...\""))
+	fmt.Println(dim.Render("  #   yoke config --clear-prompt"))
 	fmt.Println()
 	return nil
 }

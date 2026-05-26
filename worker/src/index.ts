@@ -362,12 +362,14 @@ export default {
         if (method === "POST" && path === "/api/ai-analysis") {
           const byoKey = request.headers.get("x-openrouter-key") || undefined;
           await trackUsage(env.STATS_DB, "ai-analysis");
-          const body = await parseBody<{ domain?: string; model?: string }>(request);
+          const body = await parseBody<{ domain?: string; model?: string; custom_prompt?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const model = (byoKey && typeof body.model === "string") ? body.model : undefined;
-          return getAIAnalysis(domain, env, { clientIP, byoKey, model });
+          // Custom prompts are only allowed for BYO key users (they're paying for their own tokens)
+          const customPrompt = (byoKey && typeof body.custom_prompt === "string" && body.custom_prompt.trim()) ? body.custom_prompt.trim() : undefined;
+          return getAIAnalysis(domain, env, { clientIP, byoKey, model, customPrompt });
         }
 
         // POST /api/ai-prompt — returns the assembled prompt for the prompt editor (no LLM call)
