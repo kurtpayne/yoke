@@ -1,7 +1,7 @@
-FROM golang:1.21-alpine AS build
+FROM golang:1.22-alpine AS build
 WORKDIR /app
-COPY go.mod main.go ./
-RUN go mod tidy && CGO_ENABLED=0 go build -o probe-proxy .
+COPY go.mod go.sum main.go ./
+RUN CGO_ENABLED=0 go build -o probe-proxy .
 
 FROM alpine:3.19
 RUN apk --no-cache add ca-certificates curl
