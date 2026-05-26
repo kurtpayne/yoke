@@ -1,6 +1,7 @@
 import { fetchWithTimeout, getFromCache, setCache, MULTI_PART_TLDS } from "../helpers";
 import { BREACH_CATALOG_CACHE_TTL_MS, BREACH_RESULT_CACHE_TTL_MS } from "../config/cache";
 import { logApiError } from "../api-errors";
+import { logError } from "../logger";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ export interface BreachResult {
   count: number;
   total_pwned: number;
   items: BreachItem[];
+  check_failed?: boolean;
 }
 
 export interface BreachItem {
@@ -81,7 +83,7 @@ async function getBreachCatalog(db: D1Database): Promise<HibpBreach[]> {
     });
 
     if (!res.ok) {
-      console.error(`HIBP API returned ${res.status}`);
+      logError("HIBP API error", { status: res.status, api: "hibp" });
       logApiError(db, { api: "hibp", status: res.status, message: `Breach catalog fetch failed` });
       return [];
     }
@@ -91,12 +93,12 @@ async function getBreachCatalog(db: D1Database): Promise<HibpBreach[]> {
     // Cache in D1
     try {
       await setCache(db, "_global_", "hibp_breaches", data);
-    } catch { /* non-critical */ }
+    } catch (e) { console.warn('[yoke:breaches] catalog cache write failed:', e instanceof Error ? e.message : e); }
 
     catalogCache = { data, fetchedAt: Date.now() };
     return data;
   } catch (err) {
-    console.error("Failed to fetch HIBP catalog:", err);
+    logError("Failed to fetch HIBP catalog", { error: err instanceof Error ? err.message : String(err), api: "hibp" });
     logApiError(db, { api: "hibp", status: 0, message: String(err).slice(0, 100) });
     return [];
   }
@@ -131,7 +133,7 @@ export async function checkBreaches(domain: string, db: D1Database): Promise<Bre
 
   const catalog = await getBreachCatalog(db);
   if (catalog.length === 0) {
-    return { found: false, count: 0, total_pwned: 0, items: [] };
+    return { found: false, count: 0, total_pwned: 0, items: [], check_failed: true };
   }
 
   const normalizedDomain = domain.toLowerCase();
@@ -179,12 +181,13 @@ export async function checkBreaches(domain: string, db: D1Database): Promise<Bre
     count: items.length,
     total_pwned: totalPwned,
     items,
+    check_failed: false,
   };
 
   // Cache
   try {
     await setCache(db, domain, "breaches", result);
-  } catch { /* non-critical */ }
+  } catch (e) { console.warn(`[yoke:breaches] result cache write failed for ${domain}:`, e instanceof Error ? e.message : e); }
 
   return result;
 }

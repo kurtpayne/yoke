@@ -5,9 +5,6 @@ import type {
   CaaDisplayResult, GreynoiseResult,
 } from "./types";
 
-// Build-time globals injected by build_combined.py
-declare const __SECURITY_TXT__: string;
-
 // ─── Tier 1: Certificate Transparency (CertSpotter) ─────────────────
 
 export async function checkCertTransparency(domain: string): Promise<CertTransparencyResult> {
@@ -47,28 +44,6 @@ export async function checkSecurityTxt(domain: string, instanceHost?: string): P
     hiring: null, canonical: null, preferred_languages: null, expires: null,
     is_expired: false, has_bug_bounty: false, bug_bounty_platform: null, raw: null,
   };
-
-  // Self-analysis bypass: use embedded security.txt
-  if (instanceHost && domain === instanceHost && typeof __SECURITY_TXT__ !== "undefined") {
-    const text = __SECURITY_TXT__.replace(/\\n/g, "\n");
-    const result: SecurityTxtResult = { ...empty, found: true, raw: text.slice(0, 2000) };
-    for (const line of text.split("\n")) {
-      const trimmed = line.split("#")[0]?.trim() ?? "";
-      if (!trimmed) continue;
-      const colonIdx = trimmed.indexOf(":");
-      if (colonIdx < 0) continue;
-      const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
-      const value = trimmed.substring(colonIdx + 1).trim();
-      switch (key) {
-        case "contact": result.contact.push(value); break;
-        case "canonical": result.canonical = value; break;
-        case "preferred-languages": result.preferred_languages = value; break;
-        case "expires": result.expires = value; break;
-      }
-    }
-    if (result.expires) { try { result.is_expired = new Date(result.expires).getTime() < Date.now(); } catch { /* */ } }
-    return result;
-  }
 
   const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 

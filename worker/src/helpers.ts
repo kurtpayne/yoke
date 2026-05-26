@@ -74,12 +74,19 @@ export async function fetchWithTimeout(
   }
 }
 
+// ─── Version ─────────────────────────────────────────────────────────
+
+export const YOKE_VERSION = "1.3.0";
+
 // ─── Shared Constants ────────────────────────────────────────────────
 
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
+  // Intentionally omit DELETE from CORS methods — admin DELETE endpoints
+  // (e.g., DELETE /api/cache) should not be callable cross-origin from browsers.
+  // Non-browser clients (curl, scripts) ignore CORS and can still use DELETE with auth.
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-OpenRouter-Key",
+  "Access-Control-Allow-Headers": "Content-Type",
   "X-Content-Type-Options": "nosniff",
   "Content-Security-Policy": "frame-ancestors 'self' https://*.chromiumapp.org chrome-extension://*",
 };
@@ -90,25 +97,20 @@ export const MULTI_PART_TLDS = ["co.uk", "com.au", "co.nz", "co.jp", "com.br", "
 
 export const DEFAULT_FLY_PROBE_URL = "https://yoke-probe.fly.dev";
 
-// Module-level probe URL, set from env at request start via initFlyProbeUrl()
-let _flyProbeUrl = DEFAULT_FLY_PROBE_URL;
-let _flyAuthSecret: string | undefined;
-
-/** Set the Fly probe URL and auth secret for the current request. Call from the worker entry point. */
-export function initFlyProbeUrl(env: Env): void {
-  _flyProbeUrl = env.FLY_PROBE_URL || DEFAULT_FLY_PROBE_URL;
-  _flyAuthSecret = env.FLY_AUTH_SECRET;
+/** @deprecated No longer needed — getFlyProbeUrl/getFlyAuthHeaders now read env directly. */
+export function initFlyProbeUrl(_env: Env): void {
+  // No-op: module-level state removed. Functions now read env directly.
 }
 
-/** Get the current Fly probe URL. */
-export function getFlyProbeUrl(): string {
-  return _flyProbeUrl;
+/** Derive the Fly probe URL from env, without module-level mutation. */
+export function getFlyProbeUrl(env: Env): string {
+  return env.FLY_PROBE_URL || DEFAULT_FLY_PROBE_URL;
 }
 
-/** Get auth headers for Fly probe requests (empty object if no secret configured). */
-export function getFlyAuthHeaders(): Record<string, string> {
-  if (_flyAuthSecret) {
-    return { "Authorization": `Bearer ${_flyAuthSecret}` };
+/** Get auth headers for Fly probe requests from env, without module-level mutation. */
+export function getFlyAuthHeaders(env: Env): Record<string, string> {
+  if (env.FLY_AUTH_SECRET) {
+    return { "Authorization": `Bearer ${env.FLY_AUTH_SECRET}` };
   }
   return {};
 }
@@ -252,7 +254,7 @@ export async function maybePruneCache(db: D1Database): Promise<void> {
     await db.prepare(
       "DELETE FROM domain_lookups WHERE id NOT IN (SELECT id FROM domain_lookups ORDER BY analyzed_at DESC LIMIT 500)"
     ).run();
-  } catch { /* cleanup failure is non-critical */ }
+  } catch (e) { console.warn('[yoke:prune] cache cleanup failed:', e instanceof Error ? e.message : e); }
 }
 
 // ─── Background Work Helper ──────────────────────────────────────────

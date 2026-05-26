@@ -143,6 +143,7 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
   if (!breaches) return null;
 
   const { found, count, total_pwned, items } = breaches;
+  const check_failed = (breaches as any).check_failed;
 
   const icon = found ? <ShieldAlert size={14} style={{ color: "var(--danger)" }} /> : <ShieldCheck size={14} style={{ color: "var(--success)" }} />;
 
@@ -190,6 +191,16 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
             {/* HIBP attribution */}
             <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", textAlign: "center", marginTop: "8px" }}>
               Data from <a href="https://haveibeenpwned.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Have I Been Pwned</a>
+            </div>
+          </div>
+        ) : check_failed ? (
+          <div className="text-center py-4">
+            <AlertTriangle size={24} style={{ color: "var(--warning)", margin: "0 auto 8px" }} />
+            <div style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--warning)", fontWeight: 500 }}>
+              Breach check unavailable
+            </div>
+            <div style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", marginTop: "4px" }}>
+              Unable to check breach databases at this time. Try again later.
             </div>
           </div>
         ) : (

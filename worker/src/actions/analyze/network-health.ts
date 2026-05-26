@@ -251,13 +251,13 @@ export async function checkOutagePages(domain: string): Promise<OutageLinks | nu
 // Requires the Fly probe to be running with the /probe-timing endpoint.
 
 export async function checkConnectionTiming(domain: string, env: Env): Promise<ConnectionTiming | null> {
-  const probeUrl = getFlyProbeUrl();
+  const probeUrl = getFlyProbeUrl(env);
   if (!probeUrl) return null;
 
   try {
     const res = await fetchWithTimeout(
       `${probeUrl}/probe-timing?host=${encodeURIComponent(domain)}`,
-      { timeout: 8000, headers: getFlyAuthHeaders() }
+      { timeout: 8000, headers: getFlyAuthHeaders(env) }
     );
     if (!res.ok) return null;
 

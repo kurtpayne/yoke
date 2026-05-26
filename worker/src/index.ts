@@ -20,9 +20,10 @@ import { getAIAnalysis, buildAIPrompt, ALLOWED_MODELS, DEFAULT_MODEL } from "./a
 import { trackUsage, getUsageStats } from "./usage-tracking";
 import { renderUsagePage } from "./usage-page";
 
-import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, initFlyProbeUrl } from "./helpers";
+import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, YOKE_VERSION } from "./helpers";
 import type { Env } from "./helpers";
-import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders } from "./spa";
+import { logError } from "./logger";
+import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders, wantsJSON } from "./spa";
 import { getApiDocsHtml } from "./pages";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
@@ -60,12 +61,20 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
     if (row && row.cnt >= config.limit) {
       return new Response(JSON.stringify({
         error: "Rate limit exceeded",
+        code: "RATE_LIMITED",
         limit: config.limit,
         window: `${config.windowSecs / 3600} hour`,
         retry_after: config.windowSecs,
         self_host: "https://github.com/kurtpayne/yoke#self-hosting",
         message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
-      }), { status: 429, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
+      }), { status: 429, headers: {
+        "Content-Type": "application/json",
+        ...CORS_HEADERS,
+        "X-RateLimit-Limit": String(config.limit),
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + config.windowSecs),
+        "Retry-After": String(config.windowSecs),
+      } });
     }
     // Record this request
     const now = Math.floor(Date.now() / 1000);
@@ -76,7 +85,7 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
       await db.prepare("DELETE FROM endpoint_rate_limits WHERE ts < ?").bind(old).run().catch(() => {});
     }
   } catch (err) {
-    console.error("[rate-limit] STATS_DB error:", err instanceof Error ? err.message : err);
+    logError("rate limit DB error", { error: err instanceof Error ? err.message : String(err) });
     // Fail-open for general endpoints (they don't cost money)
   }
   return null;
@@ -86,6 +95,14 @@ function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
+/** JSON response without CORS headers — used for admin-only endpoints. */
+function adminJson(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff" },
   });
 }
 
@@ -108,7 +125,7 @@ function checkAdminAuth(request: Request, adminKey: string | undefined): Respons
   if (!authHeader.startsWith("Basic ")) {
     return new Response("Unauthorized", {
       status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"' },
     });
   }
   let pass: string;
@@ -118,13 +135,13 @@ function checkAdminAuth(request: Request, adminKey: string | undefined): Respons
   } catch {
     return new Response("Malformed credentials", {
       status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"' },
     });
   }
   if (!pass || !timingSafeEq(pass, adminKey)) {
     return new Response("Invalid credentials", {
       status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"', ...CORS_HEADERS },
+      headers: { "WWW-Authenticate": 'Basic realm="Yoke Admin"' },
     });
   }
   return null; // auth passed
@@ -136,14 +153,19 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    // Initialize per-request config from env
-    initFlyProbeUrl(env);
     // Thread execution context for background work
     if (ctx) env._ctx = ctx;
 
     // Handle CORS preflight
     if (method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+      const requestHeaders = request.headers.get("Access-Control-Request-Headers") || "";
+      const allowHeaders = requestHeaders.toLowerCase().includes("x-openrouter-key")
+        ? "Content-Type, X-OpenRouter-Key"
+        : "Content-Type";
+      return new Response(null, { 
+        status: 204, 
+        headers: { ...CORS_HEADERS, "Access-Control-Allow-Headers": allowHeaders }
+      });
     }
 
     // Static content routes (SEO + LLMO) — URLs derived from request origin
@@ -182,7 +204,7 @@ export default {
       if (authErr) return authErr;
       const days = parseInt(url.searchParams.get("days") ?? "30");
       const stats = await getUsageStats(env.STATS_DB, days);
-      if (path === "/api/usage") return json(stats);
+      if (path === "/api/usage") return adminJson(stats);
       return renderUsagePage(env.STATS_DB, days);
     }
 
@@ -199,9 +221,9 @@ export default {
           const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
-          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
+          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const skipCache = body.force === true;
           await trackUsage(env.STATS_DB, "analyze");
           // Support SSE streaming when client requests it
@@ -215,10 +237,10 @@ export default {
           const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/compare", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
-          if (!body.domain1 || !body.domain2) return json({ error: "domain1 and domain2 are required" }, 400);
+          if (!body.domain1 || !body.domain2) return json({ error: "domain1 and domain2 are required", code: "MISSING_DOMAIN" }, 400);
           const d1 = cleanDomain(body.domain1);
           const d2 = cleanDomain(body.domain2);
-          if (!d1 || !d2) return json({ error: "Invalid domain format" }, 400);
+          if (!d1 || !d2) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           await trackUsage(env.STATS_DB, "compare");
           return compareDomains({ domain1: d1, domain2: d2 }, env);
         }
@@ -233,9 +255,18 @@ export default {
         // POST /api/subdomains
         if (method === "POST" && path === "/api/subdomains") {
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain) return json({ error: "domain is required" }, 400);
+          if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
+          const result = await getSubdomains(env.DB, domain);
+          await trackUsage(env.STATS_DB, "subdomains");
+          return json(result);
+        }
+
+        // GET /api/subdomains?domain=X — subdomain enumeration (GET alias)
+        if (method === "GET" && path === "/api/subdomains") {
+          const domain = cleanDomain(url.searchParams.get("domain") || "");
+          if (!domain) return json({ error: "domain query parameter is required (e.g., /api/subdomains?domain=example.com)", code: "MISSING_DOMAIN" }, 400);
           const result = await getSubdomains(env.DB, domain);
           await trackUsage(env.STATS_DB, "subdomains");
           return json(result);
@@ -246,9 +277,9 @@ export default {
           const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/subdomain-scan", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain) return json({ error: "domain is required" }, 400);
+          if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await scanSubdomains(env.DB, domain);
           await trackUsage(env.STATS_DB, "subdomain-scan");
           return json(result);
@@ -257,9 +288,9 @@ export default {
         // POST /api/company
         if (method === "POST" && path === "/api/company") {
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
-          if (!body.domain) return json({ error: "domain is required" }, 400);
+          if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await getCompanyInfo(env.DB, domain, body.force);
           await trackUsage(env.STATS_DB, "company");
           return json(result);
@@ -268,9 +299,9 @@ export default {
         // POST /api/news
         if (method === "POST" && path === "/api/news") {
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain) return json({ error: "domain is required" }, 400);
+          if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await getNews(env.DB, domain);
           await trackUsage(env.STATS_DB, "news");
           return json(result);
@@ -279,9 +310,9 @@ export default {
         // POST /api/social
         if (method === "POST" && path === "/api/social") {
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain) return json({ error: "domain is required" }, 400);
+          if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await getSocialAccounts(env.DB, domain);
           await trackUsage(env.STATS_DB, "social");
           return json(result);
@@ -290,8 +321,15 @@ export default {
         // POST /api/reverse-ip
         if (method === "POST" && path === "/api/reverse-ip") {
           const body = await parseBody<{ ip?: string }>(request);
-          if (!body.ip) return json({ error: "ip is required" }, 400);
-          const result = await getReverseIP(env.DB, body.ip);
+          if (!body.ip) return json({ error: "ip is required", code: "MISSING_IP" }, 400);
+          const ip = body.ip.trim();
+          // Validate IPv4 or IPv6 format
+          const ipv4Re = /^(\d{1,3}\.){3}\d{1,3}$/;
+          const ipv6Re = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+          if (!ipv4Re.test(ip) && !ipv6Re.test(ip)) {
+            return json({ error: "Invalid IP address format" }, 400);
+          }
+          const result = await getReverseIP(env.DB, ip);
           await trackUsage(env.STATS_DB, "reverse-ip");
           return json(result);
         }
@@ -301,12 +339,12 @@ export default {
           const rateLimited = await checkRateLimit(env.STATS_DB, clientIP, "/api/availability", env);
           if (rateLimited) return rateLimited;
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain) return json({ error: "domain is required" }, 400);
+          if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           // CF Workers expose request.cf with IncomingRequestCfProperties
           const cf = (request as Request & { cf?: { colo?: string; country?: string; city?: string } }).cf;
-          const result = await checkGlobalAvailability(domain, { colo: cf?.colo, country: cf?.country, city: cf?.city });
+          const result = await checkGlobalAvailability(domain, { colo: cf?.colo, country: cf?.country, city: cf?.city }, env);
           await trackUsage(env.STATS_DB, "availability");
           return json(result);
         }
@@ -314,7 +352,7 @@ export default {
         // POST /api/suggestions
         if (method === "POST" && path === "/api/suggestions") {
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain) return json({ error: "domain is required" }, 400);
+          if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const result = await getDomainSuggestions(body.domain, env);
           await trackUsage(env.STATS_DB, "suggestions");
           return json(result);
@@ -325,9 +363,9 @@ export default {
           const byoKey = request.headers.get("x-openrouter-key") || undefined;
           await trackUsage(env.STATS_DB, "ai-analysis");
           const body = await parseBody<{ domain?: string; model?: string }>(request);
-          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
+          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const model = (byoKey && typeof body.model === "string") ? body.model : undefined;
           return getAIAnalysis(domain, env, { clientIP, byoKey, model });
         }
@@ -335,9 +373,9 @@ export default {
         // POST /api/ai-prompt — returns the assembled prompt for the prompt editor (no LLM call)
         if (method === "POST" && path === "/api/ai-prompt") {
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required" }, 400);
+          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
-          if (!domain) return json({ error: "Invalid domain format" }, 400);
+          if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const normalized = domain.toLowerCase();
           const analysisCache = (await getFromCache(env.DB, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
           if (!analysisCache) {
@@ -396,19 +434,19 @@ export default {
           if (path === "/api/cache" && cacheType) {
             try {
               const res = await env.DB.prepare("DELETE FROM domain_cache WHERE cache_type = ?").bind(cacheType).run();
-              return json({ ok: true, type: cacheType, deleted: res.meta?.changes ?? 0 });
+              return adminJson({ ok: true, type: cacheType, deleted: res.meta?.changes ?? 0 });
             } catch (e) {
-              return json({ error: "Failed to clear cache" }, 500);
+              return adminJson({ error: "Failed to clear cache" }, 500);
             }
           }
 
           const domain = cleanDomain(path.replace("/api/cache/", ""));
-          if (!domain) return json({ error: "Invalid domain" }, 400);
+          if (!domain) return adminJson({ error: "Invalid domain" }, 400);
           try {
             await env.DB.prepare("DELETE FROM domain_cache WHERE domain = ?").bind(domain).run();
-            return json({ ok: true, domain, message: "Cache cleared" });
+            return adminJson({ ok: true, domain, message: "Cache cleared" });
           } catch (e) {
-            return json({ error: "Failed to clear cache" }, 500);
+            return adminJson({ error: "Failed to clear cache" }, 500);
           }
         }
 
@@ -443,7 +481,7 @@ export default {
             const errRes = await env.STATS_DB.prepare("DELETE FROM api_errors WHERE ts < ?").bind(cutoff7d).run();
             results.api_errors = `${errRes.meta?.changes ?? "?"} rows deleted (>7 days old)`;
           } catch (e) { results.api_errors = `error: ${e instanceof Error ? e.message : String(e)}`; }
-          return json({ ok: true, cleaned_at: new Date().toISOString(), results });
+          return adminJson({ ok: true, cleaned_at: new Date().toISOString(), results });
         }
 
         // GET /api/docs — serve HTML for browsers, JSON for API clients
@@ -460,12 +498,13 @@ export default {
           }
           return json({
             name: "Yoke Domain Intelligence API",
-            version: "1.3.0",
+            version: YOKE_VERSION,
             endpoints: {
               "GET /{domain}": "Full domain analysis (content negotiation: JSON for curl/API clients, HTML for browsers)",
               "POST /api/analyze": "Full domain analysis (JSON body: {domain: string})",
               "POST /api/compare": "Compare two domains side-by-side (JSON body: {domain1: string, domain2: string})",
               "POST /api/subdomains": "Subdomain enumeration (JSON body: {domain: string})",
+              "GET /api/subdomains": "Subdomain enumeration (query: ?domain=example.com)",
               "POST /api/company": "Company/business info (JSON body: {domain: string})",
               "POST /api/news": "News articles (JSON body: {domain: string})",
               "POST /api/social": "Social accounts (JSON body: {domain: string})",
@@ -487,7 +526,7 @@ export default {
           });
         }
 
-        return json({ error: "Not found" }, 404);
+        return json({ error: "Not found", code: "NOT_FOUND" }, 404);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Internal server error";
         // Return 400 for JSON parse errors (malformed request body)
@@ -499,6 +538,13 @@ export default {
     // ── Non-API routes: serve static assets or SPA fallback ──
     // With ASSETS binding, all requests come through the worker.
     // Try serving the exact asset; fall back to index.html for client-side routing.
+
+    // Catch-all: if a non-browser client hits an unrecognized path that doesn't look like a static asset,
+    // return a JSON error instead of SPA HTML (helps curl users who mistype domains)
+    if (wantsJSON(request) && !path.includes('.')) {
+      return json({ error: "Invalid domain format", hint: "Use a fully-qualified domain name (e.g., example.com)" }, 400);
+    }
+
     return serveAssetOrFallback(request, env);
   },
 };

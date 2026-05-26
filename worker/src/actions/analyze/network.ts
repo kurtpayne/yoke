@@ -1,9 +1,9 @@
-import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders } from "../../helpers";
+import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../../helpers";
 import type { DnsRecord, IpInfo, BlocklistResult, SslResult, ShodanResult, DnssecResult } from "./types";
 
 // ─── IP Geolocation ──────────────────────────────────────────────────
 
-export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[]): Promise<IpInfo | null> {
+export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[], env: Env): Promise<IpInfo | null> {
   const aRecord = dnsRecords.find((r) => r.type === "A");
   if (!aRecord) return null;
   const ip = aRecord.data;
@@ -11,8 +11,8 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[]): Pro
   // Try Fly probe first (MaxMind local DB + API fallbacks, no rate limits)
   try {
     const probeRes = await fetchWithTimeout(
-      `${getFlyProbeUrl()}/probe-geo?ip=${encodeURIComponent(ip)}`,
-      { timeout: 8000, headers: getFlyAuthHeaders() }
+      `${getFlyProbeUrl(env)}/probe-geo?ip=${encodeURIComponent(ip)}`,
+      { timeout: 8000, headers: getFlyAuthHeaders(env) }
     );
     if (probeRes.ok) {
       const data = await probeRes.json() as { ip: string; city?: string | null; country?: string | null; country_code?: string | null; lat?: number | null; lon?: number | null; isp?: string | null; org?: string | null; asn?: string | null; source?: string; error?: string | null };
@@ -116,9 +116,9 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
 
 // ─── SSL Labs + Direct TLS ───────────────────────────────────────────
 
-export async function checkSsl(domain: string): Promise<SslResult | null> {
+export async function checkSsl(domain: string, env: Env): Promise<SslResult | null> {
   // Priority 1: Fly probe — direct TLS handshake, most reliable, works for any domain
-  const probeResult = await tryFlyProbe(domain);
+  const probeResult = await tryFlyProbe(domain, env);
   if (probeResult && probeResult.grade) return probeResult;
 
   // Priority 2: SSL Labs — enrichment with grade/protocols when cached results exist
@@ -138,11 +138,11 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
 
 // ─── SSL: Fly Probe (direct TLS handshake) ──────────────────────────
 
-async function tryFlyProbe(domain: string): Promise<SslResult | null> {
+async function tryFlyProbe(domain: string, env: Env): Promise<SslResult | null> {
   try {
     const probeRes = await fetchWithTimeout(
-      `${getFlyProbeUrl()}/probe-ssl?domain=${encodeURIComponent(domain)}`,
-      { timeout: 12000, headers: getFlyAuthHeaders() }
+      `${getFlyProbeUrl(env)}/probe-ssl?domain=${encodeURIComponent(domain)}`,
+      { timeout: 12000, headers: getFlyAuthHeaders(env) }
     );
     if (!probeRes.ok) return null;
 
@@ -264,12 +264,12 @@ async function tryHttpsCrtsh(domain: string): Promise<SslResult | null> {
 
 // ─── Live Status Check ───────────────────────────────────────────────
 
-export async function checkStatus(domain: string): Promise<{ is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean; http2?: boolean; http3?: boolean; alt_svc?: string | null }> {
+export async function checkStatus(domain: string, env: Env): Promise<{ is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean; http2?: boolean; http3?: boolean; alt_svc?: string | null }> {
   // Try Fly.io proxy first (avoids CF Worker IP blocks for sites like meta.com)
   try {
     const probeRes = await fetchWithTimeout(
-      `${getFlyProbeUrl()}/probe-status?domain=${encodeURIComponent(domain)}`,
-      { timeout: 15000, headers: getFlyAuthHeaders() }
+      `${getFlyProbeUrl(env)}/probe-status?domain=${encodeURIComponent(domain)}`,
+      { timeout: 15000, headers: getFlyAuthHeaders(env) }
     );
     if (probeRes.ok) {
       const data = await probeRes.json() as { is_up: boolean; status_code: number | null; response_time_ms: number; error: string | null; status_label: string; http_blocked: boolean; http2?: boolean; http3?: boolean; alt_svc?: string | null };

@@ -4,12 +4,6 @@ import { fingerprints } from "../../fingerprints";
 import { getHtmlSecurityHeaders } from "../../spa";
 import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectHop } from "./types";
 
-// Build-time globals injected by build_combined.py — available in the combined worker scope
-declare const __HTML__: string;
-declare const __ROBOTS_TXT__: string;
-declare const __SITEMAP_XML__: string;
-declare const SECURITY_HEADERS: Record<string, string>;
-
 // ─── HTTP Fetch + Headers + Tech + Meta ──────────────────────────────
 
 export function auditSecurityHeaders(headers: Record<string, string>): { audit: SecurityHeaderCheck[]; grade: string } {
@@ -116,9 +110,7 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
     // Use build-time globals if available, otherwise fall back to runtime security headers
     const runtimeHeaders = getHtmlSecurityHeaders(`https://${instanceHost}`);
     const selfHeaders: Record<string, string> = {
-      ...(typeof SECURITY_HEADERS !== "undefined"
-        ? Object.fromEntries(Object.entries(SECURITY_HEADERS).map(([k, v]) => [k.toLowerCase(), v]))
-        : Object.fromEntries(Object.entries(runtimeHeaders).map(([k, v]) => [k.toLowerCase(), v]))),
+      ...Object.fromEntries(Object.entries(runtimeHeaders).map(([k, v]) => [k.toLowerCase(), v])),
       "content-type": "text/html;charset=utf-8",
       "cache-control": "public, max-age=300",
       "server": "cloudflare",
@@ -129,9 +121,7 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
     };
     // Prefer build-time HTML, then fetch from ASSETS at runtime, then empty fallback
     let html = "";
-    if (typeof __HTML__ !== "undefined") {
-      html = __HTML__;
-    } else if (env?.ASSETS) {
+    if (env?.ASSETS) {
       try {
         const resp = await env.ASSETS.fetch(new Request(`https://${instanceHost}/index.html`));
         if (resp.ok) html = await resp.text();
@@ -221,19 +211,6 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
 // ─── Robots & Sitemap ────────────────────────────────────────────────
 
 export async function checkRobotsSitemap(domain: string, instanceHost?: string): Promise<Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">> {
-  // Self-analysis bypass for robots/sitemap (CF Workers can't fetch their own domain)
-  if (instanceHost && domain === instanceHost && typeof __ROBOTS_TXT__ !== "undefined") {
-    const robotsTxt = __ROBOTS_TXT__.replace(/\\n/g, "\n");
-    const hasSitemap = typeof __SITEMAP_XML__ !== "undefined";
-    const sitemapXml = hasSitemap ? __SITEMAP_XML__ : "";
-    const urlMatches = sitemapXml.match(/<url>/gi);
-    return {
-      robots_txt: robotsTxt.slice(0, 2000), robots_txt_exists: true,
-      sitemap_detected: hasSitemap, sitemap_url: hasSitemap ? `https://${instanceHost}/sitemap.xml` : null,
-      sitemap_page_count: urlMatches ? urlMatches.length : null,
-    };
-  }
-
   const result = { robots_txt: null as string | null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null as string | null, sitemap_page_count: null as number | null };
   try {
     const res = await fetchWithTimeout(`https://${domain}/robots.txt`, { timeout: 5000 });
