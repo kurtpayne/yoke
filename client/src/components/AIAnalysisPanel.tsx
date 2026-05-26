@@ -485,7 +485,7 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
               <p style={{ margin: "0 0 6px 0" }}>
                 <strong style={{ color: "var(--text)" }}>Why?</strong> Yoke's AI analysis uses{" "}
                 <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>OpenRouter</a>
-                {" "}to access models like Claude, GPT-4o, and Gemini. Without a key, you get 10 analyses/day on our shared key. With your own, you get unlimited access, model selection, and prompt editing.
+                {" "}to access models like Claude, GPT-4o, and Gemini. Without a key, you get 10 analyses/hr on our shared key. With your own, you get unlimited access, model selection, and prompt editing.
               </p>
               <p style={{ margin: "0" }}>
                 <strong style={{ color: "var(--text)" }}>Privacy:</strong> Your key is stored in your browser's localStorage only — it's sent directly from your browser to OpenRouter, never to Yoke's servers. We can't see, log, or access it. <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>Privacy policy →</a>
@@ -639,7 +639,7 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
               {hasKey ? (
                 <>Using your key · <span style={{ color: "var(--success)" }}>Unlimited analysis</span></>
               ) : (
-                <>Platform key · 10 analyses/day</>
+                <>Platform key · 10 analyses/hr</>
               )}
             </span>
             <span style={{ opacity: 0.6 }}>
