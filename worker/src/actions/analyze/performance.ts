@@ -18,6 +18,40 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
     } catch { /* cache miss */ }
   }
 
+  // Try direct API first
+  const directResult = await tryPageSpeedDirect(domain, ttfbFallback, db, apiKey);
+  if (directResult.score != null || !directResult.error?.includes("timed out")) {
+    // Cache and return if successful or non-timeout error
+    if (db && directResult.score != null) {
+      try {
+        await db.prepare("INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
+          .bind(domain, JSON.stringify(directResult), Date.now()).run();
+      } catch { /* ignore */ }
+    }
+    return directResult;
+  }
+
+  // Fallback to Fly proxy if direct call timed out
+  try {
+    const flyUrl = `https://yoke-probe.fly.dev/pagespeed?domain=${encodeURIComponent(domain)}`;
+    const res = await fetchWithTimeout(flyUrl, { timeout: 45000 });
+    if (res.ok) {
+      const result = await res.json() as PerformanceResult;
+      // Cache successful results for 24h
+      if (db && result.score != null) {
+        try {
+          await db.prepare("INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
+            .bind(domain, JSON.stringify(result), Date.now()).run();
+        } catch { /* ignore */ }
+      }
+      return result;
+    }
+  } catch { /* Fly proxy failed, return original error */ }
+
+  return directResult;
+}
+
+async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string): Promise<PerformanceResult> {
   try {
     const keyParam = apiKey ? `&key=${apiKey}` : "";
     const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 30000 });
@@ -29,15 +63,6 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
     const perfScore = lr?.categories?.performance?.score;
     const screenshotData = audits["final-screenshot"]?.details?.data ?? null;
     const result: PerformanceResult = { score: perfScore != null ? Math.round(perfScore * 100) : null, fcp: audits["first-contentful-paint"]?.numericValue ?? null, lcp: audits["largest-contentful-paint"]?.numericValue ?? null, tbt: audits["total-blocking-time"]?.numericValue ?? null, cls: audits["cumulative-layout-shift"]?.numericValue ?? null, si: audits["speed-index"]?.numericValue ?? null, ttfb: audits["server-response-time"]?.numericValue ?? ttfbFallback, strategy: "mobile", error: null, screenshot: screenshotData };
-    
-    // Cache successful results for 24h
-    if (db && result.score != null) {
-      try {
-        await db.prepare("INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
-          .bind(domain, JSON.stringify(result), Date.now()).run();
-      } catch { /* ignore */ }
-    }
-    
     return result;
   } catch { return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "PageSpeed timed out — site may block automated testing", screenshot: null }; }
 }
