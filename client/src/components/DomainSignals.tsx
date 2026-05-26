@@ -33,6 +33,9 @@ const REFERENCE_LINKS: Record<string, { url: string; label: string }> = {
   "pagespeed": { url: "https://developer.chrome.com/docs/lighthouse/overview", label: "Lighthouse Docs" },
   "ipv6": { url: "https://www.google.com/intl/en/ipv6/statistics.html", label: "IPv6 Adoption" },
   "mta-sts": { url: "https://datatracker.ietf.org/doc/html/rfc8461", label: "RFC 8461" },
+  "permissions policy": { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Permissions-Policy", label: "MDN: Permissions-Policy" },
+  "humans.txt": { url: "https://humanstxt.org/", label: "humanstxt.org" },
+  "ads.txt": { url: "https://iabtechlab.com/ads-txt/", label: "IAB: ads.txt" },
   "blocklist": { url: "https://www.dnsbl.info/", label: "DNSBL Info" },
 };
 
