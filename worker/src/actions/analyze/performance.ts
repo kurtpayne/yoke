@@ -20,6 +20,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
 
   // Try Fly proxy first (more reliable, avoids CF egress issues)
   try {
+    console.log("[PageSpeed] Attempting Fly proxy for", domain, "flyAuthSecret present:", !!flyAuthSecret);
     const flyUrl = `https://yoke-probe.fly.dev/pagespeed?domain=${encodeURIComponent(domain)}`;
     const headers: Record<string, string> = {};
     if (flyAuthSecret) {
@@ -40,7 +41,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
       }
       // Fly proxy returned error (e.g., rate limited), fall through
     }
-  } catch { /* Fly proxy failed, try direct API as last resort */ }
+  } catch (e) { console.error("[PageSpeed] Fly proxy error:", e instanceof Error ? e.message : String(e)); }
 
   // Fallback to direct API (also 20s timeout)
   const directResult = await tryPageSpeedDirect(domain, ttfbFallback, db, apiKey);
@@ -66,7 +67,7 @@ async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, d
     const screenshotData = audits["final-screenshot"]?.details?.data ?? null;
     const result: PerformanceResult = { score: perfScore != null ? Math.round(perfScore * 100) : null, fcp: audits["first-contentful-paint"]?.numericValue ?? null, lcp: audits["largest-contentful-paint"]?.numericValue ?? null, tbt: audits["total-blocking-time"]?.numericValue ?? null, cls: audits["cumulative-layout-shift"]?.numericValue ?? null, si: audits["speed-index"]?.numericValue ?? null, ttfb: audits["server-response-time"]?.numericValue ?? ttfbFallback, strategy: "mobile", error: null, screenshot: screenshotData };
     return result;
-  } catch { return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "PageSpeed timed out — site may block automated testing", screenshot: null }; }
+  } catch (e) { console.error("[PageSpeed] Direct API error:", e instanceof Error ? e.message : String(e)); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "PageSpeed timed out — site may block automated testing", screenshot: null }; }
 }
 
 // ─── NEW: Compression Detection ─────────────────────────────────────
