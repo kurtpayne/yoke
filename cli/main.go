@@ -105,6 +105,7 @@ type AnalysisResult struct {
 	Performance   *PerfInfo       `json:"performance"`
 	AnalyzedAt    string          `json:"analyzed_at"`
 	Cached        bool            `json:"cached"`
+	CachedAt      *int64          `json:"cached_at,omitempty"`
 	HTTPProtocols *HTTPProto      `json:"http_protocols"`
 }
 
@@ -240,6 +241,17 @@ func printAnalysis(r *AnalysisResult) {
 	}
 
 	var lines []string
+
+	// Cached results banner
+	if r.Cached {
+		ts := r.AnalyzedAt
+		if r.CachedAt != nil {
+			t := time.UnixMilli(*r.CachedAt)
+			ts = t.Format("Jan 2 3:04 PM")
+		}
+		lines = append(lines, dim.Render(fmt.Sprintf("⚡ Cached results from %s", ts)))
+		lines = append(lines, "")
+	}
 
 	// Header: domain + score + grade
 	grade := gradeStyle(r.Score.Grade).Bold(true).Render(r.Score.Grade)

@@ -290,7 +290,7 @@ export async function runAnalysis(
       ).bind(domain).first<{ data_json: string; cached_at: number }>();
       if (cached && Date.now() - cached.cached_at < getAnalysisCacheTtlMs(env)) {
         const parsed = JSON.parse(cached.data_json);
-        return { kind: "cached", data: { ...parsed, cached: true } };
+        return { kind: "cached", data: { ...parsed, cached: true, cached_at: cached.cached_at } };
       }
     } catch (e) { console.warn(`[yoke:cache] D1 read failed for ${domain}:`, e instanceof Error ? e.message : e); }
   }

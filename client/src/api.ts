@@ -164,6 +164,7 @@ export interface NetworkHealthData {
 export interface AnalysisResult {
   domain: string;
   cached: boolean;
+  cached_at?: number;
   analyzed_at: string;
   status: { is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label?: string; http_blocked?: boolean } | null;
   not_registered?: boolean;
