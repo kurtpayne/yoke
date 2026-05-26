@@ -1,8 +1,10 @@
-# Copy this to fly.toml and customize for your deployment.
-app = "your-app-name"
-primary_region = "sjc"  # Change to your preferred region
+app = "yoke-probe"
+primary_region = "sjc"
 
 [build]
+
+[processes]
+  app = "/probe-proxy"
 
 [http_service]
   internal_port = 8080
