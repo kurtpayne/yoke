@@ -230,6 +230,234 @@ func fetchAnalysis(domain string) (*AnalysisResult, error) {
 	return &result, nil
 }
 
+// ─── SSE Streaming Analysis ─────────────────────────────────────────
+
+// sseCheck tracks one in-flight check during streaming.
+type sseCheck struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Done  bool
+	Error bool
+}
+
+// fetchAnalysisStream connects to the SSE streaming endpoint and shows
+// live terminal progress as each check completes.  Falls back to the
+// plain JSON endpoint when the server doesn't support streaming.
+func fetchAnalysisStream(domain string) (*AnalysisResult, error) {
+	client := &http.Client{Timeout: 120 * time.Second}
+	req, err := http.NewRequest("GET", apiBase+"/"+domain, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("User-Agent", "yoke-cli/"+version)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fetchAnalysis(domain) // fallback
+	}
+	defer resp.Body.Close()
+
+	// If server returned JSON instead of SSE, parse it directly.
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "text/event-stream") {
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		if err != nil {
+			return nil, fmt.Errorf("read failed: %w", err)
+		}
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		}
+		var result AnalysisResult
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("parse failed: %w", err)
+		}
+		return &result, nil
+	}
+
+	// ── Parse SSE stream ────────────────────────────────────────────
+	var (
+		checks    []sseCheck
+		completed int
+		total     int
+		eventType string
+		lines     int // how many progress lines we printed (for clearing)
+	)
+
+	scanner := bufio.NewScanner(resp.Body)
+	// Increase scanner buffer for the large "done" event payload.
+	scanner.Buffer(make([]byte, 0, 512*1024), 10*1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.HasPrefix(line, "event:") {
+			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			continue
+		}
+		if !strings.HasPrefix(line, "data:") {
+			continue // blank line or comment
+		}
+		data := strings.TrimPrefix(line, "data:")
+		data = strings.TrimSpace(data)
+
+		switch eventType {
+		case "phase":
+			var p struct {
+				Total  int        `json:"total"`
+				Checks []sseCheck `json:"checks"`
+			}
+			if json.Unmarshal([]byte(data), &p) == nil {
+				if p.Total > 0 {
+					total = p.Total
+				}
+				if len(p.Checks) > 0 {
+					checks = p.Checks
+				}
+			}
+
+		case "result":
+			var r struct {
+				Key       string `json:"key"`
+				Label     string `json:"label"`
+				Completed *int   `json:"completed"`
+				Total     *int   `json:"total"`
+				Error     bool   `json:"error"`
+			}
+			if json.Unmarshal([]byte(data), &r) == nil {
+				if r.Completed != nil {
+					completed = *r.Completed
+				}
+				if r.Total != nil {
+					total = *r.Total
+				}
+				// Update our check list.
+				found := false
+				for i := range checks {
+					if checks[i].Key == r.Key {
+						checks[i].Done = true
+						checks[i].Error = r.Error
+						if r.Label != "" {
+							checks[i].Label = r.Label
+						}
+						found = true
+						break
+					}
+				}
+				if !found && r.Key != "" {
+					label := r.Label
+					if label == "" {
+						label = r.Key
+					}
+					checks = append(checks, sseCheck{Key: r.Key, Label: label, Done: true, Error: r.Error})
+				}
+			}
+			lines = renderProgress(domain, checks, completed, total, lines)
+
+		case "done":
+			clearProgress(lines)
+			var result AnalysisResult
+			if err := json.Unmarshal([]byte(data), &result); err != nil {
+				return nil, fmt.Errorf("parse failed: %w", err)
+			}
+			return &result, nil
+
+		case "error":
+			clearProgress(lines)
+			var e struct {
+				Message string `json:"message"`
+			}
+			if json.Unmarshal([]byte(data), &e) == nil {
+				return nil, fmt.Errorf("analysis failed: %s", e.Message)
+			}
+			return nil, fmt.Errorf("analysis failed")
+		}
+		eventType = "" // reset for next event
+	}
+	if err := scanner.Err(); err != nil {
+		clearProgress(lines)
+		return nil, fmt.Errorf("stream read error: %w", err)
+	}
+
+	clearProgress(lines)
+	return nil, fmt.Errorf("stream ended without results")
+}
+
+// renderProgress draws the live progress display and returns the number
+// of lines printed (so we can clear them on the next update).
+func renderProgress(domain string, checks []sseCheck, completed, total int, prevLines int) int {
+	clearProgress(prevLines)
+
+	if total == 0 {
+		line := fmt.Sprintf("  %s %s", accent.Render("⚡"), dim.Render("Analyzing "+domain+"..."))
+		fmt.Print(line)
+		return 1
+	}
+
+	// Progress bar: ████████░░░░░░░░░░░░ 12/26
+	barWidth := 20
+	filled := 0
+	if total > 0 {
+		filled = completed * barWidth / total
+	}
+	if filled > barWidth {
+		filled = barWidth
+	}
+	bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
+	header := fmt.Sprintf("  %s %s %s %s",
+		accent.Render("⚡"),
+		dim.Render("Analyzing "+domain+"..."),
+		bar,
+		dim.Render(fmt.Sprintf("%d/%d", completed, total)))
+	fmt.Println(header)
+
+	// Check status line: show completed checks with ✓/✗, pending with ·
+	var parts []string
+	maxShow := 12 // limit how many checks to show on one line
+	shown := 0
+	for _, c := range checks {
+		if shown >= maxShow {
+			remaining := len(checks) - shown
+			if remaining > 0 {
+				parts = append(parts, dim.Render(fmt.Sprintf("+%d more", remaining)))
+			}
+			break
+		}
+		shortLabel := c.Label
+		if len(shortLabel) > 12 {
+			shortLabel = shortLabel[:12]
+		}
+		if c.Done && c.Error {
+			parts = append(parts, bad.Render("✗")+dim.Render(" "+shortLabel))
+		} else if c.Done {
+			parts = append(parts, good.Render("✓")+dim.Render(" "+shortLabel))
+		} else {
+			parts = append(parts, dim.Render("· "+shortLabel))
+		}
+		shown++
+	}
+	if len(parts) > 0 {
+		fmt.Println("  " + strings.Join(parts, "  "))
+		return 2
+	}
+
+	return 1
+}
+
+// clearProgress moves the cursor up and clears the lines we previously printed.
+func clearProgress(lines int) {
+	for i := 0; i < lines; i++ {
+		if i == 0 && lines > 1 {
+			// We're below the last printed line, move up
+			fmt.Print("\033[A") // cursor up
+		} else if i > 0 {
+			fmt.Print("\033[A") // cursor up
+		}
+		fmt.Print("\033[2K") // clear line
+		fmt.Print("\r")
+	}
+}
+
 // ─── Rendering ──────────────────────────────────────────────────────
 
 func severityIcon(s string) string {
@@ -362,15 +590,8 @@ func printAnalysis(r *AnalysisResult) {
 		for _, f := range infos {
 			lines = append(lines, fmt.Sprintf("%s %s", severityIcon(f.Severity), f.Label))
 		}
-		cap := 5
-		if len(goods) < cap {
-			cap = len(goods)
-		}
-		for _, f := range goods[:cap] {
+		for _, f := range goods {
 			lines = append(lines, fmt.Sprintf("%s %s", severityIcon(f.Severity), f.Label))
-		}
-		if len(goods) > 5 {
-			lines = append(lines, dim.Render(fmt.Sprintf("+%d more passing", len(goods)-5)))
 		}
 	}
 
@@ -468,20 +689,34 @@ func main() {
 	apiBase = resolveBaseURL(cfg)
 
 	root := &cobra.Command{
-		Use:     "yoke <domain>",
-		Short:   "Domain intelligence from your terminal",
-		Long:    "Analyze any domain instantly — DNS, SSL, WHOIS, security, performance, and more.\nhttps://yoke.lol",
+		Use:   "yoke <domain>",
+		Short: "Domain intelligence from your terminal",
+		Long: accent.Render("Yoke") + " — domain intelligence from your terminal\n\n" +
+			"Analyze any domain instantly: DNS, SSL, WHOIS, security headers,\n" +
+			"tech stack, performance, breaches, and more.\n\n" +
+			dim.Render("https://yoke.lol"),
 		Version: version,
-		Args:    cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				cmd.Help()
+				os.Exit(0)
+			}
+			return cobra.ExactArgs(1)(cmd, args)
+		},
 		RunE:    runAnalyze,
 		SilenceUsage: true,
-		Example: `  yoke stripe.com
-  yoke stripe.com --json
-  yoke stripe.com --json | jq .ssl
-  yoke score google.com
-  yoke compare github.com gitlab.com
-  yoke ai stripe.com`,
+		Example: `  yoke stripe.com                        # full analysis
+  yoke stripe.com --json                 # raw JSON output
+  yoke stripe.com --json | jq .ssl       # extract specific fields
+  yoke score google.com                  # quick score check
+  yoke compare github.com gitlab.com     # side-by-side comparison
+  yoke ai stripe.com                     # AI-powered analysis`,
 	}
+	// Show help instead of bare error when no args provided
+	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		cmd.Help()
+		return err
+	})
 	root.PersistentFlags().BoolVar(&jsonOutput, "json", false, "raw JSON output")
 
 	score := &cobra.Command{
@@ -534,7 +769,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		return printRawJSON(apiBase + "/" + domain)
 	}
 
-	result, err := fetchAnalysis(domain)
+	result, err := fetchAnalysisStream(domain)
 	if err != nil {
 		return err
 	}
@@ -549,7 +784,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 		return printRawJSON(apiBase + "/" + domain)
 	}
 
-	result, err := fetchAnalysis(domain)
+	result, err := fetchAnalysisStream(domain)
 	if err != nil {
 		return err
 	}
