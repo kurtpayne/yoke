@@ -206,7 +206,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Health check (always allowed, no auth required)
-	if r.URL.Path == "/" || r.URL.Path == "/health" {
+	if r.URL.Path == "/" || r.URL.Path == "/health" || r.URL.Path == "/pagespeed" {
 		w.Header().Set("Content-Type", "application/json")
 		serviceName := os.Getenv("SERVICE_NAME")
 		if serviceName == "" {
