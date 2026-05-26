@@ -73,7 +73,7 @@ export function wantsJSON(request: Request): boolean {
     ua.includes("php")
   )
     return true;
-  // Link-preview fetchers (Signal, WhatsApp, Slack, etc.) send Accept: */*
+  // Link-preview fetchers (Signal, WhatsApp, Slack, IG, etc.) send Accept: */*
   // but need HTML with OG tags — catch them before the programmatic fallback
   if (
     ua.includes("signal") ||
@@ -86,10 +86,20 @@ export function wantsJSON(request: Request): boolean {
     ua.includes("twitterbot") ||
     ua.includes("facebookexternalhit") ||
     ua.includes("facebot") ||
+    ua.includes("instagram") ||     // Instagrambot + IG in-app browser
+    ua.includes("fban") ||           // FB/IG app embedded browser (FBAN/FBIOS)
+    ua.includes("fbav") ||           // FB/IG app version marker
     ua.includes("applebot") ||
     ua.includes("iframely") ||
     ua.includes("embedly") ||
-    ua.includes("preview")
+    ua.includes("preview") ||
+    ua.includes("googlebot") ||      // Google's crawler
+    ua.includes("bingbot") ||        // Bing's crawler
+    ua.includes("yandex") ||         // Yandex
+    ua.includes("baiduspider") ||    // Baidu
+    ua.includes("duckduckbot") ||    // DuckDuckGo
+    ua.includes("pinterestbot") ||   // Pinterest
+    ua.includes("redditbot")         // Reddit
   )
     return false;
   // */* with no text/html preference = likely programmatic
@@ -189,7 +199,7 @@ export async function handleSPARoute(
       description: `Free domain intelligence report for ${domain} — DNS, SSL, WHOIS, security audit, tech stack, performance, and more.`,
       url: `${baseUrl}/${domain}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300" }, baseUrl);
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300", "Vary": "Accept" }, baseUrl);
   }
 
   // ── Compare path: SPA with OG tags ──
@@ -202,7 +212,7 @@ export async function handleSPARoute(
       description: `Side-by-side domain comparison of ${d1} and ${d2} — security, performance, reliability, trust, and visibility scores.`,
       url: `${baseUrl}/compare/${d1}/${d2}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300" }, baseUrl);
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300", "Vary": "Accept" }, baseUrl);
   }
 
   // Not a SPA route we handle — return null to let caller continue
@@ -254,6 +264,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
         "X-Yoke-Version": YOKE_VERSION,
         "X-Yoke-Docs": `${baseUrl}/api/docs`,
         "Cache-Control": "public, max-age=300",
+        "Vary": "Accept",
       },
     });
   } catch (err) {

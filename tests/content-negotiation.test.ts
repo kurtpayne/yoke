@@ -64,6 +64,18 @@ describe("wantsJSON – content negotiation", () => {
   it("returns false for facebookexternalhit", () => {
     expect(wantsJSON(req("*/*", "facebookexternalhit/1.1"))).toBe(false);
   });
+  it("returns false for Instagrambot", () => {
+    expect(wantsJSON(req("*/*", "Mozilla/5.0 (compatible; Instagrambot/1.0)"))).toBe(false);
+  });
+  it("returns false for Instagram in-app browser (FBAN)", () => {
+    expect(wantsJSON(req("*/*", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) Mobile/20G75 [FBAN/FBIOS;FBAV/428.0.0.38.109]"))).toBe(false);
+  });
+  it("returns false for Googlebot", () => {
+    expect(wantsJSON(req("*/*", "Mozilla/5.0 (compatible; Googlebot/2.1)"))).toBe(false);
+  });
+  it("returns false for Bingbot", () => {
+    expect(wantsJSON(req("*/*", "Mozilla/5.0 (compatible; bingbot/2.0)"))).toBe(false);
+  });
 
   // Unknown */* → JSON (preserves curl API default)
   it("returns true for unknown UA with */*", () => {
