@@ -31,8 +31,8 @@ export async function analyzeDomainStream(domain: string, env: Env, skipCache = 
   const doAnalysis = async () => {
     try {
       const callbacks: AnalysisCallbacks = {
-        onPhase: async (phase, status, label, total) => {
-          await send("phase", { phase, status, label, ...(total !== undefined ? { total } : {}) });
+        onPhase: async (phase, status, label, total, checks) => {
+          await send("phase", { phase, status, label, ...(total !== undefined ? { total } : {}), ...(checks ? { checks } : {}) });
         },
         onResult: async (key, value, completed, total, label) => {
           await send("result", {
