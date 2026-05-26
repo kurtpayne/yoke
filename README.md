@@ -209,11 +209,13 @@ wrangler d1 create yoke-stats
 wrangler d1 execute yoke-cache --file=worker/migrations/0001_init.sql
 wrangler d1 execute yoke-cache --file=worker/migrations/0002_domain_scores.sql
 
-# 5. Set secrets (all optional)
+# 5. Set secrets (all optional — each prompt asks for the value interactively)
 wrangler secret put BASE_URL              # Your instance URL (enables self-analysis)
 wrangler secret put OPENROUTER_API_KEY    # Enables AI Analysis tab
 wrangler secret put WHOISFREAKS_API_KEY   # WHOIS fallback for ccTLDs without RDAP
 wrangler secret put GOOGLE_PAGESPEED_API_KEY  # Lighthouse scores
+wrangler secret put ADMIN_KEY             # Protects /usage, /api/cleanup, /api/cache
+wrangler secret put FLY_AUTH_SECRET       # Shared auth between Worker and Fly probe
 
 # 6. Build and deploy
 bash deploy.sh --cf
@@ -287,18 +289,34 @@ bun test
 
 ## Maintenance
 
-### D1 Cleanup
+### Admin Endpoints
+
+Three endpoints are protected by `ADMIN_KEY` (set via `wrangler secret put ADMIN_KEY`). Auth uses HTTP Basic — any username, password is your key:
 
 ```bash
-curl -H "Authorization: Bearer YOUR_ADMIN_KEY" https://yoke.lol/api/cleanup
+# Generate a strong key
+openssl rand -hex 32
+
+# Usage dashboard (also available at /usage in the browser)
+curl -u admin:YOUR_KEY https://your-instance.com/usage
+
+# D1 cleanup — stale cache, old lookups, expired rate limits
+curl -u admin:YOUR_KEY https://your-instance.com/api/cleanup
+
+# Purge cached analysis for a specific domain
+curl -u admin:YOUR_KEY -X DELETE https://your-instance.com/api/cache/example.com
+
+# Purge all AI analysis cache
+curl -u admin:YOUR_KEY -X DELETE "https://your-instance.com/api/cache?type=ai_analysis"
 ```
 
-Clears stale cache (>7 days), trims recent lookups (keeps 500), and purges expired rate limits and error logs. Run daily via cron.
+Run `/api/cleanup` daily via cron to keep D1 lean.
 
 ### Worker-to-Fly Proxy Auth
 
 ```bash
-# Set the same secret on both sides
+# Generate a shared secret and set it on both sides
+openssl rand -hex 32
 wrangler secret put FLY_AUTH_SECRET
 fly secrets set FLY_AUTH_SECRET=your-shared-secret
 ```
