@@ -762,17 +762,17 @@ const PERSONAS: { key: PersonaKey; label: string; icon: typeof Shield; desc: str
 
 // ─── AI Loading Indicator ───────────────────────────────────────────
 
-const ESTIMATED_SECONDS = 30;
+const ESTIMATED_SECONDS = 60;
 
 const LOADING_PHASES = [
   { at: 0, msg: "Preparing analysis data…" },
-  { at: 3, msg: "Sending to AI model…" },
-  { at: 6, msg: "Analyzing security posture…" },
-  { at: 12, msg: "Evaluating infrastructure & performance…" },
-  { at: 18, msg: "Synthesizing expert insights…" },
-  { at: 25, msg: "Formatting recommendations…" },
-  { at: 35, msg: "Still working — complex domains take longer…" },
-  { at: 50, msg: "Almost there…" },
+  { at: 4, msg: "Sending to AI model…" },
+  { at: 8, msg: "Analyzing security posture…" },
+  { at: 16, msg: "Evaluating infrastructure & performance…" },
+  { at: 28, msg: "Synthesizing expert insights…" },
+  { at: 40, msg: "Formatting recommendations…" },
+  { at: 55, msg: "Still working — complex domains take longer…" },
+  { at: 75, msg: "Almost there…" },
 ];
 
 function AILoadingIndicator({ personaLabel }: { personaLabel: string }) {
@@ -808,7 +808,7 @@ function AILoadingIndicator({ personaLabel }: { personaLabel: string }) {
         }} />
       </div>
       <span style={{ fontSize: "10px", color: "var(--muted)" }}>
-        {personaLabel} analysis typically takes ~{ESTIMATED_SECONDS}s
+        Analysis typically takes 45–60s — feel free to explore other tabs while you wait
       </span>
     </div>
   );
