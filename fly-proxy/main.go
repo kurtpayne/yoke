@@ -24,16 +24,17 @@ var domainRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a
 var geoDB *geoip2.Reader
 
 func initGeoIP() {
-	paths := []string{"/GeoLite2-City.mmdb", "./GeoLite2-City.mmdb"}
-	for _, p := range paths {
-		db, err := geoip2.Open(p)
-		if err == nil {
-			geoDB = db
-			log.Printf("[geo] Loaded MaxMind GeoLite2-City from %s", p)
-			return
-		}
+	dbPath := "/GeoLite2-City.mmdb"
+	if envPath := os.Getenv("MAXMIND_DB_PATH"); envPath != "" {
+		dbPath = envPath
 	}
-	log.Println("[geo] MaxMind GeoLite2-City not found — using API fallback")
+	db, err := geoip2.Open(dbPath)
+	if err != nil {
+		log.Printf("[geo] MaxMind GeoLite2-City not available at %s: %v — using API fallback", dbPath, err)
+		return
+	}
+	geoDB = db
+	log.Printf("[geo] MaxMind GeoLite2-City loaded from %s", dbPath)
 }
 
 // ─── SSRF Protection ────────────────────────────────────────────────
@@ -346,28 +347,35 @@ func probeGeoIP(ip string) GeoResult {
 	return GeoResult{IP: ip, Error: &errStr}
 }
 
-func tryMaxMind(ip string) *GeoResult {
+func tryMaxMind(ipStr string) *GeoResult {
 	if geoDB == nil {
 		return nil
 	}
-	parsedIP := net.ParseIP(ip)
-	if parsedIP == nil {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
 		return nil
 	}
-	record, err := geoDB.City(parsedIP)
+	record, err := geoDB.City(ip)
 	if err != nil {
+		log.Printf("[geo] MaxMind lookup failed for %s: %v", ipStr, err)
 		return nil
 	}
 
-	city := record.City.Names["en"]
-	country := record.Country.Names["en"]
+	city := ""
+	if name, ok := record.City.Names["en"]; ok {
+		city = name
+	}
+	country := ""
+	if name, ok := record.Country.Names["en"]; ok {
+		country = name
+	}
 	countryCode := record.Country.IsoCode
 	lat := record.Location.Latitude
 	lon := record.Location.Longitude
 
-	// MaxMind doesn't have ISP/ASN in the City DB — leave those for enrichment
+	// GeoLite2-City doesn't have ISP/ASN data — leave those for API fallback enrichment
 	return &GeoResult{
-		IP: ip, City: &city, Country: &country,
+		IP: ipStr, City: &city, Country: &country,
 		CountryCode: &countryCode, Lat: &lat, Lon: &lon,
 		ISP: nil, Org: nil, ASN: nil, Source: "maxmind",
 	}
