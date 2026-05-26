@@ -17,3 +17,4 @@ primary_region = "sjc"
 [[vm]]
   size = "shared-cpu-1x"
   memory = 256
+# smoke test verification
