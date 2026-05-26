@@ -26,7 +26,7 @@ function WafSection({ data }: { data: AnalysisResult }) {
       <DataRow
         label={
           <span className="flex items-center gap-1.5">
-            {waf.detected ? <ShieldCheck size={12} style={{ color: "var(--pass)" }} /> : <ShieldAlert size={12} style={{ color: "var(--muted)" }} />}
+            {waf.detected ? <ShieldCheck size={12} style={{ color: "var(--success)" }} /> : <ShieldAlert size={12} style={{ color: "var(--muted)" }} />}
             Web Application Firewall
           </span>
         }
@@ -63,7 +63,7 @@ function TrustSignalRow({ signal }: { signal: { name: string; present: boolean; 
     <div className="data-row" style={{ padding: "4px 16px" }}>
       <span className="flex items-center gap-1.5" style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--text)" }}>
         {signal.present
-          ? <Check size={10} style={{ color: "var(--pass)", flexShrink: 0 }} />
+          ? <Check size={10} style={{ color: "var(--success)", flexShrink: 0 }} />
           : isExtra
             ? <span style={{ width: 10, textAlign: "center", color: "var(--dim)", fontSize: "10px", flexShrink: 0, lineHeight: "10px" }}>–</span>
             : <X size={10} style={{ color: "var(--muted)", flexShrink: 0 }} />
@@ -155,6 +155,11 @@ export function ProtectionTrustPanel({ data }: { data: AnalysisResult }) {
                 {extraPresent > 0 ? `+${extraPresent} extra` : ""}
               </span>
             </div>
+            {coreSignals.length > 0 && extraSignals.length > 0 && (
+              <div style={{ padding: "2px 16px 0", fontFamily: "var(--font-ui)", fontSize: "9px", color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Core
+              </div>
+            )}
             {coreSignals.map(s => (
               <TrustSignalRow key={s.name} signal={s} />
             ))}
@@ -173,12 +178,12 @@ export function ProtectionTrustPanel({ data }: { data: AnalysisResult }) {
       {/* Trust factor summary */}
       {factors && factors.positive.length > 0 && (
         <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
-          <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--pass)", lineHeight: "16px", fontWeight: 600, marginBottom: "2px" }}>
+          <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--success)", lineHeight: "16px", fontWeight: 600, marginBottom: "2px" }}>
             Strengths
           </div>
           {factors.positive.slice(0, 6).map((f, i) => (
             <div key={i} className="flex items-start gap-1.5" style={{ marginBottom: "2px" }}>
-              <Check size={9} style={{ color: "var(--pass)", marginTop: "3px", flexShrink: 0 }} />
+              <Check size={9} style={{ color: "var(--success)", marginTop: "3px", flexShrink: 0 }} />
               <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--text-secondary)", lineHeight: "14px" }}>
                 {f}
               </span>
