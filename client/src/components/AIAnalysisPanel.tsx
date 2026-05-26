@@ -856,11 +856,19 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
       const bodyObj: Record<string, string> = { domain };
       if (savedKey && selectedModel) bodyObj.model = selectedModel;
 
-      const res = await fetch("/api/ai-analysis", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(bodyObj),
-      });
+      // Retry with exponential backoff on 503
+      let res: Response | null = null;
+      const maxRetries = 3;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+        res = await fetch("/api/ai-analysis", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(bodyObj),
+        });
+        if (res.status !== 503) break;
+      }
+      if (!res) throw new Error("No response from AI API");
 
       if (res.status === 429) {
         const rl = await res.json() as RateLimitResponse;

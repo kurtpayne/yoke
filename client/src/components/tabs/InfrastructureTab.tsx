@@ -8,7 +8,6 @@ import { DnssecPanel, HostingPanel } from "../NewPanels";
 import { ShodanPanel } from "../ShodanPanel";
 import { AvailabilityPanel } from "../AvailabilityPanel";
 import { SubdomainScanPanel } from "../SubdomainScanPanel";
-import { AxisScoreBadge } from "../DomainScore";
 import { GreenHostingPanel } from "../Tier1Panels";
 import { NetworkHealthPanel } from "../NetworkHealthPanel";
 import type { AnalysisResult } from "../../utils/types";
@@ -34,7 +33,6 @@ export default function InfrastructureTab({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="reliability" />
       <PanelGrid tabId="infrastructure" panels={panels} />
       {/* Contextual external links */}
       <div className="flex flex-wrap gap-2 px-1">

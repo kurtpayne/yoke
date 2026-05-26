@@ -665,15 +665,17 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // Email auth completeness (trust signal)
+  // Email auth completeness (trust signal — only show as strength when complete)
   if (opts.emailAuth) {
     const complete = opts.emailAuth.spf.found && opts.emailAuth.dmarc.found && opts.emailAuth.dkim_selectors_found.length > 0;
-    findings.push({
-      signal: "email_trust", axis: "trust",
-      severity: complete ? "good" : "medium",
-      label: complete ? "Complete email authentication" : "Incomplete email authentication",
-      tradeoff: null, weight: 3,
-    });
+    if (complete) {
+      findings.push({
+        signal: "email_trust", axis: "trust",
+        severity: "good",
+        label: "Complete email authentication",
+        tradeoff: null, weight: 3,
+      });
+    }
   }
 
   // Wayback Machine presence
