@@ -537,6 +537,10 @@ export function calculateDomainScore(opts: {
       const ttfb = resolveSeverity(TTFB, perf.ttfb);
       findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(perf.ttfb)}ms`, tradeoff: null, weight: TTFB.weight, source: TTFB.source });
     }
+  } else if (perf && perf.error) {
+    // PageSpeed unavailable — don't penalize, but acknowledge the gap
+    // This prevents score inflation when PageSpeed data is missing
+    findings.push({ signal: "pagespeed_unavailable", axis: "performance", severity: "info", label: "PageSpeed Insights unavailable", tradeoff: null, weight: 1 });
   }
 
   // Compression
