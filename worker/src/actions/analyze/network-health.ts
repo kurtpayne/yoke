@@ -193,12 +193,35 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
       } catch { /* ignore parse errors */ }
     }
 
-    // Determine stability
+    // Determine stability — anycast/CDN providers (Cloudflare, Akamai, Fastly,
+    // AWS, GCP, Azure, etc.) legitimately generate high BGP update counts for
+    // traffic engineering, DDoS mitigation, and PoP failover. Use relaxed
+    // thresholds for known anycast ASNs to avoid false positives.
+    const ANYCAST_ASNS = new Set([
+      13335,  // Cloudflare
+      20940,  // Akamai
+      16509,  // Amazon/AWS
+      15169,  // Google
+      8075,   // Microsoft/Azure
+      54113,  // Fastly
+      16625,  // Akamai (alt)
+      14618,  // Amazon (alt)
+      396982, // Google Cloud
+      209242, // Cloudflare (alt)
+    ]);
+    const isAnycast = ANYCAST_ASNS.has(asn);
     let stability: RipeRouting["routing_stability"] = null;
     if (bgpUpdates !== null) {
-      if (bgpUpdates < 10) stability = "stable";
-      else if (bgpUpdates <= 100) stability = "moderate";
-      else stability = "unstable";
+      if (isAnycast) {
+        // Anycast networks: much higher thresholds
+        if (bgpUpdates < 50) stability = "stable";
+        else if (bgpUpdates <= 500) stability = "moderate";
+        else stability = "unstable";
+      } else {
+        if (bgpUpdates < 10) stability = "stable";
+        else if (bgpUpdates <= 100) stability = "moderate";
+        else stability = "unstable";
+      }
     }
 
     return { asn, asn_name: asnName, prefix, visibility, bgp_updates_24h: bgpUpdates, routing_stability: stability };

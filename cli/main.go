@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,6 +30,9 @@ type Config struct {
 }
 
 const defaultBaseURL = "https://yoke.lol"
+
+// maxResponseBytes caps the maximum API response body size (10 MB).
+const maxResponseBytes = 10 << 20
 
 // resolveBaseURL determines which Yoke instance the CLI talks to.
 // Precedence: YOKE_BASE_URL env var > config file base_url > yoke.lol.
@@ -204,7 +208,7 @@ func fetchJSON(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
@@ -423,6 +427,10 @@ func normalizeDomain(raw string) string {
 	if i := strings.IndexAny(d, "/?#"); i != -1 {
 		d = d[:i]
 	}
+	// Strip port numbers (e.g., example.com:8080)
+	if host, _, found := strings.Cut(d, ":"); found {
+		d = host
+	}
 	// Strip trailing dots and slashes
 	d = strings.TrimRight(d, "./")
 	return d
@@ -559,8 +567,8 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	d2 := normalizeDomain(args[1])
 
 	client := &http.Client{Timeout: 120 * time.Second}
-	payload := fmt.Sprintf(`{"domain1":"%s","domain2":"%s"}`, d1, d2)
-	req, _ := http.NewRequest("POST", apiBase+"/api/compare", strings.NewReader(payload))
+	payloadBytes, _ := json.Marshal(map[string]string{"domain1": d1, "domain2": d2})
+	req, _ := http.NewRequest("POST", apiBase+"/api/compare", strings.NewReader(string(payloadBytes)))
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
@@ -572,11 +580,22 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
+	if resp.StatusCode != 200 {
+		if jsonOutput {
+			os.Stdout.Write(body)
+			if len(body) > 0 && body[len(body)-1] != '\n' {
+				fmt.Println()
+			}
+			return fmt.Errorf("API error %d", resp.StatusCode)
+		}
+		return fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
 	if jsonOutput {
-		var buf interface{}
-		json.Unmarshal(body, &buf)
-		out, _ := json.MarshalIndent(buf, "", "  ")
-		fmt.Println(string(out))
+		os.Stdout.Write(body)
+		if len(body) > 0 && body[len(body)-1] != '\n' {
+			fmt.Println()
+		}
 		return nil
 	}
 
@@ -682,10 +701,13 @@ func runAI(cmd *cobra.Command, args []string) error {
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
-		var buf interface{}
-		json.Unmarshal(body, &buf)
-		out, _ := json.MarshalIndent(buf, "", "  ")
-		fmt.Println(string(out))
+		os.Stdout.Write(body)
+		if len(body) > 0 && body[len(body)-1] != '\n' {
+			fmt.Println()
+		}
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("API error %d", resp.StatusCode)
+		}
 		return nil
 	}
 
@@ -826,9 +848,9 @@ func runAISetup() error {
 	fmt.Println("  1. Get a key at " + accent.Render("https://openrouter.ai/keys"))
 	fmt.Print("  2. Paste your key: ")
 
-	var key string
-	fmt.Scanln(&key)
-	key = strings.TrimSpace(key)
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	key := strings.TrimSpace(scanner.Text())
 
 	if key == "" {
 		fmt.Println(warn.Render("  No key provided. Setup cancelled."))
