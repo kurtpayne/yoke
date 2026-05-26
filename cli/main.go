@@ -514,17 +514,13 @@ func renderProgress(domain string, checks []sseCheck, completed, total int, prev
 }
 
 // clearProgress moves the cursor up and clears the lines we previously printed.
+// After Println, the cursor is on the line *below* the last printed content.
 func clearProgress(lines int) {
 	for i := 0; i < lines; i++ {
-		if i == 0 && lines > 1 {
-			// We're below the last printed line, move up
-			fmt.Print("\033[A") // cursor up
-		} else if i > 0 {
-			fmt.Print("\033[A") // cursor up
-		}
-		fmt.Print("\033[2K") // clear line
-		fmt.Print("\r")
+		fmt.Print("\033[A")  // cursor up one line
+		fmt.Print("\033[2K") // clear entire line
 	}
+	fmt.Print("\r") // return to column 0
 }
 
 // ─── Rendering ──────────────────────────────────────────────────────
