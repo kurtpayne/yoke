@@ -28,6 +28,7 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 
@@ -39,3 +40,39 @@ jobs:
         run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Wait for deploy propagation
+        run: sleep 15
+
+      - name: Smoke test — Proxy health
+        run: |
+          echo "Checking https://yoke-probe.fly.dev/ health..."
+          RESPONSE=$(curl -sf --max-time 30 https://yoke-probe.fly.dev/)
+          echo "$RESPONSE"
+          echo "$RESPONSE" | jq -e '.status == "ok"' > /dev/null
+          echo "✓ Fly proxy healthy"
+
+      - name: Smoke test — Proxy can reach external target
+        run: |
+          echo "Checking proxy can reach check-host.net..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://yoke-probe.fly.dev/check-host.net/check-tcp?host=1.1.1.1:443&max_nodes=1")
+          echo "Status: $STATUS"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then
+            echo "✓ Proxy forwarding OK (status $STATUS)"
+          else
+            echo "::error::Proxy returned $STATUS — may be down"
+            exit 1
+          fi
+
+      - name: 🚨 Alert on failure
+        if: failure()
+        run: |
+          echo "::error::Fly proxy smoke tests failed! Manual intervention required."
+          echo "::error::To rollback: flyctl releases -a yoke-probe, then flyctl deploy with previous image"
+          echo "::error::Dashboard: https://fly.io/apps/yoke-probe"
+          exit 1

@@ -126,3 +126,85 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install worker dependencies (for wrangler rollback)
+        run: |
+          cd worker && bun install --frozen-lockfile && cd ..
+
+      - name: Wait for edge propagation
+        run: sleep 15
+
+      - name: Smoke test — HTML homepage
+        run: |
+          echo "Checking https://yoke.lol/ returns HTML..."
+          curl -sf --max-time 30 https://yoke.lol/ | grep -q '<title>'
+          echo "✓ Homepage OK"
+
+      - name: Smoke test — API docs
+        run: |
+          echo "Checking https://yoke.lol/api/docs..."
+          curl -sf --max-time 30 https://yoke.lol/api/docs | grep -qi 'api'
+          echo "✓ API docs OK"
+
+      - name: Smoke test — JSON API
+        run: |
+          echo "Checking JSON API with cloudflare.com..."
+          curl -sf --max-time 60 -H "Accept: application/json" "https://yoke.lol/cloudflare.com" | jq -e '.domain' > /dev/null
+          echo "✓ JSON API OK"
+
+      - name: Smoke test — Status page
+        run: |
+          echo "Checking https://yoke.lol/status..."
+          curl -sf --max-time 30 https://yoke.lol/status | grep -qi 'status'
+          echo "✓ Status page OK"
+
+      # ── Rollback on failure ──────────────────────────────────────
+      - name: Generate wrangler.toml (for rollback)
+        if: failure()
+        working-directory: worker
+        run: |
+          cat > wrangler.toml << 'EOF'
+          name = "yoke"
+          main = "dist/worker.js"
+          compatibility_date = "2024-12-01"
+
+          [vars]
+          BASE_URL = "https://yoke.lol"
+
+          [assets]
+          directory = "../client/dist"
+          binding = "ASSETS"
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "yoke-cache"
+          database_id = "ce2c3c22-a91c-4254-a80c-1cdc95c7ceb7"
+
+          [[d1_databases]]
+          binding = "STATS_DB"
+          database_name = "yoke-stats"
+          database_id = "6f29dfb9-b7ff-497f-a4aa-4dbb3b7dd6e1"
+          EOF
+          sed -i 's/^          //' wrangler.toml
+
+      - name: 🚨 Rollback deployment
+        if: failure()
+        working-directory: worker
+        run: |
+          echo "::error::Smoke tests failed — rolling back to previous deployment"
+          echo "y" | npx wrangler rollback --message "Automatic rollback: smoke tests failed"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
