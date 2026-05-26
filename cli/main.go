@@ -1238,10 +1238,27 @@ func runAI(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Phase 1: Ensure domain is analyzed (SSE progress bar for fresh, instant for cached)
+	// Phase 1: Ensure domain is analyzed (progress bar for fresh, instant for cached)
 	// This populates the server cache so the AI endpoint can read signals without re-analyzing.
 	if !jsonOutput {
-		_, _ = fetchAnalysisStream(domain)
+		printedLines := 0
+		_, _ = fetchAnalysisStreamWithProgress(domain, func(checks []sseCheck, completed, total int) {
+			clearProgress(printedLines)
+			barWidth := 20
+			label := fmt.Sprintf("%-22s", domain)
+			if total == 0 {
+				bar := dim.Render(strings.Repeat("░", barWidth))
+				fmt.Printf("  %s %s %s\n", accent.Render("⚡"), dim.Render(label), bar)
+			} else {
+				filled := completed * barWidth / total
+				if filled > barWidth { filled = barWidth }
+				bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
+				fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(label),
+					bar, dim.Render(fmt.Sprintf("%d/%d", completed, total)))
+			}
+			printedLines = 1
+		})
+		clearProgress(printedLines)
 	}
 
 	// Phase 2: AI analysis (LLM call)
