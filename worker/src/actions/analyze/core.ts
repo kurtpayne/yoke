@@ -503,9 +503,10 @@ export async function runAnalysis(
     ? sanitizeCfHeaders(rawHeadersOriginal) : rawHeadersOriginal;
 
   // Detect HTTP protocols — prefer Fly probe data from status check, then header detection, then dedicated probe
-  const statusHasProtocols = !!(statusResult as Record<string, unknown>).http2 || !!(statusResult as Record<string, unknown>).http3;
+  const statusAny = statusResult as unknown as Record<string, unknown>;
+  const statusHasProtocols = !!statusAny.http2 || !!statusAny.http3;
   let httpProtocols = statusHasProtocols
-    ? { http2: !!(statusResult as Record<string, unknown>).http2, http3: !!(statusResult as Record<string, unknown>).http3, alt_svc: ((statusResult as Record<string, unknown>).alt_svc as string | null) ?? null }
+    ? { http2: !!statusAny.http2, http3: !!statusAny.http3, alt_svc: (statusAny.alt_svc as string | null) ?? null }
     : detectHttpProtocols(effectiveHeaders);
   // Fallback: dedicated protocol probe if nothing detected yet
   if (!httpProtocols.http2 && !httpProtocols.http3) {
