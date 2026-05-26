@@ -670,9 +670,12 @@ export function App() {
 
         {/* Cached indicator + re-analyze */}
         {analyze.data?.cached && (
-          <div className="mt-4 flex items-center justify-center gap-3">
-            <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)" }}>
-              ● Cached result from {new Date(analyze.data.analyzed_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          <div className="mt-4 flex items-center justify-center gap-3" style={{
+            padding: "8px 16px", borderRadius: "8px",
+            background: "var(--surface)", border: "1px solid var(--border)",
+          }}>
+            <span style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)" }}>
+              Cached results from {new Date(analyze.data.cached_at || analyze.data.analyzed_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
             </span>
             <button
               type="button"
