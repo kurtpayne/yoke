@@ -53,6 +53,42 @@ interface ProgressState {
   checks: Map<string, { label: string; done: boolean }>;
 }
 
+function PendingChecksCycler({ checks }: { checks: Map<string, { label: string; done: boolean }> }) {
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const pendingLabels = Array.from(checks.values()).filter(c => !c.done).map(c => c.label);
+
+  useEffect(() => {
+    if (pendingLabels.length === 0) return;
+    setIndex(0);
+    setVisible(true);
+  }, [pendingLabels.length]);
+
+  useEffect(() => {
+    if (pendingLabels.length <= 1) return;
+    const interval = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setIndex(prev => (prev + 1) % pendingLabels.length);
+        setVisible(true);
+      }, 300);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [pendingLabels.length]);
+
+  if (pendingLabels.length === 0) return null;
+  const label = pendingLabels[index % pendingLabels.length] || pendingLabels[0];
+
+  return (
+    <span style={{
+      fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)",
+      opacity: visible ? 1 : 0, transition: "opacity 0.3s ease",
+    }}>
+      Waiting on {label}…
+    </span>
+  );
+}
+
 function StreamingProgress({ progress }: { progress: ProgressState }) {
   const pct = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
   const sortedChecks = Array.from(progress.checks.entries());
@@ -67,9 +103,12 @@ function StreamingProgress({ progress }: { progress: ProgressState }) {
             {progress.label || "Analyzing…"}
           </span>
         </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--dim)" }}>
-          {progress.completed}/{progress.total} checks
-        </span>
+        <div className="flex items-center gap-3">
+          <PendingChecksCycler checks={progress.checks} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--dim)" }}>
+            {progress.completed}/{progress.total} checks
+          </span>
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -128,13 +167,25 @@ function useStreamingAnalysis() {
         if (controller.signal.aborted) return;
         switch (evt.type) {
           case "phase": {
-            const d = evt.data as { phase: string; status: string; label: string; total?: number };
-            setProgress(prev => ({
-              ...prev,
-              phase: d.phase,
-              label: d.label,
-              total: d.total ?? prev.total,
-            }));
+            const d = evt.data as { phase: string; status: string; label: string; total?: number; checks?: Array<{ key: string; label: string }> };
+            setProgress(prev => {
+              const checks = new Map(prev.checks);
+              // Populate pending checks when phase2 starts
+              if (d.phase === "phase2" && d.checks) {
+                for (const c of d.checks) {
+                  if (!checks.has(c.key)) {
+                    checks.set(c.key, { label: c.label, done: false });
+                  }
+                }
+              }
+              return {
+                ...prev,
+                phase: d.phase,
+                label: d.label,
+                total: d.total ?? prev.total,
+                checks,
+              };
+            });
             break;
           }
           case "result": {

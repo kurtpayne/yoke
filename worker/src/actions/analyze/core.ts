@@ -44,7 +44,7 @@ import { analyzeCaaRecords } from "./tier1";
 
 /** Callbacks for streaming progress. All optional — non-streaming callers pass nothing. */
 export interface AnalysisCallbacks {
-  onPhase?: (phase: string, status: string, label: string, total?: number) => Promise<void>;
+  onPhase?: (phase: string, status: string, label: string, total?: number, checks?: Array<{ key: string; label: string }>) => Promise<void>;
   onResult?: (key: string, value: unknown, completed?: number, total?: number, label?: string) => Promise<void>;
 }
 
@@ -362,7 +362,7 @@ export async function runAnalysis(
     default: check.default,
   }));
 
-  await onPhase("phase2", "running", `Running ${checks.length} checks…`, checks.length);
+  await onPhase("phase2", "running", `Running ${checks.length} checks…`, checks.length, checks.map(c => ({ key: c.key, label: c.label })));
 
   // Collect results as they arrive, streaming each via onResult
   const results: Record<string, unknown> = {};
