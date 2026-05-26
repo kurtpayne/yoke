@@ -9,29 +9,33 @@ import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectH
 export function auditSecurityHeaders(headers: Record<string, string>): { audit: SecurityHeaderCheck[]; grade: string } {
   const checks: SecurityHeaderCheck[] = [];
   const headerDefs = [
-    { name: "Strict-Transport-Security", key: "strict-transport-security", important: true, recommend: "Add HSTS header with max-age of at least 31536000" },
-    { name: "Content-Security-Policy", key: "content-security-policy", important: true, recommend: "Implement CSP to prevent XSS and injection attacks" },
-    { name: "X-Content-Type-Options", key: "x-content-type-options", important: true, recommend: 'Set to "nosniff" to prevent MIME-type sniffing' },
-    { name: "X-Frame-Options", key: "x-frame-options", important: true, recommend: 'Set to "DENY" or "SAMEORIGIN" to prevent clickjacking' },
-    { name: "Referrer-Policy", key: "referrer-policy", important: false, recommend: 'Set to "strict-origin-when-cross-origin" or stricter' },
-    { name: "Permissions-Policy", key: "permissions-policy", important: false, recommend: "Restrict browser features with Permissions-Policy" },
-    { name: "X-XSS-Protection", key: "x-xss-protection", important: false, recommend: "Legacy header; modern CSP is preferred" },
-    { name: "Cross-Origin-Opener-Policy", key: "cross-origin-opener-policy", important: false, recommend: 'Set to "same-origin" for cross-origin isolation' },
-    { name: "Cross-Origin-Resource-Policy", key: "cross-origin-resource-policy", important: false, recommend: 'Set to "same-origin" to prevent resource leaks' },
+    // Core security headers — these define your grade
+    { name: "Strict-Transport-Security", key: "strict-transport-security", weight: 20, recommend: "Add HSTS header with max-age of at least 31536000" },
+    { name: "Content-Security-Policy", key: "content-security-policy", weight: 20, recommend: "Implement CSP to prevent XSS and injection attacks" },
+    { name: "X-Content-Type-Options", key: "x-content-type-options", weight: 15, recommend: 'Set to "nosniff" to prevent MIME-type sniffing' },
+    { name: "X-Frame-Options", key: "x-frame-options", weight: 15, recommend: 'Set to "DENY" or "SAMEORIGIN" to prevent clickjacking' },
+    // Recommended — good practice, minor weight
+    { name: "Referrer-Policy", key: "referrer-policy", weight: 10, recommend: 'Set to "strict-origin-when-cross-origin" or stricter' },
+    { name: "Permissions-Policy", key: "permissions-policy", weight: 5, recommend: "Restrict browser features with Permissions-Policy" },
+    // Situational — shown for awareness, zero scoring weight
+    { name: "X-XSS-Protection", key: "x-xss-protection", weight: 0, recommend: "Deprecated — modern CSP is preferred" },
+    { name: "Cross-Origin-Opener-Policy", key: "cross-origin-opener-policy", weight: 0, recommend: 'Set to "same-origin" if using cross-origin isolation' },
+    { name: "Cross-Origin-Resource-Policy", key: "cross-origin-resource-policy", weight: 0, recommend: 'Set to "same-origin" if using cross-origin isolation' },
   ];
 
   let score = 0;
   let maxScore = 0;
   for (const def of headerDefs) {
-    const weight = def.important ? 15 : 5;
-    maxScore += weight;
+    maxScore += def.weight;
     const val = headers[def.key] ?? null;
-    if (val) { checks.push({ header: def.name, status: "pass", value: val, recommendation: null }); score += weight; }
-    else { checks.push({ header: def.name, status: def.important ? "fail" : "warning", value: null, recommendation: def.recommend }); }
+    const isCoreOrRecommended = def.weight >= 10;
+    if (val) { checks.push({ header: def.name, status: "pass", value: val, recommendation: null }); score += def.weight; }
+    else { checks.push({ header: def.name, status: isCoreOrRecommended ? "fail" : "warning", value: null, recommendation: def.recommend }); }
   }
 
+  // Grade: 4 core headers (HSTS+CSP+XCTO+XFO) = 70/85 ≈ 82% = B
   const pct = maxScore > 0 ? (score / maxScore) * 100 : 0;
-  const grade = pct >= 90 ? "A" : pct >= 75 ? "B" : pct >= 55 ? "C" : pct >= 35 ? "D" : "F";
+  const grade = pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 65 ? "B" : pct >= 45 ? "C" : pct >= 25 ? "D" : "F";
   return { audit: checks, grade };
 }
 
