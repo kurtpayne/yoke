@@ -12,7 +12,7 @@ interface AIAnalysisResult {
   key_findings: Array<{ category: string; finding: string; severity: string; action: string }>;
   persona_insights: Record<string, string>;
   attack_surface: string[];
-  recommendations: Array<{ priority: number; action: string; impact: string; effort: string }>;
+  recommendations: Array<{ priority: number; action: string; impact: string; effort: string; tool?: string }>;
   _usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
