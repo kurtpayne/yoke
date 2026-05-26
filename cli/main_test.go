@@ -420,6 +420,8 @@ func TestNormalizeDomain(t *testing.T) {
 		{"HTTPS://Example.COM/Path", "example.com"},
 		{"example.com.", "example.com"},
 		{"example.com/", "example.com"},
+		{"example.com:8080", "example.com"},
+		{"https://example.com:443/path", "example.com"},
 	}
 	for _, tt := range tests {
 		if got := normalizeDomain(tt.input); got != tt.want {
