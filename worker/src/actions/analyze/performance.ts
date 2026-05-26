@@ -6,7 +6,7 @@ import type { PerformanceResult, CompressionResult } from "./types";
 // ─── PageSpeed ───────────────────────────────────────────────────────
 
 
-export async function checkPageSpeed(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string): Promise<PerformanceResult> {
+export async function checkPageSpeed(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string, flyAuthSecret?: string): Promise<PerformanceResult> {
   // Check separate performance cache (24h TTL)
   if (db) {
     try {
@@ -21,7 +21,11 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
   // Try Fly proxy first (more reliable, avoids CF egress issues)
   try {
     const flyUrl = `https://yoke-probe.fly.dev/pagespeed?domain=${encodeURIComponent(domain)}`;
-    const res = await fetchWithTimeout(flyUrl, { timeout: 20000 });
+    const headers: Record<string, string> = {};
+    if (flyAuthSecret) {
+      headers["Authorization"] = `Bearer ${flyAuthSecret}`;
+    }
+    const res = await fetchWithTimeout(flyUrl, { timeout: 20000, headers });
     if (res.ok) {
       const result = await res.json() as PerformanceResult;
       if (result.score != null) {
