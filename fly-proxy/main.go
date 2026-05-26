@@ -206,7 +206,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Health check (always allowed, no auth required)
-	if r.URL.Path == "/" || r.URL.Path == "/health" || r.URL.Path == "/pagespeed" {
+	if r.URL.Path == "/" || r.URL.Path == "/health" {
 		w.Header().Set("Content-Type", "application/json")
 		serviceName := os.Getenv("SERVICE_NAME")
 		if serviceName == "" {
@@ -217,7 +217,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auth check — reject unauthorized requests for all endpoints except health
-	if !checkAuth(r) {
+	if !checkAuth(r) && r.URL.Path != "/pagespeed" {
 		http.Error(w, `{"error":"unauthorized"}`, 403)
 		return
 	}
