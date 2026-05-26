@@ -51,11 +51,12 @@ function WafSection({ data }: { data: AnalysisResult }) {
 
 // ─── Trust Signals Section ──────────────────────────────────────────
 
-function TrustSignalRow({ signal }: { signal: { name: string; present: boolean; value: string | null; severity: string } }) {
+function TrustSignalRow({ signal }: { signal: { name: string; present: boolean; value: string | null; severity: string; importance?: string } }) {
   const statusMap: Record<string, "pass" | "warn" | "fail" | "info" | "neutral"> = {
     good: "pass", info: "info", low: "warn", medium: "fail",
   };
   const status = signal.present ? (statusMap[signal.severity] ?? "pass") : "neutral";
+  const isExtra = signal.importance === "extra";
   const ref = findReferenceLink(signal.name);
 
   return (
@@ -63,9 +64,11 @@ function TrustSignalRow({ signal }: { signal: { name: string; present: boolean; 
       <span className="flex items-center gap-1.5" style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--text)" }}>
         {signal.present
           ? <Check size={10} style={{ color: "var(--pass)", flexShrink: 0 }} />
-          : <X size={10} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          : isExtra
+            ? <span style={{ width: 10, textAlign: "center", color: "var(--dim)", fontSize: "10px", flexShrink: 0, lineHeight: "10px" }}>–</span>
+            : <X size={10} style={{ color: "var(--muted)", flexShrink: 0 }} />
         }
-        {signal.name}
+        <span style={{ opacity: (!signal.present && isExtra) ? 0.5 : 1 }}>{signal.name}</span>
         {ref && (
           <Tooltip text={ref.label}>
             <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
@@ -105,9 +108,11 @@ export function ProtectionTrustPanel({ data }: { data: AnalysisResult }) {
     grouped.get(cat)!.push(s);
   }
 
-  // Summary counts
-  const presentCount = signals.filter(s => s.present).length;
-  const totalChecked = signals.length;
+  // Summary counts — header badge reflects core signals only
+  const coreSignals = signals.filter(s => (s as any).importance !== "extra");
+  const corePresent = coreSignals.filter(s => s.present).length;
+  const coreTotal = coreSignals.length;
+  const extraPresent = signals.filter(s => (s as any).importance === "extra" && s.present).length;
 
   return (
     <Panel
@@ -123,8 +128,8 @@ export function ProtectionTrustPanel({ data }: { data: AnalysisResult }) {
             </Tooltip>
           )}
           <StatusBadge
-            status={presentCount >= 6 ? "pass" : presentCount >= 3 ? "info" : "neutral"}
-            label={`${presentCount}/${totalChecked} signals`}
+            status={corePresent >= coreTotal && coreTotal > 0 ? "pass" : corePresent >= Math.ceil(coreTotal / 2) ? "info" : "neutral"}
+            label={`${corePresent}/${coreTotal} core${extraPresent > 0 ? ` · +${extraPresent}` : ""}`}
           />
         </div>
       }
@@ -136,16 +141,29 @@ export function ProtectionTrustPanel({ data }: { data: AnalysisResult }) {
       {CATEGORY_ORDER.map(cat => {
         const catSignals = grouped.get(cat);
         if (!catSignals || catSignals.length === 0) return null;
-        const presentInCat = catSignals.filter(s => s.present).length;
+        const coreSignals = catSignals.filter(s => (s as any).importance !== "extra");
+        const extraSignals = catSignals.filter(s => (s as any).importance === "extra");
+        const corePresent = coreSignals.filter(s => s.present).length;
+        const extraPresent = extraSignals.filter(s => s.present).length;
         return (
           <div key={cat}>
             <div className="sub-section flex items-center justify-between">
               <span>{CATEGORY_LABELS[cat] ?? cat}</span>
               <span style={{ fontSize: "9px", color: "var(--dim)" }}>
-                {presentInCat}/{catSignals.length}
+                {coreSignals.length > 0 ? `${corePresent}/${coreSignals.length}` : ""}
+                {coreSignals.length > 0 && extraPresent > 0 ? " · " : ""}
+                {extraPresent > 0 ? `+${extraPresent} extra` : ""}
               </span>
             </div>
-            {catSignals.map(s => (
+            {coreSignals.map(s => (
+              <TrustSignalRow key={s.name} signal={s} />
+            ))}
+            {extraSignals.length > 0 && coreSignals.length > 0 && (
+              <div style={{ padding: "2px 16px 0", fontFamily: "var(--font-ui)", fontSize: "9px", color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Extra
+              </div>
+            )}
+            {extraSignals.map(s => (
               <TrustSignalRow key={s.name} signal={s} />
             ))}
           </div>
