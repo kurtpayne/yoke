@@ -209,7 +209,7 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
       396982, // Google Cloud
       209242, // Cloudflare (alt)
     ]);
-    const isAnycast = ANYCAST_ASNS.has(asn);
+    const isAnycast = asn !== null && ANYCAST_ASNS.has(asn);
     let stability: RipeRouting["routing_stability"] = null;
     if (bgpUpdates !== null) {
       if (isAnycast) {
