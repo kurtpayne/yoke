@@ -320,7 +320,7 @@ export async function runAnalysis(
   {
     const [dnsResult, httpResult] = await Promise.allSettled([
       checkDns(domain),
-      analyzeHttp(domain, instanceHost),
+      analyzeHttp(domain, instanceHost, env),
     ]);
     dnsRecords = dnsResult.status === "fulfilled" ? dnsResult.value : [];
     httpAnalysis = httpResult.status === "fulfilled" ? httpResult.value : null;

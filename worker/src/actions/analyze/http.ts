@@ -1,4 +1,5 @@
 import { fetchWithTimeout, boundedText, isBlockedUrl } from "../../helpers";
+import type { Env } from "../../helpers";
 import { fingerprints } from "../../fingerprints";
 import { getHtmlSecurityHeaders } from "../../spa";
 import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectHop } from "./types";
@@ -107,10 +108,10 @@ export function detectTechStack(headers: Record<string, string>, html: string): 
   return found;
 }
 
-export async function analyzeHttp(domain: string, instanceHost?: string): Promise<HttpAnalysis | null> {
+export async function analyzeHttp(domain: string, instanceHost?: string, env?: Env): Promise<HttpAnalysis | null> {
   // ─── Self-analysis bypass ────────────────────────────────────────────
   // CF Workers can't fetch their own domain (recursive request protection).
-  // Synthesize HTTP analysis from known security headers.
+  // Synthesize HTTP analysis from known security headers + real HTML from ASSETS.
   if (instanceHost && domain === instanceHost) {
     // Use build-time globals if available, otherwise fall back to runtime security headers
     const runtimeHeaders = getHtmlSecurityHeaders(`https://${instanceHost}`);
@@ -126,7 +127,16 @@ export async function analyzeHttp(domain: string, instanceHost?: string): Promis
       "alt-svc": "h3=\":443\"; ma=86400",
       "cf-ray": "self-analysis",
     };
-    const html = typeof __HTML__ !== "undefined" ? __HTML__ : "";
+    // Prefer build-time HTML, then fetch from ASSETS at runtime, then empty fallback
+    let html = "";
+    if (typeof __HTML__ !== "undefined") {
+      html = __HTML__;
+    } else if (env?.ASSETS) {
+      try {
+        const resp = await env.ASSETS.fetch(new Request(`https://${instanceHost}/index.html`));
+        if (resp.ok) html = await resp.text();
+      } catch { /* ignore — fall through to empty */ }
+    }
     const { audit, grade } = auditSecurityHeaders(selfHeaders);
     const techStack = html ? detectTechStack(selfHeaders, html) : [
       { category: "Web Server", name: "Cloudflare Workers", version: null, confidence: "high" },
