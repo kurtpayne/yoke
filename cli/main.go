@@ -568,7 +568,10 @@ func runCompare(cmd *cobra.Command, args []string) error {
 
 	client := &http.Client{Timeout: 120 * time.Second}
 	payloadBytes, _ := json.Marshal(map[string]string{"domain1": d1, "domain2": d2})
-	req, _ := http.NewRequest("POST", apiBase+"/api/compare", strings.NewReader(string(payloadBytes)))
+	req, err := http.NewRequest("POST", apiBase+"/api/compare", strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		return fmt.Errorf("request setup failed: %w", err)
+	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
@@ -578,7 +581,10 @@ func runCompare(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return fmt.Errorf("read failed: %w", err)
+	}
 
 	if resp.StatusCode != 200 {
 		if jsonOutput {
@@ -617,7 +623,9 @@ func runCompare(cmd *cobra.Command, args []string) error {
 			} `json:"axes"`
 		} `json:"comparison"`
 	}
-	json.Unmarshal(body, &data)
+	if err := json.Unmarshal(body, &data); err != nil {
+		return fmt.Errorf("parse failed: %w", err)
+	}
 
 	fmt.Println()
 	if data.Domain1.Score != nil {
@@ -681,14 +689,17 @@ func runAI(cmd *cobra.Command, args []string) error {
 	}
 
 	// POST /api/ai-analysis with BYO key
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := &http.Client{Timeout: 120 * time.Second}
 	payload := map[string]string{"domain": domain}
 	if model != "" {
 		payload["model"] = model
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
-	req, _ := http.NewRequest("POST", apiBase+"/api/ai-analysis", strings.NewReader(string(payloadBytes)))
+	req, err := http.NewRequest("POST", apiBase+"/api/ai-analysis", strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		return fmt.Errorf("request setup failed: %w", err)
+	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
@@ -700,7 +711,10 @@ func runAI(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("request failed: %w", err)
 		}
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		if err != nil {
+			return fmt.Errorf("read failed: %w", err)
+		}
 		os.Stdout.Write(body)
 		if len(body) > 0 && body[len(body)-1] != '\n' {
 			fmt.Println()
@@ -718,7 +732,10 @@ func runAI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return fmt.Errorf("read failed: %w", err)
+	}
 
 	if resp.StatusCode == 429 {
 		var rl struct {
@@ -944,7 +961,10 @@ func runConfig(cmd *cobra.Command, args []string) error {
 
 func printRawJSON(url string) error {
 	client := &http.Client{Timeout: 90 * time.Second}
-	req, _ := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("request setup failed: %w", err)
+	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
 
