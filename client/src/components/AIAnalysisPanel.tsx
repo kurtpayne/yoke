@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Key, Copy, Check, ChevronDown, ChevronUp, Settings, Eye, EyeOff, RotateCcw, ExternalLink } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
 import { findReferenceLink } from "./DomainSignals";
@@ -760,6 +760,60 @@ const PERSONAS: { key: PersonaKey; label: string; icon: typeof Shield; desc: str
   { key: "domain_buyer", label: "Buyer", icon: DollarSign, desc: "Domain value, age, history, and acquisition risk" },
 ];
 
+// ─── AI Loading Indicator ───────────────────────────────────────────
+
+const ESTIMATED_SECONDS = 30;
+
+const LOADING_PHASES = [
+  { at: 0, msg: "Preparing analysis data…" },
+  { at: 3, msg: "Sending to AI model…" },
+  { at: 6, msg: "Analyzing security posture…" },
+  { at: 12, msg: "Evaluating infrastructure & performance…" },
+  { at: 18, msg: "Synthesizing expert insights…" },
+  { at: 25, msg: "Formatting recommendations…" },
+  { at: 35, msg: "Still working — complex domains take longer…" },
+  { at: 50, msg: "Almost there…" },
+];
+
+function AILoadingIndicator({ personaLabel }: { personaLabel: string }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const progress = Math.min(elapsed / ESTIMATED_SECONDS, 0.95);
+  const phase = [...LOADING_PHASES].reverse().find(p => elapsed >= p.at) || LOADING_PHASES[0];
+
+  return (
+    <div style={{
+      background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
+      padding: "16px", display: "flex", flexDirection: "column", gap: "10px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <Loader2 size={14} style={{ color: "var(--accent)", animation: "spin 1s linear infinite", flexShrink: 0 }} />
+        <span style={{ fontSize: "12px", color: "var(--text)" }}>{phase.msg}</span>
+        <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{elapsed}s</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+      <div style={{
+        height: "3px", borderRadius: "2px", background: "var(--border)", overflow: "hidden",
+      }}>
+        <div style={{
+          height: "100%", borderRadius: "2px",
+          background: "var(--accent)",
+          width: `${progress * 100}%`,
+          transition: "width 1s linear",
+        }} />
+      </div>
+      <span style={{ fontSize: "10px", color: "var(--muted)" }}>
+        {personaLabel} analysis typically takes ~{ESTIMATED_SECONDS}s
+      </span>
+    </div>
+  );
+}
+
 // ─── AI Persona Insight Card ────────────────────────────────────────
 
 function PersonaInsightCard({
@@ -798,16 +852,7 @@ function PersonaInsightCard({
   }
 
   if (loading) {
-    return (
-      <div style={{
-        background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
-        padding: "20px", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
-      }}>
-        <Loader2 size={16} style={{ color: "var(--accent)", animation: "spin 1s linear infinite" }} />
-        <span style={{ fontSize: "12px", color: "var(--muted)" }}>Analyzing from {persona.label.toLowerCase()} perspective…</span>
-        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
-    );
+    return <AILoadingIndicator personaLabel={persona.label} />;
   }
 
   return (
