@@ -386,9 +386,22 @@ export default {
         }
 
         // DELETE /api/cache/:domain — purge cached analysis for a domain (admin-only)
-        if (method === "DELETE" && path.startsWith("/api/cache/")) {
+        // DELETE /api/cache?type=ai_analysis — purge all AI analysis cache (admin-only)
+        if (method === "DELETE" && (path.startsWith("/api/cache/") || path === "/api/cache")) {
           const authErr = checkAdminAuth(request, env.ADMIN_KEY);
           if (authErr) return authErr;
+
+          // Bulk type-based purge: DELETE /api/cache?type=ai_analysis
+          const cacheType = url.searchParams.get("type");
+          if (path === "/api/cache" && cacheType) {
+            try {
+              const res = await env.DB.prepare("DELETE FROM domain_cache WHERE cache_type = ?").bind(cacheType).run();
+              return json({ ok: true, type: cacheType, deleted: res.meta?.changes ?? 0 });
+            } catch (e) {
+              return json({ error: "Failed to clear cache" }, 500);
+            }
+          }
+
           const domain = cleanDomain(path.replace("/api/cache/", ""));
           if (!domain) return json({ error: "Invalid domain" }, 400);
           try {

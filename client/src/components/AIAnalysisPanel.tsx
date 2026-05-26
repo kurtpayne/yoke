@@ -837,6 +837,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
   const [loadingPersona, setLoadingPersona] = useState<string | null>(null);
   const [personaError, setPersonaError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState<RateLimitResponse | null>(null);
+  const [analysisMetadata, setAnalysisMetadata] = useState<{ analyzed_at: string; cached: boolean } | null>(null);
   const [, setKeyVersion] = useState(0);
   const [selectedModel, setSelectedModel] = useState(getSavedModel);
 
@@ -892,6 +893,9 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
           }
           return next;
         });
+        if (json.analyzed_at) {
+          setAnalysisMetadata({ analyzed_at: json.analyzed_at, cached: !!json.cached });
+        }
       }
     } catch (err) {
       setPersonaError(err instanceof Error ? err.message : "Failed to generate analysis");
@@ -1038,6 +1042,13 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
             );
           })}
         </div>
+
+        {/* Analysis timestamp */}
+        {analysisMetadata && Object.keys(personaResults).length > 0 && (
+          <div style={{ fontSize: "10px", color: "var(--muted)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+            {analysisMetadata.cached ? "Cached" : "Generated"} {new Date(analysisMetadata.analyzed_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          </div>
+        )}
 
         {/* Active persona content */}
         {activePersona && (
