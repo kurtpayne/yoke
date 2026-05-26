@@ -1013,18 +1013,21 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
           {PERSONAS.map(({ key, label, icon: PIcon }) => {
             const isActive = activePersona === key;
             const hasResult = !!personaResults[key];
+            const isDisabled = !!loadingPersona && loadingPersona !== key;
             return (
               <button
                 key={key}
-                onClick={() => handlePersonaClick(key)}
+                onClick={() => !isDisabled && handlePersonaClick(key)}
+                disabled={isDisabled}
                 style={{
                   display: "flex", alignItems: "center", gap: "5px",
                   padding: "6px 12px", borderRadius: "20px",
                   border: `1px solid ${isActive ? "var(--accent)" : hasResult ? "var(--success)" : "var(--border)"}`,
                   background: isActive ? "rgba(88,166,255,0.1)" : hasResult ? "rgba(46,160,67,0.06)" : "transparent",
                   color: isActive ? "var(--accent)" : hasResult ? "var(--success)" : "var(--muted)",
-                  cursor: "pointer", fontSize: "11px",
+                  cursor: isDisabled ? "not-allowed" : "pointer", fontSize: "11px",
                   fontWeight: isActive ? 600 : 400,
+                  opacity: isDisabled ? 0.5 : 1,
                   transition: "all 0.15s",
                 }}
               >
