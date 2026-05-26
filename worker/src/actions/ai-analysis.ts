@@ -248,7 +248,7 @@ async function callOpenRouter(
     try {
       const response = await fetchWithTimeout("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        timeout: 25000,
+        timeout: 55000,
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
