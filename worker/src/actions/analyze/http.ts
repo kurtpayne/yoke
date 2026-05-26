@@ -33,9 +33,15 @@ export function auditSecurityHeaders(headers: Record<string, string>): { audit: 
     else { checks.push({ header: def.name, status: isCoreOrRecommended ? "fail" : "warning", value: null, recommendation: def.recommend }); }
   }
 
-  // Grade: 4 core headers (HSTS+CSP+XCTO+XFO) = 70/85 ≈ 82% = B
+  // Thresholds calibrated so:
+  //   0 headers       =  0% → F
+  //   HSTS only       = 23% → D
+  //   HSTS + XCTO     = 41% → C
+  //   3 of 4 core     = 65% → B
+  //   4 core headers  = 82% → A
+  //   4 core + extras = 94% → A+
   const pct = maxScore > 0 ? (score / maxScore) * 100 : 0;
-  const grade = pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 65 ? "B" : pct >= 45 ? "C" : pct >= 25 ? "D" : "F";
+  const grade = pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 60 ? "B" : pct >= 40 ? "C" : pct >= 20 ? "D" : "F";
   return { audit: checks, grade };
 }
 
