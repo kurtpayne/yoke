@@ -29,8 +29,8 @@ import { getApiDocsHtml } from "./pages";
 
 function getRateLimits(env: Env): Record<string, { limit: number; windowSecs: number }> {
   return {
-    "/api/analyze": { limit: parseInt(env.RATE_LIMIT_ANALYZE || "30"), windowSecs: 3600 },
-    "/api/compare": { limit: parseInt(env.RATE_LIMIT_COMPARE || "15"), windowSecs: 3600 },
+    "/api/analyze": { limit: parseInt(env.RATE_LIMIT_ANALYZE || "50"), windowSecs: 3600 },
+    "/api/compare": { limit: parseInt(env.RATE_LIMIT_COMPARE || "50"), windowSecs: 3600 },
     "/api/subdomain-scan": { limit: parseInt(env.RATE_LIMIT_SUBDOMAIN || "20"), windowSecs: 3600 },
     "/api/availability": { limit: parseInt(env.RATE_LIMIT_AVAILABILITY || "60"), windowSecs: 3600 },
   };
