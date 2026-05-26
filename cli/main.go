@@ -452,6 +452,157 @@ func fetchAnalysisStream(domain string) (*AnalysisResult, error) {
 	return nil, fmt.Errorf("stream ended without results")
 }
 
+// fetchAnalysisStreamWithProgress is like fetchAnalysisStream but calls a
+// progress callback instead of rendering to the terminal directly. Used by
+// compare to run two progress bars in parallel.
+func fetchAnalysisStreamWithProgress(domain string, onProgress func(checks []sseCheck, completed, total int)) (*AnalysisResult, error) {
+	client := &http.Client{Timeout: 120 * time.Second}
+	payload := fmt.Sprintf(`{"domain":%q}`, domain)
+	req, err := http.NewRequest("POST", apiBase+"/api/analyze", strings.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "yoke-cli/"+version)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fetchAnalysis(domain)
+	}
+	defer resp.Body.Close()
+
+	ct := resp.Header.Get("Content-Type")
+	if !strings.Contains(ct, "text/event-stream") {
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		if err != nil {
+			return nil, fmt.Errorf("read failed: %w", err)
+		}
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		}
+		var result AnalysisResult
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("parse failed: %w", err)
+		}
+		return &result, nil
+	}
+
+	var (
+		checks    []sseCheck
+		completed int
+		total     int
+		eventType string
+	)
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 512*1024), 10*1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "event:") {
+			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			continue
+		}
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data:")
+		data = strings.TrimSpace(data)
+
+		switch eventType {
+		case "phase":
+			var p struct {
+				Total  int        `json:"total"`
+				Checks []sseCheck `json:"checks"`
+			}
+			if json.Unmarshal([]byte(data), &p) == nil {
+				if p.Total > 0 { total = p.Total }
+				if len(p.Checks) > 0 { checks = p.Checks }
+			}
+
+		case "result":
+			var r struct {
+				Key       string `json:"key"`
+				Label     string `json:"label"`
+				Completed *int   `json:"completed"`
+				Total     *int   `json:"total"`
+				Error     bool   `json:"error"`
+			}
+			if json.Unmarshal([]byte(data), &r) == nil {
+				if r.Completed != nil { completed = *r.Completed }
+				if r.Total != nil { total = *r.Total }
+				found := false
+				for i := range checks {
+					if checks[i].Key == r.Key {
+						checks[i].Done = true
+						checks[i].Error = r.Error
+						if r.Label != "" { checks[i].Label = r.Label }
+						found = true
+						break
+					}
+				}
+				if !found && r.Key != "" {
+					label := r.Label
+					if label == "" { label = r.Key }
+					checks = append(checks, sseCheck{Key: r.Key, Label: label, Done: true, Error: r.Error})
+				}
+			}
+			onProgress(checks, completed, total)
+
+		case "done":
+			var result AnalysisResult
+			if err := json.Unmarshal([]byte(data), &result); err != nil {
+				return nil, fmt.Errorf("parse failed: %w", err)
+			}
+			onProgress(checks, total, total) // final update
+			return &result, nil
+
+		case "error":
+			var e struct { Message string `json:"message"` }
+			if json.Unmarshal([]byte(data), &e) == nil {
+				return nil, fmt.Errorf("analysis failed: %s", e.Message)
+			}
+			return nil, fmt.Errorf("analysis failed")
+		}
+		eventType = ""
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("stream read error: %w", err)
+	}
+	return nil, fmt.Errorf("stream ended without results")
+}
+
+// runCompareJSON handles compare in --json mode (no progress, plain request).
+func runCompareJSON(d1, d2 string) error {
+	client := &http.Client{Timeout: 120 * time.Second}
+	payloadBytes, _ := json.Marshal(map[string]string{"domain1": d1, "domain2": d2})
+	req, err := http.NewRequest("POST", apiBase+"/api/compare", strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		return fmt.Errorf("request setup failed: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "yoke-cli/"+version)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return fmt.Errorf("read failed: %w", err)
+	}
+	os.Stdout.Write(body)
+	if len(body) > 0 && body[len(body)-1] != '\n' {
+		fmt.Println()
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("API error %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // renderProgress draws the live progress display and returns the number
 // of lines printed (so we can clear them on the next update).
 func renderProgress(domain string, checks []sseCheck, completed, total int, prevLines int) int {
@@ -869,17 +1020,127 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	d1 := normalizeDomain(args[0])
 	d2 := normalizeDomain(args[1])
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	if jsonOutput {
+		// JSON mode: plain request, no progress
+		return runCompareJSON(d1, d2)
+	}
+
+	// Run both analyses in parallel via SSE for progress bars
+	type streamResult struct {
+		result *AnalysisResult
+		err    error
+	}
+	ch1 := make(chan streamResult, 1)
+	ch2 := make(chan streamResult, 1)
+
+	// We render two progress rows: line 1 for d1, line 2 for d2
+	// Protected by a mutex since both goroutines update the display
+	var mu sync.Mutex
+	var d1checks []sseCheck
+	var d2checks []sseCheck
+	var d1completed, d1total int
+	var d2completed, d2total int
+	printedLines := 0
+
+	renderCompareProgress := func() {
+		// Clear previous output
+		clearProgress(printedLines)
+		lines := 0
+
+		// Domain 1 progress
+		if d1total == 0 {
+			line := fmt.Sprintf("  %s %s", accent.Render("⚡"), dim.Render(d1+"..."))
+			fmt.Println(line)
+			lines++
+		} else {
+			barWidth := 20
+			filled := d1completed * barWidth / d1total
+			if filled > barWidth { filled = barWidth }
+			bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
+			fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", d1)),
+				bar, dim.Render(fmt.Sprintf("%d/%d", d1completed, d1total)))
+			lines++
+		}
+
+		// Domain 2 progress
+		if d2total == 0 {
+			line := fmt.Sprintf("  %s %s", accent.Render("⚡"), dim.Render(d2+"..."))
+			fmt.Println(line)
+			lines++
+		} else {
+			barWidth := 20
+			filled := d2completed * barWidth / d2total
+			if filled > barWidth { filled = barWidth }
+			bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
+			fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", d2)),
+				bar, dim.Render(fmt.Sprintf("%d/%d", d2completed, d2total)))
+			lines++
+		}
+
+		printedLines = lines
+	}
+
+	// Initial render
+	renderCompareProgress()
+
+	// Stream domain 1
+	go func() {
+		result, err := fetchAnalysisStreamWithProgress(d1, func(checks []sseCheck, completed, total int) {
+			mu.Lock()
+			d1checks = checks
+			d1completed = completed
+			d1total = total
+			renderCompareProgress()
+			mu.Unlock()
+		})
+		ch1 <- streamResult{result, err}
+	}()
+
+	// Stream domain 2
+	go func() {
+		result, err := fetchAnalysisStreamWithProgress(d2, func(checks []sseCheck, completed, total int) {
+			mu.Lock()
+			d2checks = checks
+			d2completed = completed
+			d2total = total
+			renderCompareProgress()
+			mu.Unlock()
+		})
+		ch2 <- streamResult{result, err}
+	}()
+
+	r1 := <-ch1
+	r2 := <-ch2
+	_ = d1checks
+	_ = d2checks
+
+	mu.Lock()
+	clearProgress(printedLines)
+	mu.Unlock()
+
+	if r1.err != nil {
+		return fmt.Errorf("analysis of %s failed: %w", d1, r1.err)
+	}
+	if r2.err != nil {
+		return fmt.Errorf("analysis of %s failed: %w", d2, r2.err)
+	}
+
+	// Now POST to /api/compare — both domains were just analyzed via SSE above,
+	// so their results are fresh in the server's D1 cache. The compare endpoint
+	// calls analyzeDomain() internally, which checks cache first (ANALYSIS_CACHE_TTL_MS),
+	// so this should return near-instantly without re-running any checks.
+	spin := startSpinner("Comparing...")
+	client := &http.Client{Timeout: 30 * time.Second}
 	payloadBytes, _ := json.Marshal(map[string]string{"domain1": d1, "domain2": d2})
 	req, err := http.NewRequest("POST", apiBase+"/api/compare", strings.NewReader(string(payloadBytes)))
 	if err != nil {
+		spin.stop()
 		return fmt.Errorf("request setup failed: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
 
-	spin := startSpinner(fmt.Sprintf("Comparing %s vs %s...", d1, d2))
 	resp, err := client.Do(req)
 	if err != nil {
 		spin.stop()
@@ -893,22 +1154,7 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	}
 
 	if resp.StatusCode != 200 {
-		if jsonOutput {
-			os.Stdout.Write(body)
-			if len(body) > 0 && body[len(body)-1] != '\n' {
-				fmt.Println()
-			}
-			return fmt.Errorf("API error %d", resp.StatusCode)
-		}
 		return fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
-	}
-
-	if jsonOutput {
-		os.Stdout.Write(body)
-		if len(body) > 0 && body[len(body)-1] != '\n' {
-			fmt.Println()
-		}
-		return nil
 	}
 
 	var data struct {
