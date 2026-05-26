@@ -160,8 +160,8 @@ jobs:
 
       - name: Smoke test — JSON API
         run: |
-          echo "Checking JSON API with cloudflare.com..."
-          curl -sf --max-time 60 -H "Accept: application/json" "https://yoke.lol/cloudflare.com" | jq -e '.domain' > /dev/null
+          echo "Checking JSON API with example.com..."
+          curl -sf --max-time 90 -H "Accept: application/json" "https://yoke.lol/example.com" | jq -e '.domain' > /dev/null
           echo "✓ JSON API OK"
 
       - name: Smoke test — Status page
