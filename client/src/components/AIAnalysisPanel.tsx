@@ -264,8 +264,8 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       if (axes.security?.score != null && axes.trust?.score != null) {
         const secFindings = axes.security.findings || [];
         const trustFindings = axes.trust.findings || [];
-        const emailSecIssue = secFindings.some(f => f.signal?.includes("email") || f.label?.toLowerCase().includes("dkim") || f.label?.toLowerCase().includes("spf"));
-        const emailTrustIssue = trustFindings.some(f => f.label?.toLowerCase().includes("email") || f.label?.toLowerCase().includes("authentication"));
+        const emailSecIssue = secFindings.some(f => f.severity !== "good" && (f.signal?.includes("email") || f.label?.toLowerCase().includes("dkim") || f.label?.toLowerCase().includes("spf")));
+        const emailTrustIssue = trustFindings.some(f => f.severity !== "good" && (f.label?.toLowerCase().includes("email") || f.label?.toLowerCase().includes("authentication")));
         if (emailSecIssue && emailTrustIssue) {
           items.push({
             title: "Email auth impacts both security and trust scores",
