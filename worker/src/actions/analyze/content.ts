@@ -241,6 +241,37 @@ export async function checkEmailAuth(domain: string, dnsRecords: DnsRecord[]): P
       for (const s of selectors) selectorSet.add(s);
     }
   }
+
+  // ── TXT record inference: detect service verification tokens → add DKIM selectors ──
+  const txtValues = dnsRecords.filter(r => r.type === "TXT").map(r => r.data.toLowerCase()).join(" ");
+  const txtSelectorMap: Array<{ pattern: RegExp; selectors: string[] }> = [
+    { pattern: /stripe-verification=/,             selectors: ["stripe", "s1", "s2"] },
+    { pattern: /hubspot[-_]|_hubspot/,             selectors: ["hs1", "hs2", "hubspot", "smtpapi"] },
+    { pattern: /atlassian-domain-verification=/,   selectors: ["atlassian"] },
+    { pattern: /facebook-domain-verification=/,    selectors: ["facebook", "s1024", "s2048"] },
+    { pattern: /shopify-verification=/,            selectors: ["shopify"] },
+    { pattern: /docusign=/,                        selectors: ["docusign"] },
+    { pattern: /zendesk-domain-verification=/,     selectors: ["zendesk", "zendesk1", "zendesk2"] },
+    { pattern: /twilio-domain-verification=/,      selectors: ["twilio"] },
+    { pattern: /brevo-code:|sendinblue-code:/,     selectors: ["mail", "sendinblue"] },
+    { pattern: /slack-domain-verification=/,       selectors: ["slack"] },
+    { pattern: /cisco-ci-domain-verification=/,    selectors: ["cisco"] },
+    { pattern: /calendly-site-verification=/,      selectors: ["calendly"] },
+    { pattern: /notion-domain-verification=/,      selectors: ["notion"] },
+    { pattern: /intercom-domain-verification=/,    selectors: ["intercom"] },
+    { pattern: /drift-domain-verification=/,       selectors: ["drift"] },
+    { pattern: /customer\.io/,                     selectors: ["cio"] },
+    { pattern: /salesforce-verification=/,         selectors: ["sf1", "sf2", "salesforce", "salesforce1"] },
+    { pattern: /pardot/,                           selectors: ["pardot", "m1"] },
+    { pattern: /helpscout-verification=/,          selectors: ["helpscout"] },
+    { pattern: /freshdesk-verification=/,          selectors: ["freshdesk", "fdk"] },
+  ];
+  for (const { pattern, selectors } of txtSelectorMap) {
+    if (pattern.test(txtValues)) {
+      for (const s of selectors) selectorSet.add(s);
+    }
+  }
+
   // Always include a small universal fallback set
   for (const s of ["google", "selector1", "selector2", "k1", "mail", "s1", "s2"]) selectorSet.add(s);
   await Promise.allSettled([...selectorSet].map(async (sel) => {
