@@ -139,10 +139,7 @@ curl yoke.lol/api/scoring | jq
 Yoke includes a fast Go-based CLI for terminal domain analysis.
 
 ```bash
-# Install via Homebrew (macOS/Linux)
-brew install kurtpayne/tap/yoke
-
-# Or download binary
+# Install (macOS/Linux)
 curl -sSL https://yoke.lol/install.sh | bash
 
 # Analyze a domain
