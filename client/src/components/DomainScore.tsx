@@ -553,7 +553,7 @@ function TopFindings({ axes }: { axes: Record<Axis, AxisScoreData> }) {
   // Collect non-good findings across all axes, sorted by severity
   const severityOrder = ["critical", "high", "medium", "low", "info", "good"];
   const allFindings = AXES.flatMap(a => axes[a].findings)
-    .filter(f => f.severity !== "good" && f.severity !== "info")
+    .filter(f => f.severity !== "good")
     .sort((a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity))
     .slice(0, 6);
 

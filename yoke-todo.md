@@ -1,17 +1,32 @@
 # Yoke TODO
 
-## Active
-- ~~**Ensure PageSpeed works**~~ ✅ Fixed — Workers Paid plan ($5/mo) resolved subrequest limit
-- ~~**Pending checks indicator**~~ ✅ Pushed — cycles through pending check names with fade animation
-- ~~**Cached results banner**~~ ✅ Pushed — API returns cached_at, web UI + CLI show banner
-- ~~**DKIM**~~ ✅ Already configured — SPF, DKIM (RSA key), DMARC (p=reject strict) all in place
-- **Clean up debug artifacts** — removing /api/debug/pagespeed + redeploy comments (in progress)
+## Done (May 26)
+- ~~**PageSpeed**~~ ✅ Workers Paid plan ($5/mo) resolved subrequest limit
+- ~~**Pending checks indicator**~~ ✅ Animated label cycling through pending check names
+- ~~**Colored check indicators**~~ ✅ Green/red/grey circles as checks complete during streaming
+- ~~**Cached results banner**~~ ✅ API returns cached_at, web UI + CLI show banner, repositioned above tabs
+- ~~**DKIM/SPF/DMARC**~~ ✅ All configured on yoke.lol
+- ~~**Debug cleanup**~~ ✅ Removed /api/debug/pagespeed, redeploy comments, debug logs
+- ~~**CLI QA**~~ ✅ 8 bugs fixed (P0 panic, P1 json/LCP/URL bugs, P2 UX issues), 23 tests
+- ~~**CLI code review**~~ ✅ 3 P1 fixes (unbounded io.ReadAll, unchecked NewRequest, README docs)
+- ~~**BGP false positives**~~ ✅ Anycast-aware thresholds for CDN providers (CF, AWS, GCP, etc.)
+- ~~**Self-scan detection**~~ ✅ Robots/sitemap self-detection via ASSETS.fetch when scanning yoke.lol
+- ~~**CI smoke test**~~ ✅ Fixed broken smoke test (cloudflare.com timeout → example.com)
+- ~~**AI cache purge**~~ ✅ Stale email auth hallucination resolved
 
-## Next Up
-- **Finish CLI** — testing, review, polish, documentation, CONTRIBUTING.md section, `/cli` landing page, link in footer
-- **Display `info` severity findings in UI** — client filters out `info` findings in Performance tab, so neutral PageSpeed finding doesn't render
+## Pre-Launch
 - **LinkedIn launch post** — Wed May 28, 10am PT
+- **Display `info` severity findings in UI** — client filters out `info` findings, so neutral PageSpeed finding doesn't render
+
+## Nice-to-Have
+- `/cli` landing page on yoke.lol
+- Footer link to CLI docs
+- Goreleaser Homebrew tap config
+- Install script checksum verification
 
 ## Backlog
 - Longitudinal scoring / historical trends
 - Tab analytics-driven features
+- IDN/punycode domain handling
+- HTTP integration tests for CLI
+- `--verbose`/`--debug` flag for CLI self-hosting
