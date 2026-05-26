@@ -6,7 +6,7 @@ import { AiReadinessPanel } from "../AiReadinessPanel";
 import { WellKnownPanel } from "../Tier1Panels";
 import { StructuredDataPanel } from "../StructuredDataPanel";
 import { AccessibilityPanel } from "../AccessibilityPanel";
-import { AxisScoreBadge } from "../DomainScore";
+
 import type { AnalysisResult } from "../../utils/types";
 
 export default function TechTab({ data }: { data: AnalysisResult }) {
@@ -26,7 +26,6 @@ export default function TechTab({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="space-y-3">
-      <AxisScoreBadge data={data} axis="visibility" />
       <PanelGrid tabId="tech" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a href={`https://builtwith.com/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>BuiltWith ↗</a>
