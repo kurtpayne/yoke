@@ -135,8 +135,8 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
 
 | Endpoint | Limit |
 |----------|-------|
-| Analyze | 30/hr |
-| Compare | 15/hr |
+| Analyze | 50/hr |
+| Compare | 50/hr |
 | AI Analysis (platform key) | 10/day |
 | AI Analysis (BYO key) | Unlimited |
 
@@ -220,7 +220,7 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
    The proxy exposes these endpoints:
    - `/probe-status?domain=example.com` — HTTP status check with redirect following, HTTP/2 and HTTP/3 protocol detection, returns `{is_up, status_code, response_time_ms, status_label, http2, http3, alt_svc, error}`
    - `/probe-timing?host=example.com` — Connection timing breakdown, returns `{dns_ms, tcp_ms, tls_ms, total_ms, ip, tls_version, error}`
-   - `/probe-geo?ip=1.2.3.4` — IP geolocation via local MaxMind GeoLite2-City database (sub-ms, no rate limits), falls back to ip-api.com and ipwho.is
+   - `/probe-geo?ip=1.2.3.4` — IP geolocation via local MaxMind GeoLite2-City + GeoLite2-ASN databases (sub-ms, no rate limits), falls back to ip-api.com and ipwho.is
    - `/check-http?host=example.com` — Proxied check-host.net global availability probes (check-host.net blocks CF Worker IPs directly)
 
    **MaxMind GeoIP (recommended):** For reliable IP geolocation without rate limits, sign up for a free [MaxMind GeoLite2](https://www.maxmind.com/en/geolite2/signup) account and pass your license key as a build argument when deploying:
@@ -229,7 +229,7 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
    MAXMIND_LICENSE_KEY=your_key_here fly deploy -a your-app -c fly-proxy/fly.toml fly-proxy/
    ```
 
-   The Dockerfile downloads the GeoLite2-City database at build time. Without a license key, the probe falls back to ip-api.com and ipwho.is (rate-limited).
+   The Dockerfile downloads the GeoLite2-City and GeoLite2-ASN databases at build time. Without a license key, the probe falls back to ip-api.com and ipwho.is (rate-limited).
 
    **Using your own proxy:** If you'd rather run the probe elsewhere (Docker, VPS, Lambda, etc.), the proxy is a single Go file (`fly-proxy/main.go`). Set the `FLY_PROBE_URL` environment variable to point at your deployment.
 
@@ -248,8 +248,8 @@ Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platfo
 | `FLY_PROBE_URL` | No | URL of the Fly.io HTTP probe service (defaults to `https://yoke-probe.fly.dev`). Set this if you deploy your own probe, or leave unset to use direct probes from the Cloudflare edge. |
 | `FLY_AUTH_SECRET` | No | Shared secret between the Worker and Fly probe. **Required** for the probe to start — set it on both sides. To run without auth, set `ALLOW_OPEN_PROXY=true` on the probe instead. See [Worker-to-Fly Proxy Auth](#worker-to-fly-proxy-auth). |
 | `ADMIN_KEY` | No | Admin key for gated endpoints like `/api/cleanup`. |
-| `RATE_LIMIT_ANALYZE` | No | Max analyze requests per IP per hour. Default: `30`. Set to `0` to disable. |
-| `RATE_LIMIT_COMPARE` | No | Max compare requests per IP per hour. Default: `15`. Set to `0` to disable. |
+| `RATE_LIMIT_ANALYZE` | No | Max analyze requests per IP per hour. Default: `50`. Set to `0` to disable. |
+| `RATE_LIMIT_COMPARE` | No | Max compare requests per IP per hour. Default: `50`. Set to `0` to disable. |
 | `RATE_LIMIT_SUBDOMAIN` | No | Max subdomain scan requests per IP per hour. Default: `20`. Set to `0` to disable. |
 | `RATE_LIMIT_AVAILABILITY` | No | Max availability check requests per IP per hour. Default: `60`. Set to `0` to disable. |
 | `CACHE_TTL_HOURS` | No | Analysis cache TTL in hours. Default: `1`. Set to `0` to disable caching. |
