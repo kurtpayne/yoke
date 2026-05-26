@@ -2,14 +2,14 @@
 
 # 🔗 Yoke
 
-**Free, open-source domain intelligence — DNS, WHOIS, SSL, security, tech stack, performance, breaches, AI analysis, and more. All from one search.**
+**Free, open-source domain intelligence — DNS, WHOIS, SSL, security, tech stack, performance, breaches, AI analysis, and more. Web, API, CLI, and Chrome extension.**
 
 [![CI](https://github.com/kurtpayne/yoke/actions/workflows/ci.yml/badge.svg)](https://github.com/kurtpayne/yoke/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com/kurtpayne/yoke/blob/main/CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/fghkhjlelidaepapcdfjifnlcjmkgpcj?label=Chrome%20Extension)](https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj)
 
-**[Try it → yoke.lol](https://yoke.lol)** · **[API Docs](https://yoke.lol/api/docs)** · **[Chrome Extension](https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj)** · **[Status](https://yoke.lol/status)**
+**[Try it → yoke.lol](https://yoke.lol)** · **[API Docs](https://yoke.lol/api/docs)** · **[CLI](#cli)** · **[Chrome Extension](https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj)** · **[Status](https://yoke.lol/status)**
 
 </div>
 
@@ -131,6 +131,40 @@ curl yoke.lol/api/scoring | jq
 | `GET` | `/api/health` | Service health |
 | `GET` | `/api/scoring` | Scoring methodology |
 | `GET` | `/api/docs` | API documentation |
+
+---
+
+## CLI
+
+Yoke includes a fast Go-based CLI for terminal domain analysis.
+
+```bash
+# Install via Homebrew (macOS/Linux)
+brew install kurtpayne/tap/yoke
+
+# Or download binary
+curl -sSL https://yoke.lol/install.sh | bash
+
+# Analyze a domain
+yoke score stripe.com
+yoke analyze example.com --json
+yoke compare github.com gitlab.com
+
+# Configure custom API endpoint (for self-hosting)
+yoke config --set-base-url https://your-instance.com
+yoke config --set-model openai/gpt-4
+export YOKE_BASE_URL=https://your-instance.com  # ephemeral override
+
+# Commands
+yoke score <domain>              # Quick score (e.g., "92/100 A")
+yoke analyze <domain>            # Full analysis
+yoke compare <d1> <d2>           # Side-by-side comparison
+yoke config                      # Show current config
+yoke config --set-model <model>  # Set AI model for BYO key mode
+yoke config --set-base-url <url> # Set custom API endpoint
+```
+
+The CLI uses the same API as the web app and supports custom endpoints via config file (`~/.yokerc`) or `YOKE_BASE_URL` env var.
 
 ---
 

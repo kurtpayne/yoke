@@ -16,13 +16,31 @@ import (
 
 var version = "dev"
 
-const apiBase = "https://yoke.lol"
+var apiBase string
 
 // ─── Config ─────────────────────────────────────────────────────────
 
 type Config struct {
 	OpenRouterKey  string `json:"openrouter_key"`
 	SuppressAIHint bool   `json:"suppress_ai_hint"`
+	DefaultModel   string `json:"default_model,omitempty"`
+	BaseURL        string `json:"base_url,omitempty"`
+}
+
+const defaultBaseURL = "https://yoke.lol"
+
+// resolveBaseURL determines which Yoke instance the CLI talks to.
+// Precedence: YOKE_BASE_URL env var > config file base_url > yoke.lol.
+// Always returned without a trailing slash.
+func resolveBaseURL(cfg Config) string {
+	url := defaultBaseURL
+	if cfg.BaseURL != "" {
+		url = cfg.BaseURL
+	}
+	if env := strings.TrimSpace(os.Getenv("YOKE_BASE_URL")); env != "" {
+		url = env
+	}
+	return strings.TrimRight(strings.TrimSpace(url), "/")
 }
 
 func configPath() string {
@@ -342,11 +360,39 @@ func sortedAxes(axes map[string]AxisVal) []string {
 	return result
 }
 
+// ─── Text Helpers ───────────────────────────────────────────────────
+
+func wrapText(text string, width int) []string {
+	var lines []string
+	for _, para := range strings.Split(text, "\n") {
+		words := strings.Fields(para)
+		if len(words) == 0 {
+			lines = append(lines, "")
+			continue
+		}
+		line := words[0]
+		for _, w := range words[1:] {
+			if len(line)+1+len(w) > width {
+				lines = append(lines, line)
+				line = w
+			} else {
+				line += " " + w
+			}
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
 // ─── Commands ───────────────────────────────────────────────────────
 
 var jsonOutput bool
 
 func main() {
+	// Initialize API base URL from config/env (supports self-hosting)
+	cfg := loadConfig()
+	apiBase = resolveBaseURL(cfg)
+
 	root := &cobra.Command{
 		Use:     "yoke <domain>",
 		Short:   "Domain intelligence from your terminal",
@@ -384,6 +430,7 @@ func main() {
 		RunE:  runAI,
 	}
 	ai.Flags().Bool("setup", false, "configure your OpenRouter API key")
+	ai.Flags().String("model", "", "model override (e.g. openai/gpt-4o, google/gemini-2.5-pro)")
 
 	configCmd := &cobra.Command{
 		Use:   "config",
@@ -391,6 +438,8 @@ func main() {
 		RunE:  runConfig,
 	}
 	configCmd.Flags().String("set-key", "", "set OpenRouter API key")
+	configCmd.Flags().String("set-model", "", "set default AI model (e.g. openai/gpt-4o, google/gemini-2.5-pro)")
+	configCmd.Flags().String("set-base-url", "", "set Yoke instance URL for self-hosting (default: https://yoke.lol)")
 	configCmd.Flags().Bool("suppress-ai-hint", false, "hide the AI hint from analyze output")
 	configCmd.Flags().Bool("show-ai-hint", false, "re-enable the AI hint")
 
@@ -530,20 +579,45 @@ func runAI(cmd *cobra.Command, args []string) error {
 		fmt.Println("  1. Get a key at " + accent.Render("https://openrouter.ai/keys"))
 		fmt.Println("  2. Run: " + title.Render("yoke ai --setup"))
 		fmt.Println()
-		fmt.Println(dim.Render("  Free tier includes 3 analyses/day on yoke.lol without a key."))
+		fmt.Println(dim.Render("  Free tier includes 10 analyses/hour on yoke.lol without a key."))
 		fmt.Println()
 		return nil
 	}
 
-	// Call AI endpoint with BYO key
-	url := fmt.Sprintf("%s/api/ai?domain=%s", apiBase, domain)
+	model, _ := cmd.Flags().GetString("model")
+	if model == "" {
+		model = cfg.DefaultModel
+	}
+
+	// POST /api/ai-analysis with BYO key
 	client := &http.Client{Timeout: 60 * time.Second}
-	req, _ := http.NewRequest("GET", url, nil)
+	payload := map[string]string{"domain": domain}
+	if model != "" {
+		payload["model"] = model
+	}
+	payloadBytes, _ := json.Marshal(payload)
+
+	req, _ := http.NewRequest("POST", apiBase+"/api/ai-analysis", strings.NewReader(string(payloadBytes)))
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
 	req.Header.Set("X-OpenRouter-Key", cfg.OpenRouterKey)
 
-	fmt.Printf("\n  %s %s...\n", accent.Render("⚡"), dim.Render("Analyzing "+domain))
+	if jsonOutput {
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("request failed: %w", err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		var buf interface{}
+		json.Unmarshal(body, &buf)
+		out, _ := json.MarshalIndent(buf, "", "  ")
+		fmt.Println(string(out))
+		return nil
+	}
+
+	fmt.Printf("\n  %s %s\n", accent.Render("⚡"), dim.Render("Analyzing "+domain+"..."))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -552,40 +626,112 @@ func runAI(cmd *cobra.Command, args []string) error {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 
+	if resp.StatusCode == 429 {
+		var rl struct {
+			Limit int    `json:"limit"`
+			Used  int    `json:"used"`
+			Reset string `json:"reset"`
+		}
+		json.Unmarshal(body, &rl)
+		fmt.Println()
+		fmt.Println(warn.Render(fmt.Sprintf("  Rate limited: %d/%d used. Resets in %s.", rl.Used, rl.Limit, rl.Reset)))
+		fmt.Println(dim.Render("  Add your own key with: yoke ai --setup"))
+		fmt.Println()
+		return nil
+	}
+
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("AI API error %d: %s", resp.StatusCode, string(body))
 	}
 
-	if jsonOutput {
-		var buf interface{}
-		json.Unmarshal(body, &buf)
-		out, _ := json.MarshalIndent(buf, "", "  ")
-		fmt.Println(string(out))
-		return nil
-	}
-
-	// Parse and render AI response
+	// Parse the AI response
 	var aiResp struct {
-		Analysis string `json:"analysis"`
-		Model    string `json:"model"`
-		Persona  string `json:"persona"`
-		Cached   bool   `json:"cached"`
+		Result struct {
+			Summary        string            `json:"summary"`
+			Posture        string            `json:"posture"`
+			KeyFindings    []json.RawMessage `json:"key_findings"`
+			Recommendations []json.RawMessage `json:"recommendations"`
+			PersonaInsights map[string]string `json:"persona_insights"`
+		} `json:"result"`
+		AnalyzedAt string `json:"analyzed_at"`
+		Cached     bool   `json:"cached"`
 	}
-	json.Unmarshal(body, &aiResp)
+	if err := json.Unmarshal(body, &aiResp); err != nil {
+		return fmt.Errorf("parse failed: %w", err)
+	}
 
-	if aiResp.Analysis != "" {
-		fmt.Println()
-		// Wrap analysis text at ~78 chars for terminal readability
-		for _, line := range strings.Split(aiResp.Analysis, "\n") {
+	r := aiResp.Result
+
+	// Posture badge
+	postureStyle := good
+	switch r.Posture {
+	case "poor":
+		postureStyle = warn
+	case "critical":
+		postureStyle = bad
+	case "fair":
+		postureStyle = info
+	}
+
+	fmt.Println()
+	fmt.Printf("  %s  %s\n", title.Render(domain), postureStyle.Bold(true).Render(strings.ToUpper(r.Posture)))
+	fmt.Println()
+
+	// Summary
+	if r.Summary != "" {
+		for _, line := range wrapText(r.Summary, 72) {
 			fmt.Printf("  %s\n", line)
 		}
 		fmt.Println()
-		if aiResp.Model != "" {
-			fmt.Printf("  %s\n\n", dim.Render("Model: "+aiResp.Model))
-		}
-	} else {
-		fmt.Println(warn.Render("  No AI analysis returned"))
 	}
+
+	// Key findings
+	if len(r.KeyFindings) > 0 {
+		fmt.Println("  " + title.Render("Key Findings"))
+		for _, raw := range r.KeyFindings {
+			var f struct {
+				Category string `json:"category"`
+				Finding  string `json:"finding"`
+				Severity string `json:"severity"`
+				Action   string `json:"action"`
+			}
+			json.Unmarshal(raw, &f)
+			icon := severityIcon(f.Severity)
+			fmt.Printf("  %s %s\n", icon, f.Finding)
+			if f.Action != "" {
+				fmt.Printf("    %s\n", dim.Render("→ "+f.Action))
+			}
+		}
+		fmt.Println()
+	}
+
+	// Recommendations
+	if len(r.Recommendations) > 0 {
+		fmt.Println("  " + title.Render("Recommendations"))
+		for _, raw := range r.Recommendations {
+			var rec struct {
+				Priority int    `json:"priority"`
+				Action   string `json:"action"`
+				Impact   string `json:"impact"`
+				Effort   string `json:"effort"`
+			}
+			json.Unmarshal(raw, &rec)
+			effortBadge := dim.Render("[" + rec.Effort + "]")
+			fmt.Printf("  %s. %s %s\n", accent.Render(fmt.Sprintf("%d", rec.Priority)), rec.Action, effortBadge)
+			if rec.Impact != "" {
+				fmt.Printf("     %s\n", dim.Render(rec.Impact))
+			}
+		}
+		fmt.Println()
+	}
+
+	if aiResp.Cached {
+		fmt.Printf("  %s\n", dim.Render("(cached result)"))
+	}
+	if model != "" {
+		fmt.Printf("  %s\n", dim.Render("Model: "+model))
+	}
+	fmt.Printf("  %s\n\n", dim.Render(apiBase+"/"+domain))
 
 	// Suppress the hint now that they've used AI
 	if !cfg.SuppressAIHint {
@@ -631,6 +777,8 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	cfg := loadConfig()
 
 	setKey, _ := cmd.Flags().GetString("set-key")
+	setModel, _ := cmd.Flags().GetString("set-model")
+	setBaseURL, _ := cmd.Flags().GetString("set-base-url")
 	suppressHint, _ := cmd.Flags().GetBool("suppress-ai-hint")
 	showHint, _ := cmd.Flags().GetBool("show-ai-hint")
 
@@ -641,6 +789,17 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		cfg.SuppressAIHint = true
 		changed = true
 		fmt.Println(good.Render("✓ OpenRouter key saved"))
+	}
+	if setModel != "" {
+		cfg.DefaultModel = setModel
+		changed = true
+		fmt.Println(good.Render("✓ Default model set to " + setModel))
+	}
+	if setBaseURL != "" {
+		cfg.BaseURL = strings.TrimRight(strings.TrimSpace(setBaseURL), "/")
+		changed = true
+		fmt.Println(good.Render("✓ Base URL set to " + cfg.BaseURL))
+		fmt.Println(dim.Render("  Restart CLI or set YOKE_BASE_URL env var to apply immediately"))
 	}
 	if suppressHint {
 		cfg.SuppressAIHint = true
@@ -667,6 +826,19 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  OpenRouter key:  %s\n", masked)
 	} else {
 		fmt.Printf("  OpenRouter key:  %s\n", dim.Render("not set"))
+	}
+	if cfg.DefaultModel != "" {
+		fmt.Printf("  Default model:   %s\n", cfg.DefaultModel)
+	} else {
+		fmt.Printf("  Default model:   %s\n", dim.Render("not set"))
+	}
+	if cfg.BaseURL != "" {
+		fmt.Printf("  Base URL:        %s\n", cfg.BaseURL)
+	} else {
+		fmt.Printf("  Base URL:        %s\n", dim.Render("https://yoke.lol (default)"))
+	}
+	if envURL := os.Getenv("YOKE_BASE_URL"); envURL != "" {
+		fmt.Printf("  (env override:  %s)\n", envURL)
 	}
 	fmt.Printf("  AI hint:         %s\n", map[bool]string{true: "suppressed", false: "shown"}[cfg.SuppressAIHint])
 	fmt.Println()

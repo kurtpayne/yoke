@@ -327,6 +327,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// PageSpeed Insights proxy — avoids Cloudflare Worker IP blocks
+	if r.URL.Path == "/pagespeed" {
+		domain := r.URL.Query().Get("domain")
+		if domain == "" || !domainRe.MatchString(domain) {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"invalid or missing domain parameter"}`, 400)
+			return
+		}
+		apiKey := os.Getenv("GOOGLE_PAGESPEED_API_KEY")
+		result := proxyPageSpeed(domain, apiKey)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
 	http.Error(w, `{"error":"not found"}`, 404)
 }
 
@@ -974,4 +990,108 @@ func probeTiming(host string) TimingResult {
 
 	result.TotalMs = result.DnsMs + result.TcpMs + result.TlsMs
 	return result
+}
+
+// ─── PageSpeed Insights Proxy ────────────────────────────────────────
+
+type PageSpeedResult struct {
+	Score      *int     `json:"score"`
+	FCP        *float64 `json:"fcp"`
+	LCP        *float64 `json:"lcp"`
+	TBT        *float64 `json:"tbt"`
+	CLS        *float64 `json:"cls"`
+	SI         *float64 `json:"si"`
+	TTFB       *float64 `json:"ttfb"`
+	Strategy   string   `json:"strategy"`
+	Error      *string  `json:"error"`
+	Screenshot *string  `json:"screenshot"`
+}
+
+func proxyPageSpeed(domain string, apiKey string) PageSpeedResult {
+	keyParam := ""
+	if apiKey != "" {
+		keyParam = "&key=" + apiKey
+	}
+	
+	url := fmt.Sprintf("https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://%s&strategy=mobile&category=performance%s", domain, keyParam)
+	
+	client := &http.Client{Timeout: 45 * time.Second}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		errStr := fmt.Sprintf("request failed: %s", err.Error())
+		return PageSpeedResult{Error: &errStr, Strategy: "mobile"}
+	}
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		errStr := fmt.Sprintf("API request failed: %s", err.Error())
+		return PageSpeedResult{Error: &errStr, Strategy: "mobile"}
+	}
+	defer resp.Body.Close()
+	
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 5<<20)) // 5MB limit
+	if err != nil {
+		errStr := fmt.Sprintf("read failed: %s", err.Error())
+		return PageSpeedResult{Error: &errStr, Strategy: "mobile"}
+	}
+	
+	if resp.StatusCode == 429 {
+		errStr := "Rate limited — try again later"
+		return PageSpeedResult{Error: &errStr, Strategy: "mobile"}
+	}
+	
+	if resp.StatusCode != 200 {
+		errStr := fmt.Sprintf("API error (%d)", resp.StatusCode)
+		return PageSpeedResult{Error: &errStr, Strategy: "mobile"}
+	}
+	
+	var data struct {
+		LighthouseResult struct {
+			Categories struct {
+				Performance struct {
+					Score *float64 `json:"score"`
+				} `json:"performance"`
+			} `json:"categories"`
+			Audits map[string]struct {
+				NumericValue *float64 `json:"numericValue"`
+				Details struct {
+					Data string `json:"data"`
+				} `json:"details"`
+			} `json:"audits"`
+		} `json:"lighthouseResult"`
+	}
+	
+	if err := json.Unmarshal(body, &data); err != nil {
+		errStr := fmt.Sprintf("parse failed: %s", err.Error())
+		return PageSpeedResult{Error: &errStr, Strategy: "mobile"}
+	}
+	
+	lr := data.LighthouseResult
+	audits := lr.Audits
+	
+	var score *int
+	if lr.Categories.Performance.Score != nil {
+		s := int(*lr.Categories.Performance.Score * 100)
+		score = &s
+	}
+	
+	var screenshot *string
+	if details, ok := audits["final-screenshot"]; ok {
+		if details.Details.Data != "" {
+			screenshot = &details.Details.Data
+		}
+	}
+	
+	return PageSpeedResult{
+		Score:      score,
+		FCP:        audits["first-contentful-paint"].NumericValue,
+		LCP:        audits["largest-contentful-paint"].NumericValue,
+		TBT:        audits["total-blocking-time"].NumericValue,
+		CLS:        audits["cumulative-layout-shift"].NumericValue,
+		SI:         audits["speed-index"].NumericValue,
+		TTFB:       audits["server-response-time"].NumericValue,
+		Strategy:   "mobile",
+		Error:      nil,
+		Screenshot: screenshot,
+	}
 }
