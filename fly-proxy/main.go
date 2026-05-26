@@ -1015,7 +1015,7 @@ func proxyPageSpeed(domain string, apiKey string) PageSpeedResult {
 	
 	url := fmt.Sprintf("https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://%s&strategy=mobile&category=performance%s", domain, keyParam)
 	
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{Timeout: 20 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		errStr := fmt.Sprintf("request failed: %s", err.Error())
