@@ -433,13 +433,26 @@ export function calculateDomainScore(opts: {
     } else if (emailComplete) {
       findings.push({ signal: "email_auth", axis: "security", severity: "info", label: `Email auth present (DMARC: ${dmarcPolicy || "none"})`, tradeoff: null, weight: 3 });
     } else {
-      const missing = [!hasSpf && "SPF", !hasDkim && "DKIM", !hasDmarc && "DMARC"].filter(Boolean);
-      findings.push({
-        signal: "email_auth_incomplete", axis: "security",
-        severity: contextualSeverity("medium", arch, { corporate: "high" }),
-        label: `Missing email auth: ${missing.join(", ")}`,
-        tradeoff: null, weight: 3,
-      });
+      // SPF and DMARC are deterministic lookups; DKIM uses arbitrary selectors
+      // that can't always be discovered externally — treat them differently
+      const missing = [!hasSpf && "SPF", !hasDmarc && "DMARC"].filter(Boolean);
+      if (missing.length > 0) {
+        findings.push({
+          signal: "email_auth_incomplete", axis: "security",
+          severity: contextualSeverity("medium", arch, { corporate: "high" }),
+          label: `Missing email auth: ${missing.join(", ")}`,
+          tradeoff: null, weight: 3,
+        });
+      }
+      if (!hasDkim && (hasSpf || hasDmarc)) {
+        // DKIM absence is a softer signal — we may just not have found the selector
+        findings.push({
+          signal: "dkim_not_detected", axis: "security",
+          severity: "info",
+          label: "DKIM selectors not detected (external detection is limited)",
+          tradeoff: null, weight: 1,
+        });
+      }
     }
   }
 

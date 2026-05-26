@@ -20,7 +20,7 @@ Rules:
 Domain expertise calibration:
 - SSL: A+ = properly configured; A = standard modern; B = legacy/misconfigured (check cipher suites, protocol versions); C or below = actively concerning
 - DNSSEC: ~30% global adoption; absence isn't alarming for most sites, but is a gap for financial, government, healthcare, or high-value targets
-- Email auth: SPF + DKIM + DMARC with p=reject = gold standard; p=none = monitoring only (no enforcement, spoofing still possible); missing any one = incomplete chain
+- Email auth: SPF + DKIM + DMARC with p=reject = gold standard; p=none = monitoring only (no enforcement, spoofing still possible); missing any one = incomplete chain. Note: DKIM detection is based on probing common selectors — selectors are arbitrary strings chosen by each email service, so absence in our scan does not necessarily mean DKIM is unconfigured. SPF and DMARC are deterministic DNS lookups; DKIM is inherently a best-effort check.
 - Infrastructure: Cloudflare/AWS/GCP/Azure = standard; unusual/budget providers may indicate early-stage, geo-targeted, or resource-constrained operations
 - Open ports: 80/443 expected; 22 (SSH) common but ideally firewalled; 25 (SMTP) for mail servers; 8080/8443 suggest dev/proxy; anything else needs explanation
 - Domain age: <6mo = new/unestablished; 1-3yr = growing; 5+ yr = established; very old + low traffic = parked/dormant
