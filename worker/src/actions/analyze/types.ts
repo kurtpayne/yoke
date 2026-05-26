@@ -31,7 +31,7 @@ export interface IpInfo {
 }
 
 export interface BlocklistResult { name: string; zone: string; listed: boolean; detail: string | null; }
-export interface SslResult { grade: string | null; issuer: string | null; valid_from: string | null; valid_to: string | null; protocols: string[]; key_exchange: string | null; error: string | null; }
+export interface SslResult { grade: string | null; issuer: string | null; subject: string | null; valid_from: string | null; valid_to: string | null; protocols: string[]; key_exchange: string | null; error: string | null; }
 export interface PerformanceResult { score: number | null; fcp: number | null; lcp: number | null; tbt: number | null; cls: number | null; si: number | null; ttfb: number | null; strategy: string; error: string | null; screenshot: string | null; }
 export interface LlmsTxtResult { found: boolean; content: string | null; full_found: boolean; full_content: string | null; }
 export interface RobotsParsed { blocks: Array<{ user_agent: string; disallow: string[]; allow: string[] }>; crawl_delay: number | null; sitemaps: string[]; interesting_blocked: string[]; is_restrictive: boolean; is_missing: boolean; }

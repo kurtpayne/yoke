@@ -131,7 +131,7 @@ export async function checkSsl(domain: string): Promise<SslResult | null> {
 
   // If all 3 fail, return what we got (prefer probe error > labs error > generic)
   return probeResult ?? labsResult ?? httpsResult ?? {
-    grade: null, issuer: null, valid_from: null, valid_to: null,
+    grade: null, issuer: null, subject: null, valid_from: null, valid_to: null,
     protocols: [], key_exchange: null, error: "SSL check unavailable — all providers failed",
   };
 }
@@ -159,6 +159,7 @@ async function tryFlyProbe(domain: string): Promise<SslResult | null> {
     return {
       grade: data.grade,
       issuer: data.issuer || null,
+      subject: data.subject || null,
       valid_from: data.valid_from || null,
       valid_to: data.valid_to || null,
       protocols: data.protocols || [],
@@ -216,7 +217,7 @@ async function trySslLabs(domain: string): Promise<SslResult | null> {
       keyExchange = leafCert.keyAlg ? `${leafCert.keyAlg} ${leafCert.keySize ?? ""}`.trim() : null;
     }
 
-    return { grade: ep.grade ?? null, issuer, valid_from: validFrom, valid_to: validTo, protocols, key_exchange: keyExchange, error: null };
+    return { grade: ep.grade ?? null, issuer, subject: null, valid_from: validFrom, valid_to: validTo, protocols, key_exchange: keyExchange, error: null };
   } catch { return null; }
 }
 
@@ -257,7 +258,7 @@ async function tryHttpsCrtsh(domain: string): Promise<SslResult | null> {
       }
     } catch { /* crt.sh unavailable — we still know HTTPS works */ }
 
-    return { grade: "Valid", issuer, valid_from: validFrom, valid_to: validTo, protocols: [], key_exchange: null, error: null };
+    return { grade: "Valid", issuer, subject: null, valid_from: validFrom, valid_to: validTo, protocols: [], key_exchange: null, error: null };
   } catch { return null; }
 }
 
