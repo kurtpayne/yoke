@@ -35,9 +35,9 @@ jobs:
       - name: Setup Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy to Fly.io
+      - name: Deploy (blue-green)
         working-directory: fly-proxy
-        run: flyctl deploy --remote-only
+        run: flyctl deploy --remote-only --strategy bluegreen
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -46,33 +46,51 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Wait for deploy propagation
+      - name: Wait for traffic routing
         run: sleep 15
 
-      - name: Smoke test — Proxy health
+      - name: Smoke test — Health endpoint
         run: |
-          echo "Checking https://yoke-probe.fly.dev/ health..."
-          RESPONSE=$(curl -sf --max-time 30 https://yoke-probe.fly.dev/)
-          echo "$RESPONSE"
-          echo "$RESPONSE" | jq -e '.status == "ok"' > /dev/null
-          echo "✓ Fly proxy healthy"
+          echo "Checking /health..."
+          curl -sf --max-time 10 https://yoke-probe.fly.dev/health | jq -e '.status == "ok"'
+          echo "✓ Health OK"
 
-      - name: Smoke test — Proxy can reach external target
+      # Exercise real proxy paths against big domains (3/5 must pass)
+      - name: Smoke test — Real domain probes
         run: |
-          echo "Checking proxy can reach check-host.net..."
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://yoke-probe.fly.dev/check-host.net/check-tcp?host=1.1.1.1:443&max_nodes=1")
-          echo "Status: $STATUS"
-          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then
-            echo "✓ Proxy forwarding OK (status $STATUS)"
-          else
-            echo "::error::Proxy returned $STATUS — may be down"
+          DOMAINS=("google.com" "apple.com" "amazon.com" "microsoft.com" "cloudflare.com")
+          PASS=0
+          FAIL=0
+          AUTH_SECRET="${{ secrets.FLY_AUTH_SECRET }}"
+
+          for domain in "${DOMAINS[@]}"; do
+            echo -n "  probe-status $domain... "
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+              -H "Authorization: Bearer ${AUTH_SECRET}" \
+              "https://yoke-probe.fly.dev/probe-status?domain=${domain}")
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then
+              echo "✓ ($STATUS)"
+              PASS=$((PASS + 1))
+            else
+              echo "✗ ($STATUS)"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+
+          echo ""
+          echo "Results: ${PASS}/5 passed, ${FAIL}/5 failed"
+
+          if [ "$PASS" -lt 3 ]; then
+            echo "::error::Only ${PASS}/5 domain probes passed — proxy may be broken"
             exit 1
+          else
+            echo "✓ Smoke tests passed (${PASS}/5 — threshold is 3/5)"
           fi
 
       - name: 🚨 Alert on failure
         if: failure()
         run: |
-          echo "::error::Fly proxy smoke tests failed! Manual intervention required."
-          echo "::error::To rollback: flyctl releases -a yoke-probe, then flyctl deploy with previous image"
+          echo "::error::Fly proxy smoke tests failed after blue-green deploy!"
+          echo "::error::Fly health checks should have caught this — check deploy logs"
           echo "::error::Dashboard: https://fly.io/apps/yoke-probe"
           exit 1

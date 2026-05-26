@@ -14,7 +14,17 @@ primary_region = "sjc"
   min_machines_running = 0
   processes = ["app"]
 
+  # Health check — Fly verifies new machines are healthy before routing traffic
+  [[http_service.checks]]
+    interval = "5s"
+    timeout = "3s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[deploy]
+  strategy = "bluegreen"
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = 256
-# smoke test verification
