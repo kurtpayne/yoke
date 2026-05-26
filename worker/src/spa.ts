@@ -2,7 +2,7 @@
 // Handles: content negotiation, OG tag injection, security headers, static pages, asset passthrough
 
 import type { Env } from "./helpers";
-import { getBaseUrl } from "./helpers";
+import { getBaseUrl, YOKE_VERSION } from "./helpers";
 import { PRIVACY_HTML, TERMS_HTML, SECURITY_TXT } from "./pages";
 
 // ─── Security Headers ────────────────────────────────────────────────
@@ -50,8 +50,8 @@ function textResponse(body: string, contentType: string, cacheSeconds = 86400): 
 // ─── Content Negotiation ─────────────────────────────────────────────
 // Determines whether a request wants JSON (API client) or HTML (browser).
 
-const DOMAIN_PATH_RE = /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,})$/;
-const COMPARE_PATH_RE = /^\/compare\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;
+const DOMAIN_PATH_RE = /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
+const COMPARE_PATH_RE = /^\/compare\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
 
 export function wantsJSON(request: Request): boolean {
   const accept = request.headers.get("Accept") || "";
@@ -90,10 +90,23 @@ export function matchComparePath(path: string): [string, string] | null {
 
 // ─── OG Tag Injection ────────────────────────────────────────────────
 
+/** Escape a string for safe injection into HTML attribute values. */
+function escHtmlAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Escape a string for safe injection into HTML text content (e.g. <title>). */
+function escHtmlText(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function injectOgTags(html: string, opts: { title: string; description: string; url: string }): string {
-  const { title, description, url } = opts;
+  const title = escHtmlAttr(opts.title);
+  const description = escHtmlAttr(opts.description);
+  const url = escHtmlAttr(opts.url);
+  const titleText = escHtmlText(opts.title);
   let h = html;
-  h = h.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
+  h = h.replace(/<title>[^<]*<\/title>/, `<title>${titleText}</title>`);
   h = h.replace(/property="og:title" content="[^"]*"/, `property="og:title" content="${title}"`);
   h = h.replace(/property="og:description" content="[^"]*"/, `property="og:description" content="${description}"`);
   h = h.replace(/property="og:url" content="[^"]*"/, `property="og:url" content="${url}"`);
@@ -202,7 +215,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
 
     // Add _meta field
     (data as Record<string, unknown>)._meta = {
-      api_version: "1.3.0",
+      api_version: YOKE_VERSION,
       analyzed_at: new Date().toISOString(),
       docs: `${baseUrl}/api/docs`,
       source: new URL(baseUrl).hostname,
@@ -219,7 +232,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
         "X-Yoke-Cache": isCached ? "HIT" : "MISS",
-        "X-Yoke-Version": "1.3.0",
+        "X-Yoke-Version": YOKE_VERSION,
         "X-Yoke-Docs": `${baseUrl}/api/docs`,
         "Cache-Control": "public, max-age=300",
       },
@@ -227,7 +240,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analysis failed";
     return jsonResponse(
-      { error: msg, _meta: { api_version: "1.3.0", docs: `${baseUrl}/api/docs` } },
+      { error: msg, _meta: { api_version: YOKE_VERSION, docs: `${baseUrl}/api/docs` } },
       500,
     );
   }

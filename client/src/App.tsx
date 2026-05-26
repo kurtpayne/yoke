@@ -438,6 +438,7 @@ export function App() {
         {/* Search Bar + Compare toggle */}
         <div className="mb-0">
           <div className="flex items-center gap-2">
+            {!compareMode && (
             <div className="search-glow flex items-center rounded-lg flex-1 min-w-0" style={{ background: "var(--surface)" }}>
               <div className="pl-4" style={{ color: "var(--dim)" }}>
                 <Search size={16} />
@@ -473,6 +474,7 @@ export function App() {
                 {analyze.isPending ? "Analyzing…" : "Analyze"}
               </button>
             </div>
+            )}
             {/* Compare toggle */}
             <button
               type="button"

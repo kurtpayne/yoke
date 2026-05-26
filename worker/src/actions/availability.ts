@@ -10,7 +10,7 @@
 // datacenter is identified via request.cf metadata so the UI can show where
 // the probe originated.
 
-import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders } from "../helpers";
+import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../helpers";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function checkHostProbes(domain: string): Promise<{
+async function checkHostProbes(domain: string, env: Env): Promise<{
   results: AvailabilityResult[];
   request_id: string | null;
   permanent_link: string | null;
@@ -110,8 +110,8 @@ async function checkHostProbes(domain: string): Promise<{
   let startRes: Response;
   try {
     startRes = await fetchWithTimeout(
-      `${getFlyProbeUrl()}/check-http?host=${encodeURIComponent(domain)}&max_nodes=20`,
-      { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders() } }
+      `${getFlyProbeUrl(env)}/check-http?host=${encodeURIComponent(domain)}&max_nodes=20`,
+      { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders(env) } }
     );
   } catch {
     return null;
@@ -134,8 +134,8 @@ async function checkHostProbes(domain: string): Promise<{
     await sleep(attempt === 0 ? 3000 : 2000);
     try {
       const pollRes = await fetchWithTimeout(
-        `${getFlyProbeUrl()}/check-result/${check.request_id}`,
-        { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders() } }
+        `${getFlyProbeUrl(env)}/check-result/${check.request_id}`,
+        { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders(env) } }
       );
       if (pollRes.ok) {
         rawResults = (await pollRes.json()) as CheckHostResults;
@@ -287,7 +287,7 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
 
 // ─── Main entry point ────────────────────────────────────────────────
 
-export async function checkGlobalAvailability(domain: string, edge?: EdgeInfo): Promise<{
+export async function checkGlobalAvailability(domain: string, edge?: EdgeInfo, env?: Env): Promise<{
   results: AvailabilityResult[];
   request_id: string | null;
   permanent_link: string | null;
@@ -297,7 +297,7 @@ export async function checkGlobalAvailability(domain: string, edge?: EdgeInfo): 
   // Run DNS checks and check-host.net probes in parallel
   const [dnsResults, checkHostResult] = await Promise.all([
     checkDnsResolvers(domain),
-    checkHostProbes(domain),
+    checkHostProbes(domain, env!),
   ]);
 
   let httpResults: AvailabilityResult[];

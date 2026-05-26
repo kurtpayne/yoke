@@ -1,24 +1,14 @@
-import { fetchWithTimeout, boundedText, getFlyProbeUrl, getFlyAuthHeaders } from "../../helpers";
+import { fetchWithTimeout, boundedText, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../../helpers";
 import type {
   DnsRecord, LlmsTxtResult, RobotsParsed, JsonLdItem,
   OgTwitterResult, LegalResult, AiReadinessResult,
   BimiResult, MtaStsResult, TlsRptResult, EmailAuthResult,
 } from "./types";
 
-// Build-time globals injected by build_combined.py
-declare const __LLMS_TXT__: string;
-declare const __SECURITY_TXT__: string;
-
 // ─── llms.txt ────────────────────────────────────────────────────────
 
 export async function checkLlmsTxt(domain: string, instanceHost?: string): Promise<LlmsTxtResult> {
   const result: LlmsTxtResult = { found: false, content: null, full_found: false, full_content: null };
-  // Self-analysis bypass: use embedded llms.txt
-  if (instanceHost && domain === instanceHost && typeof __LLMS_TXT__ !== "undefined") {
-    result.found = true;
-    result.content = __LLMS_TXT__.slice(0, 3000);
-    return result;
-  }
   const [r1, r2] = await Promise.allSettled([
     fetchWithTimeout(`https://${domain}/llms.txt`, { timeout: 5000 }),
     fetchWithTimeout(`https://${domain}/llms-full.txt`, { timeout: 5000 }),
@@ -367,11 +357,11 @@ export function detectHttpProtocols(headers: Record<string, string> | null): { h
 }
 
 /** Probe HTTP/2 and HTTP/3 support via Fly.io (bypasses CF Worker fetch limitations) */
-export async function probeHttpProtocols(domain: string): Promise<{ http2: boolean; http3: boolean; alt_svc: string | null }> {
+export async function probeHttpProtocols(domain: string, env: Env): Promise<{ http2: boolean; http3: boolean; alt_svc: string | null }> {
   try {
-    const res = await fetch(`${getFlyProbeUrl()}/probe-protocols?domain=${encodeURIComponent(domain)}`, {
+    const res = await fetch(`${getFlyProbeUrl(env)}/probe-protocols?domain=${encodeURIComponent(domain)}`, {
       signal: AbortSignal.timeout(10000),
-      headers: getFlyAuthHeaders(),
+      headers: getFlyAuthHeaders(env),
     });
     if (res.ok) {
       const data = await res.json() as { http2: boolean; http3: boolean; alt_svc: string | null; error?: string };

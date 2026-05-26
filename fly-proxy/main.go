@@ -240,7 +240,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 		resp, err := client.Do(req)
 		if err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"upstream error: %s"}`, err.Error()), 502)
+			log.Printf("[check-host] upstream error for %s: %v", r.URL.Path, err)
+			http.Error(w, `{"error":"upstream unavailable"}`, 502)
 			return
 		}
 		defer resp.Body.Close()
@@ -248,7 +249,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(resp.StatusCode)
-		io.Copy(w, resp.Body)
+		io.Copy(w, io.LimitReader(resp.Body, 1<<20)) // 1MB response body limit
 		return
 	}
 
@@ -408,6 +409,13 @@ func tryMaxMind(ipStr string) *GeoResult {
 	}
 }
 
+// tryIpApi uses ip-api.com as a GeoIP fallback. Note: ip-api.com's free tier
+// only supports plain HTTP (no HTTPS), so the queried IP address is transmitted
+// in cleartext. This is acceptable because: (1) MaxMind local DB is the primary
+// source, (2) ip-api.com is only reached when MaxMind is unavailable, and (3) the
+// IP being looked up is already public information (it's the domain's hosting IP).
+// For production hardening, consider upgrading to ip-api.com's paid tier (HTTPS)
+// or removing this fallback entirely since ipwho.is (HTTPS) is also available.
 func tryIpApi(ip string) *GeoResult {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get("http://ip-api.com/json/" + ip + "?fields=status,country,countryCode,city,lat,lon,isp,org,as")

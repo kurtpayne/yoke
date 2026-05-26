@@ -5,8 +5,10 @@
 import { type Env, normalizeDomain, maybePruneCache, backgroundWork } from "../../helpers";
 import { getAnalysisCacheTtlMs } from "../../config/cache";
 import { analyzeWordPress } from "../wordpress";
-import { checkBreaches, type BreachResult } from "../breaches";
+import { type BreachResult } from "../breaches";
 import { logApiError, pruneApiErrors } from "../../api-errors";
+import { registry } from "../../checks/registry";
+import type { CheckContext } from "../../checks/types";
 
 import type {
   DnsRecord, HttpAnalysis, MetaResult, IpInfo, BlocklistResult, SslResult,
@@ -17,31 +19,26 @@ import type {
   WafDetection, TrustSignals,
 } from "./types";
 
-import { checkDns, isSubdomain, checkRdap, dohQuery } from "./dns";
-import { auditSecurityHeaders, detectTechStack, analyzeHttp, checkRobotsSitemap } from "./http";
-import { checkIpInfo, checkBlocklists, checkSsl, checkStatus, checkShodan, checkDnssec } from "./network";
-import { checkPageSpeed, detectCompression, checkCarbon } from "./performance";
+import { checkDns, isSubdomain, dohQuery } from "./dns";
+import { auditSecurityHeaders, detectTechStack, analyzeHttp } from "./http";
+import { detectCompression } from "./performance";
 import { checkCacheHeaders } from "./cache";
 import { checkWaf } from "./waf";
 import { checkTrustSignals } from "./trust";
 import { isActuallyCloudflare, sanitizeCfHeaders, detectHosting, auditCookies } from "./security";
 import {
-  checkLlmsTxt, checkWayback, checkTranco, checkObservatory,
-  checkEmailAuth, parseRobotsDeep, detectHttpProtocols, probeHttpProtocols, extractJsonLd,
+  parseRobotsDeep, detectHttpProtocols, probeHttpProtocols, extractJsonLd,
   extractSocialMeta, detectLegalPages, calculateAiReadiness,
-  checkAnsRecords,
+  type AnsResult,
 } from "./content";
 import { calculateHealthScore, getScreenshotUrl } from "./scoring";
 import { calculateDomainScore } from "./contextual-scoring";
-import { checkDnsPropagation, checkRipeRouting, checkOutagePages, checkConnectionTiming, type NetworkHealth } from "./network-health";
+import { type NetworkHealth } from "./network-health";
 import { validateStructuredData } from "./structured-data";
 import { analyzeAccessibility } from "./accessibility";
 import { analyzeThirdPartyScripts } from "./third-party-scripts";
 import { analyzeCookieConsent } from "./cookie-consent";
-import {
-  checkCertTransparency, checkSecurityTxt, checkGreenHosting,
-  checkWellKnownEndpoints, analyzeCaaRecords, checkGreynoise,
-} from "./tier1";
+import { analyzeCaaRecords } from "./tier1";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -295,7 +292,7 @@ export async function runAnalysis(
         const parsed = JSON.parse(cached.data_json);
         return { kind: "cached", data: { ...parsed, cached: true } };
       }
-    } catch { /* cache miss */ }
+    } catch (e) { console.warn(`[yoke:cache] D1 read failed for ${domain}:`, e instanceof Error ? e.message : e); }
   }
 
   // ── Phase 0: Quick NXDOMAIN check ────────────────────────────────
@@ -354,35 +351,16 @@ export async function runAnalysis(
   const ip = dnsRecords.find((r) => r.type === "A")?.data;
   const domainIsSubdomain = isSubdomain(domain);
 
-  type Phase2Check = { key: string; promise: Promise<unknown>; label: string };
-  const checks: Phase2Check[] = [
-    { key: "rdap", promise: checkRdap(domain, env), label: "WHOIS / RDAP" },
-    { key: "_robots_sitemap", promise: checkRobotsSitemap(domain, instanceHost), label: "Robots & Sitemap" },
-    { key: "ip_info", promise: checkIpInfo(domain, dnsRecords), label: "IP Geolocation" },
-    { key: "blocklists", promise: checkBlocklists(dnsRecords), label: "Blocklist Check" },
-    { key: "ssl", promise: checkSsl(domain), label: "SSL / TLS" },
-    { key: "performance", promise: checkPageSpeed(domain, httpAnalysis?.response_time_ms ?? null, env.DB, env.GOOGLE_PAGESPEED_API_KEY), label: "Google PageSpeed" },
-    { key: "_status", promise: checkStatus(domain), label: "HTTP Status" },
-    { key: "llms_txt", promise: checkLlmsTxt(domain, instanceHost), label: "LLMs.txt" },
-    { key: "wayback", promise: checkWayback(domain), label: "Wayback Machine" },
-    { key: "tranco_rank", promise: checkTranco(domain), label: "Tranco Ranking" },
-    { key: "observatory", promise: checkObservatory(domain), label: "Observatory" },
-    { key: "email_auth", promise: checkEmailAuth(domain, dnsRecords), label: "Email Auth" },
-    { key: "carbon", promise: checkCarbon(domain), label: "Carbon Footprint" },
-    { key: "shodan", promise: ip ? checkShodan(ip) : Promise.resolve(null), label: "Shodan" },
-    { key: "dnssec", promise: checkDnssec(domain), label: "DNSSEC" },
-    { key: "breaches", promise: checkBreaches(domain, env.DB), label: "Data Breaches" },
-    { key: "cert_transparency", promise: checkCertTransparency(domain), label: "Cert Transparency" },
-    { key: "security_txt", promise: checkSecurityTxt(domain, instanceHost), label: "Security.txt" },
-    { key: "green_hosting", promise: checkGreenHosting(domain), label: "Green Hosting" },
-    { key: "well_known", promise: checkWellKnownEndpoints(domain), label: "Well-Known" },
-    { key: "greynoise", promise: ip ? checkGreynoise(ip) : Promise.resolve(null), label: "GreyNoise" },
-    { key: "ans", promise: checkAnsRecords(domain), label: "ANS / DNS-AID" },
-    { key: "dns_propagation", promise: checkDnsPropagation(domain), label: "DNS Propagation" },
-    { key: "ripe_routing", promise: ip ? checkRipeRouting(ip) : Promise.resolve(null), label: "RIPE Routing" },
-    { key: "outage_links", promise: checkOutagePages(domain), label: "Outage Pages" },
-    { key: "connection_timing", promise: checkConnectionTiming(domain, env), label: "Connection Timing" },
-  ];
+  // Build check context from Phase 1 results for the registry
+  const checkCtx: CheckContext = { domain, env, instanceHost, dnsRecords, ip, httpResponseTimeMs: httpAnalysis?.response_time_ms ?? null };
+
+  // Launch all Phase 2 checks from the registry (one file per check — see worker/src/checks/)
+  const checks = registry.map((check) => ({
+    key: check.key,
+    promise: check.run(checkCtx),
+    label: check.label,
+    default: check.default,
+  }));
 
   await onPhase("phase2", "running", `Running ${checks.length} checks…`, checks.length);
 
@@ -390,7 +368,7 @@ export async function runAnalysis(
   const results: Record<string, unknown> = {};
   let completed = 0;
 
-  const wrappedPromises = checks.map(({ key, promise, label }) =>
+  const wrappedPromises = checks.map(({ key, promise, label, default: defaultValue }) =>
     promise.then(
       (value) => {
         results[key] = value;
@@ -418,11 +396,11 @@ export async function runAnalysis(
         return sendPromise;
       },
       (err) => {
-        results[key] = null;
+        results[key] = defaultValue;
         completed++;
         // Log API error for observability
         logApiError(env.STATS_DB, { api: key.replace(/^_/, ""), status: 0, message: String(err).slice(0, 200), domain });
-        return onResult(key, null, completed, checks.length, label);
+        return onResult(key, defaultValue, completed, checks.length, label);
       },
     )
   );
@@ -511,7 +489,7 @@ export async function runAnalysis(
   // Fallback: dedicated protocol probe if nothing detected yet
   if (!httpProtocols.http2 && !httpProtocols.http3) {
     try {
-      const probed = await probeHttpProtocols(domain);
+      const probed = await probeHttpProtocols(domain, env);
       if (probed.http2 || probed.http3) httpProtocols = probed;
     } catch { /* subrequest limit or network error — accept false */ }
   }
@@ -556,7 +534,7 @@ export async function runAnalysis(
   const setCookieHeaders = setCookieRaw ? setCookieRaw.split(/\n/) : [];
   const wafDetection = httpProbeSucceeded ? checkWaf(effectiveHeaders, html, setCookieHeaders) : null;
 
-  const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta, ansResult as Awaited<ReturnType<typeof checkAnsRecords>> | null);
+  const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta, ansResult as AnsResult | null);
   const structuredDataValidation = validateStructuredData(jsonLd);
 
   const accessibilityResult = httpProbeSucceeded ? analyzeAccessibility(html) : null;
@@ -757,13 +735,20 @@ export async function runAnalysis(
       await env.DB.prepare(
         "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)"
       ).bind(domain, resultJson, Date.now()).run();
-    } catch { /* cache write failure is non-critical */ }
+    } catch (e) { console.warn(`[yoke:cache] D1 write failed for ${domain}:`, e instanceof Error ? e.message : e); }
 
     try {
+      const summaryJson = JSON.stringify({
+        is_up: result.status?.is_up ?? null,
+        ssl_grade: result.ssl?.grade ?? null,
+        score: domainScore?.composite ?? null,
+        grade: domainScore?.grade ?? null,
+        archetype: domainScore?.archetype?.detected ?? null,
+      });
       await env.DB.prepare(
         "INSERT INTO domain_lookups (domain, results_json, analyzed_at) VALUES (?, ?, ?)"
-      ).bind(domain, resultJson, Date.now()).run();
-    } catch { /* ignore */ }
+      ).bind(domain, summaryJson, Date.now()).run();
+    } catch (e) { console.warn(`[yoke:lookups] D1 write failed for ${domain}:`, e instanceof Error ? e.message : e); }
 
     // Probabilistic cache cleanup
     await maybePruneCache(env.DB);

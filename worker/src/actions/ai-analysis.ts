@@ -1,5 +1,6 @@
 import { type Env, normalizeDomain, fetchWithTimeout, getFromCache, setCache, CORS_HEADERS } from "../helpers";
 import { AI_CACHE_TTL_MS } from "../config/cache";
+import { logWarn, logError } from "../logger";
 
 // ─── System Prompt ──────────────────────────────────────────────────
 
@@ -273,7 +274,7 @@ async function callOpenRouter(
           throw new Error(`OpenRouter API error ${response.status}: ${errText.slice(0, 200)}`);
         }
         lastError = new Error(`OpenRouter API error ${response.status}: ${errText.slice(0, 200)}`);
-        console.warn(`[AI] OpenRouter attempt ${attempt + 1}/${maxRetries} failed: ${response.status}`);
+        logWarn("OpenRouter attempt failed", { attempt: attempt + 1, maxRetries, status: response.status });
         continue;
       }
 
@@ -291,6 +292,8 @@ async function callOpenRouter(
       if (jsonMatch) {
         jsonStr = jsonMatch[1].trim();
       }
+      // Strip BOM and extra whitespace that some models emit
+      jsonStr = jsonStr.replace(/^\uFEFF/, '').trim();
 
       let parsed: AIAnalysisResult;
       try {
@@ -317,7 +320,7 @@ async function callOpenRouter(
     } catch (err) {
       // 4xx and parse errors bubble up immediately (already thrown above)
       if (lastError === null) throw err;
-      console.warn(`[AI] Attempt ${attempt + 1}/${maxRetries} error:`, err instanceof Error ? err.message : err);
+      logWarn("OpenRouter attempt error", { attempt: attempt + 1, maxRetries, error: err instanceof Error ? err.message : String(err) });
       lastError = err instanceof Error ? err : new Error(String(err));
     }
   }
@@ -451,6 +454,7 @@ export async function getAIAnalysis(
   }
 
   // Rate limiting — skip if BYO key provided
+  let rateLimitRowId: number | undefined;
   if (!byoKey) {
     try {
       await ensureRateLimitTable(env.STATS_DB);
@@ -469,18 +473,28 @@ export async function getAIAnalysis(
           instructions: "Copy the prompt below and paste it into ChatGPT, Claude, Gemini, or any AI assistant. Or enter your own OpenRouter API key in the settings above for unlimited analysis.",
         }), {
           status: 429,
-          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+          headers: {
+            "Content-Type": "application/json",
+            ...CORS_HEADERS,
+            "X-RateLimit-Limit": String(AI_HOURLY_LIMIT),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 3600),
+            "Retry-After": "3600",
+          },
         });
       }
       // Reserve the slot BEFORE calling OpenRouter to prevent race conditions.
       // Two simultaneous requests from the same IP could both pass the count check;
       // by inserting first, the second request sees count >= limit.
-      await recordRateLimitHit(env.STATS_DB, clientIP);
+      const rlResult = await env.STATS_DB.prepare(
+        "INSERT INTO ai_rate_limits (ip, ts) VALUES (?, ?)"
+      ).bind(clientIP, Math.floor(Date.now() / 1000)).run();
+      rateLimitRowId = rlResult.meta?.last_row_id as number | undefined;
     } catch (rateLimitErr) {
       // Rate limit check failed (STATS_DB issue)
-      console.error("[AI rate-limit] STATS_DB error:", rateLimitErr instanceof Error ? rateLimitErr.message : rateLimitErr);
+      logError("AI rate-limit DB error", { error: rateLimitErr instanceof Error ? rateLimitErr.message : String(rateLimitErr) });
       // Fail-open with logging — D1 hiccups shouldn't block AI analysis entirely
-      console.warn("[AI rate-limit] Proceeding without rate limit check due to STATS_DB error");
+      logWarn("Proceeding without rate limit check due to STATS_DB error");
     }
   }
 
@@ -515,11 +529,11 @@ export async function getAIAnalysis(
   } catch (err) {
     // OpenRouter call failed — best-effort release of the rate limit slot
     // so the user isn't penalized for server errors
-    if (!byoKey) {
+    if (!byoKey && rateLimitRowId) {
       try {
         await env.STATS_DB.prepare(
-          "DELETE FROM ai_rate_limits WHERE id = (SELECT id FROM ai_rate_limits WHERE ip = ? AND ts > (strftime('%s', 'now') - 3600) ORDER BY id DESC LIMIT 1)"
-        ).bind(clientIP).run();
+          "DELETE FROM ai_rate_limits WHERE id = ?"
+        ).bind(rateLimitRowId).run();
       } catch { /* decrement failure is non-critical */ }
     }
     const msg = err instanceof Error ? err.message : "AI analysis failed";
