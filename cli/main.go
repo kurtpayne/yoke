@@ -1043,20 +1043,20 @@ func runCompare(cmd *cobra.Command, args []string) error {
 
 	renderDomainLine := func(domain string, completed, total int, done bool) {
 		barWidth := 20
+		label := fmt.Sprintf("%-22s", domain)
 		if done {
-			// Completed — show full green bar with ✓
 			bar := good.Render(strings.Repeat("█", barWidth))
-			fmt.Printf("  %s %s %s %s\n", good.Render("✓"), dim.Render(fmt.Sprintf("%-20s", domain)),
+			// Use "✓ " (with trailing space) to match the rendered width of "⚡"
+			fmt.Printf("  %s %s %s %s\n", good.Render("✓ "), dim.Render(label),
 				bar, good.Render("done"))
 		} else if total == 0 {
-			// Not started yet
 			bar := dim.Render(strings.Repeat("░", barWidth))
-			fmt.Printf("  %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", domain)), bar)
+			fmt.Printf("  %s %s %s\n", accent.Render("⚡"), dim.Render(label), bar)
 		} else {
 			filled := completed * barWidth / total
 			if filled > barWidth { filled = barWidth }
 			bar := good.Render(strings.Repeat("█", filled)) + dim.Render(strings.Repeat("░", barWidth-filled))
-			fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(fmt.Sprintf("%-20s", domain)),
+			fmt.Printf("  %s %s %s %s\n", accent.Render("⚡"), dim.Render(label),
 				bar, dim.Render(fmt.Sprintf("%d/%d", completed, total)))
 		}
 	}
@@ -1238,7 +1238,13 @@ func runAI(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// POST /api/ai-analysis with BYO key
+	// Phase 1: Ensure domain is analyzed (SSE progress bar for fresh, instant for cached)
+	// This populates the server cache so the AI endpoint can read signals without re-analyzing.
+	if !jsonOutput {
+		_, _ = fetchAnalysisStream(domain)
+	}
+
+	// Phase 2: AI analysis (LLM call)
 	client := &http.Client{Timeout: 120 * time.Second}
 	payload := map[string]string{"domain": domain}
 	if model != "" {
