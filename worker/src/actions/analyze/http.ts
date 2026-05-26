@@ -153,7 +153,7 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
       redirects: [{ url: `https://${instanceHost}`, status_code: 200, server: "cloudflare", response_time_ms: 1 }],
       headers: { raw: selfHeaders, security_audit: audit, security_grade: grade },
       tech_stack: techStack,
-      meta: { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null, og_title: ogTitle, og_description: ogDesc, og_image: ogImage, favicon_url: faviconUrl },
+      meta: { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null, og_title: ogTitle, og_description: ogDesc, og_image: ogImage, favicon_url: faviconUrl }, // robots/sitemap populated by Phase 2 _robots_sitemap check
       final_url: `https://${instanceHost}`, html, status_code: 200, response_time_ms: 1,
     };
   }
@@ -220,22 +220,40 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
 
 // ─── Robots & Sitemap ────────────────────────────────────────────────
 
-export async function checkRobotsSitemap(domain: string, instanceHost?: string): Promise<Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">> {
+export async function checkRobotsSitemap(domain: string, instanceHost?: string, env?: Env): Promise<Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">> {
   const result = { robots_txt: null as string | null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null as string | null, sitemap_page_count: null as number | null };
+  const isSelf = instanceHost && domain === instanceHost;
+
+  // ─── robots.txt ────────────────────────────────────────────────────
   try {
-    const res = await fetchWithTimeout(`https://${domain}/robots.txt`, { timeout: 5000 });
-    if (res.ok) { const text = await boundedText(res); const lower = text.toLowerCase(); if (text && !lower.includes("<!doctype") && !lower.includes("<html")) { result.robots_txt = text.slice(0, 2000); result.robots_txt_exists = true; } }
+    let text: string | null = null;
+    if (isSelf) {
+      // CF Workers can't fetch their own zone — synthesize from known route handler content
+      const baseUrl = `https://${instanceHost}`;
+      text = `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml`;
+    } else {
+      const res = await fetchWithTimeout(`https://${domain}/robots.txt`, { timeout: 5000 });
+      if (res.ok) { const body = await boundedText(res); const lower = body.toLowerCase(); if (body && !lower.includes("<!doctype") && !lower.includes("<html")) text = body; }
+    }
+    if (text) { result.robots_txt = text.slice(0, 2000); result.robots_txt_exists = true; }
   } catch { /* ignore */ }
+
+  // ─── sitemap.xml ───────────────────────────────────────────────────
   try {
-    const res = await fetchWithTimeout(`https://${domain}/sitemap.xml`, { timeout: 5000 });
-    if (res.ok) {
-      const text = await boundedText(res);
-      if (text.includes("<urlset") || text.includes("<sitemapindex")) {
-        result.sitemap_detected = true; result.sitemap_url = `https://${domain}/sitemap.xml`;
-        const urlMatches = text.match(/<url>/gi); const sitemapMatches = text.match(/<sitemap>/gi);
-        if (urlMatches) result.sitemap_page_count = urlMatches.length;
-        else if (sitemapMatches) result.sitemap_page_count = sitemapMatches.length;
-      }
+    let text: string | null = null;
+    if (isSelf) {
+      // Synthesize from known route handler content
+      const baseUrl = `https://${instanceHost}`;
+      text = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${baseUrl}</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>${baseUrl}/api/docs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>\n  <url><loc>${baseUrl}/status</loc><changefreq>hourly</changefreq><priority>0.5</priority></url>\n  <url><loc>${baseUrl}/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n  <url><loc>${baseUrl}/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>`;
+    } else {
+      const res = await fetchWithTimeout(`https://${domain}/sitemap.xml`, { timeout: 5000 });
+      if (res.ok) text = await boundedText(res);
+    }
+    if (text && (text.includes("<urlset") || text.includes("<sitemapindex"))) {
+      result.sitemap_detected = true; result.sitemap_url = `https://${domain}/sitemap.xml`;
+      const urlMatches = text.match(/<url>/gi); const sitemapMatches = text.match(/<sitemap>/gi);
+      if (urlMatches) result.sitemap_page_count = urlMatches.length;
+      else if (sitemapMatches) result.sitemap_page_count = sitemapMatches.length;
     }
   } catch { /* ignore */ }
   return result;
