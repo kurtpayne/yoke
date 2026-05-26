@@ -34,12 +34,13 @@ export async function analyzeDomainStream(domain: string, env: Env, skipCache = 
         onPhase: async (phase, status, label, total, checks) => {
           await send("phase", { phase, status, label, ...(total !== undefined ? { total } : {}), ...(checks ? { checks } : {}) });
         },
-        onResult: async (key, value, completed, total, label) => {
+        onResult: async (key, value, completed, total, label, error) => {
           await send("result", {
             key, value,
             ...(completed !== undefined ? { completed } : {}),
             ...(total !== undefined ? { total } : {}),
             ...(label !== undefined ? { label } : {}),
+            ...(error ? { error: true } : {}),
           });
         },
       };

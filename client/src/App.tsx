@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, analyzeStream, type StreamEvent } from "./api";
-import { Search, Loader2, RotateCcw, ArrowLeftRight, CheckCircle2, Circle } from "lucide-react";
+import { Search, Loader2, RotateCcw, ArrowLeftRight, CheckCircle2, Circle, XCircle } from "lucide-react";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { PanelGrid, ResetLayoutButton, type PanelDef } from "./components/PanelLayout";
 
@@ -50,10 +50,10 @@ interface ProgressState {
   label: string;
   completed: number;
   total: number;
-  checks: Map<string, { label: string; done: boolean }>;
+  checks: Map<string, { label: string; done: boolean; error?: boolean }>;
 }
 
-function PendingChecksCycler({ checks }: { checks: Map<string, { label: string; done: boolean }> }) {
+function PendingChecksCycler({ checks }: { checks: Map<string, { label: string; done: boolean; error?: boolean }> }) {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
   const pendingLabels = Array.from(checks.values()).filter(c => !c.done).map(c => c.label);
@@ -122,12 +122,14 @@ function StreamingProgress({ progress }: { progress: ProgressState }) {
       {/* Check grid */}
       {sortedChecks.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "4px 12px" }}>
-          {sortedChecks.map(([key, { label, done }]) => (
+          {sortedChecks.map(([key, { label, done, error }]) => (
             <div key={key} className="flex items-center gap-1.5" style={{ opacity: done ? 1 : 0.5 }}>
               {done
-                ? <CheckCircle2 size={11} style={{ color: "var(--success)", flexShrink: 0 }} />
+                ? (error
+                  ? <XCircle size={11} style={{ color: "var(--danger)", flexShrink: 0 }} />
+                  : <CheckCircle2 size={11} style={{ color: "var(--success)", flexShrink: 0 }} />)
                 : <Circle size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />}
-              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: done ? "var(--text)" : "var(--dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: done ? (error ? "var(--danger)" : "var(--text)") : "var(--dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {label}
               </span>
             </div>
@@ -189,7 +191,7 @@ function useStreamingAnalysis() {
             break;
           }
           case "result": {
-            const d = evt.data as { key: string; value: unknown; completed?: number; total?: number; label?: string };
+            const d = evt.data as { key: string; value: unknown; completed?: number; total?: number; label?: string; error?: boolean };
             // Merge into partial data
             if (d.key && !d.key.startsWith("_")) {
               setPartialData(prev => prev ? { ...prev, [d.key]: d.value } : { [d.key]: d.value });
@@ -198,7 +200,7 @@ function useStreamingAnalysis() {
             setProgress(prev => {
               const checks = new Map(prev.checks);
               if (d.label && d.key) {
-                checks.set(d.key, { label: d.label, done: true });
+                checks.set(d.key, { label: d.label, done: true, error: !!d.error });
               }
               return {
                 ...prev,

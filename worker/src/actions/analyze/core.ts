@@ -45,7 +45,7 @@ import { analyzeCaaRecords } from "./tier1";
 /** Callbacks for streaming progress. All optional — non-streaming callers pass nothing. */
 export interface AnalysisCallbacks {
   onPhase?: (phase: string, status: string, label: string, total?: number, checks?: Array<{ key: string; label: string }>) => Promise<void>;
-  onResult?: (key: string, value: unknown, completed?: number, total?: number, label?: string) => Promise<void>;
+  onResult?: (key: string, value: unknown, completed?: number, total?: number, label?: string, error?: boolean) => Promise<void>;
 }
 
 /** Shape of the status sub-object in results. */
@@ -400,7 +400,7 @@ export async function runAnalysis(
         completed++;
         // Log API error for observability
         logApiError(env.STATS_DB, { api: key.replace(/^_/, ""), status: 0, message: String(err).slice(0, 200), domain });
-        return onResult(key, defaultValue, completed, checks.length, label);
+        return onResult(key, defaultValue, completed, checks.length, label, true);
       },
     )
   );
