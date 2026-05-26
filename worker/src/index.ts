@@ -385,6 +385,30 @@ export default {
           return json({ ...prompt, models: ALLOWED_MODELS, default_model: DEFAULT_MODEL });
         }
 
+        // GET /api/debug/pagespeed — test Fly proxy PageSpeed call directly
+        if (method === "GET" && path.startsWith("/api/debug/pagespeed")) {
+          const debugDomain = url.searchParams.get("domain") || "example.com";
+          const hasFlySecret = !!env.FLY_AUTH_SECRET;
+          const flyUrl = `https://yoke-probe.fly.dev/pagespeed?domain=${encodeURIComponent(debugDomain)}`;
+          const headers: Record<string, string> = {};
+          if (env.FLY_AUTH_SECRET) {
+            headers["Authorization"] = `Bearer ${env.FLY_AUTH_SECRET}`;
+          }
+          try {
+            const start = Date.now();
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 45000);
+            const res = await fetch(flyUrl, { headers, signal: controller.signal });
+            clearTimeout(timer);
+            const elapsed = Date.now() - start;
+            const body = await res.text();
+            return json({ hasFlySecret, flyUrl, status: res.status, elapsed, body: body.slice(0, 500) });
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            return json({ hasFlySecret, flyUrl, error: msg });
+          }
+        }
+
         // GET /api/health — API error observability dashboard
         if (method === "GET" && path === "/api/health") {
           const health = await getApiHealth(env.DB);
