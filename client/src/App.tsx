@@ -204,6 +204,7 @@ function useStreamingAnalysis() {
               }
               return {
                 ...prev,
+                checks,
                 completed: d.completed ?? prev.completed,
                 total: d.total ?? prev.total,
                 label: `Analyzing… ${d.completed ?? prev.completed} of ${d.total ?? prev.total} checks complete`,
