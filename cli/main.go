@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -218,6 +219,46 @@ func fetchJSON(url string) ([]byte, error) {
 	return body, nil
 }
 
+// ─── Spinner ────────────────────────────────────────────────────────
+
+// spinner shows an animated spinner with a message on a single line.
+// Call stop() to clear the line and stop the animation.
+type spinner struct {
+	msg    string
+	stopCh chan struct{}
+	wg     sync.WaitGroup
+}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func startSpinner(message string) *spinner {
+	s := &spinner{msg: message, stopCh: make(chan struct{})}
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		i := 0
+		ticker := time.NewTicker(80 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.stopCh:
+				fmt.Print("\033[2K\r") // clear the spinner line
+				return
+			case <-ticker.C:
+				frame := accent.Render(spinnerFrames[i%len(spinnerFrames)])
+				fmt.Printf("\033[2K\r  %s %s", frame, dim.Render(s.msg))
+				i++
+			}
+		}
+	}()
+	return s
+}
+
+func (s *spinner) stop() {
+	close(s.stopCh)
+	s.wg.Wait()
+}
+
 func fetchAnalysis(domain string) (*AnalysisResult, error) {
 	body, err := fetchJSON(apiBase + "/" + domain)
 	if err != nil {
@@ -245,11 +286,15 @@ type sseCheck struct {
 // plain JSON endpoint when the server doesn't support streaming.
 func fetchAnalysisStream(domain string) (*AnalysisResult, error) {
 	client := &http.Client{Timeout: 120 * time.Second}
-	req, err := http.NewRequest("GET", apiBase+"/"+domain, nil)
+
+	// Use POST /api/analyze which supports SSE streaming
+	payload := fmt.Sprintf(`{"domain":%q}`, domain)
+	req, err := http.NewRequest("POST", apiBase+"/api/analyze", strings.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
 
 	resp, err := client.Do(req)
@@ -811,12 +856,15 @@ func runCompare(cmd *cobra.Command, args []string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "yoke-cli/"+version)
 
+	spin := startSpinner(fmt.Sprintf("Comparing %s vs %s...", d1, d2))
 	resp, err := client.Do(req)
 	if err != nil {
+		spin.stop()
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	spin.stop()
 	if err != nil {
 		return fmt.Errorf("read failed: %w", err)
 	}
@@ -960,14 +1008,16 @@ func runAI(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("\n  %s %s\n", accent.Render("⚡"), dim.Render("Analyzing "+domain+"..."))
+	spin := startSpinner("Running AI analysis on " + domain + "...")
 
 	resp, err := client.Do(req)
 	if err != nil {
+		spin.stop()
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	spin.stop()
 	if err != nil {
 		return fmt.Errorf("read failed: %w", err)
 	}
