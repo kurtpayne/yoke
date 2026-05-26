@@ -502,11 +502,18 @@ export async function runAnalysis(
   const effectiveHeaders = (rawHeadersOriginal && !siteIsCloudflareRefined)
     ? sanitizeCfHeaders(rawHeadersOriginal) : rawHeadersOriginal;
 
-  // Detect HTTP protocols — prefer Fly probe data from status check, then header detection
+  // Detect HTTP protocols — prefer Fly probe data from status check, then header detection, then dedicated probe
   const statusHasProtocols = !!(statusResult as Record<string, unknown>).http2 || !!(statusResult as Record<string, unknown>).http3;
   let httpProtocols = statusHasProtocols
     ? { http2: !!(statusResult as Record<string, unknown>).http2, http3: !!(statusResult as Record<string, unknown>).http3, alt_svc: ((statusResult as Record<string, unknown>).alt_svc as string | null) ?? null }
     : detectHttpProtocols(effectiveHeaders);
+  // Fallback: dedicated protocol probe if nothing detected yet
+  if (!httpProtocols.http2 && !httpProtocols.http3) {
+    try {
+      const probed = await probeHttpProtocols(domain);
+      if (probed.http2 || probed.http3) httpProtocols = probed;
+    } catch { /* subrequest limit or network error — accept false */ }
+  }
 
   // Re-run security audit + tech stack with cleaned headers if we sanitized
   let finalSecurityAudit = httpAnalysis?.headers?.security_audit ?? [];
