@@ -96,3 +96,4 @@ export async function checkCarbon(domain: string): Promise<{ co2_per_view: numbe
 }
 
 // redeploy trigger
+// plan upgrade redeploy
