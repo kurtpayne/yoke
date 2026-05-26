@@ -16,8 +16,7 @@ dist/
 .mf/
 worker/wrangler.toml
 
-# Fly.io
-fly-proxy/fly.toml
+# Fly.io — fly.toml is committed (no secrets)
 
 # OS
 .DS_Store
