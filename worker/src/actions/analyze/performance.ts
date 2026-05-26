@@ -20,7 +20,6 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
 
   // Try Fly proxy first (more reliable, avoids CF egress issues)
   try {
-    console.log("[PageSpeed] Attempting Fly proxy for", domain, "flyAuthSecret present:", !!flyAuthSecret);
     const flyUrl = `https://yoke-probe.fly.dev/pagespeed?domain=${encodeURIComponent(domain)}`;
     const headers: Record<string, string> = {};
     if (flyAuthSecret) {
@@ -94,6 +93,3 @@ export async function checkCarbon(domain: string): Promise<{ co2_per_view: numbe
     return { co2_per_view: data.statistics?.co2?.grid?.grams ?? null, cleaner_than: data.cleanerThan ?? null, green: data.green === true || data.green === "true" };
   } catch { return null; }
 }
-
-// redeploy trigger
-// plan upgrade redeploy
