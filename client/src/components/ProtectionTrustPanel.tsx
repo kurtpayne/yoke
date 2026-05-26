@@ -1,6 +1,7 @@
-import { Shield, ShieldCheck, ShieldAlert, Check, X, AlertTriangle, Eye } from "lucide-react";
+import { Shield, ShieldCheck, ShieldAlert, Check, X, AlertTriangle, Eye, ExternalLink } from "lucide-react";
 import { Panel, DataRow, StatusBadge } from "./Panel";
 import { Tooltip } from "./Tooltip";
+import { findReferenceLink } from "./DomainSignals";
 import type { AnalysisResult } from "../utils/types";
 
 // ─── Category labels & icons ────────────────────────────────────────
@@ -55,6 +56,7 @@ function TrustSignalRow({ signal }: { signal: { name: string; present: boolean; 
     good: "pass", info: "info", low: "warn", medium: "fail",
   };
   const status = signal.present ? (statusMap[signal.severity] ?? "pass") : "neutral";
+  const ref = findReferenceLink(signal.name);
 
   return (
     <div className="data-row" style={{ padding: "4px 16px" }}>
@@ -64,6 +66,13 @@ function TrustSignalRow({ signal }: { signal: { name: string; present: boolean; 
           : <X size={10} style={{ color: "var(--muted)", flexShrink: 0 }} />
         }
         {signal.name}
+        {ref && (
+          <Tooltip text={ref.label}>
+            <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+              <ExternalLink size={9} style={{ color: "var(--muted)", opacity: 0.7 }} />
+            </a>
+          </Tooltip>
+        )}
       </span>
       {signal.value && signal.present && (
         <Tooltip text={signal.value}>
