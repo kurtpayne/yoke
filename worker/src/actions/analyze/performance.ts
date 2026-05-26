@@ -94,3 +94,4 @@ export async function checkCarbon(domain: string): Promise<{ co2_per_view: numbe
   } catch { return null; }
 }
 
+// redeploy trigger
