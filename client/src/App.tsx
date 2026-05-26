@@ -4,6 +4,7 @@ import { api, analyzeStream, type StreamEvent } from "./api";
 import { Search, Loader2, RotateCcw, ArrowLeftRight, CheckCircle2, Circle, XCircle } from "lucide-react";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { PanelGrid, ResetLayoutButton, type PanelDef } from "./components/PanelLayout";
+import CliPage from "./components/CliPage";
 
 // Eagerly loaded components (needed for Overview tab and landing page)
 import { TabBar, type TabId } from "./components/TabBar";
@@ -372,6 +373,11 @@ function TabContent({ tab, data, onNavigate, streaming }: { tab: TabId; data: An
 // ─── Main App ──────────────────────────────────────────────────
 
 export function App() {
+  // Route: /cli → dedicated CLI landing page
+  if (window.location.pathname === "/cli") {
+    return <CliPage />;
+  }
+
   const [domain, setDomain] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [autoLoaded, setAutoLoaded] = useState(false);
