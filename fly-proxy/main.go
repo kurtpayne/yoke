@@ -20,21 +20,36 @@ import (
 
 var domainRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$`)
 
-// MaxMind GeoLite2 database (loaded at startup if available)
+// MaxMind GeoLite2 databases (loaded at startup if available)
 var geoDB *geoip2.Reader
+var asnDB *geoip2.Reader
 
 func initGeoIP() {
-	dbPath := "/GeoLite2-City.mmdb"
+	// City database (lat/lon, country, city)
+	cityPath := "/GeoLite2-City.mmdb"
 	if envPath := os.Getenv("MAXMIND_DB_PATH"); envPath != "" {
-		dbPath = envPath
+		cityPath = envPath
 	}
-	db, err := geoip2.Open(dbPath)
+	db, err := geoip2.Open(cityPath)
 	if err != nil {
-		log.Printf("[geo] MaxMind GeoLite2-City not available at %s: %v — using API fallback", dbPath, err)
-		return
+		log.Printf("[geo] MaxMind GeoLite2-City not available at %s: %v — using API fallback", cityPath, err)
+	} else {
+		geoDB = db
+		log.Printf("[geo] Loaded MaxMind GeoLite2-City from %s", cityPath)
 	}
-	geoDB = db
-	log.Printf("[geo] MaxMind GeoLite2-City loaded from %s", dbPath)
+
+	// ASN database (ISP, org, ASN)
+	asnPath := "/GeoLite2-ASN.mmdb"
+	if envPath := os.Getenv("MAXMIND_ASN_DB_PATH"); envPath != "" {
+		asnPath = envPath
+	}
+	adb, err := geoip2.Open(asnPath)
+	if err != nil {
+		log.Printf("[geo] MaxMind GeoLite2-ASN not available at %s: %v — ISP/ASN from API fallback", asnPath, err)
+	} else {
+		asnDB = adb
+		log.Printf("[geo] Loaded MaxMind GeoLite2-ASN from %s", asnPath)
+	}
 }
 
 // ─── SSRF Protection ────────────────────────────────────────────────
@@ -373,11 +388,23 @@ func tryMaxMind(ipStr string) *GeoResult {
 	lat := record.Location.Latitude
 	lon := record.Location.Longitude
 
-	// GeoLite2-City doesn't have ISP/ASN data — leave those for API fallback enrichment
+	// Enrich with ASN data if available
+	var isp, org, asn *string
+	if asnDB != nil {
+		asnRecord, err := asnDB.ASN(ip)
+		if err == nil {
+			asnStr := fmt.Sprintf("AS%d", asnRecord.AutonomousSystemNumber)
+			orgStr := asnRecord.AutonomousSystemOrganization
+			asn = &asnStr
+			org = &orgStr
+			isp = &orgStr // ASN DB uses org as ISP
+		}
+	}
+
 	return &GeoResult{
 		IP: ipStr, City: &city, Country: &country,
 		CountryCode: &countryCode, Lat: &lat, Lon: &lon,
-		ISP: nil, Org: nil, ASN: nil, Source: "maxmind",
+		ISP: isp, Org: org, ASN: asn, Source: "maxmind",
 	}
 }
 
