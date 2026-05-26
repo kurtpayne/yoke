@@ -137,7 +137,7 @@ The extension source lives in [`extension/`](extension/) — it's a lightweight 
 |----------|-------|
 | Analyze | 50/hr |
 | Compare | 50/hr |
-| AI Analysis (platform key) | 10/day |
+| AI Analysis (platform key) | 10/hr |
 | AI Analysis (BYO key) | Unlimited |
 
 Bring your own OpenRouter API key (gear icon on the AI tab) to bypass the platform AI rate limit.
