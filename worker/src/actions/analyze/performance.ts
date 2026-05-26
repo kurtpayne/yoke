@@ -25,7 +25,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
     if (flyAuthSecret) {
       headers["Authorization"] = `Bearer ${flyAuthSecret}`;
     }
-    const res = await fetchWithTimeout(flyUrl, { timeout: 20000, headers });
+    const res = await fetchWithTimeout(flyUrl, { timeout: 45000, headers });
     if (res.ok) {
       const result = await res.json() as PerformanceResult;
       if (result.score != null) {
@@ -56,7 +56,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
 async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string): Promise<PerformanceResult> {
   try {
     const keyParam = apiKey ? `&key=${apiKey}` : "";
-    const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 20000 });
+    const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 45000 });
     if (res.status === 429) { if (db) logApiError(db, { api: "pagespeed", status: 429, message: "Rate limited", domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "Rate limited — try again later", screenshot: null }; }
     if (!res.ok) { if (db) logApiError(db, { api: "pagespeed", status: res.status, message: `API error`, domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: `API error (${res.status})`, screenshot: null }; }
     const data = await res.json() as { lighthouseResult?: { categories?: { performance?: { score?: number } }; audits?: Record<string, { numericValue?: number; details?: { data?: string } }>; }; };
