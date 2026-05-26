@@ -61,11 +61,17 @@ export default function CliPage() {
       </div>
 
       {/* Install + first analysis — above the fold */}
-      <Section title="Quick Start">
+      <Section title="Install">
         <CopyBlock code={`curl -sSL https://yoke.lol/install.sh | bash`} />
-        <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--dim)", margin: "8px 0 16px", lineHeight: "18px" }}>
-          Downloads the latest release for your platform (macOS/Linux, amd64/arm64).
+        <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--dim)", margin: "8px 0 0", lineHeight: "18px" }}>
+          Downloads the latest release for your platform (macOS/Linux, amd64/arm64). No dependencies required.
         </p>
+        <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--dim)", margin: "6px 0 16px", lineHeight: "18px" }}>
+          Or <a href="#build" onClick={e => { e.preventDefault(); document.getElementById("build")?.scrollIntoView({ behavior: "smooth" }); }} style={{ color: "var(--accent)" }}>build from source</a> with <a href="https://go.dev/dl/" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>Go 1.22+</a>.
+        </p>
+      </Section>
+
+      <Section title="Quick Start">
         <CopyBlock code="yoke stripe.com" />
         <div style={{ marginTop: 8 }}>
           <OutputBlock text={`╭─────────────────────────────────────────────────────────────╮
@@ -159,14 +165,25 @@ yoke ai stripe.com      # expert security/SEO/dev analysis`} />
 export OPENROUTER_API_KEY=sk-or-...`} />
       </Section>
 
+      {/* Build from source */}
+      <Section title="Build from Source">
+        <div id="build">
+          <CopyBlock code={`git clone https://github.com/kurtpayne/yoke
+cd yoke/cli
+go build -o yoke .
+./yoke stripe.com`} />
+        </div>
+      </Section>
+
       {/* Self-hosting */}
       <Section title="Self-Hosting">
         <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--dim)", lineHeight: "22px", marginBottom: 12 }}>
-          Yoke is open source. Deploy your own instance and point the CLI at it:
+          Yoke is open source. Deploy your own Worker and point the CLI at it:
         </p>
-        <CopyBlock code={`git clone https://github.com/kurtpayne/yoke
+        <CopyBlock code={`# Deploy the API/web app to Cloudflare Workers
 cd yoke && npm install && npx wrangler deploy
 
+# Point your CLI at your instance
 yoke config --set-base-url https://your-yoke.workers.dev`} />
         <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--dim)", marginTop: 12 }}>
           <a href="https://github.com/kurtpayne/yoke" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>View on GitHub →</a>
