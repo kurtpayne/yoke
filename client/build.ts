@@ -92,6 +92,8 @@ const html = `<!DOCTYPE html>
     <link rel="me" href="https://x.com/yokedotlol" />
     <link rel="me" href="https://github.com/yokedotlol" />
     <link rel="me" href="https://www.reddit.com/u/yokelol" />
+    <link rel="me" href="https://www.instagram.com/yokedotlol/" />
+    <link rel="me" href="https://www.threads.net/@yokedotlol" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",

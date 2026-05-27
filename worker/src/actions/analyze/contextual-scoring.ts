@@ -77,10 +77,9 @@ export function computeAxisScore(findings: Finding[]): number {
 }
 
 export function computeComposite(axisScores: Record<Axis, number>, archetype: ArchetypeName): number {
-  const weights = ARCHETYPE_WEIGHTS[archetype];
   let composite = 0;
-  for (const axis of Object.keys(weights) as Axis[]) {
-    composite += axisScores[axis] * weights[axis];
+  for (const axis of Object.keys(AXIS_WEIGHTS) as Axis[]) {
+    composite += axisScores[axis] * AXIS_WEIGHTS[axis];
   }
   return Math.round(composite);
 }
@@ -93,16 +92,28 @@ export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeN
   return overrides[archetype] ?? baseSeverity;
 }
 
-// ─── Archetype Weight Profiles ───────────────────────────────────────
+// ─── Fixed Axis Weights ──────────────────────────────────────────────
+// Single weight set for all archetypes. Security and reliability matter most;
+// performance is de-emphasized (complex sites are inherently slower);
+// visibility is a bonus, not a dealbreaker.
 
+export const AXIS_WEIGHTS: Record<Axis, number> = {
+  security: 0.25,
+  reliability: 0.25,
+  trust: 0.20,
+  performance: 0.18,
+  visibility: 0.12,
+};
+
+// Legacy export — kept for API compatibility; every archetype returns the same weights.
 export const ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
-  commerce:       { security: 0.35, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.10 },
-  content:        { security: 0.15, performance: 0.25, reliability: 0.15, trust: 0.15, visibility: 0.30 },
-  application:    { security: 0.30, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.15 },
-  corporate:      { security: 0.20, performance: 0.15, reliability: 0.15, trust: 0.30, visibility: 0.20 },
-  infrastructure: { security: 0.25, performance: 0.20, reliability: 0.30, trust: 0.10, visibility: 0.15 },
-  institutional:  { security: 0.35, performance: 0.10, reliability: 0.25, trust: 0.20, visibility: 0.10 },
-  general:        { security: 0.20, performance: 0.20, reliability: 0.20, trust: 0.20, visibility: 0.20 },
+  commerce:       AXIS_WEIGHTS,
+  content:        AXIS_WEIGHTS,
+  application:    AXIS_WEIGHTS,
+  corporate:      AXIS_WEIGHTS,
+  infrastructure: AXIS_WEIGHTS,
+  institutional:  AXIS_WEIGHTS,
+  general:        AXIS_WEIGHTS,
 };
 
 // ─── Archetype Detection ─────────────────────────────────────────────
@@ -1286,17 +1297,16 @@ export function calculateDomainScore(opts: {
   // ─── Compute Axis Scores ─────────────────────────────────────────
 
   const axes: Axis[] = ["security", "performance", "reliability", "trust", "visibility"];
-  const weights = ARCHETYPE_WEIGHTS[arch];
   const axisScores: Record<Axis, AxisScore> = {} as Record<Axis, AxisScore>;
 
   for (const axis of axes) {
     const axisFindings = findings.filter(f => f.axis === axis);
     if (axisFindings.length === 0) {
-      axisScores[axis] = { score: null, weight: weights[axis], findings: [], not_measured: true };
+      axisScores[axis] = { score: null, weight: AXIS_WEIGHTS[axis], findings: [], not_measured: true };
       continue;
     }
     const score = computeAxisScore(axisFindings);
-    axisScores[axis] = { score, weight: weights[axis], findings: axisFindings };
+    axisScores[axis] = { score, weight: AXIS_WEIGHTS[axis], findings: axisFindings };
   }
 
   // ─── Compute Composite Score ─────────────────────────────────────
@@ -1304,7 +1314,7 @@ export function calculateDomainScore(opts: {
 
   let totalMeasuredWeight = 0;
   for (const axis of axes) {
-    if (!axisScores[axis].not_measured) totalMeasuredWeight += axisScores[axis].weight;
+    if (!axisScores[axis].not_measured) totalMeasuredWeight += AXIS_WEIGHTS[axis];
   }
 
   let composite = 0;
