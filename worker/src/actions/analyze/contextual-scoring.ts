@@ -525,7 +525,7 @@ export function calculateDomainScore(opts: {
 
   // ─── NEW: Shodan Open Ports (attack surface) ─────────────────────
   if (opts.shodan) {
-    const dangerousPorts = [3306, 5432, 6379, 27017, 9200, 11211, 5984, 8080, 8443, 1433, 3389];
+    const dangerousPorts = [3306, 5432, 6379, 27017, 9200, 11211, 5984, 1433, 3389];
     const exposedDangerous = opts.shodan.ports.filter(p => dangerousPorts.includes(p));
     const nonStandard = opts.shodan.ports.filter(p => ![80, 443, 22, 25, 53, 143, 993, 587, 465].includes(p));
     if (exposedDangerous.length > 0) {
