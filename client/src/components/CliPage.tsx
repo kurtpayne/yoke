@@ -62,6 +62,10 @@ export default function CliPage() {
 
       {/* Install + first analysis — above the fold */}
       <Section title="Install">
+        <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--dim)", marginBottom: 8 }}>Homebrew (macOS/Linux):</p>
+        <CopyBlock code={`brew install yokedotlol/tap/yoke`} />
+
+        <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--dim)", margin: "16px 0 8px" }}>Or install script:</p>
         <CopyBlock code={`curl -sSL https://yoke.lol/install.sh | bash`} />
         <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--dim)", margin: "8px 0 0", lineHeight: "18px" }}>
           Downloads the latest release for your platform (macOS/Linux, amd64/arm64). No dependencies required.
