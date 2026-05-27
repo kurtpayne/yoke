@@ -4,7 +4,8 @@ project_name: yoke
 
 before:
   hooks:
-    - go mod tidy
+    - cmd: go mod tidy
+      dir: cli
 
 builds:
   - id: yoke
@@ -18,7 +19,6 @@ builds:
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
@@ -26,9 +26,6 @@ builds:
 archives:
   - id: default
     format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
     name_template: "yoke_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
