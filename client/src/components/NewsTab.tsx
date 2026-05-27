@@ -104,15 +104,18 @@ function SocialAccountsPanel({ domain }: { domain: string }) {
       ) : (
         <div className="p-3 flex flex-wrap gap-2">
           {accounts.map((acc, i) => {
-            const isVerified = acc.found_via === "homepage";
+            const trust = acc.found_via === "rel-me" ? "verified" : acc.found_via === "homepage" ? "linked" : "probable";
+            const tooltipText = trust === "verified"
+              ? "Verified via rel=\"me\" — the site explicitly claims ownership of this social profile"
+              : trust === "linked"
+              ? "Linked from site — this social profile is referenced in the site's HTML"
+              : "Username match — discovered by probing common social URL patterns";
+            const badgeColor = trust === "verified" ? "var(--success)" : trust === "linked" ? "var(--info, var(--accent))" : "var(--warning)";
+            const Icon = trust === "probable" ? HelpCircle : CheckCircle2;
             return (
-              <Tooltip key={acc.url} text={isVerified ? "Linked from site — this social profile is referenced in the site's own HTML" : "Username match — discovered by probing common social URL patterns"}>
+              <Tooltip key={acc.url} text={tooltipText}>
                 <a href={acc.url} target="_blank" rel="noopener noreferrer" className="social-badge">
-                  {isVerified ? (
-                    <CheckCircle2 size={10} style={{ color: "var(--success)", flexShrink: 0 }} />
-                  ) : (
-                    <HelpCircle size={10} style={{ color: "var(--warning)", flexShrink: 0 }} />
-                  )}
+                  <Icon size={10} style={{ color: badgeColor, flexShrink: 0 }} />
                   <span style={{ fontWeight: 600, fontSize: "11px" }}>{acc.platform}</span>
                   {acc.username && (
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>@{acc.username}</span>
@@ -120,10 +123,10 @@ function SocialAccountsPanel({ domain }: { domain: string }) {
                   <span style={{
                     fontSize: "8px", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
                     padding: "1px 4px", borderRadius: "3px", lineHeight: 1.3,
-                    background: isVerified ? "color-mix(in srgb, var(--success) 15%, transparent)" : "color-mix(in srgb, var(--warning) 15%, transparent)",
-                    color: isVerified ? "var(--success)" : "var(--warning)",
+                    background: `color-mix(in srgb, ${badgeColor} 15%, transparent)`,
+                    color: badgeColor,
                   }}>
-                    {isVerified ? "verified" : "probable"}
+                    {trust}
                   </span>
                 </a>
               </Tooltip>

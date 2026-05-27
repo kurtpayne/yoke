@@ -16,6 +16,9 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string) {
   const platformCount: Record<string, number> = {};
   const MAX_PER_PLATFORM = 3;
 
+  // Trust hierarchy: rel-me > homepage > probe
+  const TRUST_RANK: Record<string, number> = { "rel-me": 3, "homepage": 2, "probe": 1 };
+
   function normalizeUrl(url: string): string {
     return url.toLowerCase()
       .replace(/^https?:\/\//, "")
@@ -26,7 +29,14 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string) {
 
   function addAccount(platform: string, url: string, username: string | null, foundVia: string): boolean {
     const normalized = normalizeUrl(url);
-    if (seenNormalized.has(normalized)) return false;
+    // If we already have this exact URL, upgrade found_via if new source is higher trust
+    const existing = accounts.find(a => normalizeUrl(a.url) === normalized);
+    if (existing) {
+      if ((TRUST_RANK[foundVia] ?? 0) > (TRUST_RANK[existing.found_via] ?? 0)) {
+        existing.found_via = foundVia;
+      }
+      return false;
+    }
     if ((platformCount[platform] ?? 0) >= MAX_PER_PLATFORM) return false;
     if (!username || ["share", "sharer", "intent", "dialog", "login", "signup", "hashtag", "search", "explore", "about", "help", "p", "watch", "status", "i", "reel", "stories", "reels"].includes(username.toLowerCase())) return false;
     seenNormalized.add(normalized);
@@ -54,6 +64,20 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string) {
   // Determine the base domain being analyzed (to skip self-referencing links)
   const baseDomain = domain.replace(/^www\./, "").toLowerCase();
 
+  function matchHrefToPlatform(href: string, foundVia: string): void {
+    for (const pp of platformPatterns) {
+      // Skip self-referencing links (e.g., github.com linking to github.com/*)
+      if (pp.selfDomain && baseDomain.includes(pp.selfDomain.replace(/^www\./, ""))) continue;
+      pp.pattern.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = pp.pattern.exec(href)) !== null) {
+        const username = m[1] ?? null;
+        const cleanUrl = href.split("?")[0]?.replace(/\/+$/, "") ?? href;
+        addAccount(pp.platform, cleanUrl, username, foundVia);
+      }
+    }
+  }
+
   // Strategy 1: Parse homepage HTML for social links
   try {
     const res = await safeFetchWithRedirects(`https://${domain}`, {
@@ -62,25 +86,22 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string) {
     });
     if (res.ok) {
       const html = await boundedText(res);
-      // Extract all hrefs
+
+      // Strategy 1a: Extract rel="me" links first (highest trust — site claims ownership)
+      // Matches both <link rel="me" href="..."> and <a rel="me" href="...">
+      const relMeRegex = /<(?:link|a)\s[^>]*rel=["']me["'][^>]*href=["']([^"']+)["'][^>]*>|<(?:link|a)\s[^>]*href=["']([^"']+)["'][^>]*rel=["']me["'][^>]*>/gi;
+      let relMeMatch: RegExpExecArray | null;
+      while ((relMeMatch = relMeRegex.exec(html)) !== null) {
+        const href = relMeMatch[1] || relMeMatch[2] || "";
+        if (href) matchHrefToPlatform(href, "rel-me");
+      }
+
+      // Strategy 1b: Extract all other hrefs (medium trust — linked from site)
       const hrefRegex = /href=["']([^"']+)["']/gi;
       let hrefMatch: RegExpExecArray | null;
-      const hrefs: string[] = [];
       while ((hrefMatch = hrefRegex.exec(html)) !== null) {
-        hrefs.push(hrefMatch[1] ?? "");
-      }
-      for (const href of hrefs) {
-        for (const pp of platformPatterns) {
-          // Skip self-referencing links (e.g., github.com linking to github.com/*)
-          if (pp.selfDomain && baseDomain.includes(pp.selfDomain.replace(/^www\./, ""))) continue;
-          pp.pattern.lastIndex = 0;
-          let m: RegExpExecArray | null;
-          while ((m = pp.pattern.exec(href)) !== null) {
-            const username = m[1] ?? null;
-            const cleanUrl = href.split("?")[0]?.replace(/\/+$/, "") ?? href;
-            addAccount(pp.platform, cleanUrl, username, "homepage");
-          }
-        }
+        const href = hrefMatch[1] ?? "";
+        matchHrefToPlatform(href, "homepage");
       }
     }
   } catch { /* homepage fetch failed */ }
@@ -106,6 +127,9 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string) {
     });
     await Promise.allSettled(probes);
   }
+
+  // Sort: rel-me first, then homepage, then probe
+  accounts.sort((a, b) => (TRUST_RANK[b.found_via] ?? 0) - (TRUST_RANK[a.found_via] ?? 0));
 
   const result = { accounts };
   await setCache(db, domain, "social_accounts", result);
