@@ -1,31 +1,26 @@
 # Yoke Launch Checklist
-# Target: Wednesday May 28, 2026 @ 10:00 AM PT (pending NRD timing)
+# Target: Monday June 23, 2026 @ 10:00 AM PT (NRD 30-day cooloff from 5/22 registration)
 
 ---
 
-## 🔲 EMAIL (do first — needed for social signups)
+## ✅ EMAIL
 
-- [ ] Sign up for Resend (resend.com) — free tier, 100 emails/day
-- [ ] Add yoke.lol domain in Resend dashboard
-- [ ] Add DKIM records to CF DNS (Resend provides exact values)
-- [ ] Verify SPF record includes Resend (or update existing)
-- [ ] Set up hello@yoke.lol (or whatever address you want)
-- [ ] Gmail → Settings → Accounts → "Send mail as" → add yoke.lol address with Resend SMTP creds
-- [ ] Send test email, verify DKIM/SPF passes (check headers)
+- [x] Resend account set up
+- [x] DNS records (DKIM/SPF/MX) configured in Cloudflare
+- [x] hello@yoke.lol working
 
 ---
 
-## 🔲 SOCIAL HANDLES (register @yokelol everywhere)
+## 🔲 SOCIAL HANDLES
 
-- [ ] **X/Twitter** — @yokelol (status unclear, try registering)
-- [ ] **Instagram** — @yokelol
-- [ ] **Threads** — @yokelol (auto-created with Instagram)
-- [ ] **Bluesky** — yokelol.bsky.social (confirmed available)
-- [ ] **Mastodon** — @yokelol@mastodon.social (confirmed available)
-- [ ] **GitHub org** — github.com/yokelol (confirmed available; repo stays at kurtpayne/yoke)
-- [ ] **Reddit** — u/yokelol (likely available)
+- [x] **Bluesky** — yokelol.bsky.social ✅
+- [x] **Reddit** — u/yokelol ✅
+- [x] **Mastodon** — @yokelol@mastodon.social ✅
+- [x] **X/Twitter** — @yokedotlol ✅ (yokelol taken)
 - [ ] Set all bios to: "Domain intelligence in one pass. Free & open source." + link to yoke.lol
 - [ ] Set all profile pics to ox mark
+- ❌ Instagram — yokelol taken, skip
+- ❌ GitHub org — yokelol taken, repo stays at kurtpayne/yoke
 
 ---
 
@@ -38,22 +33,19 @@
 
 ---
 
-## 🔲 LINKEDIN CAROUSEL (review on filesystem)
+## ✅ LINKEDIN CAROUSEL
 
-- [ ] Review slides at `workspace/your_files/linkedin-carousel/slide1.png` through `slide6.png`
-- [ ] Review/approve slide designs, copy, visual quality
-- [ ] Iterate on any slides that need work
-- [ ] Final PDF at `workspace/your_files/linkedin-carousel/yoke-launch-carousel.pdf`
+- [x] 6 slides designed and approved
+- [x] PDF at `workspace/your_files/linkedin-carousel/yoke-launch-carousel.pdf`
 
 ---
 
-## 🔲 LINKEDIN POST COPY (review on filesystem)
+## ✅ LINKEDIN POST COPY
 
-- [ ] Review at `workspace/yoke-public/linkedin-launch-post.md`
-- [ ] Confirm "weekend project" framing
-- [ ] Confirm naming story (yoke = for those who pull the load, .lol = trogdor nod)
-- [ ] Confirm no bare links in body (all links in first comment only)
-- [ ] Prep first comment text for quick paste after posting
+- [x] Approved at `workspace/yoke-public/linkedin-launch-post.md`
+- [x] "Weekend project" framing ✅
+- [x] Naming story (yoke = for those who pull the load, .lol = trogdor nod) ✅
+- [x] No bare links in body ✅
 
 ---
 

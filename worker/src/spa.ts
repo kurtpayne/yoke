@@ -170,6 +170,10 @@ export async function handleSPARoute(
   if (method === "GET" && (path === "/.well-known/security.txt" || path === "/security.txt")) {
     return textResponse(SECURITY_TXT, "text/plain;charset=UTF-8");
   }
+  // Bluesky domain handle verification — proves yoke.lol owns this Bluesky account
+  if (method === "GET" && path === "/.well-known/atproto-did") {
+    return textResponse("did:plc:jx7ot6zjijwxh7phk7sv2taj", "text/plain;charset=UTF-8");
+  }
   if (method === "GET" && path === "/install.sh") {
     return new Response("", {
       status: 302,
