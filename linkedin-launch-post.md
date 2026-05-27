@@ -33,7 +33,7 @@ Go break it. Then tell me what's missing — I want to know what the next check 
 Links:
 
 🔗 yoke.lol
-📦 github.com/kurtpayne/yoke
+📦 github.com/yokedotlol/yoke
 🧩 Chrome extension: search "Yoke" in the Chrome Web Store
 💻 CLI: curl -sSL yoke.lol/install.sh | bash
 

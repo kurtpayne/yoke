@@ -6,7 +6,7 @@ import { logWarn, logError } from "../logger";
 
 // AI analysis prompt — extracted to prompts/ai-analysis.txt for easy editing.
 // At build time this is inlined as a string constant.
-// See: https://github.com/kurtpayne/yoke/blob/main/prompts/ai-analysis.txt
+// See: https://github.com/yokedotlol/yoke/blob/main/prompts/ai-analysis.txt
 import SYSTEM_PROMPT_RAW from "../../../prompts/ai-analysis.txt";
 const SYSTEM_PROMPT = SYSTEM_PROMPT_RAW;
 
@@ -197,7 +197,7 @@ async function callOpenRouter(
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": referer || "https://github.com/kurtpayne/yoke",
+          "HTTP-Referer": referer || "https://github.com/yokedotlol/yoke",
           "X-Title": "Yoke Domain Intelligence",
         },
         body: JSON.stringify({

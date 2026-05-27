@@ -20,7 +20,7 @@
 - [ ] Set all bios to: "Domain intelligence in one pass. Free & open source." + link to yoke.lol
 - [ ] Set all profile pics to ox mark
 - ❌ Instagram — yokelol taken, skip
-- ❌ GitHub org — yokelol taken, repo stays at kurtpayne/yoke
+- ❌ GitHub org — yokelol taken, repo stays at yokedotlol/yoke
 
 ---
 
@@ -66,7 +66,7 @@
 ## 🔲 ALREADY DONE ✅
 
 - [x] Chrome extension live on Web Store
-- [x] GitHub repo public (kurtpayne/yoke, MIT)
+- [x] GitHub repo public (yokedotlol/yoke, MIT)
 - [x] install.sh working (yoke.lol/install.sh → GitHub)
 - [x] JSON API live (curl yoke.lol/domain.com)
 - [x] Go CLI built and tested

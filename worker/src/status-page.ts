@@ -145,7 +145,7 @@ export async function renderStatusPage(db: D1Database, baseUrl = "https://yoke.l
     ${rows}
     <footer>
       <span>Updated ${escHtml(data.generated_at)} · Errors auto-prune after 7 days</span>
-      <span><a href="${baseUrl}">${escHtml(new URL(baseUrl).hostname)}</a> · <a href="https://github.com/kurtpayne/yoke">GitHub</a></span>
+      <span><a href="${baseUrl}">${escHtml(new URL(baseUrl).hostname)}</a> · <a href="https://github.com/yokedotlol/yoke">GitHub</a></span>
     </footer>
   </div>
 </body>

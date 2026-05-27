@@ -27,7 +27,7 @@ async function fetchGoogleNews(query: string): Promise<NewsArticle[]> {
   try {
     const res = await fetchWithTimeout(
       `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`,
-      { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/kurtpayne/yoke)" } }
+      { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/yokedotlol/yoke)" } }
     );
     if (res.ok) return parseGoogleNewsRss(await res.text());
   } catch { /* failed */ }
@@ -61,7 +61,7 @@ export async function getNews(db: D1Database, rawDomain: string) {
       for (const q of queries) {
         const res = await fetchWithTimeout(
           `https://www.bing.com/news/search?q=${encodeURIComponent(q)}&format=rss`,
-          { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/kurtpayne/yoke)" } }
+          { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/yokedotlol/yoke)" } }
         );
         if (res.ok) {
           const xml = await res.text();

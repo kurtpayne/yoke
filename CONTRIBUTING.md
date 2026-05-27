@@ -5,7 +5,7 @@ Thanks for wanting to contribute! Yoke is MIT-licensed and welcomes pull request
 ## Quick Start
 
 ```bash
-git clone https://github.com/kurtpayne/yoke.git
+git clone https://github.com/yokedotlol/yoke.git
 cd yoke
 bun install
 cd client && bun install && cd ..
@@ -164,7 +164,7 @@ bun test -- scoring         # Run specific test file
 
 ## Opening Issues
 
-Found a bug or have a feature idea? [Open an issue](https://github.com/kurtpayne/yoke/issues). Include:
+Found a bug or have a feature idea? [Open an issue](https://github.com/yokedotlol/yoke/issues). Include:
 
 - What you expected vs. what happened
 - The domain you tested (if applicable)

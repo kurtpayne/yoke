@@ -227,7 +227,7 @@ async function tryHttpsCrtsh(domain: string): Promise<SslResult | null> {
   try {
     const httpsRes = await fetchWithTimeout(`https://${domain}/`, {
       timeout: 8000,
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/kurtpayne/yoke)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Yoke/1.0; +https://github.com/yokedotlol/yoke)" },
     });
     if (!httpsRes.ok && httpsRes.status === 0) return null;
 

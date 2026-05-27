@@ -85,7 +85,7 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
         reset: cachedResetAt,
         window: `${config.windowSecs / 3600} hour`,
         retry_after: secsLeft,
-        self_host: "https://github.com/kurtpayne/yoke#self-hosting",
+        self_host: "https://github.com/yokedotlol/yoke#self-hosting",
         message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
       }), { status: 429, headers: {
         "Content-Type": "application/json",
@@ -133,7 +133,7 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
           reset: resetAt,
           window: `${config.windowSecs / 3600} hour`,
           retry_after: config.windowSecs,
-          self_host: "https://github.com/kurtpayne/yoke#self-hosting",
+          self_host: "https://github.com/yokedotlol/yoke#self-hosting",
           message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
         }), { status: 429, headers: {
           "Content-Type": "application/json",
@@ -271,7 +271,7 @@ export default {
 
     if (method === "GET" && path === "/llms.txt") {
       return new Response(
-        `# Yoke — Free Domain Intelligence & OSINT Tool\n\n> Yoke is a free, open-source domain intelligence tool at ${baseUrl}\n\n## What Yoke Does\n\nYoke provides instant, comprehensive analysis of any internet domain. Enter a domain name and get detailed intelligence across security, infrastructure, technology, performance, and business dimensions.\n\n## Key Capabilities\n\n- DNS Analysis: A, AAAA, MX, NS, TXT, CNAME, SOA records with DNSSEC validation\n- SSL/TLS: Certificate details, chain validation, SSL Labs grading, CAA records\n- WHOIS/RDAP: Registrar, registration and expiry dates, domain age\n- Security Audit: HTTP security headers, Mozilla Observatory scoring, cookie security\n- Data Breaches: HIBP breach detection\n- Threat Intelligence: Shodan port/vulnerability data, GreyNoise IP classification\n- Technology Detection: Frameworks, CMS, CDN, WAF, deep WordPress fingerprinting\n- Email Authentication: SPF, DKIM, DMARC validation\n- Performance: Google PageSpeed, Core Web Vitals, compression\n- Certificate Transparency: CT log monitoring for subdomain discovery\n- Business Intelligence: Company enrichment via Wikidata, Brandfetch, Crunchbase\n- AI Analysis: LLM-powered analysis from 6 expert personas\n\n## Free JSON API\n\nNo authentication required.\n\ncurl ${host}/stripe.com | jq\ncurl "${host}/stripe.com?pretty"\ncurl -s ${host}/stripe.com | jq '.ssl'\n\n## Links\n\n- Web UI: ${baseUrl}\n- API Docs: ${baseUrl}/api/docs\n- Chrome Extension: Chrome Web Store\n- Source: https://github.com/kurtpayne/yoke\n- License: MIT`,
+        `# Yoke — Free Domain Intelligence & OSINT Tool\n\n> Yoke is a free, open-source domain intelligence tool at ${baseUrl}\n\n## What Yoke Does\n\nYoke provides instant, comprehensive analysis of any internet domain. Enter a domain name and get detailed intelligence across security, infrastructure, technology, performance, and business dimensions.\n\n## Key Capabilities\n\n- DNS Analysis: A, AAAA, MX, NS, TXT, CNAME, SOA records with DNSSEC validation\n- SSL/TLS: Certificate details, chain validation, SSL Labs grading, CAA records\n- WHOIS/RDAP: Registrar, registration and expiry dates, domain age\n- Security Audit: HTTP security headers, Mozilla Observatory scoring, cookie security\n- Data Breaches: HIBP breach detection\n- Threat Intelligence: Shodan port/vulnerability data, GreyNoise IP classification\n- Technology Detection: Frameworks, CMS, CDN, WAF, deep WordPress fingerprinting\n- Email Authentication: SPF, DKIM, DMARC validation\n- Performance: Google PageSpeed, Core Web Vitals, compression\n- Certificate Transparency: CT log monitoring for subdomain discovery\n- Business Intelligence: Company enrichment via Wikidata, Brandfetch, Crunchbase\n- AI Analysis: LLM-powered analysis from 6 expert personas\n\n## Free JSON API\n\nNo authentication required.\n\ncurl ${host}/stripe.com | jq\ncurl "${host}/stripe.com?pretty"\ncurl -s ${host}/stripe.com | jq '.ssl'\n\n## Links\n\n- Web UI: ${baseUrl}\n- API Docs: ${baseUrl}/api/docs\n- Chrome Extension: Chrome Web Store\n- Source: https://github.com/yokedotlol/yoke\n- License: MIT`,
         { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
       );
     }
@@ -654,7 +654,7 @@ export default {
       return new Response(null, {
         status: 302,
         headers: {
-          Location: "https://raw.githubusercontent.com/kurtpayne/yoke/main/cli/install.sh",
+          Location: "https://raw.githubusercontent.com/yokedotlol/yoke/main/cli/install.sh",
           ...CORS_HEADERS,
         },
       });
