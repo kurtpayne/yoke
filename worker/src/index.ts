@@ -19,6 +19,7 @@ import { getDomainSuggestions } from "./actions/suggestions";
 import { getAIAnalysis, buildAIPrompt, ALLOWED_MODELS, DEFAULT_MODEL } from "./actions/ai-analysis";
 import { trackUsage, getUsageStats } from "./usage-tracking";
 import { renderUsagePage } from "./usage-page";
+import { trackRequest } from "./request-tracking";
 
 import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, YOKE_VERSION } from "./helpers";
 import type { Env } from "./helpers";
@@ -248,11 +249,15 @@ export default {
     // API routes
     if (path.startsWith("/api/")) {
       const clientIP = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+      const _t0 = Date.now();
+      const _track = (endpoint: string, status: number, domain?: string) => {
+        trackRequest(env, request, { endpoint, domain, status, latencyMs: Date.now() - _t0 });
+      };
       try {
         // POST /api/analyze
         if (method === "POST" && path === "/api/analyze") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
-          if (rl.blocked) return rl.blocked;
+          if (rl.blocked) { _track("analyze", 429); return rl.blocked; }
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
@@ -261,15 +266,16 @@ export default {
           await trackUsage(env.STATS_DB, "analyze");
           // Support SSE streaming when client requests it
           const wantsStream = request.headers.get("Accept") === "text/event-stream";
-          if (wantsStream) return analyzeDomainStream(domain, env, skipCache, rl.headers);
+          if (wantsStream) { _track("analyze", 200, domain); return analyzeDomainStream(domain, env, skipCache, rl.headers); }
           const resp = await analyzeDomain(domain, env, skipCache);
+          _track("analyze", resp.status, domain);
           return addHeaders(resp, rl.headers);
         }
 
         // POST /api/compare
         if (method === "POST" && path === "/api/compare") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/compare", env);
-          if (rl.blocked) return rl.blocked;
+          if (rl.blocked) { _track("compare", 429); return rl.blocked; }
           const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
           if (!body.domain1 || !body.domain2) return json({ error: "domain1 and domain2 are required", code: "MISSING_DOMAIN" }, 400);
           const d1 = cleanDomain(body.domain1);
@@ -277,6 +283,7 @@ export default {
           if (!d1 || !d2) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           await trackUsage(env.STATS_DB, "compare");
           const resp = await compareDomains({ domain1: d1, domain2: d2 }, env);
+          _track("compare", resp.status, d1);
           return addHeaders(resp, rl.headers);
         }
 
@@ -295,6 +302,7 @@ export default {
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await getSubdomains(env.DB, domain);
           await trackUsage(env.STATS_DB, "subdomains");
+          _track("subdomains", 200, domain);
           return json(result);
         }
 
@@ -304,19 +312,21 @@ export default {
           if (!domain) return json({ error: "domain query parameter is required (e.g., /api/subdomains?domain=example.com)", code: "MISSING_DOMAIN" }, 400);
           const result = await getSubdomains(env.DB, domain);
           await trackUsage(env.STATS_DB, "subdomains");
+          _track("subdomains", 200, domain);
           return json(result);
         }
 
         // POST /api/subdomain-scan
         if (method === "POST" && path === "/api/subdomain-scan") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/subdomain-scan", env);
-          if (rl.blocked) return rl.blocked;
+          if (rl.blocked) { _track("subdomain-scan", 429); return rl.blocked; }
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await scanSubdomains(env.DB, domain);
           await trackUsage(env.STATS_DB, "subdomain-scan");
+          _track("subdomain-scan", 200, domain);
           return addHeaders(json(result), rl.headers);
         }
 
@@ -328,6 +338,7 @@ export default {
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await getCompanyInfo(env.DB, domain, body.force);
           await trackUsage(env.STATS_DB, "company");
+          _track("company", 200, domain);
           return json(result);
         }
 
@@ -339,6 +350,7 @@ export default {
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await getNews(env.DB, domain);
           await trackUsage(env.STATS_DB, "news");
+          _track("news", 200, domain);
           return json(result);
         }
 
@@ -350,6 +362,7 @@ export default {
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const result = await getSocialAccounts(env.DB, domain);
           await trackUsage(env.STATS_DB, "social");
+          _track("social", 200, domain);
           return json(result);
         }
 
@@ -366,13 +379,14 @@ export default {
           }
           const result = await getReverseIP(env.DB, ip);
           await trackUsage(env.STATS_DB, "reverse-ip");
+          _track("reverse-ip", 200);
           return json(result);
         }
 
         // POST /api/availability
         if (method === "POST" && path === "/api/availability") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/availability", env);
-          if (rl.blocked) return rl.blocked;
+          if (rl.blocked) { _track("availability", 429); return rl.blocked; }
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
@@ -381,6 +395,7 @@ export default {
           const cf = (request as Request & { cf?: { colo?: string; country?: string; city?: string } }).cf;
           const result = await checkGlobalAvailability(domain, { colo: cf?.colo, country: cf?.country, city: cf?.city }, env);
           await trackUsage(env.STATS_DB, "availability");
+          _track("availability", 200, domain);
           return addHeaders(json(result), rl.headers);
         }
 
@@ -390,6 +405,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const result = await getDomainSuggestions(body.domain, env);
           await trackUsage(env.STATS_DB, "suggestions");
+          _track("suggestions", 200, body.domain);
           return json(result);
         }
 
@@ -404,6 +420,7 @@ export default {
           const model = (byoKey && typeof body.model === "string") ? body.model : undefined;
           // Custom prompts are only allowed for BYO key users (they're paying for their own tokens)
           const customPrompt = (byoKey && typeof body.custom_prompt === "string" && body.custom_prompt.trim()) ? body.custom_prompt.trim() : undefined;
+          _track("ai-analysis", 200, domain);
           return getAIAnalysis(domain, env, { clientIP, byoKey, model, customPrompt });
         }
 
@@ -518,6 +535,7 @@ export default {
             const errRes = await env.STATS_DB.prepare("DELETE FROM api_errors WHERE ts < ?").bind(cutoff7d).run();
             results.api_errors = `${errRes.meta?.changes ?? "?"} rows deleted (>7 days old)`;
           } catch (e) { results.api_errors = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          // request_meta: infinite retention — no pruning
           return adminJson({ ok: true, cleaned_at: new Date().toISOString(), results });
         }
 

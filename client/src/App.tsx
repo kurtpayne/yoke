@@ -388,8 +388,8 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
     return () => clearInterval(t);
   }, []);
 
-  // Option C: only show after 5+ analyses in this session
-  if (!rateLimit || sessionCount < 5) return null;
+  // Always show when we have rate limit data
+  if (!rateLimit) return null;
 
   const { limit, remaining, reset } = rateLimit;
   const pct = remaining / limit;
