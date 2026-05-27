@@ -380,6 +380,7 @@ function TabContent({ tab, data, onNavigate, streaming }: { tab: TabId; data: An
 // ─── Rate Limit Pill ────────────────────────────────────────────────
 function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo | null; sessionCount: number }) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  const [expanded, setExpanded] = useState(false);
 
   // Tick every 30s to update countdown
   useEffect(() => {
@@ -400,30 +401,72 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
   const minsLeft = Math.ceil(secsLeft / 60);
 
   const color = isOut ? "var(--danger)" : isLow ? "var(--warning, #d29922)" : "var(--cyan)";
+  const used = limit - remaining;
 
   return (
     <div
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-      style={{
-        background: "var(--card-bg)",
-        border: `1px solid ${isOut ? "var(--danger)" : "var(--border)"}`,
-        fontFamily: "var(--font-ui)",
-        fontSize: "11px",
-        color,
-        opacity: isLow ? 1 : 0.7,
-        transition: "opacity 0.3s, border-color 0.3s",
-        whiteSpace: "nowrap",
-      }}
-      title={isOut
-        ? `Rate limit reached. Resets in ${minsLeft}m. Self-host for unlimited usage.`
-        : `${remaining} of ${limit} analyses remaining this hour`
-      }
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
     >
-      <Zap size={11} />
-      {isOut
-        ? <span>Resets in {minsLeft}m</span>
-        : <span>{remaining}/{limit}</span>
-      }
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          background: "var(--card-bg)",
+          border: `1px solid ${isOut ? "var(--danger)" : "var(--border)"}`,
+          fontFamily: "var(--font-ui)",
+          fontSize: "11px",
+          color,
+          opacity: isLow ? 1 : 0.7,
+          transition: "opacity 0.3s, border-color 0.3s",
+          whiteSpace: "nowrap",
+          cursor: "pointer",
+        }}
+      >
+        <Zap size={11} />
+        {isOut
+          ? <span>Resets in {minsLeft}m</span>
+          : <span>{remaining}/{limit}</span>
+        }
+      </div>
+      {expanded && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            right: 0,
+            background: "var(--card-bg)",
+            border: "1px solid var(--border)",
+            borderRadius: "8px",
+            padding: "10px 14px",
+            minWidth: "220px",
+            fontFamily: "var(--font-ui)",
+            fontSize: "12px",
+            color: "var(--text)",
+            lineHeight: 1.6,
+            zIndex: 100,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: "4px", color }}>
+            {isOut ? "Rate limit reached" : isLow ? "Running low" : "API usage"}
+          </div>
+          {/* Usage bar */}
+          <div style={{ height: "4px", borderRadius: "2px", background: "var(--border)", marginBottom: "8px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min((used / limit) * 100, 100)}%`, background: color, borderRadius: "2px", transition: "width 0.3s" }} />
+          </div>
+          <div style={{ color: "var(--dim)", fontSize: "11px" }}>
+            <div>{used} of {limit} analyses used this hour</div>
+            {secsLeft > 0 && <div>Resets in {minsLeft} min{minsLeft !== 1 ? "s" : ""}</div>}
+          </div>
+          {isOut && (
+            <div style={{ marginTop: "6px", fontSize: "11px" }}>
+              <a href="https://github.com/kurtpayne/yoke#self-hosting" target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline" }}>Self-host</a> for unlimited usage
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
