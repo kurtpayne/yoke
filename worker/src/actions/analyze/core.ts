@@ -358,7 +358,7 @@ export async function runAnalysis(
 
   // Per-check timeout: individual checks that exceed this limit fall back to defaults.
   // This prevents a single slow API from blocking the entire analysis pipeline.
-  const PER_CHECK_TIMEOUT_MS = 25_000;
+  const PER_CHECK_TIMEOUT_MS = 30_000;
 
   // Launch all Phase 2 checks from the registry (one file per check — see worker/src/checks/)
   const checks = registry.map((check) => ({
@@ -418,7 +418,7 @@ export async function runAnalysis(
 
   // Overall Phase 2 deadline: if checks collectively exceed this limit, proceed
   // with whatever results have arrived. Leaves ~10s for scoring + response assembly.
-  const PHASE2_DEADLINE_MS = 35_000;
+  const PHASE2_DEADLINE_MS = 50_000;
   await Promise.race([
     Promise.allSettled(wrappedPromises),
     new Promise<void>((resolve) => setTimeout(resolve, PHASE2_DEADLINE_MS)),
