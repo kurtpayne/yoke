@@ -82,6 +82,10 @@ const html = `<!DOCTYPE html>
     <meta name="twitter:description" content="Analyze any domain instantly. DNS, SSL, WHOIS, security headers, tech stack, performance, and breach detection. Free API: curl yoke.lol/stripe.com" />
     <meta name="twitter:image" content="https://yoke.lol/og-banner.png" />
     <meta name="impact-site-verification" value="5b874e38-4989-4b8a-8544-3030a7b05ced" />
+    <!-- Social verification (rel="me") -->
+    <link rel="me" href="https://mastodon.social/@yokelol" />
+    <link rel="me" href="https://bsky.app/profile/yoke.lol" />
+    <link rel="me" href="https://x.com/yokedotlol" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
