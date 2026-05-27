@@ -876,13 +876,17 @@ function PersonaInsightCard({
 
 // ─── Main Component ─────────────────────────────────────────────────
 
+// Module-level cache so persona results survive tab switches (component remounts)
+const _personaCache: Record<string, Record<string, string>> = {};
+const _metadataCache: Record<string, { analyzed_at: string; cached: boolean }> = {};
+
 export function AIAnalysisPanel({ domain, analysisData }: { domain: string; analysisData?: AnalysisResult }) {
   const [activePersona, setActivePersona] = useState<PersonaKey | null>(null);
-  const [personaResults, setPersonaResults] = useState<Record<string, string>>({});
+  const [personaResults, setPersonaResults] = useState<Record<string, string>>(() => _personaCache[domain] || {});
   const [loadingPersona, setLoadingPersona] = useState<string | null>(null);
   const [personaError, setPersonaError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState<RateLimitResponse | null>(null);
-  const [analysisMetadata, setAnalysisMetadata] = useState<{ analyzed_at: string; cached: boolean } | null>(null);
+  const [analysisMetadata, setAnalysisMetadata] = useState<{ analyzed_at: string; cached: boolean } | null>(_metadataCache[domain] || null);
   const [, setKeyVersion] = useState(0);
   const [selectedModel, setSelectedModel] = useState(getSavedModel);
 
@@ -936,10 +940,14 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
           for (const [key, value] of Object.entries(insights)) {
             if (value) next[key] = value;
           }
+          // Persist to module-level cache so results survive tab switches
+          _personaCache[domain] = next;
           return next;
         });
         if (json.analyzed_at) {
-          setAnalysisMetadata({ analyzed_at: json.analyzed_at, cached: !!json.cached });
+          const meta = { analyzed_at: json.analyzed_at, cached: !!json.cached };
+          setAnalysisMetadata(meta);
+          _metadataCache[domain] = meta;
         }
       }
     } catch (err) {
@@ -960,6 +968,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
     setSelectedModel(model);
     // Clear cached persona results since model changed
     setPersonaResults({});
+    delete _personaCache[domain];
   };
 
   const handlePersonaClick = (key: PersonaKey) => {
