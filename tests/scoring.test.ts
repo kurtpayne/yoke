@@ -187,14 +187,14 @@ describe('Grade Assignment', () => {
   it('should assign correct grades (production thresholds)', () => {
     expect(gradeFromComposite(100)).toBe("A");
     expect(gradeFromComposite(95)).toBe("A");
-    expect(gradeFromComposite(85)).toBe("A");
-    expect(gradeFromComposite(84)).toBe("B");
-    expect(gradeFromComposite(70)).toBe("B");
-    expect(gradeFromComposite(69)).toBe("C");
-    expect(gradeFromComposite(55)).toBe("C");
-    expect(gradeFromComposite(54)).toBe("D");
-    expect(gradeFromComposite(40)).toBe("D");
-    expect(gradeFromComposite(39)).toBe("F");
+    expect(gradeFromComposite(90)).toBe("A");
+    expect(gradeFromComposite(89)).toBe("B");
+    expect(gradeFromComposite(75)).toBe("B");
+    expect(gradeFromComposite(74)).toBe("C");
+    expect(gradeFromComposite(60)).toBe("C");
+    expect(gradeFromComposite(59)).toBe("D");
+    expect(gradeFromComposite(45)).toBe("D");
+    expect(gradeFromComposite(44)).toBe("F");
     expect(gradeFromComposite(0)).toBe("F");
   });
 });
