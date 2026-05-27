@@ -310,19 +310,21 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
   // ─── Sort by impact, dedup by axis-severity ───────────────────────
   items.sort((a, b) => b.impact - a.impact);
 
-  // Return top 5 max, but ensure at least one cross-axis insight if available
-  const top = items.slice(0, 5);
-  const hasCrossAxis = top.some(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
-  if (!hasCrossAxis) {
-    const crossAxis = items.find(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
-    if (crossAxis && top.length >= 5) {
-      top[4] = crossAxis;
-    } else if (crossAxis) {
-      top.push(crossAxis);
+  // Ensure at least one cross-axis insight is in the top 5 displayed items
+  if (items.length > 5) {
+    const top5 = items.slice(0, 5);
+    const hasCrossAxis = top5.some(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
+    if (!hasCrossAxis) {
+      const crossIdx = items.findIndex(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
+      if (crossIdx >= 5) {
+        // Swap cross-axis insight into position 5 (last visible by default)
+        const [crossItem] = items.splice(crossIdx, 1);
+        items.splice(4, 0, crossItem);
+      }
     }
   }
 
-  return top;
+  return items;
 }
 
 // ─── BYO Key helpers ────────────────────────────────────────────────
@@ -901,6 +903,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
   const [analysisMetadata, setAnalysisMetadata] = useState<{ analyzed_at: string; cached: boolean } | null>(_metadataCache[domain] || null);
   const [, setKeyVersion] = useState(0);
   const [selectedModel, setSelectedModel] = useState(getSavedModel);
+  const [prioritiesExpanded, setPrioritiesExpanded] = useState(false);
 
   const actionItems = analysisData ? generateActionItems(analysisData) : [];
 
@@ -1022,9 +1025,13 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
             <CheckCircle2 size={14} />
             <span>This domain is well-configured. No critical issues found.</span>
           </div>
-        ) : (
+        ) : (() => {
+          const DEFAULT_VISIBLE = 5;
+          const hasMore = actionItems.length > DEFAULT_VISIBLE;
+          const visibleItems = prioritiesExpanded ? actionItems : actionItems.slice(0, DEFAULT_VISIBLE);
+          return (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "10px" }}>
-            {actionItems.map((item, i) => {
+            {visibleItems.map((item, i) => {
               const severityColor = item.severity === "critical" ? "var(--danger)"
                 : item.severity === "high" ? "#f59e0b"
                 : item.severity === "medium" ? "var(--warning)"
@@ -1063,8 +1070,27 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
                 </div>
               );
             })}
+            {hasMore && (
+              <button
+                onClick={() => setPrioritiesExpanded(prev => !prev)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer", padding: "4px 0 0",
+                  display: "flex", alignItems: "center", gap: "4px",
+                  fontSize: "11px", color: "var(--muted)", transition: "color 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+                onMouseLeave={e => (e.currentTarget.style.color = "var(--muted)")}
+              >
+                {prioritiesExpanded ? (
+                  <><ChevronUp size={12} /> Show less</>
+                ) : (
+                  <><ChevronDown size={12} /> Show {actionItems.length - DEFAULT_VISIBLE} more</>
+                )}
+              </button>
+            )}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ─── AI Deep Dive — Persona Pills ─── */}
