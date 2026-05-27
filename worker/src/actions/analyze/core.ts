@@ -688,6 +688,14 @@ export async function runAnalysis(
   // Historical score logging (non-critical)
   if (domainScore) {
     backgroundWork(env, (async () => {
+      const scoredAt = new Date().toISOString();
+      const scoreDate = scoredAt.slice(0, 10); // YYYY-MM-DD for daily dedup
+
+      // Collect top findings for longitudinal diffing (compact: signal keys only)
+      const findingsSummary = Object.entries(domainScore.axes).flatMap(([axis, axisData]) =>
+        (axisData as { findings?: Array<{ signal: string; severity: string }> }).findings?.map(f => `${axis}:${f.severity}:${f.signal}`) ?? []
+      ).sort().join("|");
+
       try {
         await env.STATS_DB.prepare(
           `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
@@ -697,7 +705,7 @@ export async function runAnalysis(
           domainScore.axes.performance.score, domainScore.axes.reliability.score,
           domainScore.axes.trust.score, domainScore.axes.visibility.score,
           domainScore.archetype.detected, domainScore.archetype.confidence,
-          new Date().toISOString(),
+          scoredAt,
         ).run();
       } catch {
         try {
@@ -722,9 +730,47 @@ export async function runAnalysis(
             domainScore.axes.performance.score, domainScore.axes.reliability.score,
             domainScore.axes.trust.score, domainScore.axes.visibility.score,
             domainScore.archetype.detected, domainScore.archetype.confidence,
-            new Date().toISOString(),
+            scoredAt,
           ).run();
         } catch { /* auto-migration + retry failed — non-critical */ }
+      }
+
+      // Daily snapshot: one row per domain per day, overwrites with latest score + findings
+      try {
+        await env.STATS_DB.prepare(
+          `INSERT OR REPLACE INTO daily_snapshots (domain, score_date, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, findings_summary, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          domain, scoreDate, domainScore.composite, domainScore.axes.security.score,
+          domainScore.axes.performance.score, domainScore.axes.reliability.score,
+          domainScore.axes.trust.score, domainScore.axes.visibility.score,
+          domainScore.archetype.detected, findingsSummary, scoredAt,
+        ).run();
+      } catch {
+        try {
+          await env.STATS_DB.prepare(
+            `CREATE TABLE IF NOT EXISTS daily_snapshots (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
+              score_date TEXT NOT NULL, composite_score INTEGER NOT NULL,
+              security_score INTEGER NOT NULL, performance_score INTEGER NOT NULL,
+              reliability_score INTEGER NOT NULL, trust_score INTEGER NOT NULL,
+              visibility_score INTEGER NOT NULL, archetype TEXT NOT NULL,
+              findings_summary TEXT, updated_at TEXT NOT NULL,
+              UNIQUE(domain, score_date)
+            )`
+          ).run();
+          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_daily_snapshots_domain ON daily_snapshots(domain)`).run();
+          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_daily_snapshots_date ON daily_snapshots(score_date)`).run();
+          await env.STATS_DB.prepare(
+            `INSERT OR REPLACE INTO daily_snapshots (domain, score_date, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, findings_summary, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            domain, scoreDate, domainScore.composite, domainScore.axes.security.score,
+            domainScore.axes.performance.score, domainScore.axes.reliability.score,
+            domainScore.axes.trust.score, domainScore.axes.visibility.score,
+            domainScore.archetype.detected, findingsSummary, scoredAt,
+          ).run();
+        } catch { /* daily snapshot migration failed — non-critical */ }
       }
     })());
   }
