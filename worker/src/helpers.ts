@@ -51,11 +51,15 @@ export function normalizeDomain(input: string): string {
   let d = input.trim().toLowerCase();
   d = d.replace(/^https?:\/\//, "");
   d = d.replace(/\/.*$/, "");
+  // Strip www. prefix — www.github.com and github.com are the same site
+  d = d.replace(/^www\./, "");
   // Convert IDN (Unicode) domains to punycode via the URL API
   try {
     const url = new URL(`http://${d}`);
     d = url.hostname;
   } catch { /* not a valid URL, keep as-is for downstream validation */ }
+  // Strip www. again in case the URL constructor re-added it
+  d = d.replace(/^www\./, "");
   return d;
 }
 
@@ -96,11 +100,6 @@ export const MULTI_PART_TLDS = ["co.uk", "com.au", "co.nz", "co.jp", "com.br", "
 // ─── External Service URLs ───────────────────────────────────────────
 
 export const DEFAULT_FLY_PROBE_URL = "https://yoke-probe.fly.dev";
-
-/** @deprecated No longer needed — getFlyProbeUrl/getFlyAuthHeaders now read env directly. */
-export function initFlyProbeUrl(_env: Env): void {
-  // No-op: module-level state removed. Functions now read env directly.
-}
 
 /** Derive the Fly probe URL from env, without module-level mutation. */
 export function getFlyProbeUrl(env: Env): string {

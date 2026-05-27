@@ -806,7 +806,13 @@ func printAnalysis(r *AnalysisResult) {
 		for _, f := range infos {
 			lines = append(lines, fmt.Sprintf("%s %s", severityIcon(f.Severity), f.Label))
 		}
-		for _, f := range goods {
+		maxGood := 5
+		for i, f := range goods {
+			if i >= maxGood {
+				remaining := len(goods) - maxGood
+				lines = append(lines, dim.Render(fmt.Sprintf("  +%d more passing", remaining)))
+				break
+			}
 			lines = append(lines, fmt.Sprintf("%s %s", severityIcon(f.Severity), f.Label))
 		}
 	}
@@ -870,6 +876,8 @@ func normalizeDomain(raw string) string {
 	}
 	// Strip trailing dots and slashes
 	d = strings.TrimRight(d, "./")
+	// Strip www. prefix — www.github.com and github.com are the same site
+	d = strings.TrimPrefix(d, "www.")
 	return d
 }
 
@@ -1000,7 +1008,26 @@ func runScore(cmd *cobra.Command, args []string) error {
 	domain := normalizeDomain(args[0])
 
 	if jsonOutput {
-		return printRawJSON(apiBase + "/" + domain)
+		// Fetch full analysis but output only minimal score JSON
+		result, err := fetchAnalysisStream(domain)
+		if err != nil {
+			return err
+		}
+		if result.Score == nil {
+			return fmt.Errorf("no score data for %s", domain)
+		}
+		minimal := struct {
+			Domain    string `json:"domain"`
+			Score     int    `json:"score"`
+			Grade     string `json:"grade"`
+		}{
+			Domain:    result.Domain,
+			Score:     result.Score.Composite,
+			Grade:     result.Score.Grade,
+		}
+		out, _ := json.MarshalIndent(minimal, "", "  ")
+		fmt.Println(string(out))
+		return nil
 	}
 
 	result, err := fetchAnalysisStream(domain)
@@ -1008,8 +1035,7 @@ func runScore(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if result.Score == nil {
-		fmt.Println(warn.Render("No score data"))
-		return nil
+		return fmt.Errorf("no score data for %s", domain)
 	}
 	grade := gradeStyle(result.Score.Grade).Bold(true).Render(result.Score.Grade)
 	fmt.Printf("%s  %d/100  %s\n", title.Render(domain), result.Score.Composite, grade)
@@ -1176,11 +1202,17 @@ func runCompare(cmd *cobra.Command, args []string) error {
 		g1 := gradeStyle(data.Domain1.Score.Grade).Bold(true).Render(data.Domain1.Score.Grade)
 		fmt.Printf("  %s  %d/100 %s\n", title.Render(fmt.Sprintf("%-30s", data.Domain1.Domain)),
 			data.Domain1.Score.Composite, g1)
+	} else {
+		fmt.Printf("  %s  %s\n", title.Render(fmt.Sprintf("%-30s", data.Domain1.Domain)),
+			bad.Render("Error — analysis failed"))
 	}
 	if data.Domain2.Score != nil {
 		g2 := gradeStyle(data.Domain2.Score.Grade).Bold(true).Render(data.Domain2.Score.Grade)
 		fmt.Printf("  %s  %d/100 %s\n", title.Render(fmt.Sprintf("%-30s", data.Domain2.Domain)),
 			data.Domain2.Score.Composite, g2)
+	} else {
+		fmt.Printf("  %s  %s\n", title.Render(fmt.Sprintf("%-30s", data.Domain2.Domain)),
+			bad.Render("Error — analysis failed"))
 	}
 	fmt.Println()
 

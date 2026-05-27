@@ -51,6 +51,8 @@ function textResponse(body: string, contentType: string, cacheSeconds = 86400): 
 // Determines whether a request wants JSON (API client) or HTML (browser).
 
 const DOMAIN_PATH_RE = /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
+// Matches /domain.tld/anything — used to strip trailing path segments
+const DOMAIN_WITH_PATH_RE = /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))\/.+$/;
 const COMPARE_PATH_RE = /^\/compare\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
 
 export function wantsJSON(request: Request): boolean {
@@ -109,6 +111,12 @@ export function wantsJSON(request: Request): boolean {
 
 export function matchDomainPath(path: string): string | null {
   const m = DOMAIN_PATH_RE.exec(path);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** Match /domain.tld/trailing-path — returns the domain portion only. */
+export function matchDomainWithPath(path: string): string | null {
+  const m = DOMAIN_WITH_PATH_RE.exec(path);
   return m ? m[1].toLowerCase() : null;
 }
 
@@ -186,6 +194,11 @@ export async function handleSPARoute(
   if (method === "GET" && path === "/terms") {
     return htmlResponse(TERMS_HTML, { "Cache-Control": "public, max-age=86400" }, baseUrl);
   }
+  // /cli is a client-side rendered page — serve the SPA shell
+  if (method === "GET" && path === "/cli") {
+    const indexHtml = await getIndexHtml(env, request.url);
+    return htmlResponse(indexHtml, { "Cache-Control": "public, max-age=300" }, baseUrl);
+  }
 
   // ── Domain path: content negotiation ──
   // GET /stripe.com → JSON for curl, SPA with OG tags for browsers
@@ -223,6 +236,15 @@ export async function handleSPARoute(
       url: `${baseUrl}/compare/${d1}/${d2}`,
     });
     return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300", "Vary": "Accept" }, baseUrl);
+  }
+
+  // ── Domain with trailing path: /github.com/kurtpayne → redirect to /github.com ──
+  const domainWithPathMatch = matchDomainWithPath(path);
+  if (domainWithPathMatch && method === "GET") {
+    return new Response(null, {
+      status: 301,
+      headers: { "Location": `${baseUrl}/${domainWithPathMatch}` },
+    });
   }
 
   // Not a SPA route we handle — return null to let caller continue

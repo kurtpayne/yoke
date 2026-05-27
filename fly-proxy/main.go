@@ -1068,28 +1068,41 @@ func proxyPageSpeed(domain string, apiKey string) PageSpeedResult {
 	
 	lr := data.LighthouseResult
 	audits := lr.Audits
-	
+
 	var score *int
 	if lr.Categories.Performance.Score != nil {
 		s := int(*lr.Categories.Performance.Score * 100)
 		score = &s
 	}
-	
+
 	var screenshot *string
-	if details, ok := audits["final-screenshot"]; ok {
-		if details.Details.Data != "" {
-			screenshot = &details.Details.Data
+	if audits != nil {
+		if details, ok := audits["final-screenshot"]; ok {
+			if details.Details.Data != "" {
+				screenshot = &details.Details.Data
+			}
 		}
 	}
-	
+
+	// Helper to safely extract a metric from the audits map.
+	auditMetric := func(key string) *float64 {
+		if audits == nil {
+			return nil
+		}
+		if a, ok := audits[key]; ok {
+			return a.NumericValue
+		}
+		return nil
+	}
+
 	return PageSpeedResult{
 		Score:      score,
-		FCP:        audits["first-contentful-paint"].NumericValue,
-		LCP:        audits["largest-contentful-paint"].NumericValue,
-		TBT:        audits["total-blocking-time"].NumericValue,
-		CLS:        audits["cumulative-layout-shift"].NumericValue,
-		SI:         audits["speed-index"].NumericValue,
-		TTFB:       audits["server-response-time"].NumericValue,
+		FCP:        auditMetric("first-contentful-paint"),
+		LCP:        auditMetric("largest-contentful-paint"),
+		TBT:        auditMetric("total-blocking-time"),
+		CLS:        auditMetric("cumulative-layout-shift"),
+		SI:         auditMetric("speed-index"),
+		TTFB:       auditMetric("server-response-time"),
 		Strategy:   "mobile",
 		Error:      nil,
 		Screenshot: screenshot,
