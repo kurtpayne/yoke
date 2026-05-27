@@ -40,6 +40,7 @@ import { dnsPropagationCheck } from "./dns-propagation";
 import { ripeRoutingCheck } from "./ripe-routing";
 import { outageLinksCheck } from "./outage-links";
 import { connectionTimingCheck } from "./connection-timing";
+import { socialAccountsCheck } from "./social-accounts";
 
 /**
  * The canonical ordered list of Phase 2 parallel checks.
@@ -72,4 +73,5 @@ export const registry: readonly Check[] = [
   ripeRoutingCheck,
   outageLinksCheck,
   connectionTimingCheck,
+  socialAccountsCheck,
 ] as const;
