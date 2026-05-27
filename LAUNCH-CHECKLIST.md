@@ -20,7 +20,8 @@
 - [x] **X/Twitter** — @yokedotlol ✅ (yokelol taken)
 - [ ] Set all bios to: "Domain intelligence in one pass. Free & open source." + link to yoke.lol
 - [ ] Set all profile pics to ox mark
-- ❌ Instagram — yokelol taken, skip
+- [x] **Instagram** — @yokedotlol ✅
+- [x] **Threads** — @yokedotlol ✅
 - [x] **GitHub org** — yokedotlol ✅ (domain verified, repo transferred)
 
 ---

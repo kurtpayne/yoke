@@ -2,7 +2,7 @@
 
 All notable changes to Yoke are documented here.
 
-## [1.3.0] — 2026-05-28
+## [1.3.0] — 2026-06-23
 
 ### Features
 - **Network Health panel** — Infrastructure tab gains DNS propagation (multi-resolver consistency), TCP connection timing (DNS/TCP/TLS breakdown via Fly probe), RIPE RIS routing data (ASN, prefix, BGP visibility & stability), and outage monitoring links (Downdetector, IsItDownRightNow). Surfaces DNS inconsistency and routing instability as domain signals and scoring findings. Compare view shows connection timing and routing stability differences. New external links to bgp.tools, HE BGP, and Downdetector on the Infrastructure tab.
@@ -20,6 +20,11 @@ All notable changes to Yoke are documented here.
 - **Wildcard DNS detection** — random subdomain probe prevents false positives for ANS/DNS-AID agent discovery on domains with `*.domain` records
 - **D1 cleanup endpoint** — `GET /api/cleanup` (admin-gated) clears stale cache, rate limits, and error logs
 - **Domain comparison** — side-by-side scoring at `/compare/domain1/domain2` with overlaid radar, per-axis deltas, and key differences
+- **83 detection signals** — expanded from 70 with 13 new signals extracted from existing data: open ports (Shodan), known vulnerabilities, cookie security, server version disclosure, referrer policy, permissions policy, HTTP-to-HTTPS redirect, redirect chain length, site unreachable, HTTP error response, security.txt, restrictive robots, PWA readiness
+- **Fixed axis weights** — Security (0.25), Reliability (0.25), Trust (0.20), Performance (0.18), Visibility (0.12) replace per-archetype weight profiles for more consistent scoring
+- **Breach grade cap** — domains with >100M breached accounts capped at B grade
+- **Social verification** — Instagram and Threads added to rel="me" verification and footer links (7 platforms total)
+- **Threads detection fix** — Threads accounts no longer misidentified as Mastodon due to generic Mastodon URL pattern
 
 ### Security
 - **Worker-to-Fly auth** — optional `FLY_AUTH_SECRET` shared secret between the CF Worker and Fly probe; graceful degradation when unset
@@ -32,6 +37,8 @@ All notable changes to Yoke are documented here.
 - **Clean landing page** — no auto-analyze on bare homepage load
 - **`ctx.waitUntil`** — non-blocking background cache writes and analytics inserts
 - **Go proxy timeouts** — read (10s), write (30s), idle (120s) server timeouts on the Fly probe
+- **Timeout tuning** — per-check 30s timeout, Phase 2 deadline 50s, optimized for Cloudflare Workers paid plan
+- **Port classification** — 8080/8443 removed from dangerous ports list (standard HTTP alternate ports)
 
 ### Infrastructure
 - **Shared analysis core** — merged `analyze.ts` and `analyze-stream.ts` into a single `analyze/core.ts` pipeline; JSON and SSE endpoints are now thin wrappers with zero logic duplication
@@ -39,11 +46,14 @@ All notable changes to Yoke are documented here.
 - **Self-hosting support** — all URLs dynamic via `getBaseUrl(request, env)`; `BASE_URL` and `FLY_PROBE_URL` env vars for custom deployments
 - **Zero `as any`** — full type safety across the entire codebase
 
+### Bug Fixes
+- **Browser title** — document title now resets when navigating home via logo click
+
 ### Developer Experience
 - **`deploy.sh` in repo** — no longer gitignored; clean build + deploy in one command
 - **Retired `build_combined.py`** — all SPA routing ported to TypeScript (`worker/src/spa.ts`)
 - **Retired `QUICKSTART.md`** — self-hosting guide consolidated into README
-- **125 tests** — scoring, detection, helpers, WHOIS, structured data
+- **151 tests** — scoring, detection, helpers, WHOIS, structured data
 - **CHANGELOG.md** — you're reading it
 
 ## [1.0.0] — 2026-05-21

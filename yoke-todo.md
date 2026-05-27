@@ -15,7 +15,7 @@
 - ~~**AI cache purge**~~ ✅ Stale email auth hallucination resolved
 
 ## Pre-Launch
-- **LinkedIn launch post** — Wed May 28, 10am PT
+- **LinkedIn launch post** — Tue June 23, 10am PT
 - **Display `info` severity findings in UI** — client filters out `info` findings, so neutral PageSpeed finding doesn't render
 
 ## Nice-to-Have
