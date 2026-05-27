@@ -4,8 +4,7 @@ project_name: yoke
 
 before:
   hooks:
-    - cmd: go mod tidy
-      dir: cli
+    - "cd cli && go mod tidy"
 
 builds:
   - id: yoke
