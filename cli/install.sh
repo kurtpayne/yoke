@@ -2,7 +2,7 @@
 # Install yoke CLI — curl -sSL https://yoke.lol/install.sh | bash
 set -euo pipefail
 
-REPO="kurtpayne/yoke"
+REPO="yokedotlol/yoke"
 
 echo "Installing yoke..."
 

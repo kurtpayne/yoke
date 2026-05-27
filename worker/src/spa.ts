@@ -177,7 +177,7 @@ export async function handleSPARoute(
   if (method === "GET" && path === "/install.sh") {
     return new Response("", {
       status: 302,
-      headers: { "Location": "https://raw.githubusercontent.com/kurtpayne/yoke/main/cli/install.sh" },
+      headers: { "Location": "https://raw.githubusercontent.com/yokedotlol/yoke/main/cli/install.sh" },
     });
   }
   if (method === "GET" && path === "/privacy") {

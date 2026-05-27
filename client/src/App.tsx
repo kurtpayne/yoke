@@ -465,7 +465,7 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
           </div>
           {isOut && (
             <div style={{ marginTop: "6px", fontSize: "11px" }}>
-              <a href="https://github.com/kurtpayne/yoke#self-hosting" target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline" }}>Self-host</a> for unlimited usage
+              <a href="https://github.com/yokedotlol/yoke#self-hosting" target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline" }}>Self-host</a> for unlimited usage
             </div>
           )}
         </div>
@@ -494,7 +494,7 @@ function RateLimitError({ message, onRetry }: { message: string; onRetry: () => 
         }
       </p>
       <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", margin: "0 0 12px 0" }}>
-        For unlimited usage, <a href="https://github.com/kurtpayne/yoke#self-hosting" target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline" }}>self-host Yoke</a> on Cloudflare Workers + Fly.io free tiers.
+        For unlimited usage, <a href="https://github.com/yokedotlol/yoke#self-hosting" target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline" }}>self-host Yoke</a> on Cloudflare Workers + Fly.io free tiers.
       </p>
       <button
         onClick={onRetry}
@@ -871,7 +871,7 @@ export function App() {
         color: "var(--dim)",
       }}>
         <a
-          href="https://github.com/kurtpayne/yoke"
+          href="https://github.com/yokedotlol/yoke"
           target="_blank"
           rel="noopener noreferrer"
           style={{ color: "var(--dim)", textDecoration: "none", display: "flex", alignItems: "center", gap: "0.35rem", transition: "color 0.15s" }}

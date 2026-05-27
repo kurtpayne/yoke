@@ -187,7 +187,7 @@ export OPENROUTER_API_KEY=sk-or-...`} />
       {/* Build from source */}
       <Section title="Build from Source">
         <div id="build">
-          <CopyBlock code={`git clone https://github.com/kurtpayne/yoke
+          <CopyBlock code={`git clone https://github.com/yokedotlol/yoke
 cd yoke/cli
 go build -o yoke .
 ./yoke stripe.com`} />
@@ -205,7 +205,7 @@ cd yoke && npm install && npx wrangler deploy
 # Point your CLI at your instance
 yoke config --set-base-url https://your-yoke.workers.dev`} />
         <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--dim)", marginTop: 12 }}>
-          <a href="https://github.com/kurtpayne/yoke" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>View on GitHub →</a>
+          <a href="https://github.com/yokedotlol/yoke" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>View on GitHub →</a>
         </p>
       </Section>
     </div>
