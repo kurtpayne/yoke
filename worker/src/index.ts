@@ -409,7 +409,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getSocialAccounts(env.DB, domain);
+          const result = await getSocialAccounts(env.DB, domain, env);
           await trackUsage(env.STATS_DB, "social");
           _track("social", 200, domain);
           return json(result);

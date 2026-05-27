@@ -1,6 +1,7 @@
 import { normalizeDomain, fetchWithTimeout, getFromCache, setCache, boundedText, safeFetchWithRedirects } from "../helpers";
+import type { Env } from "../helpers";
 
-export async function getSocialAccounts(db: D1Database, rawDomain: string) {
+export async function getSocialAccounts(db: D1Database, rawDomain: string, env?: Env) {
   const domain = normalizeDomain(rawDomain);
   const cached = await getFromCache(db, domain, "social_accounts", 24 * 60 * 60 * 1000);
   if (cached) {
@@ -80,12 +81,29 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string) {
 
   // Strategy 1: Parse homepage HTML for social links
   try {
-    const res = await safeFetchWithRedirects(`https://${domain}`, {
-      timeout: 8000,
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" },
-    });
-    if (res.ok) {
-      const html = await boundedText(res);
+    let html: string | null = null;
+
+    // Self-analysis: use ASSETS binding to read our own index.html (CF Workers can't fetch themselves)
+    const selfDomains = ["yoke.lol", "www.yoke.lol"];
+    if (env?.ASSETS && selfDomains.includes(baseDomain)) {
+      try {
+        const assetResp = await env.ASSETS.fetch(new Request("https://yoke.lol/index.html"));
+        if (assetResp.ok) html = await assetResp.text();
+      } catch { /* ASSETS fetch failed, fall through */ }
+    }
+
+    // Normal fetch for external domains (or fallback if ASSETS failed)
+    if (!html) {
+      const res = await safeFetchWithRedirects(`https://${domain}`, {
+        timeout: 8000,
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" },
+      });
+      if (res.ok) {
+        html = await boundedText(res);
+      }
+    }
+
+    if (html) {
 
       // Strategy 1a: Extract rel="me" links first (highest trust — site claims ownership)
       // Matches both <link rel="me" href="..."> and <a rel="me" href="...">
