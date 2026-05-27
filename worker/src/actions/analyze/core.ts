@@ -361,17 +361,20 @@ export async function runAnalysis(
   const PER_CHECK_TIMEOUT_MS = 30_000;
 
   // Launch all Phase 2 checks from the registry (one file per check — see worker/src/checks/)
-  const checks = registry.map((check) => ({
-    key: check.key,
-    promise: Promise.race([
-      check.run(checkCtx),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Check ${check.key} timed out after ${PER_CHECK_TIMEOUT_MS}ms`)), PER_CHECK_TIMEOUT_MS)
-      ),
-    ]),
-    label: check.label,
-    default: check.default,
-  }));
+  const checks = registry.map((check) => {
+    const timeoutMs = check.timeout ?? PER_CHECK_TIMEOUT_MS;
+    return {
+      key: check.key,
+      promise: Promise.race([
+        check.run(checkCtx),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Check ${check.key} timed out after ${timeoutMs}ms`)), timeoutMs)
+        ),
+      ]),
+      label: check.label,
+      default: check.default,
+    };
+  });
 
   await onPhase("phase2", "running", `Running ${checks.length} checks…`, checks.length, checks.map(c => ({ key: c.key, label: c.label })));
 

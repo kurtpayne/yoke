@@ -45,4 +45,6 @@ export interface Check {
   default: unknown;
   /** Execute the check. Receives the shared context; returns the result value. */
   run: (ctx: CheckContext) => Promise<unknown>;
+  /** Per-check timeout in ms. Overrides the default PER_CHECK_TIMEOUT_MS when set. */
+  timeout?: number;
 }
