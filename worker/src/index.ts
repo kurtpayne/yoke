@@ -49,6 +49,11 @@ async function ensureRateLimitTable(db: D1Database): Promise<void> {
   rateLimitTableReady = true;
 }
 
+// In-memory block cache: skip D1 queries for IPs already known to be rate-limited.
+// Key: "ip:endpoint", Value: unix timestamp when the block expires.
+// Lives only within a single Worker isolate — no cross-isolate leakage.
+const blockCache = new Map<string, number>();
+
 interface RateLimitResult {
   blocked: Response | null;
   headers: Record<string, string>;
@@ -58,9 +63,43 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
   const limits = getRateLimits(env);
   const config = limits[endpoint];
   if (!config || config.limit === 0) return { blocked: null, headers: {} };
+
+  // Fast path: if this IP+endpoint is in the block cache, return 429 without touching D1
+  const cacheKey = `${ip}:${endpoint}`;
+  const now = Math.floor(Date.now() / 1000);
+  const cachedResetAt = blockCache.get(cacheKey);
+  if (cachedResetAt && cachedResetAt > now) {
+    const secsLeft = cachedResetAt - now;
+    const rlHeaders = {
+      "X-RateLimit-Limit": String(config.limit),
+      "X-RateLimit-Remaining": "0",
+      "X-RateLimit-Reset": String(cachedResetAt),
+      "Retry-After": String(secsLeft),
+    };
+    return {
+      blocked: new Response(JSON.stringify({
+        error: "Rate limit exceeded",
+        code: "RATE_LIMITED",
+        limit: config.limit,
+        remaining: 0,
+        reset: cachedResetAt,
+        window: `${config.windowSecs / 3600} hour`,
+        retry_after: secsLeft,
+        self_host: "https://github.com/kurtpayne/yoke#self-hosting",
+        message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
+      }), { status: 429, headers: {
+        "Content-Type": "application/json",
+        ...CORS_HEADERS,
+        ...rlHeaders,
+      } }),
+      headers: rlHeaders,
+    };
+  } else if (cachedResetAt) {
+    blockCache.delete(cacheKey); // expired, clean up
+  }
+
   try {
     await ensureRateLimitTable(db);
-    const now = Math.floor(Date.now() / 1000);
     const cutoff = now - config.windowSecs;
     // Get count + oldest request in window (to calculate real reset time)
     const [countRow, oldestRow] = await db.batch([
@@ -77,6 +116,8 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
     const resetAt = oldest ? oldest + config.windowSecs : now + config.windowSecs;
 
     if (count >= config.limit) {
+      // Cache the block so subsequent requests skip D1 entirely
+      blockCache.set(cacheKey, resetAt);
       const rlHeaders = {
         "X-RateLimit-Limit": String(config.limit),
         "X-RateLimit-Remaining": "0",
