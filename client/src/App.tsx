@@ -413,8 +413,8 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
         onClick={() => setExpanded(e => !e)}
         style={{
-          background: "var(--card-bg)",
-          border: `1px solid ${isOut ? "var(--danger)" : "var(--border)"}`,
+          background: "var(--card-bg, #1c2028)",
+          border: `1px solid ${isOut ? "var(--danger)" : "var(--border, #30363d)"}`,
           fontFamily: "var(--font-ui)",
           fontSize: "11px",
           color,
@@ -436,8 +436,8 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
             position: "absolute",
             top: "calc(100% + 6px)",
             right: 0,
-            background: "var(--card-bg)",
-            border: "1px solid var(--border)",
+            background: "var(--card-bg, #1c2028)",
+            border: "1px solid var(--border, #30363d)",
             borderRadius: "8px",
             padding: "10px 14px",
             minWidth: "220px",
@@ -446,17 +446,17 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
             color: "var(--text)",
             lineHeight: 1.6,
             zIndex: 100,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
           }}
         >
           <div style={{ fontWeight: 600, marginBottom: "4px", color }}>
             {isOut ? "Rate limit reached" : isLow ? "Running low" : "API usage"}
           </div>
           {/* Usage bar */}
-          <div style={{ height: "4px", borderRadius: "2px", background: "var(--border)", marginBottom: "8px", overflow: "hidden" }}>
+          <div style={{ height: "4px", borderRadius: "2px", background: "var(--border, #30363d)", marginBottom: "8px", overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${Math.min((used / limit) * 100, 100)}%`, background: color, borderRadius: "2px", transition: "width 0.3s" }} />
           </div>
-          <div style={{ color: "var(--dim)", fontSize: "11px" }}>
+          <div style={{ color: "var(--dim, #8b949e)", fontSize: "11px" }}>
             <div>{used} of {limit} analyses used this hour</div>
             {secsLeft > 0 && <div>Resets in {minsLeft} min{minsLeft !== 1 ? "s" : ""}</div>}
           </div>
