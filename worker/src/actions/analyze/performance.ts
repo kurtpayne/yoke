@@ -25,7 +25,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
     if (flyAuthSecret) {
       headers["Authorization"] = `Bearer ${flyAuthSecret}`;
     }
-    const res = await fetchWithTimeout(flyUrl, { timeout: 30000, headers });
+    const res = await fetchWithTimeout(flyUrl, { timeout: 65000, headers });
     if (res.ok) {
       const result = await res.json() as PerformanceResult;
       if (result.score != null) {
@@ -56,7 +56,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
 async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string): Promise<PerformanceResult> {
   try {
     const keyParam = apiKey ? `&key=${apiKey}` : "";
-    const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 48000 });
+    const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 60000 });
     if (res.status === 429) { if (db) logApiError(db, { api: "pagespeed", status: 429, message: "Rate limited", domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "Rate limited — try again later", screenshot: null }; }
     if (!res.ok) { if (db) logApiError(db, { api: "pagespeed", status: res.status, message: `API error`, domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: `API error (${res.status})`, screenshot: null }; }
     const data = await res.json() as { lighthouseResult?: { categories?: { performance?: { score?: number } }; audits?: Record<string, { numericValue?: number; details?: { data?: string } }>; }; };
@@ -66,7 +66,7 @@ async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, d
     const screenshotData = audits["final-screenshot"]?.details?.data ?? null;
     const result: PerformanceResult = { score: perfScore != null ? Math.round(perfScore * 100) : null, fcp: audits["first-contentful-paint"]?.numericValue ?? null, lcp: audits["largest-contentful-paint"]?.numericValue ?? null, tbt: audits["total-blocking-time"]?.numericValue ?? null, cls: audits["cumulative-layout-shift"]?.numericValue ?? null, si: audits["speed-index"]?.numericValue ?? null, ttfb: audits["server-response-time"]?.numericValue ?? ttfbFallback, strategy: "mobile", error: null, screenshot: screenshotData };
     return result;
-  } catch (e) { console.error("[PageSpeed] Direct API error:", e instanceof Error ? e.message : String(e)); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "PageSpeed timed out — site may block automated testing", screenshot: null }; }
+  } catch (e) { console.error("[PageSpeed] Direct API error:", e instanceof Error ? e.message : String(e)); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "PageSpeed timed out — analysis may take up to 60s", screenshot: null }; }
 }
 
 // ─── NEW: Compression Detection ─────────────────────────────────────

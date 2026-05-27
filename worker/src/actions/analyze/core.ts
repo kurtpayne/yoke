@@ -421,7 +421,7 @@ export async function runAnalysis(
 
   // Overall Phase 2 deadline: if checks collectively exceed this limit, proceed
   // with whatever results have arrived. Leaves ~10s for scoring + response assembly.
-  const PHASE2_DEADLINE_MS = 50_000;
+  const PHASE2_DEADLINE_MS = 70_000;
   await Promise.race([
     Promise.allSettled(wrappedPromises),
     new Promise<void>((resolve) => setTimeout(resolve, PHASE2_DEADLINE_MS)),

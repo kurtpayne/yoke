@@ -52,6 +52,7 @@ interface ProgressState {
   completed: number;
   total: number;
   checks: Map<string, { label: string; done: boolean; error?: boolean }>;
+  startedAt: number;
 }
 
 function PendingChecksCycler({ checks }: { checks: Map<string, { label: string; done: boolean; error?: boolean }> }) {
@@ -80,12 +81,18 @@ function PendingChecksCycler({ checks }: { checks: Map<string, { label: string; 
   if (pendingLabels.length === 0) return null;
   const label = pendingLabels[index % pendingLabels.length] || pendingLabels[0];
 
+  // When PageSpeed is the sole remaining check, add timing hint
+  const isPageSpeedAlone = pendingLabels.length === 1 && label === "Google PageSpeed";
+  const displayText = isPageSpeedAlone
+    ? "Waiting on Google PageSpeed — analysis may take up to 60s…"
+    : `Waiting on ${label}…`;
+
   return (
     <span style={{
       fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)",
       opacity: visible ? 1 : 0, transition: "opacity 0.3s ease",
     }}>
-      Waiting on {label}…
+      {displayText}
     </span>
   );
 }
@@ -93,6 +100,15 @@ function PendingChecksCycler({ checks }: { checks: Map<string, { label: string; 
 function StreamingProgress({ progress }: { progress: ProgressState }) {
   const pct = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
   const sortedChecks = Array.from(progress.checks.entries());
+
+  // Elapsed timer — ticks every second
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!progress.startedAt) return;
+    setElapsed(Math.floor((Date.now() - progress.startedAt) / 1000));
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - progress.startedAt) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [progress.startedAt]);
 
   return (
     <div className="panel p-4 mt-3 space-y-3">
@@ -107,7 +123,7 @@ function StreamingProgress({ progress }: { progress: ProgressState }) {
         <div className="flex items-center gap-3">
           <PendingChecksCycler checks={progress.checks} />
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--dim)" }}>
-            {progress.completed}/{progress.total} checks
+            {progress.completed}/{progress.total} checks{elapsed > 0 ? ` · ${elapsed}s` : ""}
           </span>
         </div>
       </div>
@@ -150,7 +166,7 @@ function useStreamingAnalysis() {
   const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
   const [sessionCount, setSessionCount] = useState(0);
   const [progress, setProgress] = useState<ProgressState>({
-    phase: "", label: "", completed: 0, total: 0, checks: new Map(),
+    phase: "", label: "", completed: 0, total: 0, checks: new Map(), startedAt: 0,
   });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -165,7 +181,7 @@ function useStreamingAnalysis() {
     setData(null);
     setPartialData({ domain });
     setSessionCount(c => c + 1);
-    setProgress({ phase: "init", label: "Connecting…", completed: 0, total: 0, checks: new Map() });
+    setProgress({ phase: "init", label: "Connecting…", completed: 0, total: 0, checks: new Map(), startedAt: Date.now() });
 
     analyzeStream(
       domain,
