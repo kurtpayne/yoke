@@ -17,7 +17,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "dev"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 var apiBase string
 
@@ -974,7 +978,7 @@ func main() {
 	configCmd.Flags().String("set-key", "", "set OpenRouter API key")
 	configCmd.Flags().String("set-model", "", "set default AI model (e.g. openai/gpt-4o, google/gemini-2.5-pro)")
 	configCmd.Flags().String("set-base-url", "", "set Yoke instance URL for self-hosting (default: https://yoke.lol)")
-	configCmd.Flags().String("set-prompt", "", "set custom AI prompt file path (see: github.com/kurtpayne/yoke/blob/main/prompts/ai-analysis.txt)")
+	configCmd.Flags().String("set-prompt", "", "set custom AI prompt file path (see: github.com/yokedotlol/yoke/blob/main/prompts/ai-analysis.txt)")
 	configCmd.Flags().String("set-prompt-inline", "", "set custom AI prompt as inline text in config")
 	configCmd.Flags().Bool("clear-prompt", false, "remove custom prompt, revert to server default")
 	configCmd.Flags().Bool("suppress-ai-hint", false, "hide the AI hint from analyze output")
@@ -982,7 +986,15 @@ func main() {
 
 	root.AddCommand(score, compare, ai, configCmd)
 	root.CompletionOptions.DisableDefaultCmd = true
-	root.SetVersionTemplate("yoke {{.Version}}\n")
+	versionTmpl := "yoke {{.Version}}"
+	if commit != "none" {
+		versionTmpl += " (" + commit + ")"
+	}
+	if date != "unknown" {
+		versionTmpl += " built " + date
+	}
+	versionTmpl += "\n"
+	root.SetVersionTemplate(versionTmpl)
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -1607,7 +1619,7 @@ func runConfig(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Prompt:          %s\n", dim.Render("built-in (default)"))
 	}
 	fmt.Println()
-	fmt.Println(dim.Render("  # Default prompt: https://github.com/kurtpayne/yoke/blob/main/prompts/ai-analysis.txt"))
+	fmt.Println(dim.Render("  # Default prompt: https://github.com/yokedotlol/yoke/blob/main/prompts/ai-analysis.txt"))
 	fmt.Println(dim.Render("  # Customize via file or inline:"))
 	fmt.Println(dim.Render("  #   yoke config --set-prompt ~/my-prompt.txt"))
 	fmt.Println(dim.Render("  #   yoke config --set-prompt-inline \"You are a security auditor...\""))

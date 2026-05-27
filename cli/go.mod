@@ -1,4 +1,4 @@
-module github.com/kurtpayne/yoke/cli
+module github.com/yokedotlol/yoke/cli
 
 go 1.22
 

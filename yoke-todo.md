@@ -21,7 +21,7 @@
 ## Nice-to-Have
 - `/cli` landing page on yoke.lol
 - Footer link to CLI docs
-- Goreleaser Homebrew tap config
+- ~~Goreleaser Homebrew tap config~~ ✅
 - Install script checksum verification
 
 ## Backlog

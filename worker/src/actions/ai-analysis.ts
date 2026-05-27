@@ -140,21 +140,7 @@ export function buildAIPrompt(analysisData: Record<string, unknown>): { system: 
 
 // ─── OpenRouter API Call ────────────────────────────────────────────
 
-// ─── Allowed Models ─────────────────────────────────────────────────
-// Models that BYO-key users can select. Platform key always uses the default.
-export const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
-export const ALLOWED_MODELS = [
-  "anthropic/claude-sonnet-4",
-  "anthropic/claude-opus-4",
-  "openai/gpt-4o",
-  "openai/o3",
-  "google/gemini-2.5-pro",
-  "meta-llama/llama-4-maverick",
-];
-
-function isAllowedModel(model: string): boolean {
-  return ALLOWED_MODELS.includes(model);
-}
+const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
 
 
 interface OpenRouterResponse {
@@ -173,13 +159,9 @@ interface OpenRouterResponse {
 async function callOpenRouter(
   apiKey: string,
   analysisData: Record<string, unknown>,
-  model?: string,
   referer?: string,
-  customPrompt?: string,
 ): Promise<AIAnalysisResult> {
   const { system, user } = buildAIPrompt(analysisData);
-  const systemPrompt = customPrompt || system;
-  const useModel = (model && isAllowedModel(model)) ? model : DEFAULT_MODEL;
 
   const maxRetries = 3;
   let lastError: Error | null = null;
@@ -201,9 +183,9 @@ async function callOpenRouter(
           "X-Title": "Yoke Domain Intelligence",
         },
         body: JSON.stringify({
-          model: useModel,
+          model: DEFAULT_MODEL,
           messages: [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: system },
             { role: "user", content: user },
           ],
           temperature: 0.3,
@@ -359,30 +341,23 @@ async function cleanupOldRateLimits(db: D1Database): Promise<void> {
 export async function getAIAnalysis(
   domain: string,
   env: Env,
-  options?: { clientIP?: string; byoKey?: string; model?: string; customPrompt?: string }
+  options?: { clientIP?: string }
 ): Promise<Response> {
   const normalized = normalizeDomain(domain);
-  const byoKey = options?.byoKey;
   const clientIP = options?.clientIP || "unknown";
 
-  // Must have either platform key or BYO key
-  if (!env.OPENROUTER_API_KEY && !byoKey) {
+  // Must have platform key
+  if (!env.OPENROUTER_API_KEY) {
     return new Response(JSON.stringify({ error: "AI analysis not configured" }), {
       status: 503,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   }
 
-  // Check cache first (shared across all tiers)
+  // Check cache first
   const cached = (await getFromCache(env.DB, normalized, "ai_analysis", AI_CACHE_TTL_MS)) as CachedAIResult | null;
   if (cached) {
-    // For BYO key users, also return the prompt so the editor can show it
-    let promptMeta: { system: string; user: string } | undefined;
-    if (byoKey) {
-      const analysisCache = (await getFromCache(env.DB, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
-      if (analysisCache) promptMeta = buildAIPrompt(analysisCache);
-    }
-    return new Response(JSON.stringify({ ...cached, cached: true, ...(promptMeta ? { _prompt: promptMeta } : {}) }), {
+    return new Response(JSON.stringify({ ...cached, cached: true }), {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   }
@@ -397,59 +372,49 @@ export async function getAIAnalysis(
     );
   }
 
-  // Rate limiting — skip if BYO key provided
+  // Rate limiting
   let rateLimitRowId: number | undefined;
-  if (!byoKey) {
-    try {
-      await ensureRateLimitTable(env.STATS_DB);
-      const count = await getRateLimitCount(env.STATS_DB, clientIP);
-      if (count >= AI_HOURLY_LIMIT) {
-        // Build the DIY prompt for the rate-limited user
-        const { system, user } = buildAIPrompt(analysisCache);
-        const diyPrompt = `${system}\n\n---\n\n${user}`;
-        return new Response(JSON.stringify({
-          rate_limited: true,
-          limit: AI_HOURLY_LIMIT,
-          used: count,
-          reset: "~1 hour",
-          diy_prompt: diyPrompt,
-          model_suggestion: "anthropic/claude-sonnet-4",
-          instructions: "Copy the prompt below and paste it into ChatGPT, Claude, Gemini, or any AI assistant. Or enter your own OpenRouter API key in the settings above for unlimited analysis.",
-        }), {
-          status: 429,
-          headers: {
-            "Content-Type": "application/json",
-            ...CORS_HEADERS,
-            "X-RateLimit-Limit": String(AI_HOURLY_LIMIT),
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 3600),
-            "Retry-After": "3600",
-          },
-        });
-      }
-      // Reserve the slot BEFORE calling OpenRouter to prevent race conditions.
-      // Two simultaneous requests from the same IP could both pass the count check;
-      // by inserting first, the second request sees count >= limit.
-      const rlResult = await env.STATS_DB.prepare(
-        "INSERT INTO ai_rate_limits (ip, ts) VALUES (?, ?)"
-      ).bind(clientIP, Math.floor(Date.now() / 1000)).run();
-      rateLimitRowId = rlResult.meta?.last_row_id as number | undefined;
-    } catch (rateLimitErr) {
-      // Rate limit check failed (STATS_DB issue)
-      logError("AI rate-limit DB error", { error: rateLimitErr instanceof Error ? rateLimitErr.message : String(rateLimitErr) });
-      // Fail-open with logging — D1 hiccups shouldn't block AI analysis entirely
-      logWarn("Proceeding without rate limit check due to STATS_DB error");
+  try {
+    await ensureRateLimitTable(env.STATS_DB);
+    const count = await getRateLimitCount(env.STATS_DB, clientIP);
+    if (count >= AI_HOURLY_LIMIT) {
+      // Build the DIY prompt for the rate-limited user
+      const { system, user } = buildAIPrompt(analysisCache);
+      const diyPrompt = `${system}\n\n---\n\n${user}`;
+      return new Response(JSON.stringify({
+        rate_limited: true,
+        limit: AI_HOURLY_LIMIT,
+        used: count,
+        reset: "~1 hour",
+        diy_prompt: diyPrompt,
+        model_suggestion: "anthropic/claude-sonnet-4",
+        instructions: "Copy the prompt below and paste it into ChatGPT, Claude, Gemini, or any AI assistant.",
+      }), {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          ...CORS_HEADERS,
+          "X-RateLimit-Limit": String(AI_HOURLY_LIMIT),
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 3600),
+          "Retry-After": "3600",
+        },
+      });
     }
+    // Reserve the slot BEFORE calling OpenRouter to prevent race conditions.
+    const rlResult = await env.STATS_DB.prepare(
+      "INSERT INTO ai_rate_limits (ip, ts) VALUES (?, ?)"
+    ).bind(clientIP, Math.floor(Date.now() / 1000)).run();
+    rateLimitRowId = rlResult.meta?.last_row_id as number | undefined;
+  } catch (rateLimitErr) {
+    // Rate limit check failed (STATS_DB issue)
+    logError("AI rate-limit DB error", { error: rateLimitErr instanceof Error ? rateLimitErr.message : String(rateLimitErr) });
+    // Fail-open with logging — D1 hiccups shouldn't block AI analysis entirely
+    logWarn("Proceeding without rate limit check due to STATS_DB error");
   }
 
-  // Determine which API key to use
-  const apiKey = byoKey || env.OPENROUTER_API_KEY!;
-
   try {
-    const result = await callOpenRouter(apiKey, analysisCache, options?.model, env.BASE_URL, options?.customPrompt);
-
-    // Build prompt metadata for BYO key users (for the prompt editor)
-    const promptMeta = byoKey ? buildAIPrompt(analysisCache) : undefined;
+    const result = await callOpenRouter(env.OPENROUTER_API_KEY!, analysisCache, env.BASE_URL);
 
     const responseData: CachedAIResult = {
       result,
@@ -457,23 +422,20 @@ export async function getAIAnalysis(
       domain: normalized,
     };
 
-    // Cache the result (benefits everyone, even BYO key users)
+    // Cache the result
     await setCache(env.DB, normalized, "ai_analysis", responseData);
 
     // Probabilistic cleanup of old rate limit entries
-    if (!byoKey) {
-      try {
-        await cleanupOldRateLimits(env.STATS_DB);
-      } catch { /* non-critical */ }
-    }
+    try {
+      await cleanupOldRateLimits(env.STATS_DB);
+    } catch { /* non-critical */ }
 
-    return new Response(JSON.stringify({ ...responseData, cached: false, ...(promptMeta ? { _prompt: promptMeta } : {}) }), {
+    return new Response(JSON.stringify({ ...responseData, cached: false }), {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   } catch (err) {
     // OpenRouter call failed — best-effort release of the rate limit slot
-    // so the user isn't penalized for server errors
-    if (!byoKey && rateLimitRowId) {
+    if (rateLimitRowId) {
       try {
         await env.STATS_DB.prepare(
           "DELETE FROM ai_rate_limits WHERE id = ?"
