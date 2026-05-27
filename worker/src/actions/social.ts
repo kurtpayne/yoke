@@ -60,6 +60,7 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string, env?:
     { platform: "Threads", pattern: /https?:\/\/(?:www\.)?threads\.net\/@([a-zA-Z0-9._]+)(?:[/?#]|$)/gi, selfDomain: "threads.net" },
     { platform: "Pinterest", pattern: /https?:\/\/(?:www\.)?pinterest\.com\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/gi, selfDomain: "pinterest.com" },
     { platform: "Discord", pattern: /https?:\/\/(?:www\.)?discord\.(?:gg|com\/invite)\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/gi, selfDomain: "discord.com" },
+    { platform: "Reddit", pattern: /https?:\/\/(?:www\.)?reddit\.com\/(?:r|u|user)\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/gi, selfDomain: "reddit.com" },
   ];
 
   // Determine the base domain being analyzed (to skip self-referencing links)

@@ -87,6 +87,7 @@ const html = `<!DOCTYPE html>
     <link rel="me" href="https://bsky.app/profile/yoke.lol" />
     <link rel="me" href="https://x.com/yokedotlol" />
     <link rel="me" href="https://github.com/yokedotlol" />
+    <link rel="me" href="https://www.reddit.com/u/yokelol" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
