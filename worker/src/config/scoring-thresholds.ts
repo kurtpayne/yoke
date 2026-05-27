@@ -24,7 +24,7 @@ export interface ThresholdConfig {
 
 // ─── Severity → Score mapping ────────────────────────────────────────
 export const SEVERITY_SCORES: Record<Severity, number> = {
-  critical: 0, high: 30, medium: 65, low: 80, info: 92, good: 100,
+  critical: 0, high: 20, medium: 50, low: 70, info: 85, good: 100,
 };
 
 // ─── Performance ─────────────────────────────────────────────────────

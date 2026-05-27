@@ -618,6 +618,9 @@ export async function runAnalysis(
     waf: wafDetection,
     trustSignals,
     networkHealth,
+    breaches: breachResult,
+    trancoRank: tranco,
+    socialAccounts: null, // TODO: integrate social account detection into analysis pipeline
   });
 
   const result: AnalysisResult = {

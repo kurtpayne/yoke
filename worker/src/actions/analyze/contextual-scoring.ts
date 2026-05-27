@@ -11,6 +11,7 @@ import type {
   CookieConsentResult, CacheAnalysis, WafDetection, TrustSignals,
 } from "./types";
 import type { NetworkHealth } from "./network-health";
+import type { BreachResult } from "../breaches";
 import {
   PERF_SCORE, LCP, CLS, TTFB, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
   SEVERITY_SCORES, resolveSeverity,
@@ -83,7 +84,7 @@ export function computeComposite(axisScores: Record<Axis, number>, archetype: Ar
 }
 
 export function gradeFromComposite(score: number): string {
-  return score >= 85 ? "A" : score >= 70 ? "B" : score >= 55 ? "C" : score >= 40 ? "D" : "F";
+  return score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : score >= 45 ? "D" : "F";
 }
 
 export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: Partial<Record<ArchetypeName, Severity>>): Severity {
@@ -293,6 +294,9 @@ export function calculateDomainScore(opts: {
   waf: WafDetection | null;
   trustSignals: TrustSignals | null;
   networkHealth: NetworkHealth | null;
+  breaches: BreachResult | null;
+  trancoRank: number | null;
+  socialAccounts: { accounts: Array<{ platform: string; url: string; found_via: string }> } | null;
 }): DomainScoreResult {
   // Step 1: Detect archetype
   const archetype = detectArchetype({
@@ -410,7 +414,7 @@ export function calculateDomainScore(opts: {
   // Blocklist status
   const listedCount = (opts.blocklists ?? []).filter(b => b.listed).length;
   if (listedCount === 0) {
-    findings.push({ signal: "blocklist_clean", axis: "security", severity: "good", label: "Not on any blocklists", tradeoff: null, weight: 3 });
+    findings.push({ signal: "blocklist_clean", axis: "security", severity: "info", label: "Not on any blocklists", tradeoff: null, weight: 1 });
   } else {
     findings.push({
       signal: "blocklist_listed", axis: "security",
@@ -650,7 +654,7 @@ export function calculateDomainScore(opts: {
       : `Newly registered domain (${ageDays} days) — high risk NRD`;
     findings.push({
       signal: "domain_age_trust", axis: "trust",
-      severity, label, tradeoff: null, weight: 4,
+      severity, label, tradeoff: null, weight: 3,
     });
   }
 
@@ -668,9 +672,9 @@ export function calculateDomainScore(opts: {
   // Blocklist clean (also trust)
   findings.push({
     signal: "blocklist_trust", axis: "trust",
-    severity: listedCount === 0 ? "good" : listedCount >= 2 ? "critical" : "high",
+    severity: listedCount === 0 ? "info" : listedCount >= 2 ? "critical" : "high",
     label: listedCount === 0 ? "Clean blocklist record" : `On ${listedCount} blocklist(s)`,
-    tradeoff: null, weight: 5,
+    tradeoff: null, weight: 3,
   });
 
   // GreyNoise
@@ -680,6 +684,59 @@ export function calculateDomainScore(opts: {
     } else if (opts.greynoise.riot) {
       findings.push({ signal: "greynoise_riot", axis: "trust", severity: "good", label: "IP is a known service (GreyNoise RIOT)", tradeoff: null, weight: 2 });
     }
+  }
+
+  // Data breaches (HIBP) — major trust signal
+  if (opts.breaches && opts.breaches.found && !opts.breaches.check_failed) {
+    const bc = opts.breaches.count;
+    const totalPwned = opts.breaches.total_pwned;
+    const hasVerified = opts.breaches.items.some(b => b.is_verified);
+
+    if (totalPwned > 10_000_000) {
+      findings.push({
+        signal: "breaches", axis: "trust",
+        severity: "high",
+        label: `${bc} data breach${bc !== 1 ? "es" : ""} (${(totalPwned / 1_000_000).toFixed(0)}M+ accounts)`,
+        tradeoff: "Historical breaches reflect past security incidents, not necessarily current posture.",
+        weight: 4,
+      });
+    } else if (totalPwned > 1_000_000 || (bc >= 3 && hasVerified)) {
+      findings.push({
+        signal: "breaches", axis: "trust",
+        severity: "medium",
+        label: `${bc} data breach${bc !== 1 ? "es" : ""} (${totalPwned.toLocaleString()} accounts)`,
+        tradeoff: "Historical breaches reflect past security incidents, not necessarily current posture.",
+        weight: 3,
+      });
+    } else if (bc >= 1 && hasVerified) {
+      findings.push({
+        signal: "breaches", axis: "trust",
+        severity: "low",
+        label: `${bc} verified data breach${bc !== 1 ? "es" : ""}`,
+        tradeoff: "Historical breaches reflect past security incidents, not necessarily current posture.",
+        weight: 2,
+      });
+    } else if (bc >= 1) {
+      findings.push({
+        signal: "breaches", axis: "trust",
+        severity: "info",
+        label: `${bc} unverified data breach report${bc !== 1 ? "s" : ""}`,
+        tradeoff: null,
+        weight: 1,
+      });
+    }
+  }
+
+  // Tranco web ranking — popularity/reputation signal
+  if (opts.trancoRank != null) {
+    if (opts.trancoRank <= 1000) {
+      findings.push({ signal: "tranco_rank", axis: "trust", severity: "good", label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 3 });
+    } else if (opts.trancoRank <= 10000) {
+      findings.push({ signal: "tranco_rank", axis: "trust", severity: "good", label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 2 });
+    } else if (opts.trancoRank <= 100000) {
+      findings.push({ signal: "tranco_rank", axis: "trust", severity: "info", label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 1 });
+    }
+    // Unranked = no finding (neutral, no penalty)
   }
 
   // Email auth completeness (trust signal — only show as strength when complete)
@@ -765,6 +822,30 @@ export function calculateDomainScore(opts: {
       label: pageCount >= 2 ? `Legal pages found (${pageCount})` : pageCount === 1 ? "1 legal page found" : "No legal pages detected",
       tradeoff: null, weight: 1,
     });
+  }
+
+  // Social account presence — visibility signal
+  if (opts.socialAccounts) {
+    const accts = opts.socialAccounts.accounts;
+    const verifiedCount = accts.filter(a => a.found_via === "rel-me").length;
+    const linkedCount = accts.filter(a => a.found_via === "homepage").length;
+    const totalCount = accts.length;
+
+    if (verifiedCount >= 2) {
+      findings.push({ signal: "social_accounts", axis: "visibility", severity: "good", label: `${verifiedCount} verified social accounts (rel=me)`, tradeoff: null, weight: 3 });
+    } else if (verifiedCount >= 1 || linkedCount >= 2) {
+      findings.push({ signal: "social_accounts", axis: "visibility", severity: "good", label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`, tradeoff: null, weight: 2 });
+    } else if (totalCount >= 1) {
+      findings.push({ signal: "social_accounts", axis: "visibility", severity: "info", label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`, tradeoff: null, weight: 1 });
+    } else if (!opts.httpBlocked) {
+      // No social presence — mild visibility concern for content/corporate sites
+      findings.push({
+        signal: "no_social_accounts", axis: "visibility",
+        severity: contextualSeverity("info", arch, { content: "low", corporate: "low" }),
+        label: "No social accounts detected",
+        tradeoff: null, weight: 1,
+      });
+    }
   }
 
   // ─── Accessibility → Visibility Axis ───────────────────────────
