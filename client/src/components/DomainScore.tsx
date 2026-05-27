@@ -34,26 +34,27 @@ const ARCHETYPE_LABELS: Record<ArchetypeName, string> = {
 };
 
 const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
-  commerce: "Security and Performance matter most for Commerce sites",
-  content: "Visibility and Performance are key for Content sites",
-  application: "Security and Performance are critical for Applications",
-  corporate: "Trust and Visibility define Corporate presence",
-  infrastructure: "Reliability and Security are vital for Infrastructure",
-  institutional: "Security and Reliability are paramount for Institutional sites",
-  general: "All axes weighted equally for General sites",
+  commerce: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
+  content: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
+  application: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
+  corporate: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
+  infrastructure: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
+  institutional: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
+  general: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
 };
 
-// Archetype axis weights — fallback if API response doesn't include them.
+// Fixed axis weights — all archetypes use the same weights now.
 // Canonical source is worker/src/actions/analyze/contextual-scoring.ts;
 // the analysis response includes archetype.weights so the client uses that when available.
+const FIXED_WEIGHTS: Record<Axis, number> = { security: 0.25, performance: 0.18, reliability: 0.25, trust: 0.20, visibility: 0.12 };
 const FALLBACK_ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
-  commerce:       { security: 0.35, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.10 },
-  content:        { security: 0.15, performance: 0.25, reliability: 0.15, trust: 0.15, visibility: 0.30 },
-  application:    { security: 0.30, performance: 0.25, reliability: 0.20, trust: 0.10, visibility: 0.15 },
-  corporate:      { security: 0.20, performance: 0.15, reliability: 0.15, trust: 0.30, visibility: 0.20 },
-  infrastructure: { security: 0.25, performance: 0.20, reliability: 0.30, trust: 0.10, visibility: 0.15 },
-  institutional:  { security: 0.35, performance: 0.10, reliability: 0.25, trust: 0.20, visibility: 0.10 },
-  general:        { security: 0.20, performance: 0.20, reliability: 0.20, trust: 0.20, visibility: 0.20 },
+  commerce:       FIXED_WEIGHTS,
+  content:        FIXED_WEIGHTS,
+  application:    FIXED_WEIGHTS,
+  corporate:      FIXED_WEIGHTS,
+  infrastructure: FIXED_WEIGHTS,
+  institutional:  FIXED_WEIGHTS,
+  general:        FIXED_WEIGHTS,
 };
 
 function recomputeScore(axes: Record<Axis, AxisScoreData>, archetype: ArchetypeName, weightsTable?: Record<ArchetypeName, Record<Axis, number>>): { composite: number; grade: string } {
