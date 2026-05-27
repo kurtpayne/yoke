@@ -426,7 +426,7 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
       >
         <Zap size={11} />
         {isOut
-          ? <span>Resets in {minsLeft}m</span>
+          ? <span>Opens in {minsLeft}m</span>
           : <span>{remaining}/{limit}</span>
         }
       </div>
@@ -458,7 +458,10 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
           </div>
           <div style={{ color: "var(--dim, #8b949e)", fontSize: "11px" }}>
             <div>{used} of {limit} analyses used this hour</div>
-            {secsLeft > 0 && <div>Resets in {minsLeft} min{minsLeft !== 1 ? "s" : ""}</div>}
+            {isOut && secsLeft > 0
+              ? <div>Next slot opens in {minsLeft} min{minsLeft !== 1 ? "s" : ""}</div>
+              : <div style={{ opacity: 0.7 }}>Rolling 1-hour window</div>
+            }
           </div>
           {isOut && (
             <div style={{ marginTop: "6px", fontSize: "11px" }}>
@@ -486,8 +489,8 @@ function RateLimitError({ message, onRetry }: { message: string; onRetry: () => 
       </div>
       <p style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--text)", margin: "0 0 8px 0", lineHeight: 1.5 }}>
         {mins > 0
-          ? <>You've hit the hourly analysis limit. Resets in <strong>{mins} minute{mins !== 1 ? "s" : ""}</strong>.</>
-          : <>You've hit the hourly analysis limit. It will reset shortly.</>
+          ? <>You've hit the hourly analysis limit. Next slot opens in <strong>{mins} minute{mins !== 1 ? "s" : ""}</strong>.</>
+          : <>You've hit the hourly analysis limit. A slot will open shortly.</>
         }
       </p>
       <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", margin: "0 0 12px 0" }}>
