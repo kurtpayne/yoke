@@ -8,6 +8,7 @@
 - [x] Resend account set up
 - [x] DNS records (DKIM/SPF/MX) configured in Cloudflare
 - [x] hello@yoke.lol working
+- [x] Gmail "send as" hello@yoke.lol configured
 
 ---
 
@@ -20,7 +21,7 @@
 - [ ] Set all bios to: "Domain intelligence in one pass. Free & open source." + link to yoke.lol
 - [ ] Set all profile pics to ox mark
 - ❌ Instagram — yokelol taken, skip
-- ❌ GitHub org — yokelol taken, repo stays at yokedotlol/yoke
+- [x] **GitHub org** — yokedotlol ✅ (domain verified, repo transferred)
 
 ---
 
@@ -49,7 +50,7 @@
 
 ---
 
-## 🔲 LAUNCH DAY (Wednesday May 28, 10am PT)
+## 🔲 LAUNCH DAY (Monday June 23, 10am PT)
 
 - [ ] Final deploy of any pending code changes
 - [ ] Purge CF cache
@@ -76,3 +77,5 @@
 - [x] CHANGELOG.md created
 - [x] deploy.sh in repo
 - [x] Logo click → home page fix deployed
+- [x] Social verification: rel="me" links live, VERIFIED badges working
+- [x] Repo transferred to yokedotlol/yoke, all references updated
