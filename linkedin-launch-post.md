@@ -1,5 +1,6 @@
 # LinkedIn Launch Post — yoke.lol
-# Strategy: no links in body, all links in first comment, OG banner attached as image
+# Strategy: no clickable links in body, image carousel attached, links in first comment
+# Post timing: Wednesday May 28, 2026 at 10:00 AM PT
 
 ---
 
@@ -9,36 +10,44 @@ Someone says "something's wrong with our website" and you open 15 tabs.
 
 DNS checker. SSL test. WHOIS lookup. Security headers. PageSpeed. BuiltWith. Shodan. You know the drill.
 
-I built Yoke to kill that workflow.
+I built Yoke over a weekend to kill that workflow.
 
-Years ago I wrote a WordPress plugin called P3 — the Plugin Performance Profiler. If you were in the hosting world, your support team probably used it. One tool to find the plugin killing a customer's site.
-
-Yoke is the same idea, bigger scope. Type a domain, get everything: DNS, SSL, WHOIS, security headers, tech stack, performance, email auth, breach history, subdomains — one pass, one tool.
+Type a domain, get everything: DNS, SSL, WHOIS, security headers, tech stack, performance, email auth, breach history, subdomains, accessibility — one pass, one tool.
 
 No signup. No account. No "enter your email to see results."
+
+It scores every domain across five axes and tells you what's actually wrong, not just what's there. Issues, notices, strengths — prioritized so you know where to look first.
 
 It's FOSS. MIT licensed. Self-host the whole thing on Cloudflare Workers and Fly free tiers. There's a JSON API, a CLI, and a Chrome extension.
 
 No ads. No upsells. No premium tier. The full tool is the free tool.
 
-I named it Yoke because this is for the workhorses — the support teams, the consultants, the freelancers who get the 2am "site is down" texts. And it lives at yoke.lol because if you've worked in support, you've named an internal tool something like trogdor. 😉
+The name: a yoke is for those who pull the load — the support teams, the consultants, the freelancers who get the 2am "site is down" texts. And the .lol is a nod to every team that's named their internal tool trogdor or WOPR. You know who you are. 😉
 
 Go break it. Then tell me what's missing — I want to know what the next check should be.
 
-yoke.lol
-
 ---
 
-## FIRST COMMENT
+## FIRST COMMENT (post immediately after)
 
-Links for the curious:
+Links:
 
 🔗 yoke.lol
 📦 github.com/kurtpayne/yoke
 🧩 Chrome extension: search "Yoke" in the Chrome Web Store
-💻 CLI: curl -sSL https://yoke.lol/install.sh | bash
+💻 CLI: curl -sSL yoke.lol/install.sh | bash
 
 ---
 
 ## ATTACH
-assets/og-banner.png as image (don't paste URL — upload the image directly to avoid link unfurl)
+Upload carousel PDF as LinkedIn document post (NOT as a link — upload directly to avoid link unfurl penalty)
+
+---
+
+## NOTES
+- No clickable links in body — LinkedIn deprioritizes posts with links (6x reach penalty)
+- Post as document/carousel for 3-11x higher engagement than static image
+- Carousel lives at workspace/your_files/linkedin-carousel/
+- Weekend project framing distances from any corporate association
+- Removed P3 reference — saves space, most of the audience won't know it, and it anchors identity to WordPress/hosting era rather than the broader dev audience
+- "Go break it" CTA invites engagement (comments boost reach)
