@@ -646,6 +646,14 @@ export async function runAnalysis(
     breaches: breachResult,
     trancoRank: tranco,
     socialAccounts: socialAccountsResult,
+    // Phase 1 new signals
+    shodan: shodanResult,
+    cookieSecurity,
+    securityTxt,
+    wellKnown,
+    redirects: httpProbeSucceeded ? (httpAnalysis?.redirects ?? []) : [],
+    statusResult,
+    robotsParsed,
   });
 
   const result: AnalysisResult = {
