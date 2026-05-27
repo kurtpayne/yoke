@@ -649,17 +649,6 @@ export default {
       return json({ error: "Invalid domain format", hint: "Use a fully-qualified domain name (e.g., example.com)" }, 400);
     }
 
-    // ── /install.sh — redirect to GitHub raw install script ──
-    if (path === "/install.sh") {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: "https://raw.githubusercontent.com/yokedotlol/yoke/main/cli/install.sh",
-          ...CORS_HEADERS,
-        },
-      });
-    }
-
     return serveAssetOrFallback(request, env);
   },
 };

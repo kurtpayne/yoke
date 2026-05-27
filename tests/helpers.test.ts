@@ -18,8 +18,8 @@ describe('normalizeDomain', () => {
     expect(normalizeDomain('https://example.com')).toBe('example.com');
   });
 
-  it('should preserve www.', () => {
-    expect(normalizeDomain('www.example.com')).toBe('www.example.com');
+  it('should strip www. prefix', () => {
+    expect(normalizeDomain('www.example.com')).toBe('example.com');
   });
 
   it('should strip paths', () => {
@@ -27,7 +27,7 @@ describe('normalizeDomain', () => {
   });
 
   it('should handle full URL with www + path', () => {
-    expect(normalizeDomain('https://www.Example.COM/foo/bar')).toBe('www.example.com');
+    expect(normalizeDomain('https://www.Example.COM/foo/bar')).toBe('example.com');
   });
 
   it('should trim whitespace', () => {
@@ -43,7 +43,7 @@ describe('normalizeDomain', () => {
   });
 
   it('should handle multi-part TLD domains', () => {
-    expect(normalizeDomain('https://www.bbc.co.uk/news')).toBe('www.bbc.co.uk');
+    expect(normalizeDomain('https://www.bbc.co.uk/news')).toBe('bbc.co.uk');
   });
 });
 
