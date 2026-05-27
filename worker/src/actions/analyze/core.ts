@@ -123,6 +123,7 @@ export interface AnalysisResult {
   accessibility: unknown;
   third_party_scripts: unknown;
   cookie_consent: unknown;
+  social_accounts: { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> } | null;
   [key: string]: unknown;
 }
 
@@ -202,6 +203,7 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     accessibility: null,
     third_party_scripts: null,
     cookie_consent: null,
+    social_accounts: null,
   };
 }
 
@@ -354,10 +356,19 @@ export async function runAnalysis(
   // Build check context from Phase 1 results for the registry
   const checkCtx: CheckContext = { domain, env, instanceHost, dnsRecords, ip, httpResponseTimeMs: httpAnalysis?.response_time_ms ?? null };
 
+  // Per-check timeout: individual checks that exceed this limit fall back to defaults.
+  // This prevents a single slow API from blocking the entire analysis pipeline.
+  const PER_CHECK_TIMEOUT_MS = 25_000;
+
   // Launch all Phase 2 checks from the registry (one file per check — see worker/src/checks/)
   const checks = registry.map((check) => ({
     key: check.key,
-    promise: check.run(checkCtx),
+    promise: Promise.race([
+      check.run(checkCtx),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Check ${check.key} timed out after ${PER_CHECK_TIMEOUT_MS}ms`)), PER_CHECK_TIMEOUT_MS)
+      ),
+    ]),
     label: check.label,
     default: check.default,
   }));
@@ -405,7 +416,20 @@ export async function runAnalysis(
     )
   );
 
-  await Promise.allSettled(wrappedPromises);
+  // Overall Phase 2 deadline: if checks collectively exceed this limit, proceed
+  // with whatever results have arrived. Leaves ~10s for scoring + response assembly.
+  const PHASE2_DEADLINE_MS = 35_000;
+  await Promise.race([
+    Promise.allSettled(wrappedPromises),
+    new Promise<void>((resolve) => setTimeout(resolve, PHASE2_DEADLINE_MS)),
+  ]);
+
+  // Fill in defaults for any checks that haven't completed yet
+  for (const check of checks) {
+    if (!(check.key in results)) {
+      results[check.key] = check.default;
+    }
+  }
 
   // Probabilistic prune of old error rows (~5% of requests) — non-blocking
   if (Math.random() < 0.05) backgroundWork(env, pruneApiErrors(env.STATS_DB));
@@ -438,6 +462,7 @@ export async function runAnalysis(
   const ripeRouting = (results.ripe_routing ?? null) as import("./network-health").RipeRouting | null;
   const outageLinks = (results.outage_links ?? null) as import("./network-health").OutageLinks | null;
   const connectionTimingResult = (results.connection_timing ?? null) as import("./network-health").ConnectionTiming | null;
+  const socialAccountsResult = (results.social_accounts ?? { accounts: [] }) as { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> };
 
   // Build merged meta
   const meta: MetaResult = {
@@ -620,7 +645,7 @@ export async function runAnalysis(
     networkHealth,
     breaches: breachResult,
     trancoRank: tranco,
-    socialAccounts: null, // TODO: integrate social account detection into analysis pipeline
+    socialAccounts: socialAccountsResult,
   });
 
   const result: AnalysisResult = {
@@ -680,6 +705,7 @@ export async function runAnalysis(
     third_party_scripts: thirdPartyScriptsResult,
     cookie_consent: cookieConsentResult,
     network_health: networkHealth,
+    social_accounts: socialAccountsResult,
   };
 
   // ── Post-analysis: score logging, caching, cleanup ───────────────

@@ -492,6 +492,27 @@ export function calculateDomainScore(opts: {
     findings.push({ signal: "caa_records", axis: "security", severity: "good", label: "CAA records restrict certificate issuance", tradeoff: null, weight: 2 });
   }
 
+  // Certificate Transparency
+  if (opts.certTransparency && !opts.certTransparency.error) {
+    const ct = opts.certTransparency;
+    // Wildcard certificates — increased attack surface
+    if (ct.has_wildcard) {
+      findings.push({
+        signal: "cert_wildcard", axis: "security",
+        severity: contextualSeverity("info", arch, { institutional: "low", commerce: "low" }),
+        label: "Wildcard certificate in use",
+        tradeoff: "Wildcards simplify cert management but increase blast radius if the key is compromised.",
+        weight: 1,
+      });
+    }
+    // Certificate volume in CT logs — trust/establishment signal
+    if (ct.total_certs > 100) {
+      findings.push({ signal: "cert_volume", axis: "trust", severity: "good", label: `${ct.total_certs} certificates in CT logs`, tradeoff: null, weight: 1 });
+    } else if (ct.total_certs > 10) {
+      findings.push({ signal: "cert_volume", axis: "trust", severity: "info", label: `${ct.total_certs} certificates in CT logs`, tradeoff: null, weight: 1 });
+    }
+  }
+
   // Trust signals: composite bonus for strong trust posture
   if (opts.trustSignals) {
     const positiveCount = opts.trustSignals.trust_score_factors.positive.length;
@@ -633,6 +654,35 @@ export function calculateDomainScore(opts: {
     label: hasCaa ? "CAA records present" : "No CAA records",
     tradeoff: null, weight: 1,
   });
+
+  // DNS TTL health — very low TTLs may indicate instability or aggressive failover
+  const aRecords = dns.filter(r => r.type === "A" || r.type === "AAAA");
+  if (aRecords.length > 0) {
+    const minTtl = Math.min(...aRecords.map(r => r.ttl));
+    if (minTtl < 60) {
+      findings.push({
+        signal: "low_ttl", axis: "reliability",
+        severity: "info",
+        label: `Very low DNS TTL (${minTtl}s) — may indicate instability or aggressive failover`,
+        tradeoff: "Low TTLs enable fast failover but increase DNS query volume and latency.",
+        weight: 1,
+      });
+    } else if (minTtl >= 3600) {
+      findings.push({
+        signal: "stable_ttl", axis: "reliability",
+        severity: "good",
+        label: `Stable DNS TTL (${minTtl >= 86400 ? Math.round(minTtl / 3600) + "h" : minTtl + "s"})`,
+        tradeoff: null,
+        weight: 1,
+      });
+    }
+  }
+
+  // SOA record — authoritative zone presence
+  const hasSoa = dns.some(r => r.type === "SOA");
+  if (hasSoa) {
+    findings.push({ signal: "soa_present", axis: "reliability", severity: "good", label: "SOA record present", tradeoff: null, weight: 1 });
+  }
 
   // ─── Trust Axis Findings ─────────────────────────────────────────
 
@@ -1045,7 +1095,19 @@ export function calculateDomainScore(opts: {
   }
   composite = Math.round(composite);
 
-  const grade = gradeFromComposite(composite);
+  let grade = gradeFromComposite(composite);
+
+  // ─── Breach grade cap ────────────────────────────────────────────
+  // Domains with catastrophic data breaches should not earn top grades
+  // regardless of composite score — it's a credibility issue.
+  if (opts.breaches && opts.breaches.found && !opts.breaches.check_failed) {
+    const totalPwned = opts.breaches.total_pwned;
+    if (totalPwned > 500_000_000 && (grade === "A" || grade === "B")) {
+      grade = "B";
+    } else if (totalPwned > 100_000_000 && grade === "A") {
+      grade = "B";
+    }
+  }
 
   return { composite, grade, axes: axisScores, archetype };
 }

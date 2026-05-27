@@ -38,6 +38,7 @@ describe('Phase 2 Check Registry', () => {
     "ripe_routing",
     "outage_links",
     "connection_timing",
+    "social_accounts",
   ];
 
   it('should contain exactly the expected checks in the correct order', () => {
@@ -64,8 +65,8 @@ describe('Phase 2 Check Registry', () => {
     }
   });
 
-  it('should have 26 checks (Phase 2 total)', () => {
-    expect(registry.length).toBe(26);
+  it('should have 27 checks (Phase 2 total)', () => {
+    expect(registry.length).toBe(27);
   });
 
   it('should have a default value defined for every check', () => {
