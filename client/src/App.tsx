@@ -369,7 +369,7 @@ function TabContent({ tab, data, onNavigate, streaming }: { tab: TabId; data: An
       case "business": return <BusinessTabWrapper data={data} />;
       case "news": return <NewsTab domain={data.domain} />;
       case "explore": return <ExploreTab domain={data.domain} data={data} onNavigate={onNavigate} />;
-      case "ai": return <AIAnalysisPanel domain={data.domain} analysisData={data} />;
+      case "ai": return <AIAnalysisPanel domain={data.domain} analysisData={data} streaming={streaming} />;
       default: return null;
     }
   })();

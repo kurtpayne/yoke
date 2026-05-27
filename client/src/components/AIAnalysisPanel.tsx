@@ -892,7 +892,7 @@ function PersonaInsightCard({
 const _personaCache: Record<string, Record<string, string>> = {};
 const _metadataCache: Record<string, { analyzed_at: string; cached: boolean }> = {};
 
-export function AIAnalysisPanel({ domain, analysisData }: { domain: string; analysisData?: AnalysisResult }) {
+export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: string; analysisData?: AnalysisResult; streaming?: boolean }) {
   const [activePersona, setActivePersona] = useState<PersonaKey | null>(null);
   const [personaResults, setPersonaResults] = useState<Record<string, string>>(() => _personaCache[domain] || {});
   const [loadingPersona, setLoadingPersona] = useState<string | null>(null);
@@ -984,6 +984,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
   };
 
   const handlePersonaClick = (key: PersonaKey) => {
+    if (streaming) return; // wait for analysis to finish
     if (activePersona === key) {
       setActivePersona(null); // toggle off
     } else {
@@ -1083,7 +1084,7 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
           {PERSONAS.map(({ key, label, icon: PIcon }) => {
             const isActive = activePersona === key;
             const hasResult = !!personaResults[key];
-            const isDisabled = !!loadingPersona && loadingPersona !== key;
+            const isDisabled = streaming || (!!loadingPersona && loadingPersona !== key);
             return (
               <button
                 key={key}
@@ -1153,10 +1154,21 @@ export function AIAnalysisPanel({ domain, analysisData }: { domain: string; anal
             textAlign: "center", padding: "20px",
             background: "var(--card)", border: "1px dashed var(--border)", borderRadius: "8px",
           }}>
-            <Sparkles size={20} style={{ color: "var(--muted)", opacity: 0.4, margin: "0 auto 8px" }} />
-            <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
-              Select a perspective above for AI-powered analysis tailored to that role.
-            </p>
+            {streaming ? (
+              <>
+                <Loader2 size={20} style={{ color: "var(--accent)", opacity: 0.6, margin: "0 auto 8px", animation: "spin 1s linear infinite" }} />
+                <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
+                  Waiting for analysis to complete before generating AI insights...
+                </p>
+              </>
+            ) : (
+              <>
+                <Sparkles size={20} style={{ color: "var(--muted)", opacity: 0.4, margin: "0 auto 8px" }} />
+                <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
+                  Select a perspective above for AI-powered analysis tailored to that role.
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>
