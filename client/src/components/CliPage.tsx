@@ -75,12 +75,12 @@ export default function CliPage() {
         <CopyBlock code="yoke stripe.com" />
         <div style={{ marginTop: 8 }}>
           <OutputBlock text={`╭─────────────────────────────────────────────────────────────╮
-│ stripe.com  91/100 A                                        │
+│ stripe.com  89/100 A                                        │
 │ application                                                 │
 │                                                             │
 │ SECURITY       ███████████████████░ 98                      │
 │ PERFORMANCE    █████████████░░░░░░░ 69                      │
-│ RELIABILITY    ███████████████████░ 97                      │
+│ RELIABILITY    ██████████████████░░ 90                      │
 │ TRUST          ████████████████████ 100                     │
 │ VISIBILITY     ███████████████████░ 97                      │
 │                                                             │
@@ -90,10 +90,15 @@ export default function CliPage() {
 │ ~ 1 privacy concern(s) from third-party scripts             │
 │ ! Low performance score 44/100                              │
 │ ! LCP: 5.6s                                                 │
+│ ! 71 third-party scripts — significant performance overhead │
 │ ℹ DNSSEC not enabled                                        │
 │ ✓ SSL grade A+                                              │
 │ ✓ HSTS enabled                                              │
 │ ✓ Content Security Policy present                           │
+│ ✓ Full email auth (SPF+DKIM+DMARC reject)                   │
+│ ✓ CAA records restrict certificate issuance                 │
+│ ✓ Established domain (30+ years)                            │
+│ +10 more passing                                            │
 ╰─────────────────────────────────────────────────────────────╯`} />
         </div>
       </Section>
@@ -105,7 +110,7 @@ export default function CliPage() {
             <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--dim)", marginBottom: 8 }}>Quick score check:</p>
             <CopyBlock code="yoke score stripe.com" />
             <div style={{ marginTop: 6 }}>
-              <OutputBlock text="stripe.com  91/100  A" />
+              <OutputBlock text="stripe.com  89/100  A" />
             </div>
           </div>
 
@@ -115,7 +120,7 @@ export default function CliPage() {
             <div style={{ marginTop: 6 }}>
               <OutputBlock text={`"security: 98"
 "performance: 69"
-"reliability: 97"
+"reliability: 90"
 "trust: 100"
 "visibility: 97"`} />
             </div>
@@ -123,7 +128,19 @@ export default function CliPage() {
 
           <div>
             <p style={{ fontFamily: "var(--font-ui)", fontSize: 13, color: "var(--dim)", marginBottom: 8 }}>Compare two domains side-by-side:</p>
-            <CopyBlock code="yoke compare github.com gitlab.com" />
+            <CopyBlock code="yoke compare stripe.com google.com" />
+            <div style={{ marginTop: 6 }}>
+              <OutputBlock text={`  stripe.com                      89/100 A
+  google.com                      92/100 A
+
+  SECURITY         98 vs 96   +2
+  PERFORMANCE      69 vs 73   -4
+  RELIABILITY      90 vs 94   -4
+  TRUST           100 vs 100  +0
+  VISIBILITY       97 vs 100  -3
+
+  https://yoke.lol/compare/stripe.com/google.com`} />
+            </div>
           </div>
 
           <div>
@@ -147,6 +164,8 @@ yoke ai stripe.com      # expert security/SEO/dev analysis`} />
             ["yoke ai --setup", "Configure OpenRouter API key"],
             ["yoke config", "Show current configuration"],
             ["yoke config --set-base-url <url>", "Point to self-hosted instance"],
+            ["yoke config --set-prompt <file>", "Custom AI prompt from file"],
+            ["yoke config --set-prompt-inline \"...\"", "Custom AI prompt inline"],
           ].map(([cmd, desc], i, arr) => (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 16px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none", gap: 16 }}>
               <code style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", whiteSpace: "nowrap" }}>{cmd}</code>
