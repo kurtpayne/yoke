@@ -1092,7 +1092,12 @@ export function calculateDomainScore(opts: {
       findings.push({ signal: "social_accounts", axis: "visibility", severity: "good", label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`, tradeoff: null, weight: 2 });
     } else if (totalCount >= 1) {
       findings.push({ signal: "social_accounts", axis: "visibility", severity: "info", label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`, tradeoff: null, weight: 1 });
-    } else if (!opts.httpBlocked) {
+    }
+    // Suggest rel="me" when accounts are found but not verified
+    if (totalCount >= 2 && verifiedCount === 0) {
+      findings.push({ signal: "social_not_verified", axis: "visibility", severity: "info", label: `${totalCount} social accounts found but none verified via rel="me"`, tradeoff: null, weight: 1 });
+    }
+    if (!opts.httpBlocked && totalCount === 0) {
       // No social presence — mild visibility concern for content/corporate sites
       findings.push({
         signal: "no_social_accounts", axis: "visibility",
