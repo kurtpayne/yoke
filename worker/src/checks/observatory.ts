@@ -5,5 +5,5 @@ export const observatoryCheck: Check = {
   key: "observatory",
   label: "Observatory",
   default: null,
-  run: (ctx) => checkObservatory(ctx.domain),
+  run: (ctx) => checkObservatory(ctx.domain, ctx.env.STATS_DB),
 };

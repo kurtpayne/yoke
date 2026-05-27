@@ -6,7 +6,7 @@ import type { PerformanceResult, CompressionResult } from "./types";
 // ─── PageSpeed ───────────────────────────────────────────────────────
 
 
-export async function checkPageSpeed(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string, flyAuthSecret?: string): Promise<PerformanceResult> {
+export async function checkPageSpeed(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string, flyAuthSecret?: string, statsDb?: D1Database): Promise<PerformanceResult> {
   // Check separate performance cache (24h TTL)
   if (db) {
     try {
@@ -39,11 +39,16 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
         return result;
       }
       // Fly proxy returned error (e.g., rate limited), fall through
+    } else if (statsDb) {
+      logApiError(statsDb, { api: "fly-probe", status: res.status, message: "PageSpeed proxy failed", domain });
     }
-  } catch (e) { console.error("[PageSpeed] Fly proxy error:", e instanceof Error ? e.message : String(e)); }
+  } catch (e) {
+    console.error("[PageSpeed] Fly proxy error:", e instanceof Error ? e.message : String(e));
+    if (statsDb) logApiError(statsDb, { api: "fly-probe", status: 0, message: `PageSpeed proxy: ${String(e).slice(0, 150)}`, domain });
+  }
 
   // Fallback to direct API (also 20s timeout)
-  const directResult = await tryPageSpeedDirect(domain, ttfbFallback, db, apiKey);
+  const directResult = await tryPageSpeedDirect(domain, ttfbFallback, db, apiKey, statsDb);
   if (db && directResult.score != null) {
     try {
       await db.prepare("INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
@@ -53,12 +58,12 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
   return directResult;
 }
 
-async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string): Promise<PerformanceResult> {
+async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string, statsDb?: D1Database): Promise<PerformanceResult> {
   try {
     const keyParam = apiKey ? `&key=${apiKey}` : "";
     const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 60000 });
-    if (res.status === 429) { if (db) logApiError(db, { api: "pagespeed", status: 429, message: "Rate limited", domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "Rate limited — try again later", screenshot: null }; }
-    if (!res.ok) { if (db) logApiError(db, { api: "pagespeed", status: res.status, message: `API error`, domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: `API error (${res.status})`, screenshot: null }; }
+    if (res.status === 429) { if (statsDb) logApiError(statsDb, { api: "pagespeed", status: 429, message: "Rate limited", domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "Rate limited — try again later", screenshot: null }; }
+    if (!res.ok) { if (statsDb) logApiError(statsDb, { api: "pagespeed", status: res.status, message: `API error`, domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: `API error (${res.status})`, screenshot: null }; }
     const data = await res.json() as { lighthouseResult?: { categories?: { performance?: { score?: number } }; audits?: Record<string, { numericValue?: number; details?: { data?: string } }>; }; };
     const lr = data.lighthouseResult;
     const audits = lr?.audits ?? {};

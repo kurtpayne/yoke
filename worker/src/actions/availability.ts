@@ -11,6 +11,7 @@
 // the probe originated.
 
 import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../helpers";
+import { logApiError } from "../api-errors";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -113,10 +114,14 @@ async function checkHostProbes(domain: string, env: Env): Promise<{
       `${getFlyProbeUrl(env)}/check-http?host=${encodeURIComponent(domain)}&max_nodes=20`,
       { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders(env) } }
     );
-  } catch {
+  } catch (e) {
+    logApiError(env.STATS_DB, { api: "fly-probe", status: 0, message: `check-host start: ${String(e).slice(0, 150)}`, domain });
     return null;
   }
-  if (!startRes.ok) return null;
+  if (!startRes.ok) {
+    logApiError(env.STATS_DB, { api: "fly-probe", status: startRes.status, message: "check-host start failed", domain });
+    return null;
+  }
 
   let check: CheckHostStartResponse;
   try {

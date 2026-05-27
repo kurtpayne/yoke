@@ -1,5 +1,6 @@
 import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../../helpers";
 import type { DnsRecord, IpInfo, BlocklistResult, SslResult, ShodanResult, DnssecResult } from "./types";
+import { logApiError } from "../../api-errors";
 
 // ─── IP Geolocation ──────────────────────────────────────────────────
 
@@ -126,7 +127,7 @@ export async function checkSsl(domain: string, env: Env): Promise<SslResult | nu
   if (labsResult && labsResult.grade) return labsResult;
 
   // Priority 3: HTTPS connectivity + crt.sh cert lookup
-  const httpsResult = await tryHttpsCrtsh(domain);
+  const httpsResult = await tryHttpsCrtsh(domain, env.STATS_DB);
   if (httpsResult && httpsResult.grade) return httpsResult;
 
   // If all 3 fail, return what we got (prefer probe error > labs error > generic)
@@ -144,7 +145,10 @@ async function tryFlyProbe(domain: string, env: Env): Promise<SslResult | null> 
       `${getFlyProbeUrl(env)}/probe-ssl?domain=${encodeURIComponent(domain)}`,
       { timeout: 12000, headers: getFlyAuthHeaders(env) }
     );
-    if (!probeRes.ok) return null;
+    if (!probeRes.ok) {
+      logApiError(env.STATS_DB, { api: "fly-probe", status: probeRes.status, message: "SSL probe failed", domain });
+      return null;
+    }
 
     const data = await probeRes.json() as {
       grade: string; issuer: string; subject: string;
@@ -166,7 +170,10 @@ async function tryFlyProbe(domain: string, env: Env): Promise<SslResult | null> 
       key_exchange: data.key_alg ? `${data.key_alg} ${data.key_size || ""}`.trim() : null,
       error: data.grade === "T" ? (data.error || "Certificate trust issue") : null,
     };
-  } catch { return null; }
+  } catch (e) {
+    logApiError(env.STATS_DB, { api: "fly-probe", status: 0, message: `SSL probe: ${String(e).slice(0, 150)}`, domain });
+    return null;
+  }
 }
 
 // ─── SSL: SSL Labs (cached grade + protocol details) ────────────────
@@ -223,7 +230,7 @@ async function trySslLabs(domain: string): Promise<SslResult | null> {
 
 // ─── SSL: HTTPS fetch + crt.sh cert lookup ──────────────────────────
 
-async function tryHttpsCrtsh(domain: string): Promise<SslResult | null> {
+async function tryHttpsCrtsh(domain: string, statsDb?: D1Database): Promise<SslResult | null> {
   try {
     const httpsRes = await fetchWithTimeout(`https://${domain}/`, {
       timeout: 8000,
@@ -256,7 +263,9 @@ async function tryHttpsCrtsh(domain: string): Promise<SslResult | null> {
           validTo = latest.not_after ? new Date(latest.not_after).toISOString() : null;
         }
       }
-    } catch { /* crt.sh unavailable — we still know HTTPS works */ }
+    } catch (e) {
+      if (statsDb) logApiError(statsDb, { api: "crt.sh", status: 0, message: `SSL cert lookup: ${String(e).slice(0, 150)}`, domain });
+    }
 
     return { grade: "Valid", issuer, subject: null, valid_from: validFrom, valid_to: validTo, protocols: [], key_exchange: null, error: null };
   } catch { return null; }
@@ -284,8 +293,12 @@ export async function checkStatus(domain: string, env: Env): Promise<{ is_up: bo
         http3: data.http3 ?? false,
         alt_svc: data.alt_svc ?? null,
       };
+    } else {
+      logApiError(env.STATS_DB, { api: "fly-probe", status: probeRes.status, message: "Status probe failed", domain });
     }
-  } catch { /* Fly proxy unreachable — fall back to direct probe */ }
+  } catch (e) {
+    logApiError(env.STATS_DB, { api: "fly-probe", status: 0, message: `Status probe: ${String(e).slice(0, 150)}`, domain });
+  }
 
   // Fallback: direct probe from CF Worker
   const start = Date.now();
@@ -328,10 +341,13 @@ export async function checkStatus(domain: string, env: Env): Promise<{ is_up: bo
 
 // ─── NEW: Shodan InternetDB ─────────────────────────────────────────
 
-export async function checkShodan(ip: string): Promise<ShodanResult | null> {
+export async function checkShodan(ip: string, statsDb?: D1Database): Promise<ShodanResult | null> {
   try {
     const res = await fetchWithTimeout(`https://internetdb.shodan.io/${ip}`, { timeout: 6000 });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (statsDb) logApiError(statsDb, { api: "shodan", status: res.status, message: "InternetDB lookup failed", domain: ip });
+      return null;
+    }
     const data = await res.json() as { cpes?: string[]; hostnames?: string[]; ip?: string; ports?: number[]; tags?: string[]; vulns?: string[] };
     return {
       ports: data.ports ?? [],
@@ -340,7 +356,10 @@ export async function checkShodan(ip: string): Promise<ShodanResult | null> {
       tags: data.tags ?? [],
       hostnames: data.hostnames ?? [],
     };
-  } catch { return null; }
+  } catch (e) {
+    if (statsDb) logApiError(statsDb, { api: "shodan", status: 0, message: String(e).slice(0, 200), domain: ip });
+    return null;
+  }
 }
 
 // ─── NEW: DNSSEC Validation ─────────────────────────────────────────

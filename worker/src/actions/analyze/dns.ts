@@ -1,6 +1,7 @@
 import { fetchWithTimeout, MULTI_PART_TLDS } from "../../helpers";
 import type { Env } from "../../helpers";
 import type { DnsRecord, RdapResult } from "./types";
+import { logApiError } from "../../api-errors";
 
 // ─── DNS ─────────────────────────────────────────────────────────────
 
@@ -300,7 +301,10 @@ async function whoisFreaksFallback(domain: string, env?: Env): Promise<RdapResul
       `https://api.whoisfreaks.com/v1.0/whois?apiKey=${encodeURIComponent(apiKey)}&whois=live&domainName=${encodeURIComponent(domain)}`,
       { timeout: 10000 }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "whoisfreaks", status: res.status, message: `WHOIS lookup failed`, domain });
+      return null;
+    }
     const data = await res.json() as {
       create_date?: string;
       update_date?: string;
@@ -334,7 +338,10 @@ async function whoisFreaksFallback(domain: string, env?: Env): Promise<RdapResul
       domain_age_days: domainAgeDays,
       days_until_expiry: daysUntilExpiry,
     };
-  } catch { return null; }
+  } catch (e) {
+    if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "whoisfreaks", status: 0, message: String(e).slice(0, 200), domain });
+    return null;
+  }
 }
 
 // ─── RDAP Lookup (with retry, bootstrap, and WhoisFreaks fallback) ───
@@ -370,14 +377,16 @@ export async function tryRdap(domain: string, env?: Env): Promise<RdapResult | n
         if (res.status >= 500) {
           // 5xx → retry once
           if (attempt === 0) continue;
+          if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "rdap", status: res.status, message: `RDAP 5xx from ${new URL(rdapUrl).hostname}`, domain });
           break; // give up on this URL after retry
         }
         if (!res.ok) break; // 4xx → skip to next URL
         const data = await res.json() as Parameters<typeof parseRdapResponse>[0];
         return parseRdapResponse(data);
-      } catch {
+      } catch (e) {
         // Timeout or network error → retry once
         if (attempt === 0) continue;
+        if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "rdap", status: 0, message: `${new URL(rdapUrl).hostname}: ${String(e).slice(0, 150)}`, domain });
         break; // give up on this URL after retry
       }
     }

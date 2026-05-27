@@ -5,5 +5,5 @@ export const shodanCheck: Check = {
   key: "shodan",
   label: "Shodan",
   default: null,
-  run: (ctx) => ctx.ip ? checkShodan(ctx.ip) : Promise.resolve(null),
+  run: (ctx) => ctx.ip ? checkShodan(ctx.ip, ctx.env.STATS_DB) : Promise.resolve(null),
 };

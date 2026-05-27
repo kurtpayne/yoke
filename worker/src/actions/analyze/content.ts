@@ -1,4 +1,5 @@
 import { fetchWithTimeout, boundedText, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../../helpers";
+import { logApiError } from "../../api-errors";
 import type {
   DnsRecord, LlmsTxtResult, RobotsParsed, JsonLdItem,
   OgTwitterResult, LegalResult, AiReadinessResult,
@@ -149,24 +150,36 @@ export async function checkWayback(domain: string): Promise<{ first_snapshot: st
 
 // ─── Tranco Ranking ──────────────────────────────────────────────────
 
-export async function checkTranco(domain: string): Promise<number | null> {
+export async function checkTranco(domain: string, statsDb?: D1Database): Promise<number | null> {
   try {
     const res = await fetchWithTimeout(`https://tranco-list.eu/api/ranks/domain/${encodeURIComponent(domain)}`, { timeout: 5000 });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (statsDb) logApiError(statsDb, { api: "tranco", status: res.status, message: "Tranco rank lookup failed", domain });
+      return null;
+    }
     const data = await res.json() as { ranks?: Array<{ rank?: number }> };
     return data.ranks?.[0]?.rank ?? null;
-  } catch { return null; }
+  } catch (e) {
+    if (statsDb) logApiError(statsDb, { api: "tranco", status: 0, message: String(e).slice(0, 200), domain });
+    return null;
+  }
 }
 
 // ─── Mozilla HTTP Observatory ────────────────────────────────────────
 
-export async function checkObservatory(domain: string): Promise<{ grade: string | null; score: number | null; tests_passed: number | null; tests_total: number | null } | null> {
+export async function checkObservatory(domain: string, statsDb?: D1Database): Promise<{ grade: string | null; score: number | null; tests_passed: number | null; tests_total: number | null } | null> {
   try {
     const res = await fetchWithTimeout(`https://observatory.mozilla.org/api/v2/analyze?host=${encodeURIComponent(domain)}`, { timeout: 10000, method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `host=${encodeURIComponent(domain)}` });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (statsDb) logApiError(statsDb, { api: "observatory", status: res.status, message: "Mozilla Observatory failed", domain });
+      return null;
+    }
     const data = await res.json() as { grade?: string; score?: number; tests_passed?: number; tests_quantity?: number; };
     return { grade: data.grade ?? null, score: data.score ?? null, tests_passed: data.tests_passed ?? null, tests_total: data.tests_quantity ?? null };
-  } catch { return null; }
+  } catch (e) {
+    if (statsDb) logApiError(statsDb, { api: "observatory", status: 0, message: String(e).slice(0, 200), domain });
+    return null;
+  }
 }
 
 // ─── Email Authentication ────────────────────────────────────────────

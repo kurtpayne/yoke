@@ -176,7 +176,7 @@ func main() {
 		Addr:         ":" + port,
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 65 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -1015,7 +1015,7 @@ func proxyPageSpeed(domain string, apiKey string) PageSpeedResult {
 	
 	url := fmt.Sprintf("https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://%s&strategy=mobile&category=performance%s", domain, keyParam)
 	
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{Timeout: 60 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		errStr := fmt.Sprintf("request failed: %s", err.Error())

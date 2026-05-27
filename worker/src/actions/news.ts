@@ -1,4 +1,5 @@
 import { normalizeDomain, fetchWithTimeout, getFromCache, setCache } from "../helpers";
+import { logApiError } from "../api-errors";
 
 type NewsArticle = { title: string; link: string; source: string | null; pub_date: string | null };
 type HnStory = { title: string; url: string | null; points: number; num_comments: number; created_at: string };
@@ -34,7 +35,7 @@ async function fetchGoogleNews(query: string): Promise<NewsArticle[]> {
   return [];
 }
 
-export async function getNews(db: D1Database, rawDomain: string) {
+export async function getNews(db: D1Database, rawDomain: string, statsDb?: D1Database) {
   const domain = normalizeDomain(rawDomain);
   const cached = await getFromCache(db, domain, "news", 60 * 60 * 1000);
   if (cached) {
@@ -70,9 +71,13 @@ export async function getNews(db: D1Database, rawDomain: string) {
             googleNews = items;
             break;
           }
+        } else if (statsDb) {
+          logApiError(statsDb, { api: "bing-news", status: res.status, message: "Bing News RSS failed", domain });
         }
       }
-    } catch { /* Bing News fallback failed */ }
+    } catch (e) {
+      if (statsDb) logApiError(statsDb, { api: "bing-news", status: 0, message: String(e).slice(0, 200), domain });
+    }
   }
 
   // HackerNews Algolia
@@ -86,8 +91,12 @@ export async function getNews(db: D1Database, rawDomain: string) {
           hackerNews.push({ title: hit.title, url: hit.url ?? null, points: hit.points ?? 0, num_comments: hit.num_comments ?? 0, created_at: hit.created_at });
         }
       }
+    } else if (statsDb) {
+      logApiError(statsDb, { api: "hackernews", status: res.status, message: "HN Algolia search failed", domain });
     }
-  } catch { /* HN API failed */ }
+  } catch (e) {
+    if (statsDb) logApiError(statsDb, { api: "hackernews", status: 0, message: String(e).slice(0, 200), domain });
+  }
 
   const result = { google_news: googleNews, hacker_news: hackerNews };
   await setCache(db, domain, "news", result);

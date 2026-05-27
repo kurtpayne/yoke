@@ -1,6 +1,7 @@
 import { type Env, normalizeDomain, fetchWithTimeout, getFromCache, setCache, CORS_HEADERS } from "../helpers";
 import { AI_CACHE_TTL_MS } from "../config/cache";
 import { logWarn, logError } from "../logger";
+import { logApiError } from "../api-errors";
 
 // ─── System Prompt ──────────────────────────────────────────────────
 
@@ -443,6 +444,7 @@ export async function getAIAnalysis(
       } catch { /* decrement failure is non-critical */ }
     }
     const msg = err instanceof Error ? err.message : "AI analysis failed";
+    logApiError(env.STATS_DB, { api: "openrouter", status: 0, message: msg.slice(0, 200), domain: normalized });
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },

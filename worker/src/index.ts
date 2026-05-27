@@ -346,7 +346,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getSubdomains(env.DB, domain);
+          const result = await getSubdomains(env.DB, domain, env.STATS_DB);
           await trackUsage(env.STATS_DB, "subdomains");
           _track("subdomains", 200, domain);
           return json(result);
@@ -356,7 +356,7 @@ export default {
         if (method === "GET" && path === "/api/subdomains") {
           const domain = cleanDomain(url.searchParams.get("domain") || "");
           if (!domain) return json({ error: "domain query parameter is required (e.g., /api/subdomains?domain=example.com)", code: "MISSING_DOMAIN" }, 400);
-          const result = await getSubdomains(env.DB, domain);
+          const result = await getSubdomains(env.DB, domain, env.STATS_DB);
           await trackUsage(env.STATS_DB, "subdomains");
           _track("subdomains", 200, domain);
           return json(result);
@@ -382,7 +382,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getCompanyInfo(env.DB, domain, body.force);
+          const result = await getCompanyInfo(env.DB, domain, body.force, env.STATS_DB);
           await trackUsage(env.STATS_DB, "company");
           _track("company", 200, domain);
           return json(result);
@@ -394,7 +394,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getNews(env.DB, domain);
+          const result = await getNews(env.DB, domain, env.STATS_DB);
           await trackUsage(env.STATS_DB, "news");
           _track("news", 200, domain);
           return json(result);

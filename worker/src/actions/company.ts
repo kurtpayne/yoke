@@ -1,4 +1,5 @@
 import { normalizeDomain, fetchWithTimeout, getFromCache, setCache } from "../helpers";
+import { logApiError } from "../api-errors";
 
 interface CompanyData {
   name: string | null; description: string | null; founded: string | null;
@@ -44,13 +45,16 @@ function domainToBrandName(domain: string): string {
   return domain;
 }
 
-async function enrichFromBrandfetch(domain: string): Promise<{ name: string | null; logo_url: string | null }> {
+async function enrichFromBrandfetch(domain: string, statsDb?: D1Database): Promise<{ name: string | null; logo_url: string | null }> {
   try {
     const res = await fetchWithTimeout(`https://api.brandfetch.io/v2/search/${encodeURIComponent(domain)}`, {
       timeout: 5000,
       headers: { "User-Agent": "Mozilla/5.0 (compatible; YokeBot/1.0)" },
     });
-    if (!res.ok) return { name: null, logo_url: null };
+    if (!res.ok) {
+      if (statsDb) logApiError(statsDb, { api: "brandfetch", status: res.status, message: "Brand lookup failed", domain });
+      return { name: null, logo_url: null };
+    }
     const data = (await res.json()) as Array<{ domain?: string; name?: string; icon?: string; qualityScore?: number; claimed?: boolean }>;
     // Find exact domain match or best match
     const exact = data.find(d => d.domain === domain);
@@ -61,11 +65,13 @@ async function enrichFromBrandfetch(domain: string): Promise<{ name: string | nu
         logo_url: best.icon ?? null,
       };
     }
-  } catch { /* brandfetch failed */ }
+  } catch (e) {
+    if (statsDb) logApiError(statsDb, { api: "brandfetch", status: 0, message: String(e).slice(0, 200), domain });
+  }
   return { name: null, logo_url: null };
 }
 
-async function enrichFromWikidata(domain: string): Promise<CompanyData | null> {
+async function enrichFromWikidata(domain: string, statsDb?: D1Database): Promise<CompanyData | null> {
   // Build URL variants for matching
   const variants = [
     `<https://${domain}>`,
@@ -101,7 +107,10 @@ async function enrichFromWikidata(domain: string): Promise<CompanyData | null> {
       `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`,
       { timeout: 10000, headers: { Accept: "application/sparql-results+json", "User-Agent": "YokeBot/1.0 (domain-intelligence)" } }
     );
-    if (!wdRes.ok) return null;
+    if (!wdRes.ok) {
+      if (statsDb) logApiError(statsDb, { api: "wikidata", status: wdRes.status, message: "SPARQL query failed", domain });
+      return null;
+    }
     const wdData = await wdRes.json() as { results?: { bindings?: Array<Record<string, { value: string; type: string }>> } };
     const binding = wdData.results?.bindings?.[0];
     if (!binding) return null;
@@ -169,11 +178,14 @@ async function enrichFromWikidata(domain: string): Promise<CompanyData | null> {
       social_links: socialLinks,
       source: "wikidata",
     };
-  } catch { return null; }
+  } catch (e) {
+    if (statsDb) logApiError(statsDb, { api: "wikidata", status: 0, message: String(e).slice(0, 200), domain });
+    return null;
+  }
 }
 
 // Fallback: search Wikidata by name if URL match fails
-async function searchWikidataByName(domain: string): Promise<CompanyData | null> {
+async function searchWikidataByName(domain: string, statsDb?: D1Database): Promise<CompanyData | null> {
   const brandName = domainToBrandName(domain);
   try {
     const searchRes = await fetchWithTimeout(
@@ -204,7 +216,7 @@ async function searchWikidataByName(domain: string): Promise<CompanyData | null>
               const url = ws.mainsnak?.datavalue?.value ?? "";
               if (url.includes(domain)) {
                 // Match found! Now fetch full data
-                return enrichFromWikidata(domain);
+                return enrichFromWikidata(domain, statsDb);
               }
             }
           }
@@ -215,7 +227,7 @@ async function searchWikidataByName(domain: string): Promise<CompanyData | null>
   return null;
 }
 
-export async function getCompanyInfo(db: D1Database, rawDomain: string, force?: boolean) {
+export async function getCompanyInfo(db: D1Database, rawDomain: string, force?: boolean, statsDb?: D1Database) {
   const domain = normalizeDomain(rawDomain);
 
   // Check company cache (24h)
@@ -230,8 +242,8 @@ export async function getCompanyInfo(db: D1Database, rawDomain: string, force?: 
 
   // Parallel: Wikidata + Brandfetch
   const [wdCompany, brandfetch] = await Promise.allSettled([
-    enrichFromWikidata(domain),
-    enrichFromBrandfetch(domain),
+    enrichFromWikidata(domain, statsDb),
+    enrichFromBrandfetch(domain, statsDb),
   ]);
 
   let company: CompanyData | null = wdCompany.status === "fulfilled" ? wdCompany.value : null;
@@ -239,7 +251,7 @@ export async function getCompanyInfo(db: D1Database, rawDomain: string, force?: 
 
   // If Wikidata URL match failed, try name-based search
   if (!company) {
-    company = await searchWikidataByName(domain);
+    company = await searchWikidataByName(domain, statsDb);
   }
 
   // Merge Brandfetch data (logo, name) as fallback/supplement
