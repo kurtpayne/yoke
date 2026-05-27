@@ -2,6 +2,41 @@
 
 All notable changes to Yoke are documented here.
 
+## [1.4.0] — 2026-05-27
+
+### Scoring Overhaul
+- **106 detection signals** — expanded from 83 with 23 new signals: mixed content detection, canonical URL validation, subresource integrity checks, form action security, mobile app deep links, MTA-STS/BIMI email auth, DMARC policy granularity, RSS/Atom feeds, hreflang international targeting, favicon/title/meta description presence, ads.txt, CSP report-only detection
+- **Scoring calibration** — steepened severity curve (info 92→85, low 80→70, medium 65→50, high 30→20), raised A threshold to ≥90, grade distribution now 35% A / 57% B / 4% C / 4% D (was 93% A / 7% B)
+- **Fixed axis weights** — single weight set for all archetypes: Security (0.25), Reliability (0.25), Trust (0.20), Performance (0.18), Visibility (0.12)
+- **Breach grade cap** — >100M breached accounts caps grade at B
+
+### Features
+- **Social verification advice** — AI prompt, Top Priorities panel, and scoring now surface rel="me" verification guidance when social accounts are found but not verified
+- **AI prompt calibration** — 10 new domain expertise entries covering social verification, cookie security, server version disclosure, referrer/permissions policy, security.txt, redirect chains, PWA, robots.txt
+- **Homebrew tap** — `brew install yokedotlol/tap/yoke` via GoReleaser-managed releases
+- **CLI version flag** — `yoke --version` prints version, commit, and build date
+
+### Bug Fixes
+- **CSP double-count** — CSP was scored twice (security audit + raw headers); removed duplicate
+- **Client weight sync** — DomainScore.tsx fallback weights and summary text now match fixed weights
+- **Stale archetype note** — `/api/scoring` endpoint text updated for fixed weights
+- **www. prefix** — stripped during domain normalization (worker + CLI)
+- **Path in URL** — `/github.com/kurtpayne` now 301-redirects to `/github.com`
+- **/cli route** — browsers get SPA shell instead of 400 JSON error
+- **Duplicate /install.sh** — removed dead route from index.ts
+- **Title reset** — document title resets on logo click / home navigation
+- **Fly proxy nil check** — PageSpeed response parsing guarded against malformed API responses
+- **CLI exit codes** — API errors now consistently exit non-zero
+- **CLI score --json** — outputs minimal `{domain, score, grade}` instead of full 55-key response
+- **CLI good findings cap** — capped at 5 with "+N more passing" overflow
+- **CLI compare errors** — failed domains show "Error" instead of "0/100 F"
+- **Dead code** — removed deprecated `initFlyProbeUrl` function
+
+### Developer Experience
+- **Scoring integration tests** — 8 new tests covering grade boundaries, breach caps, CSP dedup, empty inputs
+- **159 tests** passing (up from 151)
+- **Check registry** — 26 Phase 2 checks extracted to individual files under `worker/src/checks/`
+
 ## [1.3.0] — 2026-06-23
 
 ### Features
