@@ -86,6 +86,7 @@ const html = `<!DOCTYPE html>
     <link rel="me" href="https://mastodon.social/@yokelol" />
     <link rel="me" href="https://bsky.app/profile/yoke.lol" />
     <link rel="me" href="https://x.com/yokedotlol" />
+    <link rel="me" href="https://github.com/yokedotlol" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
