@@ -61,6 +61,7 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string, env?:
     { platform: "Pinterest", pattern: /https?:\/\/(?:www\.)?pinterest\.com\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/gi, selfDomain: "pinterest.com" },
     { platform: "Discord", pattern: /https?:\/\/(?:www\.)?discord\.(?:gg|com\/invite)\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/gi, selfDomain: "discord.com" },
     { platform: "Reddit", pattern: /https?:\/\/(?:www\.)?reddit\.com\/(?:r|u|user)\/([a-zA-Z0-9_-]+)(?:[/?#]|$)/gi, selfDomain: "reddit.com" },
+    { platform: "GitLab", pattern: /https?:\/\/(?:www\.)?gitlab\.com\/([a-zA-Z0-9_.-]+)(?:[/?#]|$)/gi, selfDomain: "gitlab.com" },
   ];
 
   // Determine the base domain being analyzed (to skip self-referencing links)
@@ -134,6 +135,7 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string, env?:
       { platform: "LinkedIn", url: `https://www.linkedin.com/company/${baseName}`, username: baseName },
       { platform: "Facebook", url: `https://www.facebook.com/${baseName}`, username: baseName },
       { platform: "Instagram", url: `https://www.instagram.com/${baseName}`, username: baseName },
+      { platform: "GitLab", url: `https://gitlab.com/${baseName}`, username: baseName },
     ];
 
     const probes = probeUrls.filter(p => !accounts.some(a => a.platform === p.platform)).map(async (probe) => {
