@@ -74,13 +74,13 @@ const html = `<!DOCTYPE html>
     <meta property="og:url" content="https://yoke.lol" />
     <meta property="og:site_name" content="Yoke" />
     <meta property="og:locale" content="en_US" />
-    <meta property="og:image" content="https://yoke.lol/logo.png" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
+    <meta property="og:image" content="https://yoke.lol/og-banner.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Yoke — Free Domain Intelligence Tool" />
     <meta name="twitter:description" content="Analyze any domain instantly. DNS, SSL, WHOIS, security headers, tech stack, performance, and breach detection. Free API: curl yoke.lol/stripe.com" />
-    <meta name="twitter:image" content="https://yoke.lol/logo.png" />
+    <meta name="twitter:image" content="https://yoke.lol/og-banner.png" />
     <meta name="impact-site-verification" value="5b874e38-4989-4b8a-8544-3030a7b05ced" />
     <script type="application/ld+json">
     {
@@ -147,10 +147,11 @@ import { copyFileSync } from "fs";
 const assetsDir = join(import.meta.dir, "..", "assets", "logo");
 copyFileSync(join(assetsDir, "mark-transparent-512.png"), join(outdir, "logo.png"));
 copyFileSync(join(assetsDir, "icon-32.png"), join(outdir, "favicon.ico"));
+copyFileSync(join(import.meta.dir, "..", "assets", "og-banner.png"), join(outdir, "og-banner.png"));
 
 console.log("✓ Client build complete");
 console.log(`  JS:   ${jsPath}`);
 if (cssPath) console.log(`  CSS:  ${cssPath}`);
 console.log(`  HTML: index.html`);
-console.log(`  Assets: logo.png, favicon.ico`);
+console.log(`  Assets: logo.png, favicon.ico, og-banner.png`);
 console.log(`  Output dir: ${outdir}`);
