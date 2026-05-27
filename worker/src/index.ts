@@ -62,18 +62,26 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
     await ensureRateLimitTable(db);
     const now = Math.floor(Date.now() / 1000);
     const cutoff = now - config.windowSecs;
-    const row = await db.prepare(
-      "SELECT COUNT(*) as cnt FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?"
-    ).bind(ip, endpoint, cutoff).first<{ cnt: number }>();
-    const count = row?.cnt ?? 0;
-    const resetAt = now + config.windowSecs;
+    // Get count + oldest request in window (to calculate real reset time)
+    const [countRow, oldestRow] = await db.batch([
+      db.prepare(
+        "SELECT COUNT(*) as cnt FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?"
+      ).bind(ip, endpoint, cutoff),
+      db.prepare(
+        "SELECT MIN(ts) as oldest FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?"
+      ).bind(ip, endpoint, cutoff),
+    ]);
+    const count = (countRow.results?.[0] as { cnt: number } | undefined)?.cnt ?? 0;
+    const oldest = (oldestRow.results?.[0] as { oldest: number | null } | undefined)?.oldest;
+    // Reset = when the oldest request in the window expires (sliding window)
+    const resetAt = oldest ? oldest + config.windowSecs : now + config.windowSecs;
 
     if (count >= config.limit) {
       const rlHeaders = {
         "X-RateLimit-Limit": String(config.limit),
         "X-RateLimit-Remaining": "0",
         "X-RateLimit-Reset": String(resetAt),
-        "Retry-After": String(config.windowSecs),
+        "Retry-After": String(Math.max(1, resetAt - now)),
       };
       return {
         blocked: new Response(JSON.stringify({
