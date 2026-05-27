@@ -522,7 +522,7 @@ export default {
             description: "Yoke domain scoring methodology. All thresholds, weights, and severity mappings used to calculate the 5-axis composite score.",
             severity_scores: SEVERITY_SCORES,
             thresholds: ALL_THRESHOLDS,
-            archetype_note: "Axis weights vary by detected site archetype (commerce, content, application, corporate, infrastructure, institutional, general). See archetype field in analysis response.",
+            archetype_note: "Fixed axis weights: Security (0.25), Reliability (0.25), Trust (0.20), Performance (0.18), Visibility (0.12). Site archetype is detected for contextual severity adjustments on individual findings.",
           }, 200);
         }
 
