@@ -38,6 +38,9 @@ export async function getUsageStats(db: D1Database, days = 30): Promise<{
   by_day: { day: string; endpoint: string; hits: number }[];
   total: number;
   tab_views?: Record<string, number>;
+  score_stats?: { total_scores: number; unique_domains: number; avg_composite: number; archetype_breakdown: Record<string, number>; grade_breakdown: Record<string, number>; daily_scores: { date: string; count: number; avg: number }[] };
+  daily_snapshot_count?: number;
+  error_stats?: { total: number; by_api: Record<string, number>; recent: { ts: number; api: string; error: string }[] };
 }> {
   await ensureTable(db);
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
@@ -79,5 +82,89 @@ export async function getUsageStats(db: D1Database, days = 30): Promise<{
     }
   } catch { /* table may not exist yet */ }
 
-  return { by_endpoint, by_day, total, tab_views };
+  // Domain score stats (aggregate only — no individual domains exposed)
+  let score_stats: typeof result.score_stats = undefined;
+  try {
+    const scoreAgg = await db.prepare(
+      `SELECT COUNT(*) as total, COUNT(DISTINCT domain) as uniq, AVG(composite_score) as avg_comp FROM domain_scores WHERE scored_at >= ?`
+    ).bind(cutoff + "T00:00:00").first<{ total: number; uniq: number; avg_comp: number }>();
+
+    const archetypeRows = await db.prepare(
+      `SELECT archetype, COUNT(*) as cnt FROM domain_scores WHERE scored_at >= ? GROUP BY archetype ORDER BY cnt DESC`
+    ).bind(cutoff + "T00:00:00").all();
+    const archetype_breakdown: Record<string, number> = {};
+    for (const r of (archetypeRows.results || []) as { archetype: string; cnt: number }[]) {
+      archetype_breakdown[r.archetype] = r.cnt;
+    }
+
+    // Grade distribution from composite scores
+    const gradeRows = await db.prepare(
+      `SELECT
+        CASE
+          WHEN composite_score >= 90 THEN 'A'
+          WHEN composite_score >= 80 THEN 'B'
+          WHEN composite_score >= 70 THEN 'C'
+          WHEN composite_score >= 60 THEN 'D'
+          ELSE 'F'
+        END as grade,
+        COUNT(*) as cnt
+       FROM domain_scores WHERE scored_at >= ? GROUP BY grade ORDER BY grade`
+    ).bind(cutoff + "T00:00:00").all();
+    const grade_breakdown: Record<string, number> = {};
+    for (const r of (gradeRows.results || []) as { grade: string; cnt: number }[]) {
+      grade_breakdown[r.grade] = r.cnt;
+    }
+
+    // Daily score volume + average
+    const dailyScoreRows = await db.prepare(
+      `SELECT DATE(scored_at) as d, COUNT(*) as cnt, AVG(composite_score) as avg FROM domain_scores WHERE scored_at >= ? GROUP BY d ORDER BY d`
+    ).bind(cutoff + "T00:00:00").all();
+    const daily_scores = ((dailyScoreRows.results || []) as { d: string; cnt: number; avg: number }[]).map(r => ({
+      date: r.d, count: r.cnt, avg: Math.round(r.avg),
+    }));
+
+    if (scoreAgg) {
+      score_stats = {
+        total_scores: scoreAgg.total,
+        unique_domains: scoreAgg.uniq,
+        avg_composite: Math.round(scoreAgg.avg_comp || 0),
+        archetype_breakdown,
+        grade_breakdown,
+        daily_scores,
+      };
+    }
+  } catch { /* domain_scores table may not exist yet */ }
+
+  // Daily snapshot count
+  let daily_snapshot_count: number | undefined;
+  try {
+    const snap = await db.prepare("SELECT COUNT(*) as cnt FROM daily_snapshots").first<{ cnt: number }>();
+    daily_snapshot_count = snap?.cnt ?? 0;
+  } catch { /* table may not exist */ }
+
+  // API error stats (anonymized — no IPs)
+  let error_stats: typeof result.error_stats = undefined;
+  try {
+    const errAgg = await db.prepare(
+      `SELECT COUNT(*) as total FROM api_errors WHERE ts >= ?`
+    ).bind(Date.now() - days * 86400000).first<{ total: number }>();
+    const errByApi = await db.prepare(
+      `SELECT api, COUNT(*) as cnt FROM api_errors WHERE ts >= ? GROUP BY api ORDER BY cnt DESC`
+    ).bind(Date.now() - days * 86400000).all();
+    const by_api: Record<string, number> = {};
+    for (const r of (errByApi.results || []) as { api: string; cnt: number }[]) {
+      by_api[r.api] = r.cnt;
+    }
+    // Recent errors (last 10, no IP)
+    const recentErrors = await db.prepare(
+      `SELECT ts, api, error FROM api_errors ORDER BY ts DESC LIMIT 10`
+    ).all();
+    const recent = ((recentErrors.results || []) as { ts: number; api: string; error: string }[]).map(r => ({
+      ts: r.ts, api: r.api, error: r.error?.slice(0, 120) || "",
+    }));
+    error_stats = { total: errAgg?.total ?? 0, by_api, recent };
+  } catch { /* api_errors table may not exist */ }
+
+  const result = { by_endpoint, by_day, total, tab_views, score_stats, daily_snapshot_count, error_stats };
+  return result;
 }
