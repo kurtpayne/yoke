@@ -18,11 +18,15 @@ async function apiFetch<T>(url: string, opts?: RequestInit): Promise<T> {
 // ─── SSE Streaming Analysis ──────────────────────────────────────────
 // Streams analysis results as they complete, calling onEvent for each chunk.
 
-export interface StreamEvent {
-  type: "phase" | "result" | "done" | "error";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any;
+export interface RateLimitInfo {
+  limit: number;
+  remaining: number;
+  reset: number; // unix timestamp
 }
+
+export type StreamEvent =
+  | { type: "phase" | "result" | "done" | "error"; data: unknown }
+  | { type: "ratelimit"; data: RateLimitInfo };
 
 export async function analyzeStream(
   domain: string,
@@ -40,10 +44,37 @@ export async function analyzeStream(
     signal,
   });
 
+  // Extract rate limit headers before checking status
+  const rlLimit = res.headers.get("X-RateLimit-Limit");
+  const rlRemaining = res.headers.get("X-RateLimit-Remaining");
+  const rlReset = res.headers.get("X-RateLimit-Reset");
+  if (rlLimit && rlRemaining && rlReset) {
+    onEvent({
+      type: "ratelimit",
+      data: {
+        limit: parseInt(rlLimit, 10),
+        remaining: parseInt(rlRemaining, 10),
+        reset: parseInt(rlReset, 10),
+      },
+    });
+  }
+
   if (!res.ok) {
     const body = await res.text();
     let msg = `API error ${res.status}`;
-    try { const j = JSON.parse(body); if (j.error) msg = j.error; } catch { /* ignore */ }
+    let code = "";
+    let reset = 0;
+    try {
+      const j = JSON.parse(body);
+      if (j.error) msg = j.error;
+      if (j.code) code = j.code;
+      if (j.reset) reset = j.reset;
+    } catch { /* ignore */ }
+    if (res.status === 429 || code === "RATE_LIMITED") {
+      const resetIn = reset ? Math.max(0, reset - Math.floor(Date.now() / 1000)) : 0;
+      const mins = Math.ceil(resetIn / 60);
+      throw new Error(`rate_limit:${mins}`);
+    }
     throw new Error(msg);
   }
 
