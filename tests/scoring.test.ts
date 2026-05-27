@@ -25,37 +25,26 @@ describe('Archetype Weight Profiles', () => {
     }
   });
 
-  it('general archetype should have equal weights', () => {
-    const weights = ARCHETYPE_WEIGHTS.general;
-    expect(weights.security).toBe(0.20);
-    expect(weights.performance).toBe(0.20);
-    expect(weights.reliability).toBe(0.20);
-    expect(weights.trust).toBe(0.20);
-    expect(weights.visibility).toBe(0.20);
+  it('all archetypes should use the same fixed weights', () => {
+    const archetypes: ArchetypeName[] = ["commerce", "content", "application", "corporate", "infrastructure", "institutional", "general"];
+    for (const arch of archetypes) {
+      const w = ARCHETYPE_WEIGHTS[arch];
+      expect(w.security).toBe(0.25);
+      expect(w.reliability).toBe(0.25);
+      expect(w.trust).toBe(0.20);
+      expect(w.performance).toBe(0.18);
+      expect(w.visibility).toBe(0.12);
+    }
   });
 
-  it('commerce should weight security highest', () => {
-    const w = ARCHETYPE_WEIGHTS.commerce;
-    expect(w.security).toBeGreaterThan(w.performance);
-    expect(w.security).toBeGreaterThan(w.reliability);
+  it('security and reliability should be weighted highest', () => {
+    const w = ARCHETYPE_WEIGHTS.general;
     expect(w.security).toBeGreaterThan(w.trust);
-    expect(w.security).toBeGreaterThan(w.visibility);
-  });
-
-  it('content should weight visibility highest', () => {
-    const w = ARCHETYPE_WEIGHTS.content;
-    expect(w.visibility).toBeGreaterThanOrEqual(w.security);
-    expect(w.visibility).toBeGreaterThanOrEqual(w.performance);
-    expect(w.visibility).toBeGreaterThanOrEqual(w.reliability);
-    expect(w.visibility).toBeGreaterThanOrEqual(w.trust);
-  });
-
-  it('institutional should weight security highest', () => {
-    const w = ARCHETYPE_WEIGHTS.institutional;
     expect(w.security).toBeGreaterThan(w.performance);
-    expect(w.security).toBeGreaterThan(w.reliability);
-    expect(w.security).toBeGreaterThan(w.trust);
     expect(w.security).toBeGreaterThan(w.visibility);
+    expect(w.reliability).toBeGreaterThan(w.trust);
+    expect(w.reliability).toBeGreaterThan(w.performance);
+    expect(w.reliability).toBeGreaterThan(w.visibility);
   });
 });
 
@@ -146,25 +135,27 @@ describe('Composite Score Computation', () => {
     expect(computeComposite(axes, "general")).toBe(0);
   });
 
-  it('should weight security heavily for commerce', () => {
-    // High security, low everything else → commerce scores higher than content
+  it('should produce the same score regardless of archetype', () => {
+    // With fixed weights, archetype no longer affects composite
     const axes = { security: 100, performance: 30, reliability: 30, trust: 30, visibility: 30 };
     const commerceScore = computeComposite(axes, "commerce");
     const contentScore = computeComposite(axes, "content");
-    expect(commerceScore).toBeGreaterThan(contentScore);
+    expect(commerceScore).toBe(contentScore);
   });
 
-  it('should weight visibility heavily for content', () => {
-    // High visibility, low everything else → content scores higher than commerce
+  it('all archetypes should produce the same composite for the same inputs', () => {
+    // With fixed weights, archetype no longer changes composite
     const axes = { security: 30, performance: 30, reliability: 30, trust: 30, visibility: 100 };
+    const generalScore = computeComposite(axes, "general");
     const contentScore = computeComposite(axes, "content");
     const commerceScore = computeComposite(axes, "commerce");
-    expect(contentScore).toBeGreaterThan(commerceScore);
+    expect(contentScore).toBe(generalScore);
+    expect(commerceScore).toBe(generalScore);
   });
 
-  it('general should produce the simple average', () => {
+  it('should use fixed weights (Sec=0.25, Rel=0.25, Trust=0.20, Perf=0.18, Vis=0.12)', () => {
     const axes = { security: 60, performance: 80, reliability: 70, trust: 90, visibility: 50 };
-    const expected = Math.round((60 + 80 + 70 + 90 + 50) / 5);
+    const expected = Math.round(60*0.25 + 80*0.18 + 70*0.25 + 90*0.20 + 50*0.12);
     expect(computeComposite(axes, "general")).toBe(expected);
   });
 
