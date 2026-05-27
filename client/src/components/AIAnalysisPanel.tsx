@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Copy, Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Key, RotateCcw, Settings } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
 import { findReferenceLink } from "./DomainSignals";
 
