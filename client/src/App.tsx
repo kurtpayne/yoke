@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, analyzeStream, type StreamEvent } from "./api";
-import { Search, Loader2, RotateCcw, ArrowLeftRight, CheckCircle2, Circle, XCircle } from "lucide-react";
+import { api, analyzeStream, type StreamEvent, type RateLimitInfo } from "./api";
+import { Search, Loader2, RotateCcw, ArrowLeftRight, CheckCircle2, Circle, XCircle, Zap } from "lucide-react";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { PanelGrid, ResetLayoutButton, type PanelDef } from "./components/PanelLayout";
 import CliPage from "./components/CliPage";
@@ -147,6 +147,8 @@ function useStreamingAnalysis() {
   const [partialData, setPartialData] = useState<Partial<AnalysisResult> | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [rateLimit, setRateLimit] = useState<RateLimitInfo | null>(null);
+  const [sessionCount, setSessionCount] = useState(0);
   const [progress, setProgress] = useState<ProgressState>({
     phase: "", label: "", completed: 0, total: 0, checks: new Map(),
   });
@@ -162,6 +164,7 @@ function useStreamingAnalysis() {
     setError(null);
     setData(null);
     setPartialData({ domain });
+    setSessionCount(c => c + 1);
     setProgress({ phase: "init", label: "Connecting…", completed: 0, total: 0, checks: new Map() });
 
     analyzeStream(
@@ -226,6 +229,10 @@ function useStreamingAnalysis() {
             setIsPending(false);
             break;
           }
+          case "ratelimit": {
+            setRateLimit(evt.data as RateLimitInfo);
+            break;
+          }
         }
       },
       controller.signal,
@@ -246,7 +253,7 @@ function useStreamingAnalysis() {
     setProgress({ phase: "", label: "", completed: 0, total: 0, checks: new Map() });
   }, []);
 
-  return { data, partialData, isPending, error, progress, mutate, reset };
+  return { data, partialData, isPending, error, progress, rateLimit, sessionCount, mutate, reset };
 }
 
 const sIcon = <div className="w-3.5 h-3.5 rounded" style={{ background: "var(--border)" }} />;
@@ -368,6 +375,90 @@ function TabContent({ tab, data, onNavigate, streaming }: { tab: TabId; data: An
   })();
 
   return lazyContent ? <Suspense fallback={<TabLoadingFallback />}>{lazyContent}</Suspense> : null;
+}
+
+// ─── Rate Limit Pill ────────────────────────────────────────────────
+function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo | null; sessionCount: number }) {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+
+  // Tick every 30s to update countdown
+  useEffect(() => {
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Option C: only show after 5+ analyses in this session
+  if (!rateLimit || sessionCount < 5) return null;
+
+  const { limit, remaining, reset } = rateLimit;
+  const pct = remaining / limit;
+  const isLow = pct <= 0.25;
+  const isOut = remaining <= 0;
+
+  // Countdown for reset
+  const secsLeft = Math.max(0, reset - now);
+  const minsLeft = Math.ceil(secsLeft / 60);
+
+  const color = isOut ? "var(--danger)" : isLow ? "var(--warning, #d29922)" : "var(--cyan)";
+
+  return (
+    <div
+      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+      style={{
+        background: "var(--card-bg)",
+        border: `1px solid ${isOut ? "var(--danger)" : "var(--border)"}`,
+        fontFamily: "var(--font-ui)",
+        fontSize: "11px",
+        color,
+        opacity: isLow ? 1 : 0.7,
+        transition: "opacity 0.3s, border-color 0.3s",
+        whiteSpace: "nowrap",
+      }}
+      title={isOut
+        ? `Rate limit reached. Resets in ${minsLeft}m. Self-host for unlimited usage.`
+        : `${remaining} of ${limit} analyses remaining this hour`
+      }
+    >
+      <Zap size={11} />
+      {isOut
+        ? <span>Resets in {minsLeft}m</span>
+        : <span>{remaining}/{limit}</span>
+      }
+    </div>
+  );
+}
+
+// ─── Rate Limit Error Banner ────────────────────────────────────────
+function RateLimitError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  // Parse "rate_limit:XX" format
+  const mins = parseInt(message.replace("rate_limit:", ""), 10) || 0;
+
+  return (
+    <div className="panel p-5 mb-4 mt-3" style={{ borderColor: "var(--warning, #d29922)" }}>
+      <div className="flex items-center gap-2 mb-2">
+        <Zap size={16} style={{ color: "var(--warning, #d29922)" }} />
+        <span style={{ color: "var(--warning, #d29922)", fontFamily: "var(--font-ui)", fontSize: "14px", fontWeight: 600 }}>
+          Rate limit reached
+        </span>
+      </div>
+      <p style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--text)", margin: "0 0 8px 0", lineHeight: 1.5 }}>
+        {mins > 0
+          ? <>You've hit the hourly analysis limit. Resets in <strong>{mins} minute{mins !== 1 ? "s" : ""}</strong>.</>
+          : <>You've hit the hourly analysis limit. It will reset shortly.</>
+        }
+      </p>
+      <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", margin: "0 0 12px 0" }}>
+        For unlimited usage, <a href="https://github.com/kurtpayne/yoke#self-hosting" target="_blank" rel="noopener noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline" }}>self-host Yoke</a> on Cloudflare Workers + Fly.io free tiers.
+      </p>
+      <button
+        onClick={onRetry}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "var(--font-ui)", fontSize: "12px", cursor: "pointer" }}
+      >
+        <RotateCcw size={11} /> Try again
+      </button>
+    </div>
+  );
 }
 
 // ─── Main App ──────────────────────────────────────────────────
@@ -535,6 +626,7 @@ export function App() {
               </button>
             </div>
             )}
+            <RateLimitPill rateLimit={analyze.rateLimit} sessionCount={analyze.sessionCount} />
             {/* Compare toggle */}
             <button
               type="button"
@@ -598,6 +690,9 @@ export function App() {
 
         {/* Error state */}
         {analyze.error && !analyze.isPending && (
+          analyze.error.message.startsWith("rate_limit:") ? (
+            <RateLimitError message={analyze.error.message} onRetry={() => doAnalyze()} />
+          ) : (
           <div className="panel p-4 mb-4 flex items-center gap-3 mt-3" style={{ borderColor: "var(--danger)" }}>
             <span style={{ color: "var(--danger)", fontFamily: "var(--font-ui)", fontSize: "13px" }}>
               Analysis failed: {String(analyze.error)}
@@ -611,6 +706,7 @@ export function App() {
               <RotateCcw size={11} /> Retry
             </button>
           </div>
+          )
         )}
 
         {/* Streaming progress + partial results */}

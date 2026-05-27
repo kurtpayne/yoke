@@ -10,7 +10,7 @@ function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export async function analyzeDomainStream(domain: string, env: Env, skipCache = false): Promise<Response> {
+export async function analyzeDomainStream(domain: string, env: Env, skipCache = false, extraHeaders?: Record<string, string>): Promise<Response> {
   domain = normalizeDomain(domain);
   if (!domain || !domain.includes(".")) {
     return new Response(JSON.stringify({ error: "Invalid domain" }), {
@@ -72,6 +72,7 @@ export async function analyzeDomainStream(domain: string, env: Env, skipCache = 
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
       ...CORS_HEADERS,
+      ...(extraHeaders || {}),
     },
   });
 }
