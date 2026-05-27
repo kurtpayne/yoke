@@ -53,7 +53,7 @@ if $DEPLOY_CF; then
 
   echo "🚀 Deploying to Cloudflare..."
   cd worker
-  if ! npx wrangler deploy; then
+  if ! bun x wrangler deploy; then
     echo "❌ Cloudflare Worker deploy failed"
     exit 1
   fi
