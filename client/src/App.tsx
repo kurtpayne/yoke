@@ -796,6 +796,15 @@ export function App() {
           Chrome Extension
         </a>
         <span style={{ color: "var(--border)" }}>·</span>
+        <a
+          href="/cli"
+          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+        >
+          CLI
+        </a>
+        <span style={{ color: "var(--border)" }}>·</span>
         <ResetLayoutButton />
       </footer>
     </main>
