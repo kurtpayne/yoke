@@ -55,14 +55,18 @@ console.log(`  Chunks: ${jsChunks.length} lazy-loaded chunk(s)`);
 
 // Generate index.html
 const cssLink = cssPath ? `<link rel="stylesheet" href="/${cssPath}" />` : "";
+const cssPreload = cssPath ? `<link rel="preload" href="/${cssPath}" as="style" />` : "";
+const jsPreload = `<link rel="preload" href="/${jsPath}" as="script" crossorigin />`;
 const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    ${jsPreload}
+    ${cssPreload}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=optional" as="style" />
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" as="style" />
     <title>Yoke — Free Domain Intelligence Tool</title>
     <meta name="description" content="Free domain intelligence tool. DNS, SSL, WHOIS, security audit, tech stack detection, performance analysis, breach detection, and AI insights. Web UI, Chrome extension, and curl API." />
     <meta name="robots" content="index, follow" />
