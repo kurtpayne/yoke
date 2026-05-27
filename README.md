@@ -142,23 +142,38 @@ All limits use a rolling 1-hour window. Self-hosted instances can override or di
 
 Yoke includes a fast Go-based CLI for terminal domain analysis.
 
-```bash
-# Install (macOS/Linux)
-curl -sSL https://yoke.lol/install.sh | bash
+### Install
 
+**Homebrew (macOS/Linux):**
+```bash
+brew install yokedotlol/tap/yoke
+```
+
+**Shell script:**
+```bash
+curl -sSL https://yoke.lol/install.sh | bash
+```
+
+**From source:**
+```bash
+git clone https://github.com/yokedotlol/yoke.git
+cd yoke/cli && go build -o yoke .
+```
+
+### Usage
+
+```bash
 # Analyze a domain
 yoke stripe.com
 yoke stripe.com --json | jq .ssl
 yoke score stripe.com
 yoke compare github.com gitlab.com
 
-# AI-powered analysis (requires OpenRouter key)
+# AI-powered analysis
 yoke ai stripe.com
-yoke ai --setup
 
-# Configure
+# Configure (for self-hosting)
 yoke config --set-base-url https://your-instance.com
-yoke config --set-model openai/gpt-4o
 export YOKE_BASE_URL=https://your-instance.com  # ephemeral override
 
 # Commands
@@ -167,11 +182,9 @@ yoke <domain> --json             # Raw JSON output
 yoke score <domain>              # Quick score (e.g., "92/100 A")
 yoke compare <d1> <d2>           # Side-by-side comparison
 yoke ai <domain>                 # AI-powered analysis
-yoke ai --setup                  # Configure OpenRouter API key
 yoke config                      # Show current config
-yoke config --set-key <key>      # Set OpenRouter API key
-yoke config --set-model <model>  # Set default AI model
 yoke config --set-base-url <url> # Set custom API endpoint
+yoke --version                   # Print version info
 ```
 
 The CLI uses the same API as the web app and supports custom endpoints via config file (`~/.yoke.toml`) or `YOKE_BASE_URL` env var.

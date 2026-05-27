@@ -649,6 +649,107 @@ export function calculateDomainScore(opts: {
     }
   }
 
+  // ─── Phase 2: Mixed Content Detection ───────────────────────────
+  if (opts.html && !opts.httpBlocked && opts.ssl?.grade) {
+    // Only relevant for HTTPS sites — check for http:// resources
+    const httpResourcePattern = /(?:src|href)\s*=\s*["']http:\/\/(?!schema\.org|www\.w3\.org|xmlns\.com)[^"']+/gi;
+    const httpResources = opts.html.match(httpResourcePattern) ?? [];
+    if (httpResources.length > 0) {
+      const activePattern = /<(?:script|iframe)[^>]+src\s*=\s*["']http:\/\/(?!schema\.org|www\.w3\.org)[^"']+/gi;
+      const hasActive = activePattern.test(opts.html);
+      if (hasActive) {
+        findings.push({
+          signal: "mixed_content", axis: "security",
+          severity: contextualSeverity("medium", arch, { commerce: "high", application: "high" }),
+          label: "Active mixed content — scripts or iframes loaded over HTTP",
+          tradeoff: null, weight: 3,
+        });
+      } else {
+        findings.push({
+          signal: "mixed_content", axis: "security",
+          severity: "low",
+          label: `Passive mixed content — ${httpResources.length} resource(s) loaded over HTTP`,
+          tradeoff: null, weight: 2,
+        });
+      }
+    }
+  }
+
+  // ─── Phase 2: Subresource Integrity ──────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const scriptSrcPattern = /<script[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi;
+    const domainLowerSri = opts.domain.toLowerCase();
+    let thirdPartyTotal = 0;
+    let thirdPartyWithSri = 0;
+    let sriMatch: RegExpExecArray | null;
+    while ((sriMatch = scriptSrcPattern.exec(opts.html)) !== null) {
+      const src = sriMatch[1];
+      try {
+        const srcHost = new URL(src, `https://${opts.domain}`).hostname.toLowerCase();
+        if (srcHost !== domainLowerSri && !srcHost.endsWith(`.${domainLowerSri}`)) {
+          thirdPartyTotal++;
+          if (/integrity\s*=\s*["']sha/i.test(sriMatch[0])) {
+            thirdPartyWithSri++;
+          }
+        }
+      } catch { /* skip malformed URLs */ }
+    }
+    if (thirdPartyTotal >= 3) {
+      if (thirdPartyWithSri === thirdPartyTotal) {
+        findings.push({ signal: "subresource_integrity", axis: "security", severity: "good", label: `All ${thirdPartyTotal} third-party scripts have SRI`, tradeoff: null, weight: 2 });
+      } else if (thirdPartyWithSri === 0) {
+        findings.push({
+          signal: "subresource_integrity_missing", axis: "security",
+          severity: contextualSeverity("info", arch, { commerce: "low", application: "low" }),
+          label: `${thirdPartyTotal} third-party scripts without SRI`,
+          tradeoff: "SRI ensures CDN-hosted scripts haven't been tampered with.",
+          weight: 1,
+        });
+      } else {
+        findings.push({ signal: "subresource_integrity_partial", axis: "security", severity: "info", label: `${thirdPartyWithSri}/${thirdPartyTotal} third-party scripts have SRI`, tradeoff: null, weight: 1 });
+      }
+    }
+  }
+
+  // ─── Phase 2: Form Action Security ──────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const formActionPattern = /<form[^>]+action\s*=\s*["']http:\/\/[^"']+["']/gi;
+    const insecureForms = opts.html.match(formActionPattern) ?? [];
+    if (insecureForms.length > 0) {
+      findings.push({
+        signal: "form_action_security", axis: "security",
+        severity: contextualSeverity("medium", arch, { commerce: "high", application: "high" }),
+        label: `${insecureForms.length} form(s) post to HTTP — data sent in plaintext`,
+        tradeoff: null, weight: 3,
+      });
+    }
+  }
+
+  // ─── Phase 3: CSP Report-Only (intent without enforcement) ──────
+  if (opts.headers && !opts.httpBlocked) {
+    const hasReportOnly = !!opts.headers["content-security-policy-report-only"];
+    const hasEnforcingCsp = opts.securityAudit.some(a => a.header.toLowerCase().includes("content-security-policy") && a.status === "pass");
+    if (hasReportOnly && !hasEnforcingCsp) {
+      findings.push({
+        signal: "csp_report_only", axis: "security",
+        severity: "info",
+        label: "CSP in report-only mode — monitoring but not enforcing",
+        tradeoff: "Shows intent to implement CSP. Promote to enforcing once violations are resolved.",
+        weight: 1,
+      });
+    }
+  }
+
+  // ─── Phase 3: MTA-STS (email transport security) ────────────────
+  if (opts.emailAuth?.mta_sts) {
+    const mta = opts.emailAuth.mta_sts;
+    if (mta.policy_found && mta.mode === "enforce") {
+      findings.push({ signal: "mta_sts", axis: "security", severity: "good", label: "MTA-STS enforced — email transport protected from downgrade attacks", tradeoff: null, weight: 1 });
+    } else if (mta.policy_found && mta.mode === "testing") {
+      findings.push({ signal: "mta_sts", axis: "security", severity: "info", label: "MTA-STS in testing mode", tradeoff: null, weight: 1 });
+    }
+  }
+
   // Trust signals: composite bonus for strong trust posture
   if (opts.trustSignals) {
     const positiveCount = opts.trustSignals.trust_score_factors.positive.length;
@@ -1007,6 +1108,30 @@ export function calculateDomainScore(opts: {
     // Absent = no finding (don't penalize for absence of nice-to-have)
   }
 
+  // ─── Phase 3: BIMI Record (email brand identity) ────────────────
+  if (opts.emailAuth?.bimi?.found) {
+    findings.push({ signal: "bimi_record", axis: "trust", severity: "good", label: "BIMI record present — email brand verification", tradeoff: null, weight: 1 });
+  }
+
+  // ─── Phase 3: DMARC Policy Strength ─────────────────────────────
+  // reject is already scored via trust signals above; add granularity for weaker policies
+  if (opts.emailAuth?.dmarc?.found && opts.emailAuth.dmarc.policy) {
+    const dmarcPol = opts.emailAuth.dmarc.policy;
+    if (dmarcPol === "quarantine") {
+      findings.push({ signal: "dmarc_policy_strength", axis: "trust", severity: "info", label: "DMARC policy=quarantine — partial email protection", tradeoff: "Upgrade to p=reject for full spoofing prevention.", weight: 1 });
+    } else if (dmarcPol === "none") {
+      findings.push({ signal: "dmarc_policy_strength", axis: "trust", severity: "low", label: "DMARC policy=none — monitoring only, no email protection", tradeoff: "p=none is a first step. Move to quarantine/reject once reports look clean.", weight: 1 });
+    }
+  }
+
+  // ─── Phase 3: ads.txt (publisher transparency) ──────────────────
+  if (opts.wellKnown && arch === "content") {
+    const hasAdsTxt = opts.wellKnown.endpoints.some(e => e.path.includes("ads.txt") && e.found);
+    if (hasAdsTxt) {
+      findings.push({ signal: "ads_txt", axis: "trust", severity: "good", label: "ads.txt present — authorized ad sellers declared", tradeoff: null, weight: 1 });
+    }
+  }
+
   // Wayback Machine presence
   // Wayback Machine — informational only, not scored as a penalty.
   // Archive coverage is arbitrary and not operator-controlled; domain age already captures newness.
@@ -1128,6 +1253,94 @@ export function calculateDomainScore(opts: {
       tradeoff: null,
       weight: (arch === "application" || arch === "commerce") ? 2 : 1,
     });
+  }
+
+  // ─── Phase 2: Canonical URL ──────────────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const canonicalMatch = opts.html.match(/<link[^>]+rel\s*=\s*["']canonical["'][^>]+href\s*=\s*["']([^"']+)["']/i)
+      ?? opts.html.match(/<link[^>]+href\s*=\s*["']([^"']+)["'][^>]+rel\s*=\s*["']canonical["']/i);
+    if (canonicalMatch) {
+      const canonicalUrl = canonicalMatch[1];
+      try {
+        const canonicalHost = new URL(canonicalUrl).hostname.toLowerCase();
+        const domainLowerCan = opts.domain.toLowerCase();
+        if (canonicalHost === domainLowerCan || canonicalHost.endsWith(`.${domainLowerCan}`) || domainLowerCan.endsWith(`.${canonicalHost}`)) {
+          findings.push({ signal: "canonical_url", axis: "visibility", severity: "good", label: "Canonical URL set correctly", tradeoff: null, weight: 2 });
+        } else {
+          findings.push({ signal: "canonical_url", axis: "visibility", severity: "info", label: `Canonical URL points to different domain (${canonicalHost})`, tradeoff: "May be intentional for cross-domain canonical consolidation.", weight: 1 });
+        }
+      } catch {
+        findings.push({ signal: "canonical_url", axis: "visibility", severity: "info", label: "Canonical URL present but malformed", tradeoff: null, weight: 1 });
+      }
+    } else {
+      findings.push({
+        signal: "canonical_url_missing", axis: "visibility",
+        severity: contextualSeverity("info", arch, { content: "low", corporate: "low" }),
+        label: "No canonical URL — risk of duplicate content in search results",
+        tradeoff: null, weight: 1,
+      });
+    }
+  }
+
+  // ─── Phase 3: Mobile App Links ───────────────────────────────────
+  if (opts.wellKnown?.has_mobile_apps) {
+    findings.push({ signal: "mobile_app_links", axis: "visibility", severity: "good", label: "Mobile app deep links configured", tradeoff: null, weight: 1 });
+  }
+
+  // ─── Phase 3: RSS/Atom Feed ──────────────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const hasRss = /type\s*=\s*["']application\/(rss|atom)\+xml["']/i.test(opts.html);
+    if (hasRss) {
+      findings.push({
+        signal: "rss_feed", axis: "visibility",
+        severity: "good",
+        label: "RSS/Atom feed available",
+        tradeoff: null,
+        weight: (arch === "content") ? 2 : 1,
+      });
+    }
+  }
+
+  // ─── Phase 3: Hreflang (international targeting) ─────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const hasHreflang = /hreflang\s*=\s*["'][^"']+["']/i.test(opts.html);
+    if (hasHreflang) {
+      findings.push({ signal: "hreflang", axis: "visibility", severity: "good", label: "Hreflang tags present — international targeting configured", tradeoff: null, weight: 1 });
+    }
+  }
+
+  // ─── Phase 3: Favicon ────────────────────────────────────────────
+  if (opts.meta && !opts.httpBlocked) {
+    if (!opts.meta.favicon_url) {
+      if (arch === "content" || arch === "corporate") {
+        findings.push({ signal: "favicon_missing", axis: "visibility", severity: "low", label: "No favicon detected", tradeoff: null, weight: 1 });
+      }
+    }
+  }
+
+  // ─── Phase 3: Title Tag ──────────────────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const titleMatch = opts.html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const titleText = titleMatch ? titleMatch[1].trim() : "";
+    if (!titleText) {
+      findings.push({ signal: "title_tag_missing", axis: "visibility", severity: "low", label: "Missing page title", tradeoff: null, weight: 1 });
+    } else if (titleText.length < 5 || /^(untitled|home|welcome|index)$/i.test(titleText)) {
+      findings.push({ signal: "title_tag_generic", axis: "visibility", severity: "info", label: `Generic page title: "${titleText}"`, tradeoff: null, weight: 1 });
+    }
+  }
+
+  // ─── Phase 3: Meta Description ───────────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const hasMetaDesc = /name\s*=\s*["']description["']/i.test(opts.html);
+    const hasOgDesc = !!opts.socialMeta?.og?.description;
+    if (!hasMetaDesc && !hasOgDesc) {
+      findings.push({
+        signal: "meta_description_missing", axis: "visibility",
+        severity: contextualSeverity("info", arch, { content: "low" }),
+        label: "No meta description — search engines will generate their own snippet",
+        tradeoff: null, weight: 1,
+      });
+    }
   }
 
   // ─── Accessibility → Visibility Axis ───────────────────────────

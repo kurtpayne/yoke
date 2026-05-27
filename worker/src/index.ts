@@ -16,7 +16,7 @@ import { getNews } from "./actions/news";
 import { getSocialAccounts } from "./actions/social";
 import { getReverseIP } from "./actions/reverse-ip";
 import { getDomainSuggestions } from "./actions/suggestions";
-import { getAIAnalysis, buildAIPrompt, ALLOWED_MODELS, DEFAULT_MODEL } from "./actions/ai-analysis";
+import { getAIAnalysis, buildAIPrompt } from "./actions/ai-analysis";
 import { trackUsage, getUsageStats } from "./usage-tracking";
 import { renderUsagePage } from "./usage-page";
 import { trackRequest } from "./request-tracking";
@@ -241,10 +241,7 @@ export default {
 
     // Handle CORS preflight
     if (method === "OPTIONS") {
-      const requestHeaders = request.headers.get("Access-Control-Request-Headers") || "";
-      const allowHeaders = requestHeaders.toLowerCase().includes("x-openrouter-key")
-        ? "Content-Type, X-OpenRouter-Key"
-        : "Content-Type";
+      const allowHeaders = "Content-Type";
       return new Response(null, { 
         status: 204, 
         headers: { ...CORS_HEADERS, "Access-Control-Allow-Headers": allowHeaders }
@@ -458,19 +455,15 @@ export default {
           return json(result);
         }
 
-        // POST /api/ai-analysis — tiered access: free pool (10/day), BYO key, or DIY prompt
+        // POST /api/ai-analysis — AI-powered domain analysis (10/hr per IP)
         if (method === "POST" && path === "/api/ai-analysis") {
-          const byoKey = request.headers.get("x-openrouter-key") || undefined;
           await trackUsage(env.STATS_DB, "ai-analysis");
-          const body = await parseBody<{ domain?: string; model?: string; custom_prompt?: string }>(request);
+          const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const model = (byoKey && typeof body.model === "string") ? body.model : undefined;
-          // Custom prompts are only allowed for BYO key users (they're paying for their own tokens)
-          const customPrompt = (byoKey && typeof body.custom_prompt === "string" && body.custom_prompt.trim()) ? body.custom_prompt.trim() : undefined;
           _track("ai-analysis", 200, domain);
-          return getAIAnalysis(domain, env, { clientIP, byoKey, model, customPrompt });
+          return getAIAnalysis(domain, env, { clientIP });
         }
 
         // POST /api/ai-prompt — returns the assembled prompt for the prompt editor (no LLM call)
@@ -485,7 +478,7 @@ export default {
             return json({ error: "Domain not yet analyzed. Run a standard analysis first." }, 400);
           }
           const prompt = buildAIPrompt(analysisCache);
-          return json({ ...prompt, models: ALLOWED_MODELS, default_model: DEFAULT_MODEL });
+          return json(prompt);
         }
 
         // GET /api/health — API error observability dashboard
