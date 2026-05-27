@@ -1,12 +1,14 @@
 import { normalizeDomain, fetchWithTimeout, getFromCache, setCache, boundedText, safeFetchWithRedirects } from "../helpers";
 import type { Env } from "../helpers";
 
-export async function getSocialAccounts(db: D1Database, rawDomain: string, env?: Env) {
+export async function getSocialAccounts(db: D1Database, rawDomain: string, env?: Env, skipCache = false) {
   const domain = normalizeDomain(rawDomain);
-  const cached = await getFromCache(db, domain, "social_accounts", 24 * 60 * 60 * 1000);
-  if (cached) {
-    const c = cached as { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> };
-    return { accounts: c.accounts, cached: true };
+  if (!skipCache) {
+    const cached = await getFromCache(db, domain, "social_accounts", 24 * 60 * 60 * 1000);
+    if (cached) {
+      const c = cached as { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> };
+      return { accounts: c.accounts, cached: true };
+    }
   }
 
   const accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> = [];

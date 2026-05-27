@@ -354,7 +354,7 @@ export async function runAnalysis(
   const domainIsSubdomain = isSubdomain(domain);
 
   // Build check context from Phase 1 results for the registry
-  const checkCtx: CheckContext = { domain, env, instanceHost, dnsRecords, ip, httpResponseTimeMs: httpAnalysis?.response_time_ms ?? null };
+  const checkCtx: CheckContext = { domain, env, instanceHost, dnsRecords, ip, httpResponseTimeMs: httpAnalysis?.response_time_ms ?? null, skipCache };
 
   // Per-check timeout: individual checks that exceed this limit fall back to defaults.
   // This prevents a single slow API from blocking the entire analysis pipeline.

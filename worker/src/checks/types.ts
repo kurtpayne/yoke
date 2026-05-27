@@ -22,6 +22,8 @@ export interface CheckContext {
   ip?: string;
   /** HTTP response time from Phase 1 probe (ms), or null if probe failed */
   httpResponseTimeMs: number | null;
+  /** Skip D1 cache (force fresh analysis) */
+  skipCache?: boolean;
 }
 
 /**
