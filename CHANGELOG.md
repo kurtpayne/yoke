@@ -50,6 +50,8 @@ All notable changes to Yoke are documented here.
 - **Browser title** — document title now resets when navigating home via logo click
 
 ### Developer Experience
+- **Homebrew tap** — `brew install yokedotlol/tap/yoke` via GoReleaser-managed releases
+- **CLI version flag** — `yoke --version` prints version, commit, and build date (injected by GoReleaser at release time)
 - **`deploy.sh` in repo** — no longer gitignored; clean build + deploy in one command
 - **Retired `build_combined.py`** — all SPA routing ported to TypeScript (`worker/src/spa.ts`)
 - **Retired `QUICKSTART.md`** — self-hosting guide consolidated into README
