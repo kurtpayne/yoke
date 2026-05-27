@@ -9,6 +9,8 @@ import type {
   EmailAuthResult, CertTransparencyResult, GreynoiseResult,
   HostingResult, TechItem, AccessibilityResult, ThirdPartyScriptsResult,
   CookieConsentResult, CacheAnalysis, WafDetection, TrustSignals,
+  ShodanResult, CookieSecurityResult, SecurityTxtResult, WellKnownResult,
+  RedirectHop,
 } from "./types";
 import type { NetworkHealth } from "./network-health";
 import type { BreachResult } from "../breaches";
@@ -297,6 +299,14 @@ export function calculateDomainScore(opts: {
   breaches: BreachResult | null;
   trancoRank: number | null;
   socialAccounts: { accounts: Array<{ platform: string; url: string; found_via: string }> } | null;
+  // Phase 1 new signals
+  shodan: ShodanResult | null;
+  cookieSecurity: CookieSecurityResult | null;
+  securityTxt: SecurityTxtResult | null;
+  wellKnown: WellKnownResult | null;
+  redirects: RedirectHop[];
+  statusResult: { is_up: boolean; status_code: number | null; http_blocked?: boolean; status_label?: string } | null;
+  robotsParsed: RobotsParsed | null;
 }): DomainScoreResult {
   // Step 1: Detect archetype
   const archetype = detectArchetype({
@@ -513,6 +523,127 @@ export function calculateDomainScore(opts: {
     }
   }
 
+  // ─── NEW: Shodan Open Ports (attack surface) ─────────────────────
+  if (opts.shodan) {
+    const dangerousPorts = [3306, 5432, 6379, 27017, 9200, 11211, 5984, 8080, 8443, 1433, 3389];
+    const exposedDangerous = opts.shodan.ports.filter(p => dangerousPorts.includes(p));
+    const nonStandard = opts.shodan.ports.filter(p => ![80, 443, 22, 25, 53, 143, 993, 587, 465].includes(p));
+    if (exposedDangerous.length > 0) {
+      findings.push({
+        signal: "open_ports", axis: "security",
+        severity: "high",
+        label: `Dangerous port${exposedDangerous.length > 1 ? "s" : ""} exposed: ${exposedDangerous.join(", ")}`,
+        tradeoff: null, weight: 3,
+      });
+    } else if (nonStandard.length > 5) {
+      findings.push({
+        signal: "open_ports", axis: "security",
+        severity: "medium",
+        label: `${nonStandard.length} non-standard ports open`,
+        tradeoff: null, weight: 2,
+      });
+    }
+  }
+
+  // ─── NEW: Shodan Known Vulnerabilities ───────────────────────────
+  if (opts.shodan) {
+    if (opts.shodan.vulns.length > 0) {
+      findings.push({
+        signal: "known_vulnerabilities", axis: "security",
+        severity: opts.shodan.vulns.length >= 5 ? "critical" : "high",
+        label: `${opts.shodan.vulns.length} known CVE${opts.shodan.vulns.length > 1 ? "s" : ""} detected (Shodan)`,
+        tradeoff: "CVEs are based on detected service versions and may include patched vulnerabilities.",
+        weight: 4,
+      });
+    } else if (opts.shodan.ports.length > 0) {
+      // Shodan data exists, no CVEs found — reward
+      findings.push({
+        signal: "no_known_vulnerabilities", axis: "security",
+        severity: "good",
+        label: "No known CVEs detected",
+        tradeoff: null, weight: 1,
+      });
+    }
+  }
+
+  // ─── NEW: Cookie Security ────────────────────────────────────────
+  if (opts.cookieSecurity && !opts.httpBlocked) {
+    const issues = opts.cookieSecurity.issues;
+    const cookieCount = opts.cookieSecurity.cookies.length;
+    if (cookieCount > 0) {
+      if (issues.length === 0) {
+        findings.push({ signal: "cookie_security", axis: "security", severity: "good", label: "All cookies have Secure/HttpOnly/SameSite flags", tradeoff: null, weight: 2 });
+      } else if (issues.length >= 3) {
+        findings.push({ signal: "cookie_security", axis: "security", severity: "medium", label: `${issues.length} cookie security issues (missing Secure/HttpOnly/SameSite)`, tradeoff: null, weight: 2 });
+      } else {
+        findings.push({ signal: "cookie_security", axis: "security", severity: "low", label: `${issues.length} cookie security issue${issues.length > 1 ? "s" : ""}`, tradeoff: null, weight: 2 });
+      }
+    }
+  }
+
+  // ─── NEW: Server Version Disclosure ──────────────────────────────
+  if (opts.headers && !opts.httpBlocked) {
+    const serverHeader = opts.headers["server"] ?? "";
+    const poweredBy = opts.headers["x-powered-by"] ?? "";
+    const versionPattern = /\/[\d.]+/;
+    const serverLeaks = versionPattern.test(serverHeader);
+    const poweredByLeaks = versionPattern.test(poweredBy);
+    if (serverLeaks || poweredByLeaks) {
+      const leaked = [serverLeaks && serverHeader, poweredByLeaks && poweredBy].filter(Boolean).join(", ");
+      findings.push({
+        signal: "server_version_disclosure", axis: "security",
+        severity: poweredByLeaks ? "medium" : "low",
+        label: `Server version disclosed: ${leaked}`,
+        tradeoff: "Version info helps attackers target known vulnerabilities.",
+        weight: poweredByLeaks ? 2 : 1,
+      });
+    }
+  }
+
+  // ─── NEW: Referrer-Policy ────────────────────────────────────────
+  if (opts.headers && !opts.httpBlocked) {
+    const referrerPolicy = (opts.headers["referrer-policy"] ?? "").toLowerCase();
+    const goodPolicies = ["no-referrer", "strict-origin-when-cross-origin", "same-origin", "strict-origin"];
+    if (goodPolicies.includes(referrerPolicy)) {
+      findings.push({ signal: "referrer_policy", axis: "security", severity: "good", label: `Referrer-Policy: ${referrerPolicy}`, tradeoff: null, weight: 1 });
+    } else if (referrerPolicy === "unsafe-url") {
+      findings.push({ signal: "referrer_policy", axis: "security", severity: "medium", label: "Referrer-Policy: unsafe-url leaks full URLs cross-origin", tradeoff: null, weight: 2 });
+    } else if (!referrerPolicy) {
+      findings.push({ signal: "referrer_policy_missing", axis: "security", severity: "info", label: "No Referrer-Policy header", tradeoff: null, weight: 1 });
+    }
+  }
+
+  // ─── NEW: Permissions-Policy ─────────────────────────────────────
+  if (opts.headers && !opts.httpBlocked) {
+    const permPolicy = opts.headers["permissions-policy"] ?? opts.headers["feature-policy"] ?? "";
+    if (permPolicy) {
+      findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: "Permissions-Policy header set", tradeoff: null, weight: 1 });
+    } else {
+      findings.push({ signal: "permissions_policy_missing", axis: "security", severity: "info", label: "No Permissions-Policy header", tradeoff: null, weight: 1 });
+    }
+  }
+
+  // ─── NEW: HTTP→HTTPS Redirect ────────────────────────────────────
+  if (opts.redirects.length > 0 && !opts.httpBlocked) {
+    const firstUrl = opts.redirects[0]?.url ?? "";
+    const lastUrl = opts.redirects[opts.redirects.length - 1]?.url ?? "";
+    const startsHttp = firstUrl.startsWith("http://");
+    const endsHttps = lastUrl.startsWith("https://");
+    if (startsHttp && endsHttps) {
+      findings.push({ signal: "http_to_https_redirect", axis: "security", severity: "good", label: "HTTP→HTTPS redirect in place", tradeoff: null, weight: 3 });
+    } else if (opts.ssl?.grade && !startsHttp) {
+      // Site has SSL but we can't confirm redirect (probe may have started on HTTPS)
+      // No finding — don't penalize when we can't test
+    } else if (opts.ssl?.grade && startsHttp && !endsHttps) {
+      findings.push({
+        signal: "no_http_to_https_redirect", axis: "security",
+        severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
+        label: "No HTTP→HTTPS redirect detected",
+        tradeoff: null, weight: 2,
+      });
+    }
+  }
+
   // Trust signals: composite bonus for strong trust posture
   if (opts.trustSignals) {
     const positiveCount = opts.trustSignals.trust_score_factors.positive.length;
@@ -607,6 +738,26 @@ export function calculateDomainScore(opts: {
     findings.push({ signal: "cdn", axis: "performance", severity: "good", label: `CDN: ${opts.hosting.cdn}`, tradeoff: null, weight: 2 });
   }
 
+  // ─── NEW: Redirect Chain Length ──────────────────────────────────
+  if (opts.redirects.length > 0) {
+    const hops = opts.redirects.length;
+    if (hops >= 4) {
+      findings.push({
+        signal: "redirect_chain_length", axis: "performance",
+        severity: "medium",
+        label: `${hops} redirect hops — excessive latency`,
+        tradeoff: null, weight: 2,
+      });
+    } else if (hops >= 2) {
+      findings.push({
+        signal: "redirect_chain_length", axis: "performance",
+        severity: "info",
+        label: `${hops} redirect hops`,
+        tradeoff: null, weight: 1,
+      });
+    }
+  }
+
   // ─── Reliability Axis Findings ───────────────────────────────────
 
   const dns = opts.dnsRecords;
@@ -682,6 +833,45 @@ export function calculateDomainScore(opts: {
   const hasSoa = dns.some(r => r.type === "SOA");
   if (hasSoa) {
     findings.push({ signal: "soa_present", axis: "reliability", severity: "good", label: "SOA record present", tradeoff: null, weight: 1 });
+  }
+
+  // ─── NEW: Site Unreachable ───────────────────────────────────────
+  // DNS resolves but no HTTP server responds — fundamentally broken
+  const dnsResolves = dns.some(r => r.type === "A" || r.type === "AAAA");
+  if (opts.statusResult) {
+    if (!opts.statusResult.is_up && dnsResolves && !opts.statusResult.http_blocked) {
+      findings.push({
+        signal: "site_unreachable", axis: "reliability",
+        severity: "high",
+        label: "Site unreachable — DNS resolves but no HTTP response",
+        tradeoff: null, weight: 5,
+      });
+    }
+  }
+
+  // ─── NEW: HTTP Error Response ────────────────────────────────────
+  // Server responds but with error codes
+  if (opts.statusResult && opts.statusResult.status_code != null && opts.statusResult.status_code >= 400) {
+    const code = opts.statusResult.status_code;
+    const isWafBlock = (code === 403 || code === 429) && opts.waf?.detected;
+    if (!isWafBlock) {
+      if (code >= 500) {
+        findings.push({
+          signal: "http_error_response", axis: "reliability",
+          severity: "high",
+          label: `Server error (HTTP ${code})`,
+          tradeoff: null, weight: 4,
+        });
+      } else {
+        findings.push({
+          signal: "http_error_response", axis: "reliability",
+          severity: "medium",
+          label: `Client error response (HTTP ${code})`,
+          tradeoff: "Some sites return 4xx to automated probes while working fine in browsers.",
+          weight: 3,
+        });
+      }
+    }
   }
 
   // ─── Trust Axis Findings ─────────────────────────────────────────
@@ -802,6 +992,16 @@ export function calculateDomainScore(opts: {
     }
   }
 
+  // ─── NEW: security.txt Trust Signal ──────────────────────────────
+  if (opts.securityTxt) {
+    if (opts.securityTxt.found && opts.securityTxt.has_bug_bounty) {
+      findings.push({ signal: "security_txt", axis: "trust", severity: "good", label: `security.txt with bug bounty${opts.securityTxt.bug_bounty_platform ? ` (${opts.securityTxt.bug_bounty_platform})` : ""}`, tradeoff: null, weight: 2 });
+    } else if (opts.securityTxt.found) {
+      findings.push({ signal: "security_txt", axis: "trust", severity: "good", label: "security.txt present (responsible disclosure)", tradeoff: null, weight: 1 });
+    }
+    // Absent = no finding (don't penalize for absence of nice-to-have)
+  }
+
   // Wayback Machine presence
   // Wayback Machine — informational only, not scored as a penalty.
   // Archive coverage is arbitrary and not operator-controlled; domain age already captures newness.
@@ -896,6 +1096,28 @@ export function calculateDomainScore(opts: {
         tradeoff: null, weight: 1,
       });
     }
+  }
+
+  // ─── NEW: Restrictive robots.txt ─────────────────────────────────
+  if (opts.robotsParsed && opts.robotsParsed.is_restrictive) {
+    findings.push({
+      signal: "restrictive_robots", axis: "visibility",
+      severity: contextualSeverity("medium", arch, { infrastructure: "info", application: "info" }),
+      label: "robots.txt blocks all crawlers — site won't appear in search results",
+      tradeoff: "May be intentional for private/internal sites.",
+      weight: 2,
+    });
+  }
+
+  // ─── NEW: PWA Ready ──────────────────────────────────────────────
+  if (opts.wellKnown?.pwa_ready) {
+    findings.push({
+      signal: "pwa_ready", axis: "visibility",
+      severity: "good",
+      label: "Progressive Web App ready (manifest + service worker)",
+      tradeoff: null,
+      weight: (arch === "application" || arch === "commerce") ? 2 : 1,
+    });
   }
 
   // ─── Accessibility → Visibility Axis ───────────────────────────
