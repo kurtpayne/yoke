@@ -17,7 +17,7 @@
 
 ## What is Yoke?
 
-Yoke pulls 50+ data points for any domain and presents them in a clean tabbed interface with a contextual scoring system. Think `dig` + `whois` + `nmap` + `curl` + BuiltWith + SecurityTrails — in one tool, no account required.
+Yoke pulls 80+ data points for any domain and presents them in a clean tabbed interface with a contextual scoring system. Think `dig` + `whois` + `nmap` + `curl` + BuiltWith + SecurityTrails — in one tool, no account required.
 
 ```bash
 curl yoke.lol/stripe.com | jq
@@ -26,7 +26,7 @@ curl yoke.lol/stripe.com | jq
 ## Features
 
 ### 📊 Contextual Scoring
-5-axis scoring (Security, Performance, Reliability, Trust, Visibility) with radar visualization. Auto-classifies sites into 7 archetypes (commerce, content, application, corporate, infrastructure, institutional, general) and adjusts weights — missing HSTS is critical for e-commerce, low-priority for a blog. [Compare domains side-by-side](https://yoke.lol/compare/github.com/gitlab.com) with overlaid radar and per-axis deltas.
+5-axis scoring (Security, Performance, Reliability, Trust, Visibility) with radar visualization. Fixed axis weights prioritize Security and Reliability (0.25 each), then Trust (0.20), Performance (0.18), and Visibility (0.12). Auto-classifies sites into 7 archetypes (commerce, content, application, corporate, infrastructure, institutional, general) to adjust individual finding severity — missing HSTS is critical for e-commerce, low-priority for a blog. [Compare domains side-by-side](https://yoke.lol/compare/github.com/gitlab.com) with overlaid radar and per-axis deltas.
 
 ### 🔍 Core Analysis
 - **DNS** — A, AAAA, MX, NS, TXT, CNAME, CAA, SOA with TTL and provider detection
@@ -58,7 +58,7 @@ curl yoke.lol/stripe.com | jq
 - **PageSpeed** — Lighthouse scores, Core Web Vitals (FCP, LCP, TBT, CLS), cache analysis
 - **Company Intel** — Wikidata + Brandfetch + Crunchbase enrichment
 - **Stock Data** — Live ticker, price, market cap, sparkline for public companies
-- **News & Social** — Bing News, Hacker News, social account discovery with verification badges
+- **News & Social** — Bing News, Hacker News, social account discovery with rel="me" verification badges across 12+ platforms
 
 ### 🤖 AI Analysis
 6 AI personas (Security Analyst, SEO Expert, Developer, Business Analyst, Privacy Auditor, Performance Engineer). Powered by Claude via OpenRouter with 24h caching. BYO API key to bypass rate limits — includes model picker and prompt editor.
