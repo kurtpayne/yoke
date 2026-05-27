@@ -194,6 +194,18 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
     }
   }
 
+  // Social verification via rel="me" — check scoring findings for unverified social accounts
+  if (data.domain_score?.axes?.visibility?.findings) {
+    const visFindings = data.domain_score.axes.visibility.findings as Array<{ signal?: string; severity?: string; label?: string }>;
+    const notVerified = visFindings.find(f => f.signal === "social_not_verified");
+    const socialInfo = visFindings.find(f => f.signal === "social_accounts" && f.severity === "info");
+    if (notVerified) {
+      items.push({ title: "Add rel=\"me\" links for social account verification", reason: "Your social accounts are detected but not verified. Adding <link rel=\"me\" href=\"...\"> tags to your HTML head takes 5 minutes and proves you own those profiles — turning yellow \"linked\" badges green.", effort: "~5 min — add link tags to <head>", axis: "visibility" as AxisName, severity: "low", impact: 15 });
+    } else if (socialInfo) {
+      items.push({ title: "Verify social accounts with rel=\"me\" links", reason: "Social accounts were found by username matching but aren't verified. Add <link rel=\"me\" href=\"...\"> tags to prove ownership and strengthen your identity signals.", effort: "~5 min — add link tags to <head>", axis: "visibility" as AxisName, severity: "low", impact: 12 });
+    }
+  }
+
   if (data.meta && !data.meta.sitemap_detected) {
     items.push({ title: "Add a sitemap.xml", reason: "Sitemaps help search engines discover and index all your pages. Most frameworks can auto-generate one.", effort: "~15 min", axis: "visibility", severity: "low", impact: 15 });
   }

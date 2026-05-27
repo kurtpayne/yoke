@@ -29,6 +29,15 @@ Domain expertise calibration:
 - Accessibility: WCAG compliance is legal obligation (ADA in US, EAA in EU); score <50 = poor; alt text + form labels are highest-impact fixes
 - Third-party scripts: >10 = significant overhead; render-blocking = performance drag; note privacy implications by category (analytics, ads, social, tracking)
 - Cookie consent: CMP present = GDPR compliance effort; cookies set before consent interaction = compliance violation risk; p3p_present = legacy IE-era holdover
+- Social verification: rel="me" verification (site explicitly claims ownership of social profiles via HTML link elements) is the gold standard — green "verified" badge. Homepage links without rel="me" are "linked" (moderate trust). Username-match probes are lowest trust. Sites with social accounts but no rel="me" verification should be advised to add `<link rel="me" href="...">` tags — it's a 5-minute improvement that strengthens identity verification and helps platforms like Mastodon verify account ownership.
+- Cookie security: Secure flag required for HTTPS-only transmission; HttpOnly prevents XSS-based cookie theft; SameSite=Lax or Strict prevents CSRF. Missing any of these on session/auth cookies is a real vulnerability, not theoretical.
+- Server version disclosure: Exposing exact server/framework versions (e.g., "Apache/2.4.51" or "PHP/8.1") in response headers enables attackers to target known CVEs. Recommendation: strip version strings or use generic identifiers.
+- Referrer-Policy: Controls what URL information is sent to external sites. "no-referrer-when-downgrade" is browser default and leaks full URL on HTTPS→HTTPS navigations. Recommended: "strict-origin-when-cross-origin" or stricter.
+- Permissions-Policy: Controls browser feature access (camera, microphone, geolocation, etc.). Absence means any embedded iframe can request these features. Low effort to add, high privacy impact.
+- security.txt: RFC 9116 standard for security contact disclosure. Located at /.well-known/security.txt. Presence indicates mature security program; absence is a missed opportunity for responsible disclosure.
+- HTTP redirect chains: Each redirect adds latency (~50-200ms). More than 2 hops is a performance concern; more than 4 is a bug. Check for HTTP→HTTPS→www→final patterns that could be consolidated.
+- PWA readiness: Web app manifest + service worker = Progressive Web App capable. Not required for most sites, but a positive signal for web applications.
+- Restrictive robots.txt: Overly broad Disallow rules can prevent search indexing. Common mistake: blocking CSS/JS files that Googlebot needs to render the page.
 
 Output ONLY valid JSON matching this exact schema (no markdown wrapping, no text outside the JSON):
 {
