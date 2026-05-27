@@ -83,7 +83,14 @@ export async function getUsageStats(db: D1Database, days = 30): Promise<{
   } catch { /* table may not exist yet */ }
 
   // Domain score stats (aggregate only — no individual domains exposed)
-  let score_stats: typeof result.score_stats = undefined;
+  let score_stats: {
+    total_scores: number;
+    unique_domains: number;
+    avg_composite: number;
+    archetype_breakdown: Record<string, number>;
+    grade_breakdown: Record<string, number>;
+    daily_scores: { date: string; count: number; avg: number }[];
+  } | undefined = undefined;
   try {
     const scoreAgg = await db.prepare(
       `SELECT COUNT(*) as total, COUNT(DISTINCT domain) as uniq, AVG(composite_score) as avg_comp FROM domain_scores WHERE scored_at >= ?`
@@ -143,7 +150,11 @@ export async function getUsageStats(db: D1Database, days = 30): Promise<{
   } catch { /* table may not exist */ }
 
   // API error stats (anonymized — no IPs)
-  let error_stats: typeof result.error_stats = undefined;
+  let error_stats: {
+    total: number;
+    by_api: Record<string, number>;
+    recent: { ts: number; api: string; error: string }[];
+  } | undefined = undefined;
   try {
     const errAgg = await db.prepare(
       `SELECT COUNT(*) as total FROM api_errors WHERE ts >= ?`
