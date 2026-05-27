@@ -492,13 +492,7 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // CSP header (trust signal: strong security posture)
-  if (opts.headers && !opts.httpBlocked) {
-    const csp = opts.headers["content-security-policy"];
-    if (csp) {
-      findings.push({ signal: "csp_header", axis: "security", severity: "good", label: "Content Security Policy configured", tradeoff: null, weight: 3 });
-    }
-  }
+  // CSP header — already scored via securityAudit ("csp" signal above); skip to avoid double-count
 
   // HSTS preload
   if (opts.headers && !opts.httpBlocked) {
