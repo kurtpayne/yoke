@@ -108,8 +108,12 @@ curl yoke.lol/api/scoring | jq
 |----------|-------|
 | Analyze | 50/hr per IP |
 | Compare | 50/hr per IP |
+| Subdomain Scan | 30/hr per IP |
+| Availability | 60/hr per IP |
 | AI Analysis (platform key) | 10/hr per IP |
 | AI Analysis (BYO key) | Unlimited |
+
+All limits use a rolling 1-hour window. Self-hosted instances can override or disable limits via environment variables.
 
 ### API Routes
 
@@ -276,6 +280,8 @@ Both `worker/wrangler.toml` and `fly-proxy/fly.toml` are gitignored — `git pul
 | `ADMIN_KEY` | Admin key for `/api/cleanup` |
 | `RATE_LIMIT_ANALYZE` | Max analyze/hr per IP (default: 50, 0 = disable) |
 | `RATE_LIMIT_COMPARE` | Max compare/hr per IP (default: 50, 0 = disable) |
+| `RATE_LIMIT_SUBDOMAIN` | Max subdomain-scan/hr per IP (default: 30, 0 = disable) |
+| `RATE_LIMIT_AVAILABILITY` | Max availability/hr per IP (default: 60, 0 = disable) |
 | `CACHE_TTL_HOURS` | Cache TTL in hours (default: 1, 0 = disable) |
 
 ### Fly Proxy (optional)
