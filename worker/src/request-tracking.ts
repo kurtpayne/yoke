@@ -127,20 +127,30 @@ export async function getRequestAnalytics(db: D1Database, days: number): Promise
   }
 
   try {
-    // Aggregate KPIs
+    // Aggregate KPIs — visitor/domain counts from request_meta, total from endpoint_usage for full history
     const agg = await db.prepare(
-      `SELECT COUNT(*) as total, COUNT(DISTINCT visitor_hash) as visitors, COUNT(DISTINCT domain) as domains,
+      `SELECT COUNT(DISTINCT visitor_hash) as visitors, COUNT(DISTINCT domain) as domains,
               AVG(latency_ms) as avg_lat,
-              SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as errors
+              SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as errors,
+              COUNT(*) as rm_total
        FROM request_meta WHERE day >= ?`
-    ).bind(cutoff).first<{ total: number; visitors: number; domains: number; avg_lat: number; errors: number }>();
+    ).bind(cutoff).first<{ visitors: number; domains: number; avg_lat: number; errors: number; rm_total: number }>();
+
+    // Total requests from endpoint_usage (has full history)
+    let totalFromUsage = 0;
+    try {
+      const usageTotal = await db.prepare(
+        `SELECT SUM(hits) as total FROM endpoint_usage WHERE day >= ?`
+      ).bind(cutoff).first<{ total: number }>();
+      totalFromUsage = usageTotal?.total ?? 0;
+    } catch { /* endpoint_usage may not exist */ }
 
     if (agg) {
-      result.total_requests = agg.total;
+      result.total_requests = totalFromUsage || agg.rm_total;
       result.unique_visitors = agg.visitors;
       result.unique_domains = agg.domains;
       result.avg_latency_ms = Math.round(agg.avg_lat || 0);
-      result.error_rate_pct = agg.total > 0 ? Math.round((agg.errors / agg.total) * 1000) / 10 : 0;
+      result.error_rate_pct = agg.rm_total > 0 ? Math.round((agg.errors / agg.rm_total) * 1000) / 10 : 0;
     }
 
     // Top 20 scanned domains
@@ -159,17 +169,33 @@ export async function getRequestAnalytics(db: D1Database, days: number): Promise
     ).bind(cutoff).all();
     result.visitors_per_day = ((vpd.results || []) as { day: string; visitors: number }[]).map(r => ({ date: r.day, count: r.visitors }));
 
-    // Unique domains per day
-    const dpd = await db.prepare(
-      `SELECT day, COUNT(DISTINCT domain) as domains FROM request_meta WHERE day >= ? AND domain IS NOT NULL GROUP BY day ORDER BY day`
-    ).bind(cutoff).all();
-    result.domains_per_day = ((dpd.results || []) as { day: string; domains: number }[]).map(r => ({ date: r.day, count: r.domains }));
+    // Unique domains per day — blend request_meta + domain_scores for full history
+    try {
+      const dpd = await db.prepare(
+        `SELECT day as d, COUNT(DISTINCT domain) as domains FROM (
+           SELECT day, domain FROM request_meta WHERE day >= ? AND domain IS NOT NULL
+           UNION ALL
+           SELECT DATE(scored_at) as day, domain FROM domain_scores WHERE scored_at >= ?
+         ) GROUP BY d ORDER BY d`
+      ).bind(cutoff, cutoff + "T00:00:00").all();
+      result.domains_per_day = ((dpd.results || []) as { d: string; domains: number }[]).map(r => ({ date: r.d, count: r.domains }));
+    } catch {
+      // Fallback to request_meta only
+      try {
+        const dpd = await db.prepare(
+          `SELECT day, COUNT(DISTINCT domain) as domains FROM request_meta WHERE day >= ? AND domain IS NOT NULL GROUP BY day ORDER BY day`
+        ).bind(cutoff).all();
+        result.domains_per_day = ((dpd.results || []) as { day: string; domains: number }[]).map(r => ({ date: r.day, count: r.domains }));
+      } catch { /* */ }
+    }
 
-    // Requests per day
-    const rpd = await db.prepare(
-      `SELECT day, COUNT(*) as cnt FROM request_meta WHERE day >= ? GROUP BY day ORDER BY day`
-    ).bind(cutoff).all();
-    result.requests_per_day = ((rpd.results || []) as { day: string; cnt: number }[]).map(r => ({ date: r.day, count: r.cnt }));
+    // Requests per day — pull from endpoint_usage for full history
+    try {
+      const rpd = await db.prepare(
+        `SELECT day, SUM(hits) as cnt FROM endpoint_usage WHERE day >= ? GROUP BY day ORDER BY day`
+      ).bind(cutoff).all();
+      result.requests_per_day = ((rpd.results || []) as { day: string; cnt: number }[]).map(r => ({ date: r.day, count: r.cnt }));
+    } catch { /* endpoint_usage may not exist */ }
 
     // By client type
     const bct = await db.prepare(
