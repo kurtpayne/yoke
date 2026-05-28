@@ -638,7 +638,7 @@ export async function runAnalysis(
     securityTxt,
     wellKnown,
     redirects: httpProbeSucceeded ? (httpAnalysis?.redirects ?? []) : [],
-    statusResult,
+    statusResult: enhancedStatus,
     robotsParsed,
   });
 
