@@ -627,7 +627,6 @@ export default {
               "POST /api/availability": "Global availability check (JSON body: {domain: string})",
               "POST /api/reverse-ip": "Reverse IP lookup (JSON body: {ip: string})",
               // AI analysis not listed — restricted to web/extension only
-              "GET /api/recent": "Recent lookups (query: ?limit=N)",
               "GET /api/health": "Health check",
               "GET /api/scoring": "Scoring methodology — all thresholds, weights, and severity bands",
             },

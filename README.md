@@ -273,6 +273,7 @@ wrangler secret put WHOISFREAKS_API_KEY   # WHOIS fallback for ccTLDs without RD
 wrangler secret put GOOGLE_PAGESPEED_API_KEY  # Lighthouse scores
 wrangler secret put ADMIN_KEY             # Protects /usage, /api/cleanup, /api/cache
 wrangler secret put FLY_AUTH_SECRET       # Shared auth between Worker and Fly probe
+wrangler secret put SHARE_SECRET          # HMAC-SHA256 key for signed share card URLs
 
 # 6. Build and deploy
 bash deploy.sh --cf
@@ -290,6 +291,7 @@ Both `worker/wrangler.toml` and `fly-proxy/fly.toml` are gitignored — `git pul
 | `BASE_URL` | Instance base URL for self-analysis support |
 | `FLY_PROBE_URL` | Custom Fly probe URL (default: direct probes from CF edge) |
 | `FLY_AUTH_SECRET` | Shared secret between Worker and Fly probe |
+| `SHARE_SECRET` | HMAC-SHA256 key for signing share card URLs. If unset, falls back to a dev key — set your own for production |
 | `ADMIN_KEY` | Admin key for `/api/cleanup` |
 | `RATE_LIMIT_ANALYZE` | Max analyze/hr per IP (default: 50, 0 = disable) |
 | `RATE_LIMIT_COMPARE` | Max compare/hr per IP (default: 50, 0 = disable) |
@@ -319,6 +321,22 @@ Without a proxy, everything still works — sites that block CF IPs show as REST
 git pull
 bash deploy.sh --all
 ```
+
+### Share Card URLs
+
+Share cards generate signed URLs for social sharing with OG image previews. The payload (domain, score, grade, axis scores) is base64url-encoded and signed with HMAC-SHA256.
+
+```bash
+# Generate a secret and set it on the worker
+openssl rand -hex 32
+wrangler secret put SHARE_SECRET
+```
+
+If `SHARE_SECRET` is not set, a built-in dev fallback key is used. Set your own for production deployments to prevent URL forgery.
+
+URL patterns:
+- `/r/{payload}.{sig}` — Report card HTML page (human-viewable)
+- `/og/{payload}.{sig}.png` — Dynamic OG image (PNG, 1200×630, rendered via resvg-wasm)
 
 ---
 
