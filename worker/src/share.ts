@@ -192,6 +192,9 @@ function generateOgSvg(data: SharePayload): string {
       <stop offset="0%" stop-color="${gc}" stop-opacity="0.15"/>
       <stop offset="100%" stop-color="${gc}" stop-opacity="0"/>
     </linearGradient>
+    <filter id="invert">
+      <feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0"/>
+    </filter>
   </defs>
 
   <!-- Background -->
@@ -202,7 +205,7 @@ function generateOgSvg(data: SharePayload): string {
   <rect x="0.5" y="0.5" width="1199" height="629" rx="0" fill="none" stroke="#30363d" stroke-width="1"/>
 
   <!-- Yoke branding -->
-  <image x="56" y="50" width="28" height="28" href="${OX_LOGO_DATA_URI}"/>
+  <image x="56" y="50" width="28" height="28" href="${OX_LOGO_DATA_URI}" filter="url(#invert)" opacity="0.7"/>
   <text x="92" y="72" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="600" letter-spacing="2">YOKE</text>
   <text x="170" y="72" fill="#484f58" font-family="system-ui,-apple-system,sans-serif" font-size="14">DOMAIN INTELLIGENCE</text>
 
@@ -322,7 +325,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
 <body>
   <div class="card">
     <div class="brand">
-      <img src="${OX_LOGO_DATA_URI}" alt="Yoke" width="22" height="22" style="opacity:0.7"/>
+      <img src="${OX_LOGO_DATA_URI}" alt="Yoke" width="22" height="22" style="filter:brightness(0) invert(1);opacity:0.7"/>
       <span class="brand-name">YOKE</span>
       <span class="brand-sub">DOMAIN INTELLIGENCE</span>
     </div>
