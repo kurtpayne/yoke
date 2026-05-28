@@ -1291,8 +1291,7 @@ export function calculateDomainScore(opts: {
     }
     // Unranked = no finding (neutral, no penalty)
   } else {
-    // No Tranco rank — domain is unranked, mild trust penalty
-    findings.push({ signal: "tranco_unranked", axis: "trust", severity: "low", label: "Domain not ranked in Tranco top 1M", tradeoff: null, weight: 2 });
+    // No Tranco rank — neutral, no penalty (most legitimate domains aren't top 1M)
   }
 
   // Email auth completeness (trust signal — bidirectional: penalize incomplete, reward complete)
