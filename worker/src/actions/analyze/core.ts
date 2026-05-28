@@ -487,10 +487,20 @@ export async function runAnalysis(
       enhancedStatus = { ...statusResult, is_up: true, status_code: finalCode, status_label: "UP", http_blocked: false, error: null };
     }
   } else if (!statusResult.is_up && dnsResolves) {
-    enhancedStatus = {
-      ...statusResult, is_up: true, status_label: "RESTRICTED", http_blocked: true,
-      error: sslValid ? "Site is online (DNS resolves, SSL valid) but blocked our HTTP probe" : "Site is online (DNS resolves) but blocked our HTTP probe",
-    };
+    // Distinguish between "timed out with no response" and "actively blocked"
+    // A full timeout (response_time >= 10s, no status code) means the site is effectively down
+    // even if DNS resolves — don't upgrade to RESTRICTED just because DNS works
+    const fullTimeout = statusResult.response_time_ms != null && statusResult.response_time_ms >= 10000 && statusResult.status_code == null;
+    if (fullTimeout) {
+      // Leave as DOWN — DNS alone doesn't mean the site is serving content
+      enhancedStatus = { ...statusResult, is_up: false, status_label: "DOWN", http_blocked: false,
+        error: "Site timed out — DNS resolves but no HTTP response" };
+    } else {
+      enhancedStatus = {
+        ...statusResult, is_up: true, status_label: "RESTRICTED", http_blocked: true,
+        error: sslValid ? "Site is online (DNS resolves, SSL valid) but blocked our HTTP probe" : "Site is online (DNS resolves) but blocked our HTTP probe",
+      };
+    }
   } else if (statusResult.http_blocked && dnsResolves) {
     enhancedStatus = {
       ...statusResult, is_up: true, status_label: "RESTRICTED",

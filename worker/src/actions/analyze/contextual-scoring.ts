@@ -1231,6 +1231,35 @@ export function calculateDomainScore(opts: {
     }
   }
 
+  // ─── HTTP Blocked (RESTRICTED) — analysis is incomplete ──────────
+  // The site is up but blocked our probe, so we can't assess headers, content, etc.
+  if (opts.statusResult && opts.statusResult.http_blocked) {
+    findings.push({
+      signal: "http_blocked_reliability", axis: "reliability",
+      severity: "medium",
+      label: "HTTP probe blocked — analysis is limited",
+      tradeoff: "Site may be blocking automated requests. Scoring is based on DNS/WHOIS/SSL data only.",
+      weight: 3,
+    });
+    // Can't trust performance data if we couldn't fetch the page
+    if (!opts.pagespeed) {
+      findings.push({
+        signal: "http_blocked_performance", axis: "performance",
+        severity: "medium",
+        label: "Cannot measure performance — HTTP blocked",
+        tradeoff: null, weight: 4,
+      });
+    }
+    // Security headers are unknown
+    findings.push({
+      signal: "http_blocked_security", axis: "security",
+      severity: "medium",
+      label: "Security headers unknown — HTTP blocked",
+      tradeoff: "Cannot audit CSP, HSTS, or other headers without HTTP access.",
+      weight: 3,
+    });
+  }
+
   // ─── NEW: HTTP Error Response ────────────────────────────────────
   // Server responds but with error codes
   if (opts.statusResult && opts.statusResult.status_code != null && opts.statusResult.status_code >= 400) {
