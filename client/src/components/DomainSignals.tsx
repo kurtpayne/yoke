@@ -128,7 +128,8 @@ function buildSignals(data: AnalysisResult, streaming?: boolean): Signal[] {
     if (hasSpf && hasDmarc && hasDkim) {
       const policy = dmarc.policy;
       if (policy === "reject") signals.push({ type: "strength", text: "Full email authentication (SPF + DMARC reject + DKIM)" });
-      else signals.push({ type: "strength", text: "Email authentication configured", detail: `DMARC policy: ${policy ?? "unknown"}` });
+      else if (policy === "quarantine") signals.push({ type: "strength", text: "Email authentication configured", detail: `DMARC policy: ${policy}` });
+      else signals.push({ type: "notice", text: "Email auth present but DMARC not enforcing", detail: `DMARC policy: ${policy ?? "none"} — consider upgrading to quarantine or reject` });
     } else {
       if (!hasSpf) signals.push({ type: "issue", text: "No SPF record", detail: "Email spoofing protection missing" });
       if (!hasDmarc) signals.push({ type: "issue", text: "No DMARC record", detail: "Email authentication policy missing" });
