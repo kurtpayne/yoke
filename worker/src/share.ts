@@ -152,10 +152,8 @@ function gradeColor(grade: string): string {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 90) return "#3fb950";  // green (matches --success)
-  if (score >= 80) return "#7ee787";  // light green
-  if (score >= 70) return "#d29922";  // amber (matches --warning)
-  if (score >= 60) return "#ffa198";  // light red
+  if (score >= 80) return "#3fb950";  // green (matches --success)
+  if (score >= 60) return "#d29922";  // amber (matches --warning)
   return "#f85149";                   // red (matches --danger)
 }
 
