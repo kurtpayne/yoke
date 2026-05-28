@@ -145,10 +145,9 @@ function esc(s: string): string {
 
 function gradeColor(grade: string): string {
   if (grade === "A") return "#3fb950";
-  if (grade === "B") return "#7ee787";
+  if (grade === "B") return "#3fb950";
   if (grade === "C") return "#d29922";
-  if (grade === "D") return "#ffa198";
-  return "#f85149";
+  return "#f85149";  // D and F
 }
 
 function scoreColor(score: number): string {
