@@ -1150,6 +1150,13 @@ export function calculateDomainScore(opts: {
         label: "Site unreachable — zero web visibility",
         tradeoff: null, weight: 5,
       });
+      // Also tank Performance — cannot measure performance of an unreachable site
+      findings.push({
+        signal: "site_unreachable_performance", axis: "performance",
+        severity: "critical",
+        label: "Site unreachable — cannot measure performance",
+        tradeoff: null, weight: 5,
+      });
     }
   }
 
@@ -1823,7 +1830,7 @@ export function calculateDomainScore(opts: {
 
     // Confidence dampening: blend sparse axes toward default to prevent
     // high-confidence scores from limited data
-    const MIN_FINDINGS: Partial<Record<Axis, number>> = { security: 6, visibility: 4 };
+    const MIN_FINDINGS: Partial<Record<Axis, number>> = { security: 6, visibility: 4, performance: 4 };
     const minRequired = MIN_FINDINGS[axis];
     if (minRequired && axisFindings.length < minRequired) {
       const confidence = axisFindings.length / minRequired;

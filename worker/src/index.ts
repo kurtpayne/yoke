@@ -27,6 +27,9 @@ import { logError } from "./logger";
 import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders, wantsJSON } from "./spa";
 import { handleShareSign, handleSharePage, handleOgImage, matchSharePath, matchOgImagePath } from "./share";
 import { getApiDocsHtml } from "./pages";
+import { scanForVulnerableLibraries, VULNERABLE_LIBRARIES } from "./data/vulnerable-libraries";
+import type { VulnerableLibrary } from "./data/vulnerable-libraries";
+import { loadData } from "./data/kv-loader";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
@@ -36,6 +39,7 @@ function getRateLimits(env: Env): Record<string, { limit: number; windowSecs: nu
     "/api/compare": { limit: parseInt(env.RATE_LIMIT_COMPARE || "50"), windowSecs: 3600 },
     "/api/subdomain-scan": { limit: parseInt(env.RATE_LIMIT_SUBDOMAIN || "30"), windowSecs: 3600 },
     "/api/availability": { limit: parseInt(env.RATE_LIMIT_AVAILABILITY || "60"), windowSecs: 3600 },
+    "/api/js-audit": { limit: 20, windowSecs: 3600 },
   };
 }
 
@@ -528,13 +532,89 @@ export default {
           return json({ ok: true });
         }
 
+        // GET /api/js-audit?domain=x — deep JS vulnerability scan
+        // POST /api/js-audit {domain} — deep JS vulnerability scan
+        if ((method === "GET" || method === "POST") && path === "/api/js-audit") {
+          const adminBypass = env.ADMIN_KEY && request.headers.get("X-Admin-Key") === env.ADMIN_KEY;
+          const rl = adminBypass ? { blocked: null, headers: {} } : await checkRateLimit(env.STATS_DB, clientIP, "/api/js-audit", env);
+          if (rl.blocked) { _track("js-audit", 429); return rl.blocked; }
+
+          let domain: string | null = null;
+          if (method === "GET") {
+            domain = url.searchParams.get("domain");
+          } else {
+            const body = await parseBody<{ domain?: string }>(request);
+            domain = body.domain ?? null;
+          }
+          if (!domain || typeof domain !== "string") {
+            return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
+          }
+          domain = cleanDomain(domain);
+
+          // Fetch the page HTML
+          let html = "";
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10_000);
+            const resp = await fetch(`https://${domain}`, {
+              headers: { "User-Agent": "YokeBot/1.0 (+https://yoke.lol)" },
+              redirect: "follow",
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (resp.ok) {
+              html = await resp.text();
+            }
+          } catch (_) {
+            // Site unreachable — return empty scan
+          }
+
+          if (!html) {
+            return addHeaders(json({
+              domain,
+              error: null,
+              libraries_found: [],
+              total_scripts_scanned: 0,
+              scan_date: new Date().toISOString(),
+              database: "inline-curated",
+              note: "Could not fetch page HTML — site may be unreachable",
+            }), rl.headers);
+          }
+
+          // Try KV for extended vulnerability DB, fall back to inline
+          let dbSource = "inline-curated";
+          const kvLibs = env.REFERENCE_DATA
+            ? await loadData<VulnerableLibrary[]>(env.REFERENCE_DATA, "vulnerable-libraries")
+            : null;
+          if (kvLibs) dbSource = "kv-reference";
+
+          // Scan using the inline curated library scanner
+          const results = scanForVulnerableLibraries(html);
+
+          _track("js-audit", 200);
+          return addHeaders(json({
+            domain,
+            libraries_found: results.map(r => ({
+              name: r.library,
+              version: r.version,
+              vulnerable: r.cves.length > 0,
+              cves: r.cves,
+              severity: r.severity,
+              eol: r.eol || false,
+            })),
+            total_libraries_checked: VULNERABLE_LIBRARIES.length,
+            scan_date: new Date().toISOString(),
+            database: dbSource,
+          }), rl.headers);
+        }
+
         // GET /api/scoring — transparent scoring methodology
         if (method === "GET" && path === "/api/scoring") {
           return json({
             description: "Yoke domain scoring methodology. All thresholds, weights, and severity mappings used to calculate the 5-axis composite score.",
             severity_scores: SEVERITY_SCORES,
             thresholds: ALL_THRESHOLDS,
-            archetype_note: "Fixed axis weights: Security (0.25), Reliability (0.25), Trust (0.20), Performance (0.18), Visibility (0.12). Site archetype is detected for contextual severity adjustments on individual findings.",
+            archetype_note: "Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A≥90, B+≥85, B≥80, C≥65, D≥50, F<50. Site archetype is detected for contextual severity adjustments on individual findings.",
           }, 200);
         }
 
@@ -630,6 +710,7 @@ export default {
               // AI analysis not listed — restricted to web/extension only
               "GET /api/health": "Health check",
               "GET /api/scoring": "Scoring methodology — all thresholds, weights, and severity bands",
+              "GET /api/js-audit?domain=example.com": "Deep JS vulnerability scan — detects outdated/vulnerable client-side libraries",
             },
             examples: {
               curl_simple: `curl ${host}/stripe.com`,

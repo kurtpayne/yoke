@@ -1,14 +1,10 @@
 #!/bin/bash
 # Seed reference data into Cloudflare KV namespace REFERENCE_DATA
-# Usage: bash scripts/seed-kv.sh
+# Usage: bash scripts/seed-kv.sh [--retire-js] [--all]
 #
-# Currently a placeholder — actual seeding will happen when:
-#   1. retire.js DB is integrated (downloads from GitHub, converts to JSON, writes to KV)
-#   2. Third-party script patterns are offloaded from bundle to KV
-#   3. NS provider mapping is optionally moved to KV
-#
-# The curated vulnerable-libraries.ts and ns-providers.ts stay in-bundle for scoring;
-# KV stores the extended reference data for dedicated analysis endpoints.
+# Data sources:
+#   retire.js DB — community-maintained JS vulnerability database from GitHub
+#   (other sources will be added as KV-offloaded data grows)
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -17,26 +13,58 @@ cd "$(dirname "$0")/.."
 set -a && source /home/hatch/.wrangler/.env && set +a
 export PATH="/home/hatch/.local/node22/bin:$PATH"
 
-KV_NAMESPACE_ID="aba8639ff0b945598ccc6ff2730656da"
+WRANGLER="npx wrangler"
+CONFIG="--config worker/wrangler.toml"
 
-echo "=== Yoke KV Reference Data Seeder ==="
-echo ""
+do_retire_js() {
+  echo "=== Fetching retire.js vulnerability database ==="
+  local tmpfile="/tmp/retirejs-db.json"
+  
+  curl -sSL "https://raw.githubusercontent.com/nicksam112/retire.js/master/repository/jsrepository.json" \
+    -o "$tmpfile" 2>/dev/null || {
+    # Try alternate repo location
+    curl -sSL "https://raw.githubusercontent.com/nicksam112/retire.js/refs/heads/master/repository/jsrepository.json" \
+      -o "$tmpfile" 2>/dev/null || {
+      echo "⚠️  Could not download retire.js DB — trying RetireJS org repo"
+      curl -sSL "https://raw.githubusercontent.com/RetireJS/retire.js/master/repository/jsrepository.json" \
+        -o "$tmpfile" || { echo "❌ All retire.js sources failed"; return 1; }
+    }
+  }
+  
+  # Validate it's valid JSON
+  if ! python3 -c "import json; json.load(open('$tmpfile'))" 2>/dev/null; then
+    if ! node -e "JSON.parse(require('fs').readFileSync('$tmpfile','utf8'))" 2>/dev/null; then
+      echo "❌ Downloaded file is not valid JSON"
+      return 1
+    fi
+  fi
+  
+  local size=$(wc -c < "$tmpfile" | tr -d ' ')
+  echo "   Downloaded: ${size} bytes"
+  
+  # Write to KV
+  $WRANGLER kv key put "vulnerable-libraries-retirejs" --path "$tmpfile" \
+    --binding REFERENCE_DATA $CONFIG 2>/dev/null
+  echo "✅ retire.js DB written to KV (key: vulnerable-libraries-retirejs)"
+  
+  # Write metadata
+  local meta="{\"source\":\"github.com/nicksam112/retire.js\",\"updated\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"size_bytes\":${size}}"
+  echo "$meta" | $WRANGLER kv key put "vulnerable-libraries-retirejs-meta" --path /dev/stdin \
+    --binding REFERENCE_DATA $CONFIG 2>/dev/null
+  echo "✅ Metadata written"
+  
+  rm -f "$tmpfile"
+}
 
-# ── retire.js DB ───────────────────────────────────────────────────
-# TODO: Download retire.js repo DB from GitHub, transform to JSON, write to KV
-# Key: "retirejs-db"
-# Schedule: weekly (Sunday maintenance cron)
-echo "⏭️  retire.js DB — not yet implemented"
-
-# ── Third-party script patterns ──────────────────────────────────
-# TODO: Offload third-party script patterns from bundle to KV
-# Key: "third-party-patterns"
-echo "⏭️  Third-party patterns — not yet implemented"
-
-# ── NS provider mapping ─────────────────────────────────────────
-# The ns-providers.ts map (~2KB) is fine in-bundle for now
-# Could be moved to KV if it grows significantly
-echo "⏭️  NS providers — staying in-bundle for now"
-
-echo ""
-echo "✅ KV seed complete (placeholders only — real data seeding coming soon)"
+case "${1:-all}" in
+  --retire-js) do_retire_js ;;
+  --all|all)
+    do_retire_js
+    echo ""
+    echo "=== KV seed complete ==="
+    ;;
+  *)
+    echo "Usage: $0 [--retire-js] [--all]"
+    exit 1
+    ;;
+esac
