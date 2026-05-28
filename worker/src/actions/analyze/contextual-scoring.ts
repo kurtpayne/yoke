@@ -529,14 +529,9 @@ export function calculateDomainScore(opts: {
         label: `Dangerous port${exposedDangerous.length > 1 ? "s" : ""} exposed: ${exposedDangerous.join(", ")}`,
         tradeoff: null, weight: 3,
       });
-    } else if (nonStandard.length > 5) {
-      findings.push({
-        signal: "open_ports", axis: "security",
-        severity: "medium",
-        label: `${nonStandard.length} non-standard ports open`,
-        tradeoff: null, weight: 2,
-      });
     }
+    // Non-standard port count removed — complex infrastructure legitimately
+    // runs many ports; count alone isn't a security signal
   }
 
   // ─── NEW: Shodan Known Vulnerabilities ───────────────────────────
