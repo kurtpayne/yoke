@@ -220,12 +220,12 @@ function generateOgSvg(data: SharePayload): string {
   <circle cx="200" cy="370" r="120" fill="none" stroke="#21262d" stroke-width="8"/>
   <circle cx="200" cy="370" r="120" fill="none" stroke="${sc}" stroke-width="8" stroke-dasharray="${(score / 100) * 754} 754" stroke-linecap="round" transform="rotate(-90 200 370)" opacity="0.7"/>
   <circle cx="200" cy="370" r="100" fill="#0d1117" opacity="0.5"/>
-  <text x="200" y="358" fill="${sc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="72" font-weight="700" text-anchor="middle" dominant-baseline="middle">${score}</text>
+  <text x="200" y="370" fill="${sc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="72" font-weight="700" text-anchor="middle" dominant-baseline="central">${score}</text>
   <text x="200" y="420" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" text-anchor="middle"></text>
 
   <!-- Grade badge -->
   <rect x="400" y="332" width="80" height="80" rx="16" fill="${gc}" opacity="0.15" stroke="${gc}" stroke-width="2"/>
-  <text x="440" y="385" fill="${gc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="48" font-weight="700" text-anchor="middle" dominant-baseline="middle">${esc(grade)}</text>
+  <text x="440" y="372" fill="${gc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="48" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(grade)}</text>
 
   <!-- Axis scores -->
   ${bars}
