@@ -44,6 +44,7 @@ function WafSection({ data }: { data: AnalysisResult }) {
             <StatusBadge status="neutral" label="Not detected" />
           )
         }
+        copyValue={waf.detected ? (waf.provider ?? "Detected") : undefined}
       />
     </div>
   );
@@ -60,31 +61,36 @@ function TrustSignalRow({ signal }: { signal: { name: string; present: boolean; 
   const ref = findReferenceLink(signal.name);
 
   return (
-    <div className="data-row" style={{ padding: "4px 16px" }}>
-      <span className="flex items-center gap-1.5" style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--text)" }}>
-        {signal.present
-          ? <Check size={10} style={{ color: "var(--success)", flexShrink: 0 }} />
-          : isExtra
-            ? <span style={{ width: 10, textAlign: "center", color: "var(--dim)", fontSize: "10px", flexShrink: 0, lineHeight: "10px" }}>–</span>
-            : <X size={10} style={{ color: "var(--muted)", flexShrink: 0 }} />
-        }
-        <span style={{ opacity: (!signal.present && isExtra) ? 0.5 : 1 }}>{signal.name}</span>
-        {ref && (
-          <Tooltip text={ref.label}>
-            <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-              <ExternalLink size={9} style={{ color: "var(--muted)", opacity: 0.7 }} />
-            </a>
+    <DataRow
+      label={
+        <span className="flex items-center gap-1.5" style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--text)" }}>
+          {signal.present
+            ? <Check size={10} style={{ color: "var(--success)", flexShrink: 0 }} />
+            : isExtra
+              ? <span style={{ width: 10, textAlign: "center", color: "var(--dim)", fontSize: "10px", flexShrink: 0, lineHeight: "10px" }}>–</span>
+              : <X size={10} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          }
+          <span style={{ opacity: (!signal.present && isExtra) ? 0.5 : 1 }}>{signal.name}</span>
+          {ref && (
+            <Tooltip text={ref.label}>
+              <a href={ref.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                <ExternalLink size={9} style={{ color: "var(--muted)", opacity: 0.7 }} />
+              </a>
+            </Tooltip>
+          )}
+        </span>
+      }
+      value={
+        signal.value && signal.present ? (
+          <Tooltip text={signal.value}>
+            <span className={`badge badge-${status}`} style={{ fontSize: "9px", cursor: "help", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {signal.value.length > 40 ? signal.value.slice(0, 37) + "…" : signal.value}
+            </span>
           </Tooltip>
-        )}
-      </span>
-      {signal.value && signal.present && (
-        <Tooltip text={signal.value}>
-          <span className={`badge badge-${status}`} style={{ fontSize: "9px", cursor: "help", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {signal.value.length > 40 ? signal.value.slice(0, 37) + "…" : signal.value}
-          </span>
-        </Tooltip>
-      )}
-    </div>
+        ) : null
+      }
+      copyValue={signal.value && signal.present ? signal.value : undefined}
+    />
   );
 }
 

@@ -120,28 +120,28 @@ export function SecurityTxtPanel({ data }: { data: AnalysisResult }) {
                     {c} <ExternalLink size={10} style={{ display: "inline", verticalAlign: "middle" }} />
                   </a>
                 ) : <span style={{ fontSize: "12px" }}>{c}</span>
-              } />
+              } copyValue={c} />
             ))}
             {sec.policy && (
               <DataRow label="Policy" value={
                 <a href={sec.policy} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "12px" }}>
                   {sec.policy} <ExternalLink size={10} style={{ display: "inline", verticalAlign: "middle" }} />
                 </a>
-              } />
+              } copyValue={sec.policy} />
             )}
             {sec.acknowledgments && (
               <DataRow label="Acknowledgments" value={
                 <a href={sec.acknowledgments} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "12px" }}>
                   {sec.acknowledgments} <ExternalLink size={10} style={{ display: "inline", verticalAlign: "middle" }} />
                 </a>
-              } />
+              } copyValue={sec.acknowledgments} />
             )}
             {sec.hiring && (
               <DataRow label="Hiring" value={
                 <a href={sec.hiring} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none", fontSize: "12px" }}>
                   {sec.hiring} <ExternalLink size={10} style={{ display: "inline", verticalAlign: "middle" }} />
                 </a>
-              } />
+              } copyValue={sec.hiring} />
             )}
             {sec.encryption && <DataRow label="Encryption" value={sec.encryption} />}
             {sec.expires && (
@@ -149,7 +149,7 @@ export function SecurityTxtPanel({ data }: { data: AnalysisResult }) {
                 <span style={{ color: sec.is_expired ? "var(--danger)" : "var(--fg)", fontSize: "12px" }}>
                   {sec.expires} {sec.is_expired && " ⚠️ Expired"}
                 </span>
-              } />
+              } copyValue={sec.expires} />
             )}
             {sec.preferred_languages && <DataRow label="Languages" value={sec.preferred_languages} />}
           </>
@@ -333,17 +333,19 @@ export function CaaPanel({ data }: { data: AnalysisResult }) {
         {caa.has_caa ? (
           <>
             {caa.records.map((rec, i) => (
-              <div key={`caa-${rec.value}`} className="flex items-center justify-between py-1" style={{ borderBottom: i < caa.records.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <div className="flex items-center gap-2">
-                  <span style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--fg)" }}>
-                    {rec.ca_name}
-                  </span>
-                  <span className="badge badge-info" style={{ fontSize: "9px" }}>{rec.tag}</span>
-                </div>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
-                  {rec.value}
-                </span>
-              </div>
+              <DataRow
+                key={`caa-${rec.value}`}
+                label={
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600, color: "var(--fg)" }}>
+                      {rec.ca_name}
+                    </span>
+                    <span className="badge badge-info" style={{ fontSize: "9px" }}>{rec.tag}</span>
+                  </div>
+                }
+                value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>{rec.value}</span>}
+                copyValue={rec.value}
+              />
             ))}
             {caa.has_wildcard_policy && (
               <div className="flex items-center gap-1.5 mt-1">
@@ -413,7 +415,7 @@ export function GreynoisePanel({ data }: { data: AnalysisResult }) {
         <DataRow label="IP" value={gn.ip} />
         <DataRow label="Classification" value={
           <span style={{ color: classColor, fontWeight: 600 }}>{classLabel}</span>
-        } />
+        } copyValue={classLabel} />
         {gn.name && <DataRow label="Identity" value={gn.name} />}
         {gn.riot && <DataRow label="Service Type" value="Common Business Service (CDN/DNS/Cloud)" />}
         {gn.noise && <DataRow label="Scanning" value="Observed scanning the internet" />}

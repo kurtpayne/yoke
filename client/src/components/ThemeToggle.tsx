@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-type Theme = "dark" | "light" | "arcade" | "deep-blue" | "enterprise" | "newsprint";
+type Theme = "dark" | "light" | "arcade" | "deep-blue" | "enterprise" | "newsprint" | "lcars" | "synthwave" | "botanical" | "slate" | "rose" | "high-contrast";
 
 const THEMES: { id: Theme; label: string; emoji: string }[] = [
   { id: "dark", label: "Midnight", emoji: "🌙" },
@@ -9,6 +9,12 @@ const THEMES: { id: Theme; label: string; emoji: string }[] = [
   { id: "deep-blue", label: "Deep Blue", emoji: "🌊" },
   { id: "enterprise", label: "Enterprise", emoji: "💼" },
   { id: "newsprint", label: "Newsprint", emoji: "📰" },
+  { id: "lcars", label: "LCARS", emoji: "🖖" },
+  { id: "synthwave", label: "Synthwave", emoji: "🌅" },
+  { id: "botanical", label: "Botanical", emoji: "🌿" },
+  { id: "slate", label: "Slate", emoji: "🪨" },
+  { id: "rose", label: "Rosé", emoji: "🌸" },
+  { id: "high-contrast", label: "High Contrast", emoji: "♿" },
 ];
 
 const VALID_THEMES = new Set<string>(THEMES.map((t) => t.id));

@@ -65,6 +65,7 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
               {cache.cache_control.ttl_human}
             </span>
           }
+          copyValue={cache.cache_control.ttl_human}
         />
       )}
 
@@ -91,6 +92,7 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
               })}
             </div>
           }
+          copyValue={directiveKeys.map(key => { const val = directives[key]; return val === true ? key : `${key}=${val}`; }).join(", ")}
         />
       )}
 
@@ -125,6 +127,7 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
               )}
             </div>
           }
+          copyValue={[cache.cdn_cache.provider, cache.cdn_cache.status, cache.cdn_cache.age_seconds != null ? `age: ${cache.cdn_cache.age_seconds}s` : null].filter(Boolean).join(" · ")}
         />
       )}
 
@@ -167,6 +170,7 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
               ))}
             </div>
           }
+          copyValue={cache.conditional.varies_on.join(", ")}
         />
       )}
 

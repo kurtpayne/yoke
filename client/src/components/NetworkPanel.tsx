@@ -82,7 +82,7 @@ export function HttpProtocolsPanel({ data }: { data: AnalysisResult }) {
         value={<StatusBadge status={proto.http3 ? "pass" : "neutral"} label={proto.http3 ? "Supported" : "Not detected"} />}
       />
       {proto.alt_svc && (
-        <DataRow label="Alt-Svc" value={<span style={{ fontSize: "10px" }} className="break-all">{proto.alt_svc.length > 80 ? proto.alt_svc.slice(0, 80) + "…" : proto.alt_svc}</span>} />
+        <DataRow label="Alt-Svc" value={<span style={{ fontSize: "10px" }} className="break-all">{proto.alt_svc.length > 80 ? proto.alt_svc.slice(0, 80) + "…" : proto.alt_svc}</span>} copyValue={proto.alt_svc} />
       )}
     </Panel>
   );

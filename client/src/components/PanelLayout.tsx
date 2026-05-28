@@ -34,6 +34,8 @@ interface PanelCtx {
   panelId: string;
   collapsed: boolean;
   toggle: () => void;
+  onGripMouseDown: () => void;
+  onGripMouseUp: () => void;
 }
 
 const PanelContext = createContext<PanelCtx | null>(null);
@@ -57,6 +59,7 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
   const [layout, setLayout] = useState<LayoutState>(() => loadLayout());
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dragSrcRef = useRef<string | null>(null);
+  const gripActiveRef = useRef<string | null>(null);
 
   // Filter visible
   const visible: PanelDef[] = [];
@@ -101,6 +104,11 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
   }
 
   function onDragStart(pid: string, e: React.DragEvent<HTMLDivElement>) {
+    // Only allow drag when initiated from the grip handle
+    if (gripActiveRef.current !== pid) {
+      e.preventDefault();
+      return;
+    }
     dragSrcRef.current = pid;
     e.dataTransfer.setData("text/plain", pid);
     e.dataTransfer.effectAllowed = "move";
@@ -110,6 +118,7 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
 
   function onDragEnd(e: React.DragEvent<HTMLDivElement>) {
     dragSrcRef.current = null;
+    gripActiveRef.current = null;
     setDragOverId(null);
     e.currentTarget.style.opacity = "1";
   }
@@ -153,7 +162,7 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
       (p.fullWidth ? " full-width" : "");
 
     return (
-      <PanelContext.Provider key={p.id} value={{ panelId: p.id, collapsed: coll, toggle: function() { toggle(p.id); } }}>
+      <PanelContext.Provider key={p.id} value={{ panelId: p.id, collapsed: coll, toggle: function() { toggle(p.id); }, onGripMouseDown: function() { gripActiveRef.current = p.id; }, onGripMouseUp: function() { gripActiveRef.current = null; } }}>
         <div
           className={cls}
           draggable={true}

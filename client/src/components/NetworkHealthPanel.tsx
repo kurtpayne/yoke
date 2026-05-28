@@ -306,6 +306,7 @@ function ConnectionTimingSection({ data }: { data: NonNullable<NetworkHealthData
               <StatusBadge status="info" label={data.tls_version} />
             }
             mono={false}
+            copyValue={data.tls_version}
           />
         )}
         {data.ip && <DataRow label="Connected IP" value={data.ip} />}
@@ -386,6 +387,7 @@ function RipeRoutingSection({ data }: { data: NonNullable<NetworkHealthData["rip
               </span>
             }
             mono={false}
+            copyValue={data.asn_name ? `AS${data.asn} — ${data.asn_name}` : `AS${data.asn}`}
           />
         )}
 
@@ -429,6 +431,7 @@ function RipeRoutingSection({ data }: { data: NonNullable<NetworkHealthData["rip
               </div>
             }
             mono={false}
+            copyValue={`${data.visibility.seen_by}/${data.visibility.total} peers (${data.visibility.percentage}%)`}
           />
         )}
 
@@ -453,6 +456,7 @@ function RipeRoutingSection({ data }: { data: NonNullable<NetworkHealthData["rip
               </div>
             }
             mono={false}
+            copyValue={[stabilityLabel, data.bgp_updates_24h != null ? `${data.bgp_updates_24h} updates/24h` : null].filter(Boolean).join(" · ")}
           />
         )}
       </div>

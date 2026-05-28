@@ -98,6 +98,7 @@ export function SslPanel({ data }: { data: AnalysisResult }) {
               ))}
             </div>
           }
+          copyValue={ssl.protocols.join(", ")}
         />
       )}
       {ssl.key_exchange && <DataRow label="Key Exchange" value={ssl.key_exchange} />}
@@ -154,8 +155,7 @@ export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
         const headerKey = check.header.toLowerCase();
         const tooltip = HEADER_TOOLTIPS[headerKey];
         const docUrl = HEADER_DOCS[headerKey];
-        return (
-          <div key={check.header} className="data-row" style={{ alignItems: "flex-start" }}>
+        const headerLabel = (
             <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
               <div
                 className="w-2 h-2 rounded-full flex-shrink-0"
@@ -193,8 +193,8 @@ export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
                 </a>
               )}
             </div>
-            <div className="text-right flex-shrink-0 ml-3" style={{ maxWidth: "50%" }}>
-              {check.value ? (
+        );
+        const displayValue = check.value ? (
                 <span className="break-all" style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
                   {check.value.length > 60 ? check.value.slice(0, 60) + "…" : check.value}
                 </span>
@@ -202,9 +202,14 @@ export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
                 <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
                   {check.recommendation}
                 </span>
-              ) : null}
-            </div>
-          </div>
+              ) : null;
+        return (
+          <DataRow
+            key={check.header}
+            label={headerLabel}
+            value={displayValue}
+            copyValue={check.value || undefined}
+          />
         );
       })}
     </Panel>

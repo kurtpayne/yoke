@@ -155,6 +155,7 @@ export function HostingPanel({ data }: { data: AnalysisResult }) {
               <span>{hosting.provider}</span>
             </div>
           }
+          copyValue={hosting.provider}
         />
       )}
       {hosting.cdn && (
@@ -166,6 +167,7 @@ export function HostingPanel({ data }: { data: AnalysisResult }) {
               <span>{hosting.cdn}</span>
             </div>
           }
+          copyValue={hosting.cdn}
         />
       )}
       {hosting.waf && (
@@ -177,6 +179,7 @@ export function HostingPanel({ data }: { data: AnalysisResult }) {
               <span>{hosting.waf}</span>
             </div>
           }
+          copyValue={hosting.waf}
         />
       )}
     </Panel>
@@ -260,7 +263,7 @@ export function EmailExtrasPanel({ data }: { data: AnalysisResult }) {
           <div className="sub-section">TLS-RPT</div>
           {auth.tls_rpt.found ? (
             <>
-              {auth.tls_rpt.rua && <DataRow label="Report URI" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{auth.tls_rpt.rua}</span>} />}
+              {auth.tls_rpt.rua && <DataRow label="Report URI" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{auth.tls_rpt.rua}</span>} copyValue={auth.tls_rpt.rua} />}
             </>
           ) : (
             <div className="px-4 py-2"><StatusBadge status="neutral" label="No TLS-RPT record found" /></div>

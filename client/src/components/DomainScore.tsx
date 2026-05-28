@@ -112,6 +112,11 @@ function gridPolygon(level: number): string {
   }).join(" ");
 }
 
+/** Compute edge stroke opacity from raw axis score (0–100) */
+function radarEdgeOpacity(score: number): number {
+  return 0.15 + (Math.max(score - 25, 0) / 75) * 0.55;
+}
+
 interface RadarPlotProps {
   axes: Record<Axis, AxisScoreData>;
   archetype: ArchetypeName;
@@ -122,7 +127,24 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
   const weights = (weightsTable ?? FALLBACK_ARCHETYPE_WEIGHTS)[archetype];
   const [animProgress, setAnimProgress] = useState(0);
   const [hoveredAxis, setHoveredAxis] = useState<Axis | null>(null);
+  const [isLight, setIsLight] = useState(() => {
+    const theme = document.documentElement.getAttribute("data-theme");
+    return theme === "light" || theme === "newsprint" || theme === "botanical" || theme === "rose";
+  });
   const rafRef = useRef<number>(0);
+  const uidRef = useRef(`rp-${Math.random().toString(36).slice(2, 8)}`);
+  const uid = uidRef.current;
+
+  // React to theme changes
+  useEffect(() => {
+    const check = () => {
+      const theme = document.documentElement.getAttribute("data-theme");
+      setIsLight(theme === "light" || theme === "newsprint" || theme === "botanical" || theme === "rose");
+    };
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const start = performance.now();
@@ -140,7 +162,20 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
   }, []);
 
   const values = AXES.map(a => (axes[a].not_measured || axes[a].score == null) ? 0 : axes[a].score! * animProgress);
+  const rawScores = AXES.map(a => (axes[a].not_measured || axes[a].score == null) ? 0 : axes[a].score!);
   const dataPoints = polygonPoints(values);
+
+  // Animated vertex positions for edge gradients
+  const vertices = AXES.map((_, i) => {
+    const angle = (2 * Math.PI * i) / AXES.length;
+    const r = (values[i] / 100) * RADIUS;
+    return polarToCartesian(angle, r);
+  });
+
+  // Gradient parameters — theme-aware
+  const coreColor = isLight ? "var(--bg)" : "#ffffff";
+  const coreOpacity = isLight ? 0.6 : 0.1;
+  const edgeSaturation = isLight ? 0.7 : 0.85;
 
   return (
     <div className="relative" style={{ width: "100%", maxWidth: SIZE, aspectRatio: "1/1" }}>
@@ -151,19 +186,78 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
         style={{ overflow: "visible" }}
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* Grid lines */}
-        {[25, 50, 75, 100].map(level => (
-          <polygon
-            key={level}
-            points={gridPolygon(level)}
-            fill="none"
-            stroke="var(--border)"
-            strokeWidth={level === 100 ? 1 : 0.5}
-            opacity={level === 100 ? 0.6 : 0.3}
-          />
-        ))}
+        <defs>
+          {/* Radial gradient: white/bg center → saturated accent edge */}
+          <radialGradient id={`${uid}-rg`} gradientUnits="userSpaceOnUse" cx={CENTER} cy={CENTER} r={RADIUS}>
+            <stop offset="0%" stopColor={coreColor} stopOpacity={coreOpacity} />
+            <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.04} />
+            <stop offset="12%" stopColor="var(--accent)" stopOpacity={0.08} />
+            <stop offset="25%" stopColor="var(--accent)" stopOpacity={0.15} />
+            <stop offset="40%" stopColor="var(--accent)" stopOpacity={0.25} />
+            <stop offset="55%" stopColor="var(--accent)" stopOpacity={0.38} />
+            <stop offset="70%" stopColor="var(--accent)" stopOpacity={0.52} />
+            <stop offset="85%" stopColor="var(--accent)" stopOpacity={0.68} />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity={edgeSaturation} />
+          </radialGradient>
 
-        {/* Spoke lines */}
+          {/* Clip path to data polygon */}
+          <clipPath id={`${uid}-clip`}>
+            <polygon points={dataPoints} />
+          </clipPath>
+
+          {/* Subtle glow filter for grid lines */}
+          <filter id={`${uid}-gg`} x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="0.8" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+
+          {/* Edge glow filter */}
+          <filter id={`${uid}-egl`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2.5" />
+          </filter>
+
+          {/* Per-edge linear gradients (stroke + glow) */}
+          {AXES.map((_, i) => {
+            const j = (i + 1) % AXES.length;
+            const [x0, y0] = vertices[i];
+            const [x1, y1] = vertices[j];
+            const op0 = radarEdgeOpacity(rawScores[i]);
+            const op1 = radarEdgeOpacity(rawScores[j]);
+            return (
+              <g key={`eg-defs-${i}`}>
+                <linearGradient id={`${uid}-eg-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={op0} />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={op1} />
+                </linearGradient>
+                <linearGradient id={`${uid}-eglg-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={op0 * 0.35} />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={op1 * 0.35} />
+                </linearGradient>
+              </g>
+            );
+          })}
+        </defs>
+
+        {/* Grid lines — accent-tinted with subtle glow */}
+        {[25, 50, 75, 100].map(level => {
+          const op = level === 100 ? 0.22 : level === 75 ? 0.14 : level === 50 ? 0.09 : 0.05;
+          return (
+            <polygon
+              key={level}
+              points={gridPolygon(level)}
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth={level === 100 ? 0.7 : 0.4}
+              opacity={op}
+              filter={`url(#${uid}-gg)`}
+            />
+          );
+        })}
+
+        {/* Spoke lines — accent-tinted */}
         {AXES.map((_, i) => {
           const angle = (2 * Math.PI * i) / AXES.length;
           const [x, y] = polarToCartesian(angle, RADIUS);
@@ -174,41 +268,59 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
               y1={CENTER}
               x2={x}
               y2={y}
-              stroke="var(--border)"
-              strokeWidth={0.5}
-              opacity={0.4}
+              stroke="var(--accent)"
+              strokeWidth={0.4}
+              opacity={0.12}
             />
           );
         })}
 
-        {/* Data polygon fill */}
-        <polygon
-          points={dataPoints}
-          fill="var(--accent)"
-          fillOpacity={0.15}
-          stroke="var(--accent)"
-          strokeWidth={1.5}
-          strokeLinejoin="round"
-        />
+        {/* Data fill — radial gradient circle clipped to data polygon */}
+        <g clipPath={`url(#${uid}-clip)`}>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill={`url(#${uid}-rg)`} />
+        </g>
 
-        {/* Data points */}
-        {AXES.map((axis, i) => {
-          const angle = (2 * Math.PI * i) / AXES.length;
-          const r = (values[i] / 100) * RADIUS;
-          const [x, y] = polarToCartesian(angle, r);
+        {/* Edge glow — blurred wider strokes behind the crisp edges */}
+        {AXES.map((_, i) => {
+          const j = (i + 1) % AXES.length;
+          const [x0, y0] = vertices[i];
+          const [x1, y1] = vertices[j];
           return (
-            <circle
-              key={axis}
-              cx={x}
-              cy={y}
-              r={hoveredAxis === axis ? 4 : 3}
-              fill="var(--accent)"
-              stroke="var(--surface)"
-              strokeWidth={1.5}
-              style={{ transition: "r 0.15s" }}
+            <line
+              key={`glow-${i}`}
+              x1={x0}
+              y1={y0}
+              x2={x1}
+              y2={y1}
+              stroke={`url(#${uid}-eglg-${i})`}
+              strokeWidth={5}
+              strokeLinecap="round"
+              filter={`url(#${uid}-egl)`}
             />
           );
         })}
+
+        {/* Edge strokes — per-segment gradient */}
+        {AXES.map((_, i) => {
+          const j = (i + 1) % AXES.length;
+          const [x0, y0] = vertices[i];
+          const [x1, y1] = vertices[j];
+          return (
+            <line
+              key={`edge-${i}`}
+              x1={x0}
+              y1={y0}
+              x2={x1}
+              y2={y1}
+              stroke={`url(#${uid}-eg-${i})`}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+          );
+        })}
+
+        {/* Center dot */}
+        <circle cx={CENTER} cy={CENTER} r={1.5} fill={coreColor} opacity={coreOpacity * 0.8} />
 
         {/* Axis labels */}
         {AXES.map((axis, i) => {
@@ -217,7 +329,6 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
           const [x, y] = polarToCartesian(angle, labelR);
           const score = axes[axis].score;
           const notMeasured = axes[axis].not_measured || score == null;
-          const weight = Math.round(axes[axis].weight * 100);
           const isHovered = hoveredAxis === axis;
 
           return (
@@ -241,7 +352,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
               >
                 {AXIS_LABELS[axis]}
               </text>
-              {/* Score under label */}
+              {/* Score under label — opacity scales with axis score */}
               <text
                 x={x}
                 y={y + 12}
@@ -251,8 +362,8 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
                   fontFamily: "var(--font-mono)",
                   fontSize: "9px",
                   fontWeight: 600,
-                  fill: notMeasured ? "var(--dim)" : score! >= 80 ? "var(--success)" : score! >= 60 ? "var(--warning)" : "var(--danger)",
-                  opacity: notMeasured ? 0.4 : isHovered ? 1 : 0.7,
+                  fill: notMeasured ? "var(--dim)" : "var(--accent)",
+                  opacity: notMeasured ? 0.4 : isHovered ? 1 : radarEdgeOpacity(rawScores[i]),
                   fontStyle: notMeasured ? "italic" : "normal",
                 }}
                 onMouseEnter={() => setHoveredAxis(axis)}
@@ -337,15 +448,11 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
   const ds = data.domain_score;
   if (!ds) return null;
 
-  const [autoDetect, setAutoDetect] = useState(true);
-  const [selectedArchetype, setSelectedArchetype] = useState<ArchetypeName>(ds.archetype.detected);
-
-  // When auto-detect changes, reset to detected
-  const activeArchetype = autoDetect ? ds.archetype.detected : selectedArchetype;
+  // Always use the detected archetype — manual override removed after calibration
+  const activeArchetype = ds.archetype.detected;
 
   // Resolve weights table: prefer API response, fall back to hardcoded
   const weightsTable = ds.archetype.weights ?? FALLBACK_ARCHETYPE_WEIGHTS;
-
   // Recalculate composite + grade when archetype changes
   const { composite, grade } = activeArchetype === ds.archetype.detected
     ? { composite: ds.composite, grade: ds.grade }
@@ -370,12 +477,9 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
               style={{
                 fontSize: "10px",
                 cursor: "help",
-                borderStyle: autoDetect ? "solid" : "dashed",
-                opacity: autoDetect ? 1 : 0.8,
               }}
             >
               {ARCHETYPE_ICONS[activeArchetype]} {ARCHETYPE_LABELS[activeArchetype]}
-              {!autoDetect && <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: 4 }}>(manual)</span>}
             </span>
           </Tooltip>
         </div>
@@ -473,47 +577,11 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
             </div>
 
             {/* Secondary archetype note */}
-            {ds.archetype.secondary && autoDetect && (
+            {ds.archetype.secondary && (
               <p style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
                 Also shows {ARCHETYPE_LABELS[ds.archetype.secondary]} traits
               </p>
             )}
-
-            {/* Archetype override controls */}
-            <div className="flex items-center gap-3" style={{ fontSize: "11px", fontFamily: "var(--font-ui)" }}>
-              <label className="flex items-center gap-1.5" style={{ color: "var(--dim)", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={autoDetect}
-                  onChange={(e) => {
-                    setAutoDetect(e.target.checked);
-                    if (e.target.checked) setSelectedArchetype(ds.archetype.detected);
-                  }}
-                  style={{ accentColor: "var(--accent)", cursor: "pointer" }}
-                />
-                Auto-detect
-              </label>
-              <select
-                value={selectedArchetype}
-                onChange={(e) => setSelectedArchetype(e.target.value as ArchetypeName)}
-                disabled={autoDetect}
-                style={{
-                  background: "var(--surface-raised)",
-                  color: autoDetect ? "var(--dim)" : "var(--text)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-sm)",
-                  padding: "2px 6px",
-                  fontSize: "11px",
-                  fontFamily: "var(--font-ui)",
-                  cursor: autoDetect ? "not-allowed" : "pointer",
-                  opacity: autoDetect ? 0.5 : 1,
-                }}
-              >
-                {(["commerce", "content", "application", "corporate", "infrastructure", "institutional", "general"] as ArchetypeName[]).map(a => (
-                  <option key={a} value={a}>{ARCHETYPE_ICONS[a]} {ARCHETYPE_LABELS[a]}</option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
 

@@ -71,7 +71,7 @@ export function LegalPanel({ data }: { data: AnalysisResult }) {
             <Cookie size={11} style={{ color: "var(--accent)" }} />
             <span>{legal.consent_provider}</span>
           </div>
-        } />
+        } copyValue={legal.consent_provider} />
       )}
     </Panel>
   );

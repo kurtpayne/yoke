@@ -1,5 +1,5 @@
 import { Puzzle, Shield, Paintbrush, Package, Zap, Search, ShoppingCart, Globe, Code2, Server } from "lucide-react";
-import { Panel, StatusBadge } from "./Panel";
+import { Panel, DataRow, StatusBadge } from "./Panel";
 import type { AnalysisResult } from "../utils/types";
 
 const categoryIcons: Record<string, typeof Puzzle> = {
@@ -122,14 +122,12 @@ export function WordPressPanel({ data }: { data: AnalysisResult }) {
               <span style={{ opacity: 0.5 }}>({plugins.length})</span>
             </div>
             {plugins.map((p, i) => (
-              <div key={p.name} className="data-row">
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text)" }}>
-                  {p.name}
-                </span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
-                  {p.slug}
-                </span>
-              </div>
+              <DataRow
+                key={p.name}
+                label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text)" }}>{p.name}</span>}
+                value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>{p.slug}</span>}
+                copyValue={p.slug}
+              />
             ))}
           </div>
         );

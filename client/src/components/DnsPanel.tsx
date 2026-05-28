@@ -66,6 +66,7 @@ export function DnsPanel({ data }: { data: AnalysisResult }) {
                   key={`${type}-${i}`}
                   label={<span className="flex items-center gap-1">{isSubdomain && <span style={{ color: "var(--accent)", fontSize: "10px", fontFamily: "var(--font-mono)" }}>{rec.name}</span>}TTL {rec.ttl} <Tooltip text={`Time to Live: DNS resolvers cache this record for ${rec.ttl} seconds before re-querying`} help /></span>}
                   value={<span className="break-all" style={{ fontSize: "11px" }}>{rec.data}</span>}
+                  copyValue={rec.data}
                 />
               );
             })}

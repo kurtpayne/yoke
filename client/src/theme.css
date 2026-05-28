@@ -246,6 +246,222 @@
   --space-accent: var(--accent);
 }
 
+/* ─── LCARS theme ─────────────────────────────────────────────── */
+[data-theme="lcars"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #0c0810;
+  --surface-raised: #161020;
+  --surface-hover: #201830;
+  --text: #ffe4c4;
+  --text-secondary: #cc9966;
+  --dim: #8a6e44;
+  --border: #2a1e3a;
+  --border-muted: #1e1428;
+  --accent: #f1a04c;
+  --accent-fg: #000000;
+  --accent-dim: #c07830;
+  --accent-subtle: rgba(241, 160, 76, 0.10);
+  --success: #7abe6e;
+  --success-subtle: rgba(122, 190, 110, 0.10);
+  --warning: #cc6699;
+  --warning-subtle: rgba(204, 102, 153, 0.10);
+  --danger: #cc3333;
+  --danger-subtle: rgba(204, 51, 51, 0.12);
+  --purple: #9999cc;
+
+  --card: var(--surface);
+  --muted: var(--dim);
+  --fg: var(--text);
+  --surface-2: var(--surface-raised);
+
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+/* ─── Synthwave theme ─────────────────────────────────────────── */
+[data-theme="synthwave"] {
+  color-scheme: dark;
+  --bg: #120826;
+  --surface: #1a0e32;
+  --surface-raised: #22143e;
+  --surface-hover: #2c1c4a;
+  --text: #ede0ff;
+  --text-secondary: #b098d0;
+  --dim: #6e5898;
+  --border: #2e1c50;
+  --border-muted: #221440;
+  --accent: #ff2d95;
+  --accent-fg: #120826;
+  --accent-dim: #cc1a70;
+  --accent-subtle: rgba(255, 45, 149, 0.10);
+  --success: #2de2b8;
+  --success-subtle: rgba(45, 226, 184, 0.12);
+  --warning: #ffb020;
+  --warning-subtle: rgba(255, 176, 32, 0.10);
+  --danger: #ff3344;
+  --danger-subtle: rgba(255, 51, 68, 0.12);
+  --purple: #b04aff;
+
+  --card: var(--surface);
+  --muted: var(--dim);
+  --fg: var(--text);
+  --surface-2: var(--surface-raised);
+
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+/* ─── Botanical theme ─────────────────────────────────────────── */
+[data-theme="botanical"] {
+  color-scheme: light;
+  --bg: #f6faf5;
+  --surface: #ecf2e8;
+  --surface-raised: #e2eadc;
+  --surface-hover: #d8e2d0;
+  --text: #1a2e18;
+  --text-secondary: #3e5838;
+  --dim: #5e7a56;
+  --border: #c0d4b8;
+  --border-muted: #d2e0cc;
+  --accent: #1a8a6e;
+  --accent-fg: #ffffff;
+  --accent-dim: #146650;
+  --accent-subtle: rgba(26, 138, 110, 0.07);
+  --success: #2e8a40;
+  --success-subtle: rgba(46, 138, 64, 0.08);
+  --warning: #a08000;
+  --warning-subtle: rgba(160, 128, 0, 0.08);
+  --danger: #c03828;
+  --danger-subtle: rgba(192, 56, 40, 0.08);
+  --purple: #7060a8;
+
+  --card: var(--surface);
+  --muted: var(--dim);
+  --fg: var(--text);
+  --surface-2: var(--surface-raised);
+
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+/* ─── Slate theme ─────────────────────────────────────────────── */
+[data-theme="slate"] {
+  color-scheme: dark;
+  --bg: #16181d;
+  --surface: #1c1f26;
+  --surface-raised: #24272e;
+  --surface-hover: #2c2f36;
+  --text: #d1d5db;
+  --text-secondary: #9ca3af;
+  --dim: #6b7280;
+  --border: #2e3138;
+  --border-muted: #252830;
+  --accent: #94a3b8;
+  --accent-fg: #16181d;
+  --accent-dim: #64748b;
+  --accent-subtle: rgba(148, 163, 184, 0.08);
+  --success: #4ade80;
+  --success-subtle: rgba(74, 222, 128, 0.08);
+  --warning: #fbbf24;
+  --warning-subtle: rgba(251, 191, 36, 0.08);
+  --danger: #f87171;
+  --danger-subtle: rgba(248, 113, 113, 0.08);
+  --purple: #a78bfa;
+
+  --card: var(--surface);
+  --muted: var(--dim);
+  --fg: var(--text);
+  --surface-2: var(--surface-raised);
+
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+/* ─── Rosé theme ──────────────────────────────────────────────── */
+[data-theme="rose"] {
+  color-scheme: light;
+  --bg: #fdfbf9;
+  --surface: #f5f0ec;
+  --surface-raised: #ede6e0;
+  --surface-hover: #e5ddd5;
+  --text: #2d2024;
+  --text-secondary: #6b555e;
+  --dim: #9a838c;
+  --border: #ddd2d6;
+  --border-muted: #e8dfe3;
+  --accent: #d14d72;
+  --accent-fg: #ffffff;
+  --accent-dim: #a83a5a;
+  --accent-subtle: rgba(209, 77, 114, 0.07);
+  --success: #2d8a4e;
+  --success-subtle: rgba(45, 138, 78, 0.08);
+  --warning: #b8860b;
+  --warning-subtle: rgba(184, 134, 11, 0.08);
+  --danger: #c42b3a;
+  --danger-subtle: rgba(196, 43, 58, 0.08);
+  --purple: #8b5daa;
+
+  --card: var(--surface);
+  --muted: var(--dim);
+  --fg: var(--text);
+  --surface-2: var(--surface-raised);
+
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+/* ─── High Contrast theme (a11y) ──────────────────────────────── */
+[data-theme="high-contrast"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-raised: #141414;
+  --surface-hover: #1e1e1e;
+  --text: #ffffff;
+  --text-secondary: #e0e0e0;
+  --dim: #b0b0b0;
+  --border: #444444;
+  --border-muted: #333333;
+  --accent: #ffdd00;
+  --accent-fg: #000000;
+  --accent-dim: #ccb100;
+  --accent-subtle: rgba(255, 221, 0, 0.10);
+  --success: #00ff88;
+  --success-subtle: rgba(0, 255, 136, 0.12);
+  --warning: #ff9900;
+  --warning-subtle: rgba(255, 153, 0, 0.12);
+  --danger: #ff3333;
+  --danger-subtle: rgba(255, 51, 51, 0.12);
+  --purple: #cc99ff;
+
+  --card: var(--surface);
+  --muted: var(--dim);
+  --fg: var(--text);
+  --surface-2: var(--surface-raised);
+
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -364,6 +580,32 @@ main {
   word-break: break-all;
   overflow-wrap: anywhere;
   min-width: 0;
+}
+.data-value-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.data-copy-icon {
+  opacity: 0;
+  color: var(--dim);
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+  line-height: 0;
+}
+.data-row-copiable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.data-row-copiable:hover {
+  background: var(--surface-hover);
+}
+.data-row-copiable:hover .data-copy-icon {
+  opacity: 1;
+}
+.data-row-copiable:active {
+  background: var(--accent-subtle);
 }
 
 /* Badge styles */
@@ -735,12 +977,22 @@ main {
 
 /* Logo inversion for light themes */
 [data-theme="light"] .site-logo,
-[data-theme="newsprint"] .site-logo {
+[data-theme="newsprint"] .site-logo,
+[data-theme="botanical"] .site-logo,
+[data-theme="rose"] .site-logo {
   filter: brightness(0) saturate(100%);
 }
 
 /* Selection highlight in light theme */
 [data-theme="light"] ::selection {
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-theme="botanical"] ::selection {
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-theme="rose"] ::selection {
   background: var(--accent);
   color: #ffffff;
 }
@@ -750,6 +1002,12 @@ main {
 /* Search glow tweak for light theme */
 [data-theme="light"] .search-glow:focus-within {
   box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+[data-theme="botanical"] .search-glow:focus-within {
+  box-shadow: 0 0 0 3px rgba(26, 138, 110, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+[data-theme="rose"] .search-glow:focus-within {
+  box-shadow: 0 0 0 3px rgba(209, 77, 114, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* Domain hero gradient for light */

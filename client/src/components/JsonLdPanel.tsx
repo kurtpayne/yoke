@@ -21,8 +21,8 @@ export function JsonLdPanel({ data }: { data: AnalysisResult }) {
         <div key={`${item.type}-${item.name ?? i}`}>
           <div className="sub-section" style={{ fontSize: "10px" }}>@type: {item.type}</div>
           {item.name && <DataRow label="Name" value={item.name} mono={false} />}
-          {item.description && <DataRow label="Description" value={<span style={{ fontSize: "11px" }}>{item.description}</span>} mono={false} />}
-          {item.url && <DataRow label="URL" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{item.url}</span>} />}
+          {item.description && <DataRow label="Description" value={<span style={{ fontSize: "11px" }}>{item.description}</span>} mono={false} copyValue={item.description} />}
+          {item.url && <DataRow label="URL" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{item.url}</span>} copyValue={item.url} />}
         </div>
       ))}
     </Panel>

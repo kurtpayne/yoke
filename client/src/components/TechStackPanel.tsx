@@ -1,5 +1,5 @@
 import { Layers } from "lucide-react";
-import { Panel, StatusBadge, ErrorState } from "./Panel";
+import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
 import type { AnalysisResult } from "../utils/types";
 
 const confidenceLabel: Record<string, string> = { high: "high", medium: "med", low: "low" };
@@ -30,32 +30,34 @@ export function TechStackPanel({ data }: { data: AnalysisResult }) {
         <div key={category}>
           <div className="sub-section" style={{ color: "var(--dim)", fontSize: "10px" }}>{category}</div>
           {items.map((item, i) => (
-            <div key={item.name} className="data-row">
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text)" }}>
-                {item.name}
-              </span>
-              <div className="flex items-center gap-2">
-                {item.version && <span className="badge badge-info" style={{ fontSize: "10px" }}>v{item.version}</span>}
-                <span
-                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5"
-                  style={{
-                    fontSize: "9px",
-                    fontFamily: "var(--font-ui)",
-                    fontWeight: 600,
-                    letterSpacing: "0.03em",
-                    color: confidenceColor[item.confidence] ?? "var(--dim)",
-                    background: `color-mix(in srgb, ${confidenceColor[item.confidence] ?? "var(--dim)"} 12%, transparent)`,
-                    lineHeight: 1,
-                  }}
-                >
+            <DataRow
+              key={item.name}
+              label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text)" }}>{item.name}</span>}
+              value={
+                <div className="flex items-center gap-2">
+                  {item.version && <span className="badge badge-info" style={{ fontSize: "10px" }}>v{item.version}</span>}
                   <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: confidenceColor[item.confidence] ?? "var(--dim)" }}
-                  />
-                  {confidenceLabel[item.confidence] ?? item.confidence}
-                </span>
-              </div>
-            </div>
+                    className="inline-flex items-center gap-1 rounded px-1.5 py-0.5"
+                    style={{
+                      fontSize: "9px",
+                      fontFamily: "var(--font-ui)",
+                      fontWeight: 600,
+                      letterSpacing: "0.03em",
+                      color: confidenceColor[item.confidence] ?? "var(--dim)",
+                      background: `color-mix(in srgb, ${confidenceColor[item.confidence] ?? "var(--dim)"} 12%, transparent)`,
+                      lineHeight: 1,
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ background: confidenceColor[item.confidence] ?? "var(--dim)" }}
+                    />
+                    {confidenceLabel[item.confidence] ?? item.confidence}
+                  </span>
+                </div>
+              }
+              copyValue={item.version ? `${item.name} v${item.version}` : item.name}
+            />
           ))}
         </div>
       ))}

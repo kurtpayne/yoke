@@ -90,13 +90,13 @@ export function OgPreviewPanel({ data }: { data: AnalysisResult }) {
 
       {/* Tag details */}
       <div className="sub-section">Tag Audit</div>
-      <DataRow label="og:type" value={og.type || <StatusBadge status="warn" label="Missing" />} />
-      <DataRow label="og:url" value={og.url ? <span style={{ fontSize: "10px", wordBreak: "break-all" }}>{og.url}</span> : <StatusBadge status="warn" label="Missing" />} />
-      <DataRow label="og:locale" value={og.locale || <StatusBadge status="neutral" label="Not set" />} />
-      <DataRow label="og:site_name" value={og.site_name || <StatusBadge status="warn" label="Missing" />} />
-      <DataRow label="twitter:card" value={twitter.card || <StatusBadge status="warn" label="Missing" />} />
-      <DataRow label="twitter:site" value={twitter.site || <StatusBadge status="neutral" label="Not set" />} />
-      <DataRow label="twitter:creator" value={twitter.creator || <StatusBadge status="neutral" label="Not set" />} />
+      <DataRow label="og:type" value={og.type || <StatusBadge status="warn" label="Missing" />} copyValue={og.type || undefined} />
+      <DataRow label="og:url" value={og.url ? <span style={{ fontSize: "10px", wordBreak: "break-all" }}>{og.url}</span> : <StatusBadge status="warn" label="Missing" />} copyValue={og.url || undefined} />
+      <DataRow label="og:locale" value={og.locale || <StatusBadge status="neutral" label="Not set" />} copyValue={og.locale || undefined} />
+      <DataRow label="og:site_name" value={og.site_name || <StatusBadge status="warn" label="Missing" />} copyValue={og.site_name || undefined} />
+      <DataRow label="twitter:card" value={twitter.card || <StatusBadge status="warn" label="Missing" />} copyValue={twitter.card || undefined} />
+      <DataRow label="twitter:site" value={twitter.site || <StatusBadge status="neutral" label="Not set" />} copyValue={twitter.site || undefined} />
+      <DataRow label="twitter:creator" value={twitter.creator || <StatusBadge status="neutral" label="Not set" />} copyValue={twitter.creator || undefined} />
 
       {/* Missing tags */}
       {sm.missing.length > 0 && (

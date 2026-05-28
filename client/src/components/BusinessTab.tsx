@@ -81,7 +81,7 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
         </div>
       )}
 
-      {company.description && <DataRow label="Description" value={<span style={{ fontSize: "11px" }}>{company.description}</span>} mono={false} />}
+      {company.description && <DataRow label="Description" value={<span style={{ fontSize: "11px" }}>{company.description}</span>} mono={false} copyValue={company.description} />}
       {company.founded && <DataRow label="Founded" value={company.founded} />}
       {company.ceo && <DataRow label="CEO" value={company.ceo} mono={false} />}
       {company.hq && <DataRow label="Headquarters" value={company.hq} mono={false} />}

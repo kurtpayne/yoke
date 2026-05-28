@@ -128,7 +128,7 @@ export function EmailAuthPanel({ data }: { data: AnalysisResult }) {
                 status={auth.spf.all_qualifier === "-all" ? "pass" : auth.spf.all_qualifier === "~all" ? "warn" : "warn"}
                 label={auth.spf.all_qualifier}
               />
-            } />
+            } copyValue={auth.spf.all_qualifier} />
           )}
         </div>
       ) : (
@@ -145,11 +145,11 @@ export function EmailAuthPanel({ data }: { data: AnalysisResult }) {
                 status={auth.dmarc.policy === "reject" ? "pass" : auth.dmarc.policy === "quarantine" ? "warn" : "warn"}
                 label={`p=${auth.dmarc.policy}`}
               />
-            } />
+            } copyValue={`p=${auth.dmarc.policy}`} />
           )}
           {auth.dmarc.subdomain_policy && <DataRow label="Subdomain Policy" value={`sp=${auth.dmarc.subdomain_policy}`} />}
-          {auth.dmarc.rua && <DataRow label="Aggregate Reports" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{auth.dmarc.rua}</span>} />}
-          {auth.dmarc.ruf && <DataRow label="Forensic Reports" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{auth.dmarc.ruf}</span>} />}
+          {auth.dmarc.rua && <DataRow label="Aggregate Reports" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{auth.dmarc.rua}</span>} copyValue={auth.dmarc.rua} />}
+          {auth.dmarc.ruf && <DataRow label="Forensic Reports" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{auth.dmarc.ruf}</span>} copyValue={auth.dmarc.ruf} />}
         </div>
       ) : (
         <div className="p-4"><StatusBadge status="fail" label="No DMARC record found" /></div>

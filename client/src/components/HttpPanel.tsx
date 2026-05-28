@@ -1,5 +1,5 @@
 import { ArrowRight, FileCode } from "lucide-react";
-import { Panel, StatusBadge, ErrorState } from "./Panel";
+import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
 import type { AnalysisResult } from "../utils/types";
 
 export function RedirectPanel({ data }: { data: AnalysisResult }) {
@@ -72,14 +72,12 @@ export function HeadersPanel({ data }: { data: AnalysisResult }) {
     >
       <div style={{ maxHeight: "280px", overflowY: "auto", overflowX: "auto" }}>
         {entries.map(([key, value], i) => (
-          <div key={key} className="data-row" style={{ alignItems: "flex-start" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--accent)", minWidth: "100px", flexShrink: 0 }}>
-              {key}
-            </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all", overflowWrap: "anywhere", textAlign: "right", minWidth: 0 }}>
-              {value.length > 100 ? value.slice(0, 100) + "…" : value}
-            </span>
-          </div>
+          <DataRow
+            key={key}
+            label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--accent)" }}>{key}</span>}
+            value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all", overflowWrap: "anywhere" }}>{value.length > 100 ? value.slice(0, 100) + "…" : value}</span>}
+            copyValue={value}
+          />
         ))}
       </div>
     </Panel>

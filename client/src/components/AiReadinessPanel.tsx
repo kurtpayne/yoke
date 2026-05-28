@@ -109,6 +109,7 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
               </a>
             </div>
           }
+          copyValue={ai.rss_feed}
         />
       )}
 
@@ -124,6 +125,7 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
                   {ans.ans_records.map((r, i) => <div key={i}>{r.length > 80 ? r.slice(0, 80) + "…" : r}</div>)}
                 </div>
               }
+              copyValue={ans.ans_records.join("\n")}
             />
           )}
           {ans.agents_found && (
@@ -134,6 +136,7 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
                   {ans.agents_records.map((r, i) => <div key={i}>{r.length > 80 ? r.slice(0, 80) + "…" : r}</div>)}
                 </div>
               }
+              copyValue={ans.agents_records.join("\n")}
             />
           )}
           {ans.agent_json_found && (

@@ -265,6 +265,8 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
   const [animProgress, setAnimProgress] = useState(0);
   const [hoveredAxis, setHoveredAxis] = useState<Axis | null>(null);
   const rafRef = useRef<number>(0);
+  const uidRef = useRef(`cr-${Math.random().toString(36).slice(2, 8)}`);
+  const crUid = uidRef.current;
 
   useEffect(() => {
     const start = performance.now();
@@ -305,25 +307,40 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
           style={{ overflow: "visible" }}
           preserveAspectRatio="xMidYMid meet"
         >
-          {/* Grid lines */}
-          {[25, 50, 75, 100].map(level => (
-            <polygon
-              key={level}
-              points={gridPolygon(level)}
-              fill="none"
-              stroke="var(--border)"
-              strokeWidth={level === 100 ? 1 : 0.5}
-              opacity={level === 100 ? 0.6 : 0.3}
-            />
-          ))}
+          {/* Subtle glow filter for grid */}
+          <defs>
+            <filter id={`${crUid}-gg`} x="-10%" y="-10%" width="120%" height="120%">
+              <feGaussianBlur stdDeviation="0.8" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
 
-          {/* Spoke lines */}
+          {/* Grid lines — accent-tinted */}
+          {[25, 50, 75, 100].map(level => {
+            const op = level === 100 ? 0.22 : level === 75 ? 0.14 : level === 50 ? 0.09 : 0.05;
+            return (
+              <polygon
+                key={level}
+                points={gridPolygon(level)}
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth={level === 100 ? 0.7 : 0.4}
+                opacity={op}
+                filter={`url(#${crUid}-gg)`}
+              />
+            );
+          })}
+
+          {/* Spoke lines — accent-tinted */}
           {AXES.map((_, i) => {
             const angle = (2 * Math.PI * i) / AXES.length;
             const [x, y] = polarToCartesian(angle, RADIUS);
             return (
               <line key={i} x1={CENTER} y1={CENTER} x2={x} y2={y}
-                stroke="var(--border)" strokeWidth={0.5} opacity={0.4} />
+                stroke="var(--accent)" strokeWidth={0.4} opacity={0.12} />
             );
           })}
 
@@ -347,32 +364,6 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             strokeDasharray="6 3"
             strokeLinejoin="round"
           />
-
-          {/* Data points — domain 1 */}
-          {AXES.map((axis, i) => {
-            const angle = (2 * Math.PI * i) / AXES.length;
-            const r = (vals1[i] / 100) * RADIUS;
-            const [x, y] = polarToCartesian(angle, r);
-            return (
-              <circle key={`d1-${axis}`} cx={x} cy={y}
-                r={hoveredAxis === axis ? 4 : 3}
-                fill="var(--accent)" stroke="var(--surface)" strokeWidth={1.5}
-                style={{ transition: "r 0.15s" }} />
-            );
-          })}
-
-          {/* Data points — domain 2 */}
-          {AXES.map((axis, i) => {
-            const angle = (2 * Math.PI * i) / AXES.length;
-            const r = (vals2[i] / 100) * RADIUS;
-            const [x, y] = polarToCartesian(angle, r);
-            return (
-              <circle key={`d2-${axis}`} cx={x} cy={y}
-                r={hoveredAxis === axis ? 4 : 3}
-                fill="#f97316" stroke="var(--surface)" strokeWidth={1.5}
-                style={{ transition: "r 0.15s" }} />
-            );
-          })}
 
           {/* Axis labels */}
           {AXES.map((axis, i) => {

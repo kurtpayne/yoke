@@ -18,12 +18,12 @@ export function MetaPanel({ data }: { data: AnalysisResult }) {
           <div className="sub-section">Open Graph</div>
           {meta.og_title && <DataRow label="Title" value={meta.og_title} mono={false} />}
           {meta.og_description && (
-            <DataRow label="Description" value={<span style={{ fontSize: "11px" }}>{meta.og_description.length > 80 ? meta.og_description.slice(0, 80) + "…" : meta.og_description}</span>} mono={false} />
+            <DataRow label="Description" value={<span style={{ fontSize: "11px" }}>{meta.og_description.length > 80 ? meta.og_description.slice(0, 80) + "…" : meta.og_description}</span>} mono={false} copyValue={meta.og_description} />
           )}
-          {meta.og_image && <DataRow label="Image" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{meta.og_image}</span>} />}
+          {meta.og_image && <DataRow label="Image" value={<span style={{ fontSize: "10px", wordBreak: "break-all" }}>{meta.og_image}</span>} copyValue={meta.og_image} />}
         </div>
       )}
-      <DataRow label="Favicon" value={meta.favicon_url ? <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><img src={meta.favicon_url} alt="favicon" style={{ width: 16, height: 16, imageRendering: "pixelated" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} /><span style={{ fontSize: "10px", wordBreak: "break-all" }}>{meta.favicon_url.length > 60 ? meta.favicon_url.slice(0, 60) + "…" : meta.favicon_url}</span></span> : <StatusBadge status="warn" label="NOT FOUND" />} />
+      <DataRow label="Favicon" value={meta.favicon_url ? <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}><img src={meta.favicon_url} alt="favicon" style={{ width: 16, height: 16, imageRendering: "pixelated" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} /><span style={{ fontSize: "10px", wordBreak: "break-all" }}>{meta.favicon_url.length > 60 ? meta.favicon_url.slice(0, 60) + "…" : meta.favicon_url}</span></span> : <StatusBadge status="warn" label="NOT FOUND" />} copyValue={meta.favicon_url || undefined} />
       <DataRow label="robots.txt" value={meta.robots_txt_exists ? <StatusBadge status="pass" label="PRESENT" /> : <StatusBadge status="warn" label="MISSING" />} />
       <DataRow
         label="Sitemap"
@@ -73,10 +73,7 @@ export function RobotsDeepPanel({ data }: { data: AnalysisResult }) {
                 User-Agent: {block.user_agent}
               </div>
               {block.disallow.slice(0, 8).map((path, j) => (
-                <div key={j} className="data-row">
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--danger)" }}>Disallow</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)" }}>{path}</span>
-                </div>
+                <DataRow key={`disallow-${j}`} label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--danger)" }}>Disallow</span>} value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)" }}>{path}</span>} copyValue={path} />
               ))}
               {block.disallow.length > 8 && (
                 <div className="px-4 py-1" style={{ fontSize: "10px", color: "var(--dim)" }}>
@@ -84,10 +81,7 @@ export function RobotsDeepPanel({ data }: { data: AnalysisResult }) {
                 </div>
               )}
               {block.allow.slice(0, 4).map((path, j) => (
-                <div key={j} className="data-row">
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--success)" }}>Allow</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)" }}>{path}</span>
-                </div>
+                <DataRow key={`allow-${j}`} label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--success)" }}>Allow</span>} value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)" }}>{path}</span>} copyValue={path} />
               ))}
             </div>
           ))}
@@ -100,9 +94,7 @@ export function RobotsDeepPanel({ data }: { data: AnalysisResult }) {
         <div>
           <div className="sub-section">Referenced Sitemaps</div>
           {parsed.sitemaps.map((url, i) => (
-            <div key={`meta-row-${i}`} className="data-row">
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all" }}>{url}</span>
-            </div>
+            <DataRow key={`sitemap-${i}`} label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>URL</span>} value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all" }}>{url}</span>} copyValue={url} />
           ))}
         </div>
       )}
@@ -111,9 +103,7 @@ export function RobotsDeepPanel({ data }: { data: AnalysisResult }) {
         <div>
           <div className="sub-section" style={{ color: "var(--warning)" }}>Interesting Blocked Paths</div>
           {parsed.interesting_blocked.map((path, i) => (
-            <div key={`meta-row-${i}`} className="data-row">
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--warning)" }}>{path}</span>
-            </div>
+            <DataRow key={`blocked-${i}`} label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--warning)" }}>Blocked</span>} value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--warning)" }}>{path}</span>} copyValue={path} />
           ))}
         </div>
       )}
