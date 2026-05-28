@@ -24,7 +24,7 @@ export interface ThresholdConfig {
 
 // ─── Severity → Score mapping ────────────────────────────────────────
 export const SEVERITY_SCORES: Record<Severity, number> = {
-  critical: 0, high: 20, medium: 50, low: 70, info: 85, good: 100,
+  critical: 0, high: 15, medium: 40, low: 65, info: 82, good: 100,
 };
 
 // ─── Performance ─────────────────────────────────────────────────────
@@ -36,8 +36,8 @@ export const PERF_SCORE: ThresholdConfig = {
   unit: "points",
   bands: [
     { min: 90, severity: "good", label: "Performance score {value}/100" },
-    { min: 80, severity: "low", label: "Performance score {value}/100" },
-    { min: 50, severity: "medium", label: "Performance score {value}/100" },
+    { min: 70, severity: "low", label: "Performance score {value}/100" },
+    { min: 40, severity: "medium", label: "Performance score {value}/100" },
     { min: 0, severity: "high", label: "Low performance score {value}/100" },
   ],
 };
@@ -49,8 +49,9 @@ export const LCP: ThresholdConfig = {
   unit: "seconds",
   bands: [
     { max: 2.5, severity: "good", label: "LCP: {value}s" },
-    { max: 4.0, severity: "medium", label: "LCP: {value}s" },
-    { min: 4.0, severity: "high", label: "LCP: {value}s" },
+    { max: 4.0, severity: "low", label: "LCP: {value}s" },
+    { max: 6.0, severity: "medium", label: "LCP: {value}s" },
+    { min: 6.0, severity: "high", label: "LCP: {value}s" },
   ],
 };
 

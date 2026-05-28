@@ -29,21 +29,21 @@ describe('Archetype Weight Profiles', () => {
     const archetypes: ArchetypeName[] = ["commerce", "content", "application", "corporate", "infrastructure", "institutional", "general"];
     for (const arch of archetypes) {
       const w = ARCHETYPE_WEIGHTS[arch];
-      expect(w.security).toBe(0.25);
+      expect(w.security).toBe(0.28);
       expect(w.reliability).toBe(0.25);
-      expect(w.trust).toBe(0.20);
-      expect(w.performance).toBe(0.18);
-      expect(w.visibility).toBe(0.12);
+      expect(w.trust).toBe(0.12);
+      expect(w.performance).toBe(0.20);
+      expect(w.visibility).toBe(0.15);
     }
   });
 
-  it('security and reliability should be weighted highest', () => {
+  it('security should be weighted highest', () => {
     const w = ARCHETYPE_WEIGHTS.general;
     expect(w.security).toBeGreaterThan(w.trust);
     expect(w.security).toBeGreaterThan(w.performance);
     expect(w.security).toBeGreaterThan(w.visibility);
+    expect(w.security).toBeGreaterThan(w.reliability);
     expect(w.reliability).toBeGreaterThan(w.trust);
-    expect(w.reliability).toBeGreaterThan(w.performance);
     expect(w.reliability).toBeGreaterThan(w.visibility);
   });
 });
@@ -70,8 +70,8 @@ describe('Severity Score Mapping', () => {
 // ─── Axis Score Computation ──────────────────────────────────────────
 
 describe('Axis Score Computation', () => {
-  it('should return 75 for empty findings', () => {
-    expect(computeAxisScore([])).toBe(75);
+  it('should return 65 for empty findings', () => {
+    expect(computeAxisScore([])).toBe(65);
   });
 
   it('should return 100 for all-good findings', () => {
@@ -153,9 +153,9 @@ describe('Composite Score Computation', () => {
     expect(commerceScore).toBe(generalScore);
   });
 
-  it('should use fixed weights (Sec=0.25, Rel=0.25, Trust=0.20, Perf=0.18, Vis=0.12)', () => {
+  it('should use fixed weights (Sec=0.28, Rel=0.25, Trust=0.12, Perf=0.20, Vis=0.15)', () => {
     const axes = { security: 60, performance: 80, reliability: 70, trust: 90, visibility: 50 };
-    const expected = Math.round(60*0.25 + 80*0.18 + 70*0.25 + 90*0.20 + 50*0.12);
+    const expected = Math.round(60*0.28 + 80*0.20 + 70*0.25 + 90*0.12 + 50*0.15);
     expect(computeComposite(axes, "general")).toBe(expected);
   });
 
@@ -180,12 +180,12 @@ describe('Grade Assignment', () => {
     expect(gradeFromComposite(95)).toBe("A");
     expect(gradeFromComposite(90)).toBe("A");
     expect(gradeFromComposite(89)).toBe("B");
-    expect(gradeFromComposite(75)).toBe("B");
-    expect(gradeFromComposite(74)).toBe("C");
-    expect(gradeFromComposite(60)).toBe("C");
-    expect(gradeFromComposite(59)).toBe("D");
-    expect(gradeFromComposite(45)).toBe("D");
-    expect(gradeFromComposite(44)).toBe("F");
+    expect(gradeFromComposite(80)).toBe("B");
+    expect(gradeFromComposite(79)).toBe("C");
+    expect(gradeFromComposite(65)).toBe("C");
+    expect(gradeFromComposite(64)).toBe("D");
+    expect(gradeFromComposite(50)).toBe("D");
+    expect(gradeFromComposite(49)).toBe("F");
     expect(gradeFromComposite(0)).toBe("F");
   });
 });

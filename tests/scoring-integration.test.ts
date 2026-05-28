@@ -80,24 +80,46 @@ describe('calculateDomainScore integration', () => {
     const opts = baseOpts();
     opts.ssl = { grade: "A+", issuer: "Let's Encrypt", subject: "example.com", valid_from: "2025-01-01", valid_to: "2026-01-01", error: null, certTransparency: true } as any;
     opts.securityAudit = [
-      { header: "strict-transport-security", present: true, value: "max-age=31536000; includeSubDomains", severity: "pass" as any },
-      { header: "x-content-type-options", present: true, value: "nosniff", severity: "pass" as any },
-      { header: "x-frame-options", present: true, value: "DENY", severity: "pass" as any },
+      { header: "strict-transport-security", present: true, value: "max-age=31536000; includeSubDomains", severity: "pass" as any, status: "pass" },
+      { header: "x-content-type-options", present: true, value: "nosniff", severity: "pass" as any, status: "pass" },
+      { header: "x-frame-options", present: true, value: "DENY", severity: "pass" as any, status: "pass" },
+      { header: "content-security-policy", present: true, value: "default-src 'self'", severity: "pass" as any, status: "pass" },
     ];
     opts.dnssec = { enabled: true, valid: true } as any;
     opts.emailAuth = { spf: { found: true, record: "v=spf1 -all", mechanisms: ["-all"], all_qualifier: "-all" }, dkim_selectors_found: ["default"], dmarc: { found: true, record: "v=DMARC1; p=reject", policy: "reject", subdomain_policy: null, rua: null, ruf: null }, bimi: { found: false }, mta_sts: { found: false }, tls_rpt: { found: false } } as any;
     opts.performance = { score: 95, fcp: 800, lcp: 1200, cls: 0.02, tbt: 50, si: 1000, ttfb: 200 } as any;
-    opts.compression = { gzip: true, brotli: true } as any;
+    opts.compression = { encoding: "br" } as any;
     opts.httpProtocols = { http2: true, http3: true };
     opts.hosting = { provider: "Cloudflare", cdn: "Cloudflare", waf: "Cloudflare" } as any;
     opts.rdap = { domain_age_days: 3650, days_until_expiry: 365 };
-    opts.headers = { "strict-transport-security": "max-age=31536000", "x-content-type-options": "nosniff" };
+    opts.headers = {
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "permissions-policy": "geolocation=(self)",
+    };
     opts.statusResult = { is_up: true, status_code: 200 };
+    opts.dnsRecords = [
+      { type: "A", value: "1.1.1.1", ttl: 3600 },
+      { type: "A", value: "1.0.0.1", ttl: 3600 },
+      { type: "AAAA", value: "2606:4700::1", ttl: 3600 },
+      { type: "NS", value: "ns1.example.com", ttl: 86400 },
+      { type: "NS", value: "ns2.example.com", ttl: 86400 },
+      { type: "NS", value: "ns3.example.com", ttl: 86400 },
+      { type: "NS", value: "ns4.example.com", ttl: 86400 },
+      { type: "SOA", value: "ns1.example.com admin.example.com", ttl: 86400 },
+      { type: "MX", value: "10 mail.example.com", ttl: 3600 },
+      { type: "MX", value: "20 mail2.example.com", ttl: 3600 },
+    ] as any;
+    opts.redirects = [{ url: "http://example.com", status_code: 301 }, { url: "https://example.com", status_code: 200 }] as any;
+    opts.jsonLd = [{ type: "Organization" }] as any;
+    opts.socialMeta = { score: 90, og: { title: "Example", description: "Test" } } as any;
+    opts.meta = { robots_txt_exists: true, sitemap_detected: true, favicon_url: "/favicon.ico" } as any;
 
     const result = calculateDomainScore(opts);
     // Strong signals should produce at least a B grade
-    expect(result.composite).toBeGreaterThanOrEqual(65);
-    expect(['A+', 'A', 'A-', 'B+', 'B', 'B-']).toContain(result.grade);
+    expect(result.composite).toBeGreaterThanOrEqual(80);
+    expect(['A', 'B']).toContain(result.grade);
   });
 
   it('produces a mid-range grade with mixed signals', () => {
