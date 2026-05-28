@@ -46,7 +46,7 @@ const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
 // Fixed axis weights — all archetypes use the same weights now.
 // Canonical source is worker/src/actions/analyze/contextual-scoring.ts;
 // the analysis response includes archetype.weights so the client uses that when available.
-const FIXED_WEIGHTS: Record<Axis, number> = { security: 0.25, performance: 0.18, reliability: 0.25, trust: 0.20, visibility: 0.12 };
+const FIXED_WEIGHTS: Record<Axis, number> = { security: 0.28, reliability: 0.25, performance: 0.20, visibility: 0.15, trust: 0.12 };
 const FALLBACK_ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
   commerce:       FIXED_WEIGHTS,
   content:        FIXED_WEIGHTS,

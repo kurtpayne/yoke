@@ -109,9 +109,10 @@ export async function getUsageStats(db: D1Database, days = 30): Promise<{
       `SELECT
         CASE
           WHEN composite_score >= 90 THEN 'A'
+          WHEN composite_score >= 85 THEN 'B+'
           WHEN composite_score >= 80 THEN 'B'
-          WHEN composite_score >= 70 THEN 'C'
-          WHEN composite_score >= 60 THEN 'D'
+          WHEN composite_score >= 65 THEN 'C'
+          WHEN composite_score >= 50 THEN 'D'
           ELSE 'F'
         END as grade,
         COUNT(*) as cnt

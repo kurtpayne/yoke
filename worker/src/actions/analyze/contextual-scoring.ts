@@ -1778,13 +1778,17 @@ export function calculateDomainScore(opts: {
       });
     }
 
-    // BGP stability
+    // BGP stability — demote to info if the site is actually reachable,
+    // since BGP churn on a responding site is traffic engineering, not instability
     if (nh.ripe_routing?.routing_stability === "unstable") {
+      const siteIsUp = opts.statusResult?.is_up === true;
       findings.push({
         signal: "bgp_unstable", axis: "reliability",
-        severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
-        label: `BGP route unstable (${nh.ripe_routing.bgp_updates_24h} updates in 24h)`,
-        tradeoff: null, weight: 3,
+        severity: siteIsUp ? "info" : contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
+        label: siteIsUp
+          ? `BGP route churn (${nh.ripe_routing.bgp_updates_24h} updates in 24h — site responding normally)`
+          : `BGP route unstable (${nh.ripe_routing.bgp_updates_24h} updates in 24h)`,
+        tradeoff: null, weight: siteIsUp ? 1 : 3,
       });
     }
     // bgp_stable removed — only 3 domains ever, unreliable data asymmetry
