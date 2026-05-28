@@ -389,6 +389,19 @@ curl -u admin:YOUR_KEY -X DELETE "https://your-instance.com/api/cache?type=ai_an
 
 Run `/api/cleanup` daily via cron to keep D1 lean.
 
+### Rate Limit Bypass
+
+For batch analysis, internal tooling, or CI pipelines, pass `X-Admin-Key` to skip per-IP rate limits on `/api/analyze`:
+
+```bash
+curl -X POST https://your-instance.com/api/analyze \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Key: YOUR_KEY" \
+  -d '{"domain": "example.com"}'
+```
+
+Uses the same `ADMIN_KEY` secret. All other endpoints (compare, subdomain-scan, AI, etc.) remain rate-limited as normal.
+
 ### Worker-to-Fly Proxy Auth
 
 ```bash
