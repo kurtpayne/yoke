@@ -150,53 +150,63 @@ export async function checkCrux(
   }
 
   try {
-    const res = await fetchWithTimeout(
-      `https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${apiKey}`,
-      {
-        timeout: 10000,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ origin: `https://${domain}` }),
-      },
-    );
+    // Try bare domain first, then www. fallback — CrUX indexes by canonical origin
+    // e.g. godaddy.com has no data but www.godaddy.com does
+    const origins = domain.startsWith("www.")
+      ? [`https://${domain}`]
+      : [`https://${domain}`, `https://www.${domain}`];
 
-    if (res.status === 404 || res.status === 400) {
-      // No CrUX data for this domain — cache the null result to avoid repeated lookups
+    for (const origin of origins) {
+      const res = await fetchWithTimeout(
+        `https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${apiKey}`,
+        {
+          timeout: 10000,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ origin }),
+        },
+      );
+
+      if (res.status === 404 || res.status === 400) {
+        // No CrUX data for this origin — try next
+        continue;
+      }
+
+      if (res.status === 403) {
+        console.error("[CrUX] API not enabled (403). Enable 'Chrome UX Report API' in Google Cloud Console.");
+        if (statsDb) logApiError(statsDb, { api: "crux", status: 403, message: "CrUX API not enabled — enable in Cloud Console", domain });
+        return null;
+      }
+
+      if (!res.ok) {
+        if (statsDb) logApiError(statsDb, { api: "crux", status: res.status, message: "CrUX API error", domain });
+        return null;
+      }
+
+      const data = await res.json() as CruxApiResponse;
+      const result = parseCruxResponse(data);
+
+      // Cache result
       if (db) {
         try {
           await db.prepare(
             "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'crux', ?, ?)"
-          ).bind(domain, "null", Date.now()).run();
+          ).bind(domain, JSON.stringify(result), Date.now()).run();
         } catch { /* ignore */ }
       }
-      return null;
+
+      return result;
     }
 
-    if (res.status === 403) {
-      // CrUX API not enabled in Google Cloud project — log once and return null
-      console.error("[CrUX] API not enabled (403). Enable 'Chrome UX Report API' in Google Cloud Console.");
-      if (statsDb) logApiError(statsDb, { api: "crux", status: 403, message: "CrUX API not enabled — enable in Cloud Console", domain });
-      return null;
-    }
-
-    if (!res.ok) {
-      if (statsDb) logApiError(statsDb, { api: "crux", status: res.status, message: "CrUX API error", domain });
-      return null;
-    }
-
-    const data = await res.json() as CruxApiResponse;
-    const result = parseCruxResponse(data);
-
-    // Cache result
+    // No CrUX data for any origin variant — cache the null result
     if (db) {
       try {
         await db.prepare(
           "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'crux', ?, ?)"
-        ).bind(domain, JSON.stringify(result), Date.now()).run();
+        ).bind(domain, "null", Date.now()).run();
       } catch { /* ignore */ }
     }
-
-    return result;
+    return null;
   } catch (e) {
     console.error("[CrUX] API error:", e instanceof Error ? e.message : String(e));
     if (statsDb) logApiError(statsDb, { api: "crux", status: 0, message: `CrUX: ${String(e).slice(0, 150)}`, domain });
