@@ -52,7 +52,6 @@ export interface CookieAudit { name: string; secure: boolean; httponly: boolean;
 export interface CookieSecurityResult { cookies: CookieAudit[]; issues: string[]; }
 export interface CompressionResult { encoding: string | null; vary_accept_encoding: boolean; }
 export interface AiReadinessResult { score: number; max_score: number; grade: string; checks: Array<{ name: string; passed: boolean; points: number }>; rss_feed: string | null; ans: { ans_found: boolean; ans_records: string[]; agents_found: boolean; agents_records: string[]; agent_json_found: boolean } | null; }
-export interface HealthScoreResult { score: number; max_score: number; grade: string; breakdown: Record<string, number>; }
 export interface BimiResult { found: boolean; record: string | null; logo_url: string | null; authority_url: string | null; }
 export interface MtaStsResult { dns_found: boolean; policy_found: boolean; mode: string | null; }
 export interface TlsRptResult { found: boolean; record: string | null; rua: string | null; }

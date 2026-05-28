@@ -27,7 +27,6 @@ export type {
   CompressionData,
   CacheAnalysisData,
   AiReadinessData,
-  HealthScoreData,
   WordPressData,
   WordPressPlugin,
   AvailabilityResult,

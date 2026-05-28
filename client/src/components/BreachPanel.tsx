@@ -143,7 +143,7 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
   if (!breaches) return null;
 
   const { found, count, total_pwned, items } = breaches;
-  const check_failed = (breaches as any).check_failed;
+  const check_failed = breaches.check_failed;
 
   const icon = found ? <ShieldAlert size={14} style={{ color: "var(--danger)" }} /> : <ShieldCheck size={14} style={{ color: "var(--success)" }} />;
 

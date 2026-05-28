@@ -490,7 +490,7 @@ export function extractSocialMeta(html: string): OgTwitterResult {
 
 // ─── NEW: Legal Pages Detection ─────────────────────────────────────
 
-export const LEGAL_PATTERNS: Array<{ name: string; patterns: RegExp[] }> = [
+const LEGAL_PATTERNS: Array<{ name: string; patterns: RegExp[] }> = [
   { name: "Privacy Policy", patterns: [/\/privacy/i, /privacy[_-]?policy/i] },
   { name: "Terms of Service", patterns: [/\/terms/i, /terms[_-]?of[_-]?service/i, /terms[_-]?of[_-]?use/i, /\/tos\b/i] },
   { name: "Cookie Policy", patterns: [/cookie[_-]?policy/i, /\/cookies\b/i] },
@@ -499,7 +499,7 @@ export const LEGAL_PATTERNS: Array<{ name: string; patterns: RegExp[] }> = [
   { name: "Imprint", patterns: [/\/imprint/i, /\/impressum/i] },
 ];
 
-export const CONSENT_PROVIDERS: Array<{ name: string; pattern: RegExp }> = [
+const CONSENT_PROVIDERS: Array<{ name: string; pattern: RegExp }> = [
   { name: "Cookiebot", pattern: /cookiebot/i },
   { name: "OneTrust", pattern: /onetrust|optanon/i },
   { name: "Quantcast", pattern: /quantcast.*choice|__tcfapi/i },

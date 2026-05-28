@@ -33,7 +33,7 @@ export interface Env {
 
 // Re-export from centralized config for backward compatibility
 import { ANALYSIS_CACHE_TTL_MS, getAnalysisCacheTtlMs } from "./config/cache";
-export const CACHE_TTL_MS = ANALYSIS_CACHE_TTL_MS;
+const CACHE_TTL_MS = ANALYSIS_CACHE_TTL_MS;
 export { getAnalysisCacheTtlMs };
 
 // ─── Domain Validation ───────────────────────────────────────────────
@@ -105,7 +105,7 @@ export const MULTI_PART_TLDS = ["co.uk", "com.au", "co.nz", "co.jp", "com.br", "
 
 // ─── External Service URLs ───────────────────────────────────────────
 
-export const DEFAULT_FLY_PROBE_URL = "https://yoke-probe.fly.dev";
+const DEFAULT_FLY_PROBE_URL = "https://yoke-probe.fly.dev";
 
 /** Derive the Fly probe URL from env, without module-level mutation. */
 export function getFlyProbeUrl(env: Env): string {
@@ -127,7 +127,7 @@ export function getBaseUrl(request: Request, env?: Env): string {
 }
 
 /** Get the instance hostname (e.g. "yoke.lol") from request or env. */
-export function getInstanceHost(request: Request, env?: Env): string {
+function getInstanceHost(request: Request, env?: Env): string {
   if (env?.BASE_URL) {
     try { return new URL(env.BASE_URL).hostname; } catch { /* fall through */ }
   }

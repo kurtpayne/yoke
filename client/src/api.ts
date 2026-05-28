@@ -231,7 +231,7 @@ export interface AnalysisResult {
   wayback: WaybackData | null;
   tranco_rank: number | null;
   observatory: ObservatoryData | null;
-  screenshot_url: string | null;
+  screenshot_url?: string | null; // Deprecated — kept for cached responses
   email_auth: EmailAuth | null;
   http_protocols: HttpProtocols | null;
   carbon: CarbonData | null;
@@ -248,7 +248,7 @@ export interface AnalysisResult {
   compression: CompressionData | null;
   cache_analysis: CacheAnalysisData | null;
   ai_readiness: AiReadinessData | null;
-  health_score: HealthScoreData | null;
+  health_score?: HealthScoreData | null; // Deprecated — kept for cached responses
   wordpress: WordPressData | null;
   breaches: BreachData | null;
 
@@ -408,6 +408,7 @@ export interface BreachData {
   count: number;
   total_pwned: number;
   items: BreachItem[];
+  check_failed?: boolean;
 }
 
 export interface AvailabilityResult {
@@ -702,6 +703,7 @@ export interface TrustSignalData {
   present: boolean;
   value: string | null;
   severity: "good" | "info" | "low" | "medium";
+  importance?: "core" | "extra";
 }
 
 export interface TrustSignalsData {

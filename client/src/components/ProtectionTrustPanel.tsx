@@ -115,10 +115,10 @@ export function ProtectionTrustPanel({ data }: { data: AnalysisResult }) {
   }
 
   // Summary counts — header badge reflects core signals only
-  const coreSignals = signals.filter(s => (s as any).importance !== "extra");
+  const coreSignals = signals.filter(s => s.importance !== "extra");
   const corePresent = coreSignals.filter(s => s.present).length;
   const coreTotal = coreSignals.length;
-  const extraPresent = signals.filter(s => (s as any).importance === "extra" && s.present).length;
+  const extraPresent = signals.filter(s => s.importance === "extra" && s.present).length;
 
   return (
     <Panel
@@ -147,8 +147,8 @@ export function ProtectionTrustPanel({ data }: { data: AnalysisResult }) {
       {CATEGORY_ORDER.map(cat => {
         const catSignals = grouped.get(cat);
         if (!catSignals || catSignals.length === 0) return null;
-        const coreSignals = catSignals.filter(s => (s as any).importance !== "extra");
-        const extraSignals = catSignals.filter(s => (s as any).importance === "extra");
+        const coreSignals = catSignals.filter(s => s.importance !== "extra");
+        const extraSignals = catSignals.filter(s => s.importance === "extra");
         const corePresent = coreSignals.filter(s => s.present).length;
         const extraPresent = extraSignals.filter(s => s.present).length;
         return (

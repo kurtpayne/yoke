@@ -41,3 +41,8 @@ worker/src/resvg_bg.wasm
 worker/src/resvg.js
 og-worker/wrangler.toml
 og-worker/dist/
+
+# Calibration data (large JSON files)
+calibration/results/
+calibration/*.log
+calibration/analysis-output.txt

@@ -199,11 +199,11 @@ export function EmailAuthPanel({ data }: { data: AnalysisResult }) {
 }
 
 export function ScreenshotPanel({ data }: { data: AnalysisResult }) {
-  const screenshotUrl = data.screenshot_url;
   const lighthouseScreenshot = data.performance?.screenshot;
+  const microlink = data.domain ? `https://api.microlink.io?url=https://${encodeURIComponent(data.domain)}&screenshot=true&meta=false&embed=screenshot.url` : null;
   const [imgError, setImgError] = useState(false);
 
-  const src = lighthouseScreenshot || screenshotUrl;
+  const src = lighthouseScreenshot || microlink;
   if (!src) return null;
 
   return (

@@ -20,15 +20,12 @@ do_retire_js() {
   echo "=== Fetching retire.js vulnerability database ==="
   local tmpfile="/tmp/retirejs-db.json"
   
-  curl -sSL "https://raw.githubusercontent.com/nicksam112/retire.js/master/repository/jsrepository.json" \
+  # Canonical source first, fork as fallback
+  curl -sSL "https://raw.githubusercontent.com/RetireJS/retire.js/master/repository/jsrepository.json" \
     -o "$tmpfile" 2>/dev/null || {
-    # Try alternate repo location
-    curl -sSL "https://raw.githubusercontent.com/nicksam112/retire.js/refs/heads/master/repository/jsrepository.json" \
-      -o "$tmpfile" 2>/dev/null || {
-      echo "⚠️  Could not download retire.js DB — trying RetireJS org repo"
-      curl -sSL "https://raw.githubusercontent.com/RetireJS/retire.js/master/repository/jsrepository.json" \
-        -o "$tmpfile" || { echo "❌ All retire.js sources failed"; return 1; }
-    }
+    echo "⚠️  Canonical repo failed — trying fork"
+    curl -sSL "https://raw.githubusercontent.com/nicksam112/retire.js/master/repository/jsrepository.json" \
+      -o "$tmpfile" || { echo "❌ All retire.js sources failed"; return 1; }
   }
   
   # Validate it's valid JSON
@@ -48,7 +45,7 @@ do_retire_js() {
   echo "✅ retire.js DB written to KV (key: vulnerable-libraries-retirejs)"
   
   # Write metadata
-  local meta="{\"source\":\"github.com/nicksam112/retire.js\",\"updated\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"size_bytes\":${size}}"
+  local meta="{\"source\":\"github.com/RetireJS/retire.js\",\"updated\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"size_bytes\":${size}}"
   echo "$meta" | $WRANGLER kv key put "vulnerable-libraries-retirejs-meta" --path /dev/stdin \
     --binding REFERENCE_DATA $CONFIG 2>/dev/null
   echo "✅ Metadata written"

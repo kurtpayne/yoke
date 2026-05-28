@@ -17,9 +17,6 @@ const SYSTEM_PROMPT = SYSTEM_PROMPT_RAW;
 function sanitizeForLLM(data: Record<string, unknown>): Record<string, unknown> {
   const sanitized = { ...data };
 
-  // Remove verbose/binary fields
-  delete sanitized.screenshot_url;
-
   // Strip raw headers (security_audit already summarizes them)
   if (sanitized.headers && typeof sanitized.headers === "object") {
     const h = { ...(sanitized.headers as Record<string, unknown>) };

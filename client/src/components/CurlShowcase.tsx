@@ -32,7 +32,7 @@ function CopyBtn({ text }: { text: string }) {
 // ─── Tab → jq filter mapping ───────────────────────────────────
 
 const TAB_FILTERS: Record<TabId, { label: string; filter: string } | null> = {
-  overview:       { label: "Overview",        filter: "'{status, health_score, hosting, tranco_rank}'" },
+  overview:       { label: "Overview",        filter: "'{status, domain_score, hosting, tranco_rank}'" },
   infrastructure: { label: "Infrastructure",  filter: "'{dns, ip_info, ssl, rdap, shodan, redirects}'" },
   security:       { label: "Security",        filter: "'{headers, email_auth, dnssec, blocklists, breaches}'" },
   tech:           { label: "Tech Stack",      filter: "'{tech_stack, wordpress}'" },

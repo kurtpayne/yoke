@@ -31,7 +31,6 @@ import {
   extractSocialMeta, detectLegalPages, calculateAiReadiness,
   type AnsResult,
 } from "./content";
-import { calculateHealthScore, getScreenshotUrl } from "./scoring";
 import { calculateDomainScore } from "./contextual-scoring";
 import { type NetworkHealth } from "./network-health";
 import { validateStructuredData } from "./structured-data";
@@ -97,7 +96,6 @@ export interface AnalysisResult {
   robots_parsed: unknown;
   json_ld: unknown[];
   http_protocols: { http2: boolean; http3: boolean; alt_svc?: string | null };
-  screenshot_url: string;
   shodan: ShodanResult | null;
   dnssec: DnssecResult;
   hosting: HostingResult;
@@ -109,7 +107,6 @@ export interface AnalysisResult {
   waf: WafDetection | null;
   trust_signals: TrustSignals | null;
   ai_readiness: unknown;
-  health_score: unknown;
   wordpress: unknown;
   breaches: BreachResult;
   cert_transparency: CertTransparencyResult;
@@ -177,7 +174,6 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     robots_parsed: null,
     json_ld: [],
     http_protocols: { http2: false, http3: false },
-    screenshot_url: "",
     shodan: null,
     dnssec: DEFAULT_DNSSEC,
     hosting: { provider: null, cdn: null, waf: null } as HostingResult,
@@ -189,7 +185,6 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     waf: null,
     trust_signals: null,
     ai_readiness: null,
-    health_score: { score: 0, max_score: 71, grade: "N/A", breakdown: {} },
     wordpress: null,
     breaches: DEFAULT_BREACH,
     cert_transparency: DEFAULT_CERT_TRANSPARENCY,
@@ -569,26 +564,6 @@ export async function runAnalysis(
   const thirdPartyScriptsResult = httpProbeSucceeded ? analyzeThirdPartyScripts(html, domain) : null;
   const cookieConsentResult = httpProbeSucceeded ? analyzeCookieConsent(html, effectiveHeaders ?? {}, domain) : null;
 
-  // Health score
-  const listedCount = blocklists.filter((bl) => bl.listed).length;
-  const healthScore = calculateHealthScore({
-    ssl: sslResult,
-    secGrade: httpProbeSucceeded ? finalSecurityGrade : null,
-    dnssec: dnssecResult,
-    headers: httpProbeSucceeded ? effectiveHeaders : null,
-    spf: emailAuth.spf.found,
-    dmarcPolicy: emailAuth.dmarc.policy,
-    dkim: emailAuth.dkim_selectors_found.length > 0,
-    blocklistListedCount: listedCount,
-    perfScore: pageSpeedResult?.score ?? null,
-    legalPagesCount: legal.pages_found.length,
-    ogScore: httpProbeSucceeded ? socialMeta.score : 0,
-    statusCode: enhancedStatus?.status_code ?? null,
-    finalUrl: httpAnalysis?.final_url ?? null,
-    httpBlocked: !httpProbeSucceeded,
-    isSubdomain: domainIsSubdomain,
-  });
-
   // Trust signal aggregation
   const caaAnalysis = analyzeCaaRecords(dnsRecords);
   const caaRecordsForTrust = (caaAnalysis as { records?: Array<{ tag: string; value: string }> } | null)?.records ?? null;
@@ -689,7 +664,6 @@ export async function runAnalysis(
     robots_parsed: robotsParsed,
     json_ld: jsonLd,
     http_protocols: httpProtocols,
-    screenshot_url: getScreenshotUrl(domain),
     shodan: shodanResult,
     dnssec: dnssecResult,
     hosting,
@@ -701,7 +675,6 @@ export async function runAnalysis(
     waf: wafDetection,
     trust_signals: trustSignals,
     ai_readiness: aiReadiness,
-    health_score: healthScore,
     wordpress: wpDetails,
     breaches: breachResult,
     cert_transparency: certTransparency,
