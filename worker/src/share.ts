@@ -151,11 +151,11 @@ function gradeColor(grade: string): string {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 90) return "#3fb950";  // strong green
-  if (score >= 75) return "#7ee787";  // light green
-  if (score >= 60) return "#d29922";  // yellow/amber
-  if (score >= 40) return "#ffa198";  // light red
-  return "#f85149";                   // red
+  if (score >= 90) return "#3fb950";  // green (matches --success)
+  if (score >= 80) return "#7ee787";  // light green
+  if (score >= 70) return "#d29922";  // amber (matches --warning)
+  if (score >= 60) return "#ffa198";  // light red
+  return "#f85149";                   // red (matches --danger)
 }
 
 const AXIS_LABELS = ["Security", "Reliability", "Trust", "Performance", "Visibility"];
@@ -220,7 +220,7 @@ function generateOgSvg(data: SharePayload): string {
   <circle cx="200" cy="370" r="120" fill="none" stroke="${sc}" stroke-width="8" stroke-dasharray="${(score / 100) * 754} 754" stroke-linecap="round" transform="rotate(-90 200 370)" opacity="0.7"/>
   <circle cx="200" cy="370" r="100" fill="#0d1117" opacity="0.5"/>
   <text x="200" y="358" fill="${sc}" font-family="system-ui,-apple-system,sans-serif" font-size="72" font-weight="700" text-anchor="middle" dominant-baseline="middle">${score}</text>
-  <text x="200" y="420" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="16" text-anchor="middle">/100</text>
+  <text x="200" y="420" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="16" text-anchor="middle"></text>
 
   <!-- Grade badge -->
   <rect x="400" y="332" width="80" height="80" rx="16" fill="${gc}" opacity="0.15" stroke="${gc}" stroke-width="2"/>
@@ -339,7 +339,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
         </svg>
         <div class="score-num">
           <div class="val">${score}</div>
-          <div class="unit">/100</div>
+          <div class="unit"></div>
         </div>
       </div>
       <div class="grade-badge">${esc(grade)}</div>
