@@ -151,11 +151,11 @@ function gradeColor(grade: string): string {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return "#3fb950";
-  if (score >= 60) return "#7ee787";
-  if (score >= 40) return "#d29922";
-  if (score >= 20) return "#ffa198";
-  return "#f85149";
+  if (score >= 90) return "#3fb950";  // strong green
+  if (score >= 75) return "#7ee787";  // light green
+  if (score >= 60) return "#d29922";  // yellow/amber
+  if (score >= 40) return "#ffa198";  // light red
+  return "#f85149";                   // red
 }
 
 const AXIS_LABELS = ["Security", "Reliability", "Trust", "Performance", "Visibility"];
