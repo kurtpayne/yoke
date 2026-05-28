@@ -899,28 +899,6 @@ export function App() {
         </a>
         <span style={{ color: "var(--border)" }}>·</span>
         <a
-          href="https://www.instagram.com/yokedotlol/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          Instagram
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="https://www.threads.net/@yokedotlol"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          Threads
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
           href="https://yoke.canny.io"
           target="_blank"
           rel="noopener noreferrer"
