@@ -57,27 +57,6 @@ const FALLBACK_ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = 
   general:        FIXED_WEIGHTS,
 };
 
-function recomputeScore(axes: Record<Axis, AxisScoreData>, archetype: ArchetypeName, weightsTable?: Record<ArchetypeName, Record<Axis, number>>): { composite: number; grade: string } {
-  const weights = (weightsTable ?? FALLBACK_ARCHETYPE_WEIGHTS)[archetype];
-  let composite = 0;
-  let totalMeasuredWeight = 0;
-  for (const axis of AXES) {
-    if (!axes[axis].not_measured && axes[axis].score != null) {
-      totalMeasuredWeight += weights[axis];
-    }
-  }
-  if (totalMeasuredWeight > 0) {
-    for (const axis of AXES) {
-      if (!axes[axis].not_measured && axes[axis].score != null) {
-        composite += axes[axis].score! * (weights[axis] / totalMeasuredWeight);
-      }
-    }
-  }
-  composite = Math.round(composite);
-  const grade = composite >= 90 ? "A" : composite >= 80 ? "B" : composite >= 70 ? "C" : composite >= 60 ? "D" : "F";
-  return { composite, grade };
-}
-
 // ─── Radar Plot SVG ──────────────────────────────────────────────────
 
 const SIZE = 200;
@@ -453,10 +432,7 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
 
   // Resolve weights table: prefer API response, fall back to hardcoded
   const weightsTable = ds.archetype.weights ?? FALLBACK_ARCHETYPE_WEIGHTS;
-  // Recalculate composite + grade when archetype changes
-  const { composite, grade } = activeArchetype === ds.archetype.detected
-    ? { composite: ds.composite, grade: ds.grade }
-    : recomputeScore(ds.axes, activeArchetype, weightsTable);
+  const { composite, grade } = { composite: ds.composite, grade: ds.grade };
 
   return (
     <div className="panel">
