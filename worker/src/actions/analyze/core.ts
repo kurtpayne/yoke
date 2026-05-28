@@ -799,12 +799,19 @@ export async function runAnalysis(
   }
 
   // Cache result + recent lookup (non-blocking)
+  // Skip caching when the site is unreachable — transient failures (deploys, blips)
+  // shouldn't poison the cache for 24h
+  const siteIsUp = result.status?.is_up !== false;
   backgroundWork(env, (async () => {
-    try {
-      await env.DB.prepare(
-        "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)"
-      ).bind(domain, resultJson, Date.now()).run();
-    } catch (e) { console.warn(`[yoke:cache] D1 write failed for ${domain}:`, e instanceof Error ? e.message : e); }
+    if (siteIsUp) {
+      try {
+        await env.DB.prepare(
+          "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)"
+        ).bind(domain, resultJson, Date.now()).run();
+      } catch (e) { console.warn(`[yoke:cache] D1 write failed for ${domain}:`, e instanceof Error ? e.message : e); }
+    } else {
+      console.log(`[yoke:cache] Skipping cache write for ${domain} — site unreachable`);
+    }
 
     try {
       const summaryJson = JSON.stringify({
