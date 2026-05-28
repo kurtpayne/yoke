@@ -5,6 +5,9 @@ import type { Env } from "./helpers";
 import { getBaseUrl } from "./helpers";
 import { getHtmlSecurityHeaders } from "./spa";
 
+// ─── Ox Mark Logo (base64 PNG) ───────────────────────────────────────
+const OX_LOGO_DATA_URI = "data:image/png;base64,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";
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 interface SharePayload {
@@ -199,7 +202,8 @@ function generateOgSvg(data: SharePayload): string {
   <rect x="0.5" y="0.5" width="1199" height="629" rx="0" fill="none" stroke="#30363d" stroke-width="1"/>
 
   <!-- Yoke branding -->
-  <text x="60" y="72" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="600" letter-spacing="2">⚡ YOKE</text>
+  <image x="56" y="50" width="28" height="28" href="${OX_LOGO_DATA_URI}"/>
+  <text x="92" y="72" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="600" letter-spacing="2">YOKE</text>
   <text x="170" y="72" fill="#484f58" font-family="system-ui,-apple-system,sans-serif" font-size="14">DOMAIN INTELLIGENCE</text>
 
   <!-- Domain name -->
@@ -318,7 +322,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
 <body>
   <div class="card">
     <div class="brand">
-      <span style="font-size:18px">⚡</span>
+      <img src="${OX_LOGO_DATA_URI}" alt="Yoke" width="22" height="22" style="opacity:0.7"/>
       <span class="brand-name">YOKE</span>
       <span class="brand-sub">DOMAIN INTELLIGENCE</span>
     </div>
