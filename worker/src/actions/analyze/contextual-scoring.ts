@@ -87,7 +87,7 @@ export function computeComposite(axisScores: Record<Axis, number>, archetype: Ar
 }
 
 export function gradeFromComposite(score: number): string {
-  return score >= 90 ? "A" : score >= 85 ? "B+" : score >= 80 ? "B" : score >= 65 ? "C" : score >= 50 ? "D" : "F";
+  return score >= 95 ? "A+" : score >= 90 ? "A" : score >= 85 ? "B+" : score >= 80 ? "B" : score >= 75 ? "C+" : score >= 65 ? "C" : score >= 50 ? "D" : "F";
 }
 
 export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: Partial<Record<ArchetypeName, Severity>>): Severity {

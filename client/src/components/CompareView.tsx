@@ -427,9 +427,9 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
 // ─── Score helpers ───────────────────────────────────────────────────
 
 function gradeColor(grade: string): string {
-  if (grade === "A") return "var(--success)";
-  if (grade === "B") return "#7ee787";
-  if (grade === "C") return "var(--warning)";
+  if (grade === "A+" || grade === "A") return "var(--success)";
+  if (grade === "B+" || grade === "B") return "#7ee787";
+  if (grade === "C+" || grade === "C") return "var(--warning)";
   if (grade === "D") return "#ffa198";
   return "var(--danger)";
 }
