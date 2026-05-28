@@ -315,7 +315,9 @@ export default {
       try {
         // POST /api/analyze
         if (method === "POST" && path === "/api/analyze") {
-          const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
+          // Admin key bypasses rate limit (for batch calibration / internal tools)
+          const adminBypass = env.ADMIN_KEY && request.headers.get("X-Admin-Key") === env.ADMIN_KEY;
+          const rl = adminBypass ? { blocked: null, headers: {} } : await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
           if (rl.blocked) { _track("analyze", 429); return rl.blocked; }
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
