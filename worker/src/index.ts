@@ -25,6 +25,7 @@ import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, YOKE_VERSION } fro
 import type { Env } from "./helpers";
 import { logError } from "./logger";
 import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders, wantsJSON } from "./spa";
+import { handleShareSign, handleSharePage, handleOgImage, matchSharePath, matchOgImagePath } from "./share";
 import { getApiDocsHtml } from "./pages";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
@@ -288,6 +289,18 @@ export default {
       return renderUsagePage(env.STATS_DB, days);
     }
 
+    // ── Share card routes ──
+    // GET /r/:token — report card page with OG tags
+    const shareMatch = method === "GET" ? matchSharePath(path) : null;
+    if (shareMatch) {
+      return handleSharePage(request, env, shareMatch);
+    }
+    // GET /og/:token.svg — dynamic OG image
+    const ogMatch = method === "GET" ? matchOgImagePath(path) : null;
+    if (ogMatch) {
+      return handleOgImage(request, env, ogMatch);
+    }
+
     // ── SPA routes: static pages, domain paths with content negotiation, compare paths ──
     const spaResponse = await handleSPARoute(request, env, path);
     if (spaResponse) return spaResponse;
@@ -485,6 +498,11 @@ export default {
         if (method === "GET" && path === "/api/health") {
           const health = await getApiHealth(env.DB);
           return json(health);
+        }
+
+        // POST /api/share-sign — sign a share card payload
+        if (method === "POST" && path === "/api/share-sign") {
+          return handleShareSign(request, env);
         }
 
         // POST /api/track-tab — anonymous tab view analytics

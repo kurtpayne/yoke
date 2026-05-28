@@ -828,7 +828,13 @@ export function App() {
                 <CurlBar domain={analyze.data.domain} activeTab={activeTab} />
               </div>
             )}
-            <ShareBar domain={analyze.data.domain} />
+            <ShareBar
+              domain={analyze.data.domain}
+              composite={analyze.data.domain_score?.composite}
+              grade={analyze.data.domain_score?.grade}
+              axes={analyze.data.domain_score?.axes}
+              analyzedAt={analyze.data.analyzed_at}
+            />
             <ErrorBoundary fallbackLabel="This tab encountered an error" key={activeTab}>
               <TabContent tab={activeTab} data={cleanTechStack(analyze.data)} onNavigate={handleNavigate} />
             </ErrorBoundary>

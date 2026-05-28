@@ -17,6 +17,8 @@ export interface Env {
   RATE_LIMIT_COMPARE?: string;
   RATE_LIMIT_SUBDOMAIN?: string;
   RATE_LIMIT_AVAILABILITY?: string;
+  /** HMAC secret for signing share card URLs */
+  SHARE_SECRET?: string;
   /** Analysis cache TTL override in hours (default: 1) */
   CACHE_TTL_HOURS?: string;
   /** Execution context for ctx.waitUntil — set per-request from the Worker fetch handler */

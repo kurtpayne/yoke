@@ -1,21 +1,104 @@
 import { Link2, Share2 } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import type { Axis, AxisScoreData } from "../api";
+
+// ─── Base64url encoding ──────────────────────────────────────────────
+
+function base64urlEncode(bytes: Uint8Array): string {
+  let b64 = "";
+  const len = bytes.length;
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < len ? bytes[i + 1] : 0;
+    const b2 = i + 2 < len ? bytes[i + 2] : 0;
+    const triplet = (b0 << 16) | (b1 << 8) | b2;
+    b64 += chars[(triplet >> 18) & 0x3f];
+    b64 += chars[(triplet >> 12) & 0x3f];
+    b64 += i + 1 < len ? chars[(triplet >> 6) & 0x3f] : "";
+    b64 += i + 2 < len ? chars[triplet & 0x3f] : "";
+  }
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// ─── Share payload builder ───────────────────────────────────────────
+
+const AXIS_ORDER: Axis[] = ["security", "reliability", "trust", "performance", "visibility"];
+
+function buildPayload(
+  domain: string,
+  composite: number,
+  grade: string,
+  axes: Record<Axis, AxisScoreData>,
+  analyzedAt: string,
+): string {
+  const axisScores = AXIS_ORDER.map(a => axes[a]?.score ?? 0);
+  const ts = Math.floor(new Date(analyzedAt).getTime() / 1000);
+  const obj = { d: domain, s: composite, g: grade, a: axisScores, t: ts };
+  const json = JSON.stringify(obj);
+  return base64urlEncode(new TextEncoder().encode(json));
+}
+
+async function getSignedUrl(
+  payload: string,
+  origin: string,
+): Promise<string> {
+  const resp = await fetch(`${origin}/api/share-sign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payload }),
+  });
+  if (!resp.ok) throw new Error("Failed to sign share payload");
+  const data = await resp.json() as { signature: string };
+  return `${origin}/r/${payload}.${data.signature}`;
+}
+
+// ─── Component ───────────────────────────────────────────────────────
 
 interface ShareBarProps {
   domain: string;
+  composite?: number;
+  grade?: string;
+  axes?: Record<Axis, AxisScoreData>;
+  analyzedAt?: string;
 }
 
-export function ShareBar({ domain }: ShareBarProps) {
+export function ShareBar({ domain, composite, grade, axes, analyzedAt }: ShareBarProps) {
   const [copied, setCopied] = useState(false);
-  const url = `${window.location.origin}/${domain}`;
+  const signedUrlRef = useRef<string | null>(null);
+  const signingRef = useRef<Promise<string> | null>(null);
+
+  // Check if we have score data for rich share URLs
+  const hasScoreData = composite != null && grade && axes && analyzedAt;
+
+  const getShareUrl = useCallback(async (): Promise<string> => {
+    if (signedUrlRef.current) return signedUrlRef.current;
+
+    if (!hasScoreData) {
+      return `${window.location.origin}/${domain}`;
+    }
+
+    // Deduplicate concurrent sign requests
+    if (!signingRef.current) {
+      const payload = buildPayload(domain, composite!, grade!, axes!, analyzedAt!);
+      signingRef.current = getSignedUrl(payload, window.location.origin).then(url => {
+        signedUrlRef.current = url;
+        return url;
+      }).catch(() => {
+        signingRef.current = null;
+        return `${window.location.origin}/${domain}`;
+      });
+    }
+    return signingRef.current;
+  }, [domain, composite, grade, axes, analyzedAt, hasScoreData]);
 
   const copyLink = useCallback(async () => {
+    const url = await getShareUrl();
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
       const input = document.createElement("input");
       input.value = url;
       document.body.appendChild(input);
@@ -25,36 +108,40 @@ export function ShareBar({ domain }: ShareBarProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
-  }, [url]);
+  }, [getShareUrl]);
 
-  const shareToX = useCallback(() => {
+  const shareToX = useCallback(async () => {
+    const url = await getShareUrl();
     const text = `Domain intelligence report for ${domain}`;
     window.open(
       `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
       "_blank",
       "noopener,noreferrer,width=550,height=420"
     );
-  }, [domain, url]);
+  }, [domain, getShareUrl]);
 
-  const shareToLinkedIn = useCallback(() => {
+  const shareToLinkedIn = useCallback(async () => {
+    const url = await getShareUrl();
     window.open(
       `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
       "_blank",
       "noopener,noreferrer,width=600,height=500"
     );
-  }, [url]);
+  }, [getShareUrl]);
 
-  const shareToReddit = useCallback(() => {
+  const shareToReddit = useCallback(async () => {
+    const url = await getShareUrl();
     const title = `${domain} — Domain Intelligence Report`;
     window.open(
       `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
       "_blank",
       "noopener,noreferrer"
     );
-  }, [domain, url]);
+  }, [domain, getShareUrl]);
 
   const nativeShare = useCallback(async () => {
     if (navigator.share) {
+      const url = await getShareUrl();
       try {
         await navigator.share({
           title: `${domain} — Yoke`,
@@ -65,7 +152,7 @@ export function ShareBar({ domain }: ShareBarProps) {
         // User cancelled or share failed — ignore
       }
     }
-  }, [domain, url]);
+  }, [domain, getShareUrl]);
 
   const hasNativeShare = typeof navigator !== "undefined" && !!navigator.share;
 
