@@ -1297,7 +1297,7 @@ export function calculateDomainScore(opts: {
   // Blocklist clean (also trust) — "not blocklisted" is neutral, not positive
   findings.push({
     signal: "blocklist_trust", axis: "trust",
-    severity: listedCount === 0 ? "low" : listedCount >= 2 ? "critical" : "high",
+    severity: listedCount === 0 ? "info" : listedCount >= 2 ? "critical" : "high",
     label: listedCount === 0 ? "Clean blocklist record" : `On ${listedCount} blocklist(s)`,
     tradeoff: null, weight: listedCount === 0 ? 2 : 3,
   });

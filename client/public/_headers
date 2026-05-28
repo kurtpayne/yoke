@@ -1,0 +1,7 @@
+# Immutable cache for content-hashed assets
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Immutable cache for self-hosted fonts
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

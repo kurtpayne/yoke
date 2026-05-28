@@ -17,9 +17,9 @@ export function getHtmlSecurityHeaders(baseUrl?: string): Record<string, string>
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "Content-Security-Policy":
       "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; " +
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+      "style-src 'self' 'unsafe-inline'; " +
       `img-src 'self' data: https:; connect-src ${connectSrc} https://*.googleapis.com; ` +
-      "font-src 'self' https://fonts.gstatic.com; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
+      "font-src 'self'; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
     "Cross-Origin-Opener-Policy": "same-origin",
   };
@@ -338,6 +338,22 @@ export async function serveAssetOrFallback(request: Request, env: Env): Promise<
         },
       });
     }
+
+    // Apply aggressive caching for content-hashed assets and fonts
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const isHashedAsset = /\/assets\/[^/]+-[a-z0-9]{8,}\.\w+$/.test(path);
+    const isFont = path.startsWith("/fonts/") && path.endsWith(".woff2");
+    if (isHashedAsset || isFont) {
+      return new Response(assetResp.body, {
+        status: assetResp.status,
+        headers: {
+          ...Object.fromEntries(assetResp.headers.entries()),
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    }
+
     return assetResp;
   }
 
