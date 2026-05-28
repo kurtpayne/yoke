@@ -1282,13 +1282,14 @@ export function calculateDomainScore(opts: {
     });
   }
 
-  // Registration length remaining
+  // Registration length remaining — 1 year is normal/neutral, only reward long or flag near-expiry
   const expiryDays = opts.rdap?.days_until_expiry;
   if (expiryDays != null) {
+    const years = Math.floor(expiryDays / 365);
     findings.push({
       signal: "registration_length", axis: "trust",
-      severity: expiryDays > 365 ? "good" : expiryDays > 90 ? "info" : expiryDays > 30 ? "low" : "medium",
-      label: expiryDays > 365 ? `Registration good for ${Math.floor(expiryDays / 365)}+ years` : `Expires in ${expiryDays} days`,
+      severity: expiryDays > 730 ? "good" : expiryDays > 30 ? "info" : expiryDays > 7 ? "low" : "medium",
+      label: expiryDays > 730 ? `Registration good for ${years}+ years` : expiryDays > 30 ? `Expires in ${expiryDays} days` : `Expiring soon (${expiryDays} days)`,
       tradeoff: null, weight: 2,
     });
   }
@@ -1445,9 +1446,9 @@ export function calculateDomainScore(opts: {
   // ─── Organizational Identity (Trust) ────────────────────────────
   if (opts.legal && !opts.httpBlocked) {
     const pages = opts.legal.pages_found ?? [];
-    const hasPrivacy = pages.some((p: string) => /privacy/i.test(p));
-    const hasTerms = pages.some((p: string) => /terms|tos|conditions/i.test(p));
-    const hasAbout = pages.some((p: string) => /about|company|team/i.test(p));
+    const hasPrivacy = pages.some((p: any) => /privacy/i.test(p.name ?? p));
+    const hasTerms = pages.some((p: any) => /terms|tos|conditions/i.test(p.name ?? p));
+    const hasAbout = pages.some((p: any) => /about|company|team/i.test(p.name ?? p));
     const orgCount = [hasPrivacy, hasTerms, hasAbout].filter(Boolean).length;
     if (orgCount >= 3) {
       findings.push({ signal: "organizational_identity", axis: "trust", severity: "good", label: "Privacy policy, terms, and about page found", tradeoff: null, weight: 2 });
