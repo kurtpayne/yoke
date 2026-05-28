@@ -200,7 +200,7 @@ function SuggestionRow({ suggestion, onNavigate }: { suggestion: DomainSuggestio
   // Taken domains: clickable to analyze in Yoke
   return (
     <div className="suggestion-row">
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div className="flex items-center gap-2 min-w-0" style={{ flexShrink: 0 }}>
         <AvailabilityIcon available={available} />
         {available === true ? (
           <span className="domain-pill" style={{ cursor: "default", opacity: 0.9 }}>
@@ -228,7 +228,7 @@ function SuggestionRow({ suggestion, onNavigate }: { suggestion: DomainSuggestio
           </span>
         )}
       </div>
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0" style={{ marginLeft: "auto" }}>
         {available === true ? (
           <RegisterLinks domain={domain} />
         ) : available === false ? (
