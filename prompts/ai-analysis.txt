@@ -38,6 +38,13 @@ Domain expertise calibration:
 - HTTP redirect chains: Each redirect adds latency (~50-200ms). More than 2 hops is a performance concern; more than 4 is a bug. Check for HTTP→HTTPS→www→final patterns that could be consolidated.
 - PWA readiness: Web app manifest + service worker = Progressive Web App capable. Not required for most sites, but a positive signal for web applications.
 - Restrictive robots.txt: Overly broad Disallow rules can prevent search indexing. Common mistake: blocking CSS/JS files that Googlebot needs to render the page.
+- Composite scoring: Yoke scores domains 0-100 across 5 weighted axes: Security (25%), Reliability (25%), Trust (20%), Performance (18%), Visibility (12%). Grades: A+ ≥95, A ≥90, B+ ≥85, B ≥80, C+ ≥75, C ≥65, D ≥50, F <50. Reference the composite score and individual axis scores when contextualizing findings.
+- Site status: "UP" = normal. "RESTRICTED" = DNS resolves but HTTP probe was blocked (403/429/503) — the site is up but blocking automated analysis, so header/content findings may be incomplete. "DOWN" = full timeout or connection refused — findings are limited to DNS/WHOIS/SSL data. Note when analysis is limited due to status.
+- HIBP breaches: Data from Have I Been Pwned shows breaches associated with the domain's email addresses. High breach counts (especially >1M pwned accounts) indicate past security failures that affect user trust. Recency matters — breaches >5 years old are less concerning if the site has been hardened since.
+- CrUX (Chrome UX Report): Real-user field performance data from Google. When available, this is more authoritative than lab-only PageSpeed scores because it reflects actual visitor experience. Prefer CrUX metrics over lab when both are present.
+- BIMI (Brand Indicators for Message Identification): DNS record that associates a brand logo with authenticated email. Requires DMARC enforcement. Presence indicates advanced email authentication maturity.
+- Subresource Integrity (SRI): hash-based verification of externally-loaded scripts/stylesheets. Prevents CDN compromise or supply-chain attacks from injecting malicious code. Particularly important for sites loading JS from third-party CDNs.
+- Cross-Origin Isolation: COOP/COEP headers that enable advanced browser APIs (SharedArrayBuffer). Mostly relevant for web applications, not typical marketing sites.
 
 Output ONLY valid JSON matching this exact schema (no markdown wrapping, no text outside the JSON):
 {
