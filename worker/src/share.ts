@@ -1,6 +1,7 @@
 // Share card system — payload encoding, OG tags, dynamic OG image, report card page
-// Route handlers for /r/:payload.:sig and /og/:payload.:sig.svg
+// Route handlers for /r/:payload.:sig and /og/:payload.:sig.png (was .svg)
 
+import { svgToPng } from "./png-render";
 import type { Env } from "./helpers";
 import { getBaseUrl } from "./helpers";
 import { getHtmlSecurityHeaders } from "./spa";
@@ -175,10 +176,10 @@ function generateOgSvg(data: SharePayload): string {
     const barWidth = Math.max(4, (val / 100) * 460);
     const color = scoreColor(val);
     return `
-      <text x="660" y="${y + 4}" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="16" text-anchor="end">${AXIS_LABELS[i]}</text>
+      <text x="660" y="${y + 4}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" text-anchor="end">${AXIS_LABELS[i]}</text>
       <rect x="680" y="${y - 12}" width="460" height="24" rx="4" fill="#21262d"/>
       <rect x="680" y="${y - 12}" width="${barWidth}" height="24" rx="4" fill="${color}" opacity="0.85"/>
-      <text x="1152" y="${y + 4}" fill="#e6edf3" font-family="system-ui,-apple-system,sans-serif" font-size="15" text-anchor="end">${val}</text>
+      <text x="1152" y="${y + 4}" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="15" text-anchor="end">${val}</text>
     `;
   }).join("");
 
@@ -206,11 +207,11 @@ function generateOgSvg(data: SharePayload): string {
 
   <!-- Yoke branding -->
   <image x="56" y="50" width="28" height="28" href="${OX_LOGO_DATA_URI}" filter="url(#invert)" opacity="0.7"/>
-  <text x="92" y="72" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="600" letter-spacing="2">YOKE</text>
-  <text x="170" y="72" fill="#484f58" font-family="system-ui,-apple-system,sans-serif" font-size="14">DOMAIN INTELLIGENCE</text>
+  <text x="92" y="72" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="18" font-weight="600" letter-spacing="2">YOKE</text>
+  <text x="170" y="72" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="14">DOMAIN INTELLIGENCE</text>
 
   <!-- Domain name -->
-  <text x="60" y="146" fill="#e6edf3" font-family="system-ui,-apple-system,sans-serif" font-size="46" font-weight="700">${domain.length > 28 ? domain.substring(0, 28) + "…" : domain}</text>
+  <text x="60" y="146" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="46" font-weight="700">${domain.length > 28 ? domain.substring(0, 28) + "…" : domain}</text>
 
   <!-- Divider -->
   <line x1="60" y1="175" x2="580" y2="175" stroke="#30363d" stroke-width="1"/>
@@ -219,19 +220,19 @@ function generateOgSvg(data: SharePayload): string {
   <circle cx="200" cy="370" r="120" fill="none" stroke="#21262d" stroke-width="8"/>
   <circle cx="200" cy="370" r="120" fill="none" stroke="${sc}" stroke-width="8" stroke-dasharray="${(score / 100) * 754} 754" stroke-linecap="round" transform="rotate(-90 200 370)" opacity="0.7"/>
   <circle cx="200" cy="370" r="100" fill="#0d1117" opacity="0.5"/>
-  <text x="200" y="358" fill="${sc}" font-family="system-ui,-apple-system,sans-serif" font-size="72" font-weight="700" text-anchor="middle" dominant-baseline="middle">${score}</text>
-  <text x="200" y="420" fill="#8b949e" font-family="system-ui,-apple-system,sans-serif" font-size="16" text-anchor="middle"></text>
+  <text x="200" y="358" fill="${sc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="72" font-weight="700" text-anchor="middle" dominant-baseline="middle">${score}</text>
+  <text x="200" y="420" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" text-anchor="middle"></text>
 
   <!-- Grade badge -->
   <rect x="400" y="332" width="80" height="80" rx="16" fill="${gc}" opacity="0.15" stroke="${gc}" stroke-width="2"/>
-  <text x="440" y="385" fill="${gc}" font-family="system-ui,-apple-system,sans-serif" font-size="48" font-weight="700" text-anchor="middle" dominant-baseline="middle">${esc(grade)}</text>
+  <text x="440" y="385" fill="${gc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="48" font-weight="700" text-anchor="middle" dominant-baseline="middle">${esc(grade)}</text>
 
   <!-- Axis scores -->
   ${bars}
 
   <!-- Footer -->
-  <text x="60" y="585" fill="#484f58" font-family="system-ui,-apple-system,sans-serif" font-size="13">yoke.lol — Free domain intelligence report</text>
-  <text x="1140" y="585" fill="#484f58" font-family="system-ui,-apple-system,sans-serif" font-size="13" text-anchor="end">Analyzed ${new Date(data.t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</text>
+  <text x="60" y="585" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="13">yoke.lol — Free domain intelligence report</text>
+  <text x="1140" y="585" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="13" text-anchor="end">Analyzed ${new Date(data.t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</text>
 </svg>`;
 }
 
@@ -247,7 +248,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
     weekday: "long", month: "long", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
   });
-  const ogImageUrl = `${baseUrl}/og/${esc(token)}.svg`;
+  const ogImageUrl = `${baseUrl}/og/${esc(token)}.png`;
   const shareUrl = `${baseUrl}/r/${esc(token)}`;
 
   const axisBarsHtml = data.a.map((val, i) => {
@@ -273,7 +274,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
   <meta property="og:title" content="${domain} scored ${score}/100 (${esc(grade)}) — Yoke"/>
   <meta property="og:description" content="Security ${data.a[0]} · Reliability ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
   <meta property="og:image" content="${ogImageUrl}"/>
-  <meta property="og:image:type" content="image/svg+xml"/>
+  <meta property="og:image:type" content="image/png"/>
   <meta property="og:image:width" content="1200"/>
   <meta property="og:image:height" content="630"/>
   <meta property="og:url" content="${shareUrl}"/>
@@ -383,7 +384,7 @@ function isBotUA(ua: string): boolean {
 // ─── Route handlers ──────────────────────────────────────────────────
 
 const SHARE_PATH_RE = /^\/r\/(.+)$/;
-const OG_IMAGE_PATH_RE = /^\/og\/(.+)\.svg$/;
+const OG_IMAGE_PATH_RE = /^\/og\/(.+)\.png$/;
 
 export function matchSharePath(path: string): string | null {
   const m = SHARE_PATH_RE.exec(path);
@@ -412,7 +413,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 
   if (isBotUA(ua)) {
     // Minimal HTML with OG tags for crawlers
-    const ogImageUrl = `${baseUrl}/og/${token}.svg`;
+    const ogImageUrl = `${baseUrl}/og/${token}.png`;
     const shareUrl = `${baseUrl}/r/${token}`;
     const d = parsed.data;
     const domain = esc(d.d);
@@ -423,7 +424,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 <meta property="og:title" content="${domain} scored ${d.s}/100 (${esc(d.g)}) — Yoke"/>
 <meta property="og:description" content="Security ${d.a[0]} · Reliability ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]} — Free domain intelligence report"/>
 <meta property="og:image" content="${esc(ogImageUrl)}"/>
-<meta property="og:image:type" content="image/svg+xml"/>
+<meta property="og:image:type" content="image/png"/>
 <meta property="og:image:width" content="1200"/>
 <meta property="og:image:height" content="630"/>
 <meta property="og:url" content="${esc(shareUrl)}"/>
@@ -453,7 +454,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
   });
 }
 
-/** Handle GET /og/:token.svg — dynamic OG image as SVG */
+/** Handle GET /og/:token.png — dynamic OG image as PNG */
 export async function handleOgImage(request: Request, env: Env, token: string): Promise<Response> {
   const parsed = parseShareToken(token);
   if (!parsed) {
@@ -466,9 +467,10 @@ export async function handleOgImage(request: Request, env: Env, token: string): 
   }
 
   const svg = generateOgSvg(parsed.data);
-  return new Response(svg, {
+  const png = await svgToPng(svg);
+  return new Response(png, {
     headers: {
-      "Content-Type": "image/svg+xml",
+      "Content-Type": "image/png",
       "Cache-Control": "public, max-age=604800, immutable",
       "Access-Control-Allow-Origin": "*",
     },

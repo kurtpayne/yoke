@@ -37,3 +37,5 @@ client/package-lock.json
 HATCH-NOTES.md
 *.zip
 cli/yoke
+worker/src/resvg_bg.wasm
+worker/src/resvg.js
