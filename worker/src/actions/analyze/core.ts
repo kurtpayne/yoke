@@ -16,7 +16,7 @@ import type {
   HostingResult, CookieSecurityResult,
   CompressionResult, CertTransparencyResult, SecurityTxtResult, GreenHostingResult,
   WellKnownResult, GreynoiseResult, EmailAuthResult, CacheAnalysis,
-  WafDetection, TrustSignals,
+  WafDetection, TrustSignals, CruxResult,
 } from "./types";
 
 import { checkDns, isSubdomain, dohQuery } from "./dns";
@@ -87,6 +87,8 @@ export interface AnalysisResult {
   blocklists: BlocklistResult[];
   ssl: SslResult | null;
   performance: PerformanceResult;
+  performance_desktop: PerformanceResult | null;
+  performance_crux: CruxResult | null;
   llms_txt: LlmsTxtResult;
   wayback: unknown;
   tranco_rank: number | null;
@@ -165,6 +167,8 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     blocklists: [],
     ssl: null,
     performance: DEFAULT_PERFORMANCE,
+    performance_desktop: null,
+    performance_crux: null,
     llms_txt: DEFAULT_LLMS_TXT,
     wayback: null,
     tranco_rank: null,
@@ -440,6 +444,8 @@ export async function runAnalysis(
   const blocklists = (results.blocklists ?? []) as BlocklistResult[];
   const sslResult = (results.ssl ?? null) as SslResult | null;
   const pageSpeedResult = (results.performance ?? DEFAULT_PERFORMANCE) as PerformanceResult;
+  const pageSpeedDesktop = (results.performance_desktop ?? null) as PerformanceResult | null;
+  const cruxResult = (results.crux ?? null) as CruxResult | null;
   const statusResult = (results._status ?? DEFAULT_STATUS) as StatusShape;
   const llmsTxt = (results.llms_txt ?? DEFAULT_LLMS_TXT) as LlmsTxtResult;
   const wayback = (results.wayback ?? null) as { first_snapshot: string | null; last_snapshot: string | null; total_snapshots: number | null; archive_url: string } | null;
@@ -597,6 +603,8 @@ export async function runAnalysis(
     blocklists,
     emailAuth,
     performance: pageSpeedResult,
+    performanceDesktop: pageSpeedDesktop,
+    crux: cruxResult,
     compression,
     httpProtocols,
     hosting,
@@ -655,6 +663,8 @@ export async function runAnalysis(
     blocklists,
     ssl: sslResult,
     performance: pageSpeedResult,
+    performance_desktop: pageSpeedDesktop,
+    performance_crux: cruxResult,
     llms_txt: llmsTxt,
     wayback,
     tranco_rank: tranco,

@@ -19,7 +19,8 @@ import { robotsSitemapCheck } from "./robots-sitemap";
 import { ipInfoCheck } from "./ip-info";
 import { blocklistsCheck } from "./blocklists";
 import { sslCheck } from "./ssl";
-import { performanceCheck } from "./performance";
+import { performanceCheck, performanceDesktopCheck } from "./performance";
+import { cruxCheck } from "./crux";
 import { statusCheck } from "./status";
 import { llmsTxtCheck } from "./llms-txt";
 import { waybackCheck } from "./wayback";
@@ -53,6 +54,8 @@ export const registry: readonly Check[] = [
   blocklistsCheck,
   sslCheck,
   performanceCheck,
+  performanceDesktopCheck,
+  cruxCheck,
   statusCheck,
   llmsTxtCheck,
   waybackCheck,

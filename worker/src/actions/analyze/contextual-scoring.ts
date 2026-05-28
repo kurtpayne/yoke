@@ -10,7 +10,7 @@ import type {
   HostingResult, TechItem, AccessibilityResult, ThirdPartyScriptsResult,
   CookieConsentResult, CacheAnalysis, WafDetection, TrustSignals,
   ShodanResult, CookieSecurityResult, SecurityTxtResult, WellKnownResult,
-  RedirectHop,
+  RedirectHop, CruxResult,
 } from "./types";
 import type { NetworkHealth } from "./network-health";
 import type { BreachResult } from "../breaches";
@@ -285,6 +285,8 @@ export function calculateDomainScore(opts: {
   blocklists: BlocklistResult[];
   emailAuth: EmailAuthResult | null;
   performance: PerformanceResult | null;
+  performanceDesktop: PerformanceResult | null;
+  crux: CruxResult | null;
   compression: CompressionResult | null;
   httpProtocols: { http2: boolean; http3: boolean } | null;
   hosting: HostingResult | null;
@@ -895,35 +897,109 @@ export function calculateDomainScore(opts: {
 
   // ─── Performance Axis Findings ───────────────────────────────────
 
-  const perf = opts.performance;
-  if (perf && perf.score != null) {
-    // Overall performance score — thresholds from config/scoring-thresholds.ts
-    const ps = resolveSeverity(PERF_SCORE, perf.score);
-    const psSev = perf.score >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, perf.score >= 50 ? { content: "high" } : {});
-    findings.push({ signal: PERF_SCORE.signal, axis: "performance", severity: psSev, label: ps.label, tradeoff: null, weight: PERF_SCORE.weight, source: PERF_SCORE.source });
+  const perf = opts.performance;           // PSI mobile (always present)
+  const perfDesktop = opts.performanceDesktop;  // PSI desktop (new)
+  const crux = opts.crux;                  // CrUX field data (new)
+
+  // Determine the primary performance score source
+  // Priority: CrUX field data > blended lab > mobile-only lab
+  const hasCrux = crux && crux.has_data;
+  const hasMobile = perf && perf.score != null;
+  const hasDesktop = perfDesktop && perfDesktop.score != null;
+
+  if (hasCrux) {
+    // ── CrUX field data available — use real user metrics ──
+    findings.push({ signal: "crux_field_data", axis: "performance", severity: "good", label: "Real-user field data available (Chrome UX Report)", tradeoff: null, weight: 1 });
+
+    // Derive a synthetic performance score from CrUX p75 values using Google's thresholds
+    // LCP: good ≤2500ms, poor >4000ms
+    // FCP: good ≤1800ms, poor >3000ms
+    // CLS: good ≤0.1, poor >0.25
+    // INP: good ≤200ms, poor >500ms
+    // TTFB: good ≤800ms, poor >1800ms
+    const cruxScores: number[] = [];
+    if (crux.lcp_p75 != null) cruxScores.push(crux.lcp_p75 <= 2500 ? 95 : crux.lcp_p75 <= 4000 ? 70 : 30);
+    if (crux.fcp_p75 != null) cruxScores.push(crux.fcp_p75 <= 1800 ? 95 : crux.fcp_p75 <= 3000 ? 70 : 30);
+    if (crux.cls_p75 != null) cruxScores.push(crux.cls_p75 <= 0.1 ? 95 : crux.cls_p75 <= 0.25 ? 70 : 30);
+    if (crux.inp_p75 != null) cruxScores.push(crux.inp_p75 <= 200 ? 95 : crux.inp_p75 <= 500 ? 70 : 30);
+    if (crux.ttfb_p75 != null) cruxScores.push(crux.ttfb_p75 <= 800 ? 95 : crux.ttfb_p75 <= 1800 ? 70 : 30);
+
+    if (cruxScores.length > 0) {
+      const avgScore = Math.round(cruxScores.reduce((a, b) => a + b, 0) / cruxScores.length);
+      const ps = resolveSeverity(PERF_SCORE, avgScore);
+      const psSev = avgScore >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, avgScore >= 50 ? { content: "high" } : {});
+      findings.push({ signal: PERF_SCORE.signal, axis: "performance", severity: psSev, label: `Performance score ${avgScore}/100 (field data)`, tradeoff: null, weight: PERF_SCORE.weight, source: "Chrome UX Report (real users)" });
+    }
+
+    // Individual CrUX metrics
+    if (crux.lcp_p75 != null) {
+      const lcpSec = crux.lcp_p75 / 1000;
+      const lcp = resolveSeverity(LCP, lcpSec);
+      findings.push({ signal: LCP.signal, axis: "performance", severity: lcp.severity, label: `LCP: ${lcpSec.toFixed(1)}s (p75 field)`, tradeoff: null, weight: LCP.weight, source: "CrUX" });
+    }
+    if (crux.cls_p75 != null) {
+      const cls = resolveSeverity(CLS, crux.cls_p75);
+      findings.push({ signal: CLS.signal, axis: "performance", severity: cls.severity, label: `CLS: ${crux.cls_p75.toFixed(3)} (p75 field)`, tradeoff: null, weight: CLS.weight, source: "CrUX" });
+    }
+    if (crux.ttfb_p75 != null) {
+      const ttfb = resolveSeverity(TTFB, crux.ttfb_p75);
+      findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(crux.ttfb_p75)}ms (p75 field)`, tradeoff: null, weight: TTFB.weight, source: "CrUX" });
+    }
+    if (crux.fcp_p75 != null) {
+      const fcpSec = crux.fcp_p75 / 1000;
+      const fcpSev: Severity = fcpSec < 1.8 ? "good" : fcpSec < 3.0 ? "low" : "medium";
+      findings.push({ signal: "fcp", axis: "performance", severity: fcpSev, label: `FCP: ${fcpSec.toFixed(1)}s (p75 field)`, tradeoff: null, weight: 2, source: "CrUX" });
+    }
+    if (crux.inp_p75 != null) {
+      // INP (Interaction to Next Paint) — Core Web Vital, only from CrUX
+      const inpSev: Severity = crux.inp_p75 <= 200 ? "good" : crux.inp_p75 <= 500 ? "low" : "medium";
+      findings.push({ signal: "inp", axis: "performance", severity: inpSev, label: `INP: ${Math.round(crux.inp_p75)}ms (p75 field)`, tradeoff: null, weight: 3, source: "CrUX — Interaction to Next Paint" });
+    }
+  } else if (hasMobile || hasDesktop) {
+    // ── No CrUX — use lab data ──
+    // Blend desktop (60%) + mobile (40%) if both available, otherwise use whichever exists
+    let blendedScore: number;
+    let sourceLabel: string;
+    if (hasMobile && hasDesktop) {
+      blendedScore = Math.round(perfDesktop!.score! * 0.6 + perf!.score! * 0.4);
+      sourceLabel = "Lighthouse lab (desktop 60% + mobile 40%)";
+    } else if (hasDesktop) {
+      blendedScore = perfDesktop!.score!;
+      sourceLabel = "Lighthouse lab (desktop)";
+    } else {
+      blendedScore = perf!.score!;
+      sourceLabel = "Lighthouse lab (mobile)";
+    }
+
+    const ps = resolveSeverity(PERF_SCORE, blendedScore);
+    const psSev = blendedScore >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, blendedScore >= 50 ? { content: "high" } : {});
+    findings.push({ signal: PERF_SCORE.signal, axis: "performance", severity: psSev, label: `Performance score ${blendedScore}/100`, tradeoff: null, weight: PERF_SCORE.weight, source: sourceLabel });
+
+    // Use desktop metrics as primary when available (closer to real usage), fallback to mobile
+    const primaryPerf = hasDesktop ? perfDesktop! : perf!;
 
     // LCP
-    if (perf.lcp != null) {
-      const lcpSec = perf.lcp / 1000;
+    if (primaryPerf.lcp != null) {
+      const lcpSec = primaryPerf.lcp / 1000;
       const lcp = resolveSeverity(LCP, lcpSec);
       findings.push({ signal: LCP.signal, axis: "performance", severity: lcp.severity, label: `LCP: ${lcpSec.toFixed(1)}s`, tradeoff: null, weight: LCP.weight, source: LCP.source });
     }
 
     // CLS
-    if (perf.cls != null) {
-      const cls = resolveSeverity(CLS, perf.cls);
-      findings.push({ signal: CLS.signal, axis: "performance", severity: cls.severity, label: `CLS: ${perf.cls.toFixed(3)}`, tradeoff: null, weight: CLS.weight, source: CLS.source });
+    if (primaryPerf.cls != null) {
+      const cls = resolveSeverity(CLS, primaryPerf.cls);
+      findings.push({ signal: CLS.signal, axis: "performance", severity: cls.severity, label: `CLS: ${primaryPerf.cls.toFixed(3)}`, tradeoff: null, weight: CLS.weight, source: CLS.source });
     }
 
     // TTFB
-    if (perf.ttfb != null) {
-      const ttfb = resolveSeverity(TTFB, perf.ttfb);
-      findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(perf.ttfb)}ms`, tradeoff: null, weight: TTFB.weight, source: TTFB.source });
+    if (primaryPerf.ttfb != null) {
+      const ttfb = resolveSeverity(TTFB, primaryPerf.ttfb);
+      findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(primaryPerf.ttfb)}ms`, tradeoff: null, weight: TTFB.weight, source: TTFB.source });
     }
 
-    // TBT (Total Blocking Time) — JS execution blocking metric
-    if (perf.tbt != null) {
-      const tbtMs = perf.tbt;
+    // TBT (Total Blocking Time) — JS execution blocking metric (lab only)
+    if (primaryPerf.tbt != null) {
+      const tbtMs = primaryPerf.tbt;
       const tbtSev: Severity = tbtMs < 200 ? "good" : tbtMs < 600 ? "low" : "medium";
       findings.push({
         signal: "tbt", axis: "performance",
@@ -934,8 +1010,8 @@ export function calculateDomainScore(opts: {
     }
 
     // FCP (First Contentful Paint) — initial rendering speed
-    if (perf.fcp != null) {
-      const fcpSec = perf.fcp / 1000;
+    if (primaryPerf.fcp != null) {
+      const fcpSec = primaryPerf.fcp / 1000;
       const fcpSev: Severity = fcpSec < 1.8 ? "good" : fcpSec < 3.0 ? "low" : "medium";
       findings.push({
         signal: "fcp", axis: "performance",

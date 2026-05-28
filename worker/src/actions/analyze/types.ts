@@ -33,6 +33,18 @@ export interface IpInfo {
 export interface BlocklistResult { name: string; zone: string; listed: boolean; detail: string | null; }
 export interface SslResult { grade: string | null; issuer: string | null; subject: string | null; valid_from: string | null; valid_to: string | null; protocols: string[]; key_exchange: string | null; error: string | null; }
 export interface PerformanceResult { score: number | null; fcp: number | null; lcp: number | null; tbt: number | null; cls: number | null; si: number | null; ttfb: number | null; strategy: string; error: string | null; screenshot: string | null; }
+
+export interface CruxResult {
+  lcp_p75: number | null;        // ms
+  fcp_p75: number | null;        // ms
+  cls_p75: number | null;        // unitless
+  inp_p75: number | null;        // ms
+  ttfb_p75: number | null;       // ms
+  rtt_p75: number | null;        // ms
+  form_factors: { desktop: number; phone: number; tablet: number } | null;
+  collection_period: { first_date: string; last_date: string } | null;
+  has_data: boolean;
+}
 export interface LlmsTxtResult { found: boolean; content: string | null; full_found: boolean; full_content: string | null; }
 export interface RobotsParsed { blocks: Array<{ user_agent: string; disallow: string[]; allow: string[] }>; crawl_delay: number | null; sitemaps: string[]; interesting_blocked: string[]; is_restrictive: boolean; is_missing: boolean; }
 export interface JsonLdItem { type: string; name: string | null; description: string | null; url: string | null; raw: Record<string, unknown>; }

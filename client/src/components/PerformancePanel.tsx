@@ -1,4 +1,4 @@
-import { Gauge, Leaf, ExternalLink } from "lucide-react";
+import { Gauge, Leaf, ExternalLink, BarChart3, Monitor, Smartphone, Users } from "lucide-react";
 import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
 import { CliButton, performanceCliCommands } from "./CliModal";
 import { Tooltip } from "./Tooltip";
@@ -31,52 +31,116 @@ function formatMs(ms: number | null): string {
   return `${Math.round(ms)}ms`;
 }
 
+function VitalBadge({ label, value, good, poor }: { label: string; value: number; good: number; poor: number }) {
+  const color = value <= good ? "var(--success)" : value <= poor ? "var(--warning)" : "var(--danger)";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: "4px",
+      padding: "2px 8px", borderRadius: "4px", fontSize: "11px",
+      fontFamily: "var(--font-mono)", fontWeight: 600, color,
+      background: `color-mix(in srgb, ${color} 10%, transparent)`,
+    }}>
+      {label}
+    </span>
+  );
+}
+
 export function PerformancePanel({ data }: { data: AnalysisResult }) {
   const perf = data.performance;
+  const perfDesktop = data.performance_desktop;
+  const crux = data.performance_crux;
   const domain = data.domain;
   const psiUrl = `https://pagespeed.web.dev/analysis?url=https://${encodeURIComponent(domain)}`;
+  const hasCrux = crux && crux.has_data;
 
-  if (!perf) return (
-    <Panel title="Google PageSpeed" icon={<Gauge size={14} />}>
+  if (!perf && !perfDesktop && !hasCrux) return (
+    <Panel title="Performance" icon={<Gauge size={14} />}>
       <ErrorState message="Performance data unavailable" />
     </Panel>
   );
 
-  const hasError = !!perf.error;
-  const hasScore = perf.score != null;
-  // TTFB from our own probe is always available even if PageSpeed fails
-  const hasTtfbOnly = !hasScore && perf.ttfb != null;
+  const hasError = !!perf?.error && !perf?.score;
+  const mobileScore = perf?.score;
+  const desktopScore = perfDesktop?.score;
 
   return (
     <Panel
-      title="Google PageSpeed"
+      title="Performance"
       icon={<Gauge size={14} />}
       badge={
         <div className="flex items-center gap-1.5">
           <CliButton commands={performanceCliCommands(data.domain)} domain={data.domain} />
-          {hasError
-            ? <StatusBadge status="warn" label={perf.error!.length > 40 ? perf.error!.slice(0, 37) + "…" : perf.error!} />
-            : hasScore
-            ? <StatusBadge status={perf.score! >= 90 ? "pass" : perf.score! >= 50 ? "warn" : "fail"} label={`${perf.score}/100`} />
+          {hasCrux && <StatusBadge status="pass" label="Field data" />}
+          {hasError && !hasCrux
+            ? <StatusBadge status="warn" label={perf!.error!.length > 40 ? perf!.error!.slice(0, 37) + "…" : perf!.error!} />
             : undefined}
         </div>
       }
     >
-      {/* Score gauge — only when PageSpeed returned a score */}
-      {hasScore && (
+      {/* Score gauges — show all available */}
+      {(mobileScore != null || desktopScore != null) && (
         <div className="flex justify-center gap-4 py-4 px-3" style={{ borderBottom: "1px solid var(--border-muted)" }}>
-          <ScoreGauge score={perf.score!} label="Overall" />
+          {desktopScore != null && <ScoreGauge score={desktopScore} label="Desktop" />}
+          {mobileScore != null && <ScoreGauge score={mobileScore} label="Mobile" />}
+          {desktopScore != null && mobileScore != null && (
+            <ScoreGauge score={Math.round(desktopScore * 0.6 + mobileScore * 0.4)} label="Blended" />
+          )}
+        </div>
+      )}
+
+      {/* CrUX Field Data Section */}
+      {hasCrux && (
+        <div style={{ borderBottom: "1px solid var(--border-muted)" }}>
+          <div className="px-4 py-2" style={{ background: "color-mix(in srgb, var(--success) 5%, transparent)" }}>
+            <div className="flex items-center gap-1.5">
+              <Users size={12} style={{ color: "var(--success)" }} />
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 600, color: "var(--success)" }}>
+                Chrome UX Report — Real User Data (28-day p75)
+              </span>
+            </div>
+          </div>
+          <div>
+            {crux.lcp_p75 != null && (
+              <DataRow label={<span className="flex items-center gap-1">LCP <Tooltip text="Largest Contentful Paint — p75 from real Chrome users over 28 days. Under 2.5s is good." help /></span>} value={<VitalBadge label={formatMs(crux.lcp_p75)} value={crux.lcp_p75} good={2500} poor={4000} />} />
+            )}
+            {crux.fcp_p75 != null && (
+              <DataRow label={<span className="flex items-center gap-1">FCP <Tooltip text="First Contentful Paint — p75 from real Chrome users. Under 1.8s is good." help /></span>} value={<VitalBadge label={formatMs(crux.fcp_p75)} value={crux.fcp_p75} good={1800} poor={3000} />} />
+            )}
+            {crux.cls_p75 != null && (
+              <DataRow label={<span className="flex items-center gap-1">CLS <Tooltip text="Cumulative Layout Shift — p75 from real Chrome users. Under 0.1 is good." help /></span>} value={<VitalBadge label={crux.cls_p75.toFixed(3)} value={crux.cls_p75} good={0.1} poor={0.25} />} />
+            )}
+            {crux.inp_p75 != null && (
+              <DataRow label={<span className="flex items-center gap-1">INP <Tooltip text="Interaction to Next Paint — a Core Web Vital measuring responsiveness. Under 200ms is good. Only available from real user data." help /></span>} value={<VitalBadge label={formatMs(crux.inp_p75)} value={crux.inp_p75} good={200} poor={500} />} />
+            )}
+            {crux.ttfb_p75 != null && (
+              <DataRow label={<span className="flex items-center gap-1">TTFB <Tooltip text="Time to First Byte — p75 from real Chrome users. Under 800ms is good." help /></span>} value={<VitalBadge label={formatMs(crux.ttfb_p75)} value={crux.ttfb_p75} good={800} poor={1800} />} />
+            )}
+          </div>
+          {crux.collection_period && (
+            <div className="px-4 py-1.5">
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+                Collection: {crux.collection_period.first_date} → {crux.collection_period.last_date}
+              </span>
+            </div>
+          )}
+          {crux.form_factors && (
+            <div className="px-4 py-1.5" style={{ borderTop: "1px solid var(--border-muted)" }}>
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+                Device mix: 🖥 {Math.round(crux.form_factors.desktop * 100)}% · 📱 {Math.round(crux.form_factors.phone * 100)}% · 📟 {Math.round(crux.form_factors.tablet * 100)}%
+              </span>
+            </div>
+          )}
         </div>
       )}
 
       {/* Error state — informational, not scary */}
-      {hasError && (
+      {hasError && !hasCrux && (
         <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-muted)" }}>
           <div className="flex items-start gap-2">
             <span style={{ color: "var(--warning)", fontSize: "14px", lineHeight: 1, flexShrink: 0 }}>⚠</span>
             <div>
               <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--warning)", margin: 0 }}>
-                {perf.error}
+                {perf!.error}
               </p>
               <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", margin: "4px 0 0" }}>
                 Google's Lighthouse couldn't complete the analysis.{" "}
@@ -89,23 +153,61 @@ export function PerformancePanel({ data }: { data: AnalysisResult }) {
         </div>
       )}
 
-      <div>
-        {perf.fcp != null && <DataRow label={<span className="flex items-center gap-1">First Contentful Paint <Tooltip text="Time until the first text or image is painted on screen" help /></span>} value={formatMs(perf.fcp)} />}
-        {perf.lcp != null && <DataRow label={<span className="flex items-center gap-1">Largest Contentful Paint <Tooltip text="Time until the largest visible element (image or text block) renders. Under 2.5s is good." help /></span>} value={formatMs(perf.lcp)} />}
-        {perf.tbt != null && <DataRow label={<span className="flex items-center gap-1">Total Blocking Time <Tooltip text="Total time the main thread was blocked, preventing user interaction. Under 200ms is good." help /></span>} value={formatMs(perf.tbt)} />}
-        {perf.cls != null && <DataRow label={<span className="flex items-center gap-1">Cumulative Layout Shift <Tooltip text="Measures visual stability — how much the page layout shifts unexpectedly. Under 0.1 is good." help /></span>} value={perf.cls.toFixed(3)} />}
-        {perf.si != null && <DataRow label={<span className="flex items-center gap-1">Speed Index <Tooltip text="How quickly content is visually displayed during page load. Lower is better." help /></span>} value={formatMs(perf.si)} />}
-        {perf.ttfb != null && <DataRow label={<span className="flex items-center gap-1">Time to First Byte <Tooltip text="Time from the browser request to receiving the first byte from the server. Under 800ms is good. Measured by Yoke directly." help /></span>} value={formatMs(perf.ttfb)} />}
-        <DataRow label="Strategy" value={perf.strategy} />
-      </div>
+      {/* Lab Data — Desktop + Mobile side by side */}
+      {(mobileScore != null || desktopScore != null) && (
+        <div>
+          <div className="px-4 py-2" style={{ background: "color-mix(in srgb, var(--accent) 5%, transparent)" }}>
+            <div className="flex items-center gap-1.5">
+              <BarChart3 size={12} style={{ color: "var(--accent)" }} />
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 600, color: "var(--accent)" }}>
+                Lighthouse Lab Data
+              </span>
+            </div>
+          </div>
+          {/* Desktop metrics */}
+          {perfDesktop && desktopScore != null && (
+            <div>
+              <div className="px-4 py-1.5" style={{ borderBottom: "1px solid var(--border-muted)" }}>
+                <div className="flex items-center gap-1">
+                  <Monitor size={11} style={{ color: "var(--dim)" }} />
+                  <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Desktop</span>
+                </div>
+              </div>
+              {perfDesktop.fcp != null && <DataRow label="FCP" value={formatMs(perfDesktop.fcp)} />}
+              {perfDesktop.lcp != null && <DataRow label="LCP" value={formatMs(perfDesktop.lcp)} />}
+              {perfDesktop.tbt != null && <DataRow label="TBT" value={formatMs(perfDesktop.tbt)} />}
+              {perfDesktop.cls != null && <DataRow label="CLS" value={perfDesktop.cls.toFixed(3)} />}
+              {perfDesktop.si != null && <DataRow label="Speed Index" value={formatMs(perfDesktop.si)} />}
+              {perfDesktop.ttfb != null && <DataRow label="TTFB" value={formatMs(perfDesktop.ttfb)} />}
+            </div>
+          )}
+          {/* Mobile metrics */}
+          {perf && mobileScore != null && (
+            <div>
+              <div className="px-4 py-1.5" style={{ borderBottom: "1px solid var(--border-muted)" }}>
+                <div className="flex items-center gap-1">
+                  <Smartphone size={11} style={{ color: "var(--dim)" }} />
+                  <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Mobile</span>
+                </div>
+              </div>
+              {perf.fcp != null && <DataRow label="FCP" value={formatMs(perf.fcp)} />}
+              {perf.lcp != null && <DataRow label="LCP" value={formatMs(perf.lcp)} />}
+              {perf.tbt != null && <DataRow label="TBT" value={formatMs(perf.tbt)} />}
+              {perf.cls != null && <DataRow label="CLS" value={perf.cls.toFixed(3)} />}
+              {perf.si != null && <DataRow label="Speed Index" value={formatMs(perf.si)} />}
+              {perf.ttfb != null && <DataRow label="TTFB" value={formatMs(perf.ttfb)} />}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Source attribution */}
       <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
         <div className="flex items-center justify-between">
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
-            {hasScore ? "Data from" : "TTFB measured by Yoke •"}{" "}
+            {hasCrux ? "Field data from CrUX • Lab data from " : "Data from "}
             <a href={psiUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>
-              Google PageSpeed Insights <ExternalLink size={9} style={{ display: "inline", verticalAlign: "middle" }} />
+              Google PageSpeed <ExternalLink size={9} style={{ display: "inline", verticalAlign: "middle" }} />
             </a>
           </span>
         </div>

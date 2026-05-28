@@ -1,17 +1,29 @@
 import { fetchWithTimeout } from "../../helpers";
 import { PERF_CACHE_TTL_MS } from "../../config/cache";
 import { logApiError } from "../../api-errors";
-import type { PerformanceResult, CompressionResult } from "./types";
+import type { PerformanceResult, CompressionResult, CruxResult } from "./types";
 
 // ─── PageSpeed ───────────────────────────────────────────────────────
 
+type Strategy = "mobile" | "desktop";
 
-export async function checkPageSpeed(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string, flyAuthSecret?: string, statsDb?: D1Database): Promise<PerformanceResult> {
+export async function checkPageSpeed(
+  domain: string,
+  ttfbFallback: number | null,
+  db?: D1Database,
+  apiKey?: string,
+  flyAuthSecret?: string,
+  statsDb?: D1Database,
+  strategy: Strategy = "mobile",
+): Promise<PerformanceResult> {
+  const cacheType = strategy === "desktop" ? "performance_desktop" : "performance";
+
   // Check separate performance cache (24h TTL)
   if (db) {
     try {
-      const cached = await db.prepare("SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = 'performance' ORDER BY cached_at DESC LIMIT 1")
-        .bind(domain).first<{ data_json: string; cached_at: number }>();
+      const cached = await db.prepare(
+        `SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = ? ORDER BY cached_at DESC LIMIT 1`
+      ).bind(domain, cacheType).first<{ data_json: string; cached_at: number }>();
       if (cached && Date.now() - cached.cached_at < PERF_CACHE_TTL_MS) {
         return JSON.parse(cached.data_json) as PerformanceResult;
       }
@@ -20,7 +32,7 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
 
   // Try Fly proxy first (more reliable, avoids CF egress issues)
   try {
-    const flyUrl = `https://yoke-probe.fly.dev/pagespeed?domain=${encodeURIComponent(domain)}`;
+    const flyUrl = `https://yoke-probe.fly.dev/pagespeed?domain=${encodeURIComponent(domain)}&strategy=${strategy}`;
     const headers: Record<string, string> = {};
     if (flyAuthSecret) {
       headers["Authorization"] = `Bearer ${flyAuthSecret}`;
@@ -28,53 +40,238 @@ export async function checkPageSpeed(domain: string, ttfbFallback: number | null
     const res = await fetchWithTimeout(flyUrl, { timeout: 65000, headers });
     if (res.ok) {
       const result = await res.json() as PerformanceResult;
+      // Ensure strategy field reflects what we asked for
+      result.strategy = strategy;
       if (result.score != null) {
         // Cache successful results for 24h
         if (db) {
           try {
-            await db.prepare("INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
-              .bind(domain, JSON.stringify(result), Date.now()).run();
+            await db.prepare(
+              "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, ?, ?, ?)"
+            ).bind(domain, cacheType, JSON.stringify(result), Date.now()).run();
           } catch { /* ignore */ }
         }
         return result;
       }
       // Fly proxy returned error (e.g., rate limited), fall through
     } else if (statsDb) {
-      logApiError(statsDb, { api: "fly-probe", status: res.status, message: "PageSpeed proxy failed", domain });
+      logApiError(statsDb, { api: "fly-probe", status: res.status, message: `PageSpeed ${strategy} proxy failed`, domain });
     }
   } catch (e) {
-    console.error("[PageSpeed] Fly proxy error:", e instanceof Error ? e.message : String(e));
-    if (statsDb) logApiError(statsDb, { api: "fly-probe", status: 0, message: `PageSpeed proxy: ${String(e).slice(0, 150)}`, domain });
+    console.error(`[PageSpeed/${strategy}] Fly proxy error:`, e instanceof Error ? e.message : String(e));
+    if (statsDb) logApiError(statsDb, { api: "fly-probe", status: 0, message: `PageSpeed ${strategy} proxy: ${String(e).slice(0, 150)}`, domain });
   }
 
-  // Fallback to direct API (also 20s timeout)
-  const directResult = await tryPageSpeedDirect(domain, ttfbFallback, db, apiKey, statsDb);
+  // Fallback to direct API
+  const directResult = await tryPageSpeedDirect(domain, ttfbFallback, db, apiKey, statsDb, strategy);
   if (db && directResult.score != null) {
     try {
-      await db.prepare("INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'performance', ?, ?)")
-        .bind(domain, JSON.stringify(directResult), Date.now()).run();
+      await db.prepare(
+        "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, ?, ?, ?)"
+      ).bind(domain, cacheType, JSON.stringify(directResult), Date.now()).run();
     } catch { /* ignore */ }
   }
   return directResult;
 }
 
-async function tryPageSpeedDirect(domain: string, ttfbFallback: number | null, db?: D1Database, apiKey?: string, statsDb?: D1Database): Promise<PerformanceResult> {
+async function tryPageSpeedDirect(
+  domain: string,
+  ttfbFallback: number | null,
+  db?: D1Database,
+  apiKey?: string,
+  statsDb?: D1Database,
+  strategy: Strategy = "mobile",
+): Promise<PerformanceResult> {
+  const empty: PerformanceResult = { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy, error: null, screenshot: null };
   try {
     const keyParam = apiKey ? `&key=${apiKey}` : "";
-    const res = await fetchWithTimeout(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=mobile&category=performance${keyParam}`, { timeout: 60000 });
-    if (res.status === 429) { if (statsDb) logApiError(statsDb, { api: "pagespeed", status: 429, message: "Rate limited", domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "Rate limited — try again later", screenshot: null }; }
-    if (!res.ok) { if (statsDb) logApiError(statsDb, { api: "pagespeed", status: res.status, message: `API error`, domain }); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: `API error (${res.status})`, screenshot: null }; }
-    const data = await res.json() as { lighthouseResult?: { categories?: { performance?: { score?: number } }; audits?: Record<string, { numericValue?: number; details?: { data?: string } }>; }; };
+    const res = await fetchWithTimeout(
+      `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${encodeURIComponent(domain)}&strategy=${strategy}&category=performance${keyParam}`,
+      { timeout: 60000 },
+    );
+    if (res.status === 429) {
+      if (statsDb) logApiError(statsDb, { api: "pagespeed", status: 429, message: `Rate limited (${strategy})`, domain });
+      return { ...empty, error: "Rate limited — try again later" };
+    }
+    if (!res.ok) {
+      if (statsDb) logApiError(statsDb, { api: "pagespeed", status: res.status, message: `API error (${strategy})`, domain });
+      return { ...empty, error: `API error (${res.status})` };
+    }
+    const data = await res.json() as {
+      lighthouseResult?: {
+        categories?: { performance?: { score?: number } };
+        audits?: Record<string, { numericValue?: number; details?: { data?: string } }>;
+      };
+    };
     const lr = data.lighthouseResult;
     const audits = lr?.audits ?? {};
     const perfScore = lr?.categories?.performance?.score;
     const screenshotData = audits["final-screenshot"]?.details?.data ?? null;
-    const result: PerformanceResult = { score: perfScore != null ? Math.round(perfScore * 100) : null, fcp: audits["first-contentful-paint"]?.numericValue ?? null, lcp: audits["largest-contentful-paint"]?.numericValue ?? null, tbt: audits["total-blocking-time"]?.numericValue ?? null, cls: audits["cumulative-layout-shift"]?.numericValue ?? null, si: audits["speed-index"]?.numericValue ?? null, ttfb: audits["server-response-time"]?.numericValue ?? ttfbFallback, strategy: "mobile", error: null, screenshot: screenshotData };
+    const result: PerformanceResult = {
+      score: perfScore != null ? Math.round(perfScore * 100) : null,
+      fcp: audits["first-contentful-paint"]?.numericValue ?? null,
+      lcp: audits["largest-contentful-paint"]?.numericValue ?? null,
+      tbt: audits["total-blocking-time"]?.numericValue ?? null,
+      cls: audits["cumulative-layout-shift"]?.numericValue ?? null,
+      si: audits["speed-index"]?.numericValue ?? null,
+      ttfb: audits["server-response-time"]?.numericValue ?? ttfbFallback,
+      strategy,
+      error: null,
+      screenshot: screenshotData,
+    };
     return result;
-  } catch (e) { console.error("[PageSpeed] Direct API error:", e instanceof Error ? e.message : String(e)); return { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: ttfbFallback, strategy: "mobile", error: "PageSpeed timed out — analysis may take up to 60s", screenshot: null }; }
+  } catch (e) {
+    console.error(`[PageSpeed/${strategy}] Direct API error:`, e instanceof Error ? e.message : String(e));
+    return { ...empty, error: `PageSpeed ${strategy} timed out — analysis may take up to 60s` };
+  }
 }
 
-// ─── NEW: Compression Detection ─────────────────────────────────────
+// ─── CrUX API ────────────────────────────────────────────────────────
+
+export async function checkCrux(
+  domain: string,
+  apiKey?: string,
+  db?: D1Database,
+  statsDb?: D1Database,
+): Promise<CruxResult | null> {
+  if (!apiKey) return null;
+
+  // Check cache (24h TTL)
+  if (db) {
+    try {
+      const cached = await db.prepare(
+        "SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = 'crux' ORDER BY cached_at DESC LIMIT 1"
+      ).bind(domain).first<{ data_json: string; cached_at: number }>();
+      if (cached && Date.now() - cached.cached_at < PERF_CACHE_TTL_MS) {
+        const parsed = JSON.parse(cached.data_json) as CruxResult | null;
+        return parsed;
+      }
+    } catch { /* cache miss */ }
+  }
+
+  try {
+    const res = await fetchWithTimeout(
+      `https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${apiKey}`,
+      {
+        timeout: 10000,
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ origin: `https://${domain}` }),
+      },
+    );
+
+    if (res.status === 404 || res.status === 400) {
+      // No CrUX data for this domain — cache the null result to avoid repeated lookups
+      if (db) {
+        try {
+          await db.prepare(
+            "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'crux', ?, ?)"
+          ).bind(domain, "null", Date.now()).run();
+        } catch { /* ignore */ }
+      }
+      return null;
+    }
+
+    if (res.status === 403) {
+      // CrUX API not enabled in Google Cloud project — log once and return null
+      console.error("[CrUX] API not enabled (403). Enable 'Chrome UX Report API' in Google Cloud Console.");
+      if (statsDb) logApiError(statsDb, { api: "crux", status: 403, message: "CrUX API not enabled — enable in Cloud Console", domain });
+      return null;
+    }
+
+    if (!res.ok) {
+      if (statsDb) logApiError(statsDb, { api: "crux", status: res.status, message: "CrUX API error", domain });
+      return null;
+    }
+
+    const data = await res.json() as CruxApiResponse;
+    const result = parseCruxResponse(data);
+
+    // Cache result
+    if (db) {
+      try {
+        await db.prepare(
+          "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'crux', ?, ?)"
+        ).bind(domain, JSON.stringify(result), Date.now()).run();
+      } catch { /* ignore */ }
+    }
+
+    return result;
+  } catch (e) {
+    console.error("[CrUX] API error:", e instanceof Error ? e.message : String(e));
+    if (statsDb) logApiError(statsDb, { api: "crux", status: 0, message: `CrUX: ${String(e).slice(0, 150)}`, domain });
+    return null;
+  }
+}
+
+// ─── CrUX Response Parsing ──────────────────────────────────────────
+
+interface CruxMetricValue {
+  percentiles?: { p75?: number };
+  histogram?: Array<{ start: number; end?: number; density: number }>;
+}
+
+interface CruxApiResponse {
+  record?: {
+    key?: { origin?: string };
+    metrics?: Record<string, CruxMetricValue>;
+    collectionPeriod?: {
+      firstDate?: { year: number; month: number; day: number };
+      lastDate?: { year: number; month: number; day: number };
+    };
+  };
+}
+
+function cruxDateStr(d?: { year: number; month: number; day: number }): string | null {
+  if (!d) return null;
+  return `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`;
+}
+
+function parseCruxResponse(data: CruxApiResponse): CruxResult {
+  const metrics = data.record?.metrics ?? {};
+  const period = data.record?.collectionPeriod;
+
+  // Extract p75 values
+  const lcp = metrics["largest_contentful_paint"]?.percentiles?.p75 ?? null;
+  const fcp = metrics["first_contentful_paint"]?.percentiles?.p75 ?? null;
+  const cls = metrics["cumulative_layout_shift"]?.percentiles?.p75 ?? null;
+  const inp = metrics["interaction_to_next_paint"]?.percentiles?.p75 ?? null;
+  const ttfb = metrics["experimental_time_to_first_byte"]?.percentiles?.p75 ?? null;
+  const rtt = metrics["round_trip_time"]?.percentiles?.p75 ?? null;
+
+  // Extract form factor fractions
+  const ffMetric = metrics["form_factors"];
+  let formFactors: CruxResult["form_factors"] = null;
+  if (ffMetric?.histogram) {
+    // CrUX form_factors metric uses histogram with density fractions
+    // But typically form_factors is in a different structure
+    // The fractions come from the record.key.formFactor aggregation
+  }
+  // Try the newer fractions format from the main record
+  const recordAny = data.record as Record<string, unknown> | undefined;
+  if (recordAny) {
+    // Form factors come via a separate query or from the metrics
+    // When querying without formFactor filter, fractions aren't directly available
+    // We'd need separate per-formFactor queries. For now, set null.
+  }
+
+  return {
+    lcp_p75: lcp ?? null,
+    fcp_p75: fcp ?? null,
+    cls_p75: cls ?? null, // CrUX returns CLS as a decimal (e.g., 0.05)
+    inp_p75: inp ?? null,
+    ttfb_p75: ttfb ?? null,
+    rtt_p75: rtt ?? null,
+    form_factors: formFactors,
+    collection_period: period ? {
+      first_date: cruxDateStr(period.firstDate) ?? "",
+      last_date: cruxDateStr(period.lastDate) ?? "",
+    } : null,
+    has_data: lcp != null || fcp != null || cls != null || inp != null,
+  };
+}
+
+// ─── Compression Detection ──────────────────────────────────────────
 
 export function detectCompression(headers: Record<string, string> | null): CompressionResult | null {
   if (!headers) return null;
@@ -88,7 +285,7 @@ export function detectCompression(headers: Record<string, string> | null): Compr
   };
 }
 
-// ─── Website Carbon ──────────────────────────────────────────────────
+// ─── Website Carbon ─────────────────────────────────────────────────
 
 export async function checkCarbon(domain: string): Promise<{ co2_per_view: number | null; cleaner_than: number | null; green: boolean } | null> {
   try {

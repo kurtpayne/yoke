@@ -221,6 +221,18 @@ export interface AnalysisResult {
     cls: number | null; si: number | null; ttfb: number | null;
     strategy: string; error: string | null; screenshot: string | null;
   } | null;
+  performance_desktop: {
+    score: number | null; fcp: number | null; lcp: number | null; tbt: number | null;
+    cls: number | null; si: number | null; ttfb: number | null;
+    strategy: string; error: string | null; screenshot: string | null;
+  } | null;
+  performance_crux: {
+    lcp_p75: number | null; fcp_p75: number | null; cls_p75: number | null;
+    inp_p75: number | null; ttfb_p75: number | null; rtt_p75: number | null;
+    form_factors: { desktop: number; phone: number; tablet: number } | null;
+    collection_period: { first_date: string; last_date: string } | null;
+    has_data: boolean;
+  } | null;
   redirects: RedirectHop[] | null;
   meta: {
     robots_txt: string | null; robots_txt_exists: boolean;
