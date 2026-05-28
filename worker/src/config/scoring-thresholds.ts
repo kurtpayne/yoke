@@ -82,7 +82,7 @@ export const TTFB: ThresholdConfig = {
 // ─── Security ────────────────────────────────────────────────────────
 
 export const SSL_GRADE: ThresholdConfig = {
-  signal: "ssl_grade", axis: "security", weight: 5,
+  signal: "ssl_grade", axis: "security", weight: 3,
   description: "SSL Labs server test grade",
   source: "Qualys SSL Labs grading: A+/A are best practice, B has minor issues, C+ has configuration problems",
   bands: [
@@ -106,17 +106,18 @@ export const BLOCKLIST: ThresholdConfig = {
 // ─── Trust ───────────────────────────────────────────────────────────
 
 export const DOMAIN_AGE: ThresholdConfig = {
-  signal: "domain_age_trust", axis: "trust", weight: 4,
+  signal: "domain_age_trust", axis: "trust", weight: 3,
   description: "Domain registration age — newer domains are higher risk",
   source: "NextDNS NRD: domains <30 days are newly registered; industry treats <1 year as young",
   unit: "days",
   bands: [
-    { min: 1095, severity: "good", label: "Established domain ({value} days)" },       // 3+ years
-    { min: 365, severity: "info", label: "Domain age: {value} days" },                  // 1-3 years
-    { min: 90, severity: "low", label: "Young domain ({value} days)" },                 // 90d-1yr
-    { min: 30, severity: "medium", label: "Recently registered ({value} days)" },       // 30-90d
-    { min: 7, severity: "medium", label: "Newly registered domain ({value} days) — within NRD window" },  // 7-30d
-    { min: 0, severity: "high", label: "Newly registered domain ({value} days) — high risk NRD" },        // <7d
+    { min: 3650, severity: "good", label: "Established domain ({value} days)" },      // 10+ years
+    { min: 1825, severity: "info", label: "Mature domain ({value} days)" },            // 5-10 years
+    { min: 1095, severity: "low", label: "Domain age: {value} days" },                 // 3-5 years
+    { min: 365, severity: "low", label: "Domain age: {value} days" },                  // 1-3 years
+    { min: 90, severity: "medium", label: "Young domain ({value} days)" },             // 90d-1yr
+    { min: 30, severity: "high", label: "Recently registered ({value} days)" },        // 30-90d
+    { min: 0, severity: "critical", label: "Newly registered domain ({value} days) — high risk NRD" }, // <30d
   ],
 };
 
@@ -147,7 +148,7 @@ export const NS_COUNT: ThresholdConfig = {
 // ─── Visibility ──────────────────────────────────────────────────────
 
 export const A11Y_SCORE: ThresholdConfig = {
-  signal: "accessibility", axis: "visibility", weight: 4,
+  signal: "accessibility", axis: "visibility", weight: 1,
   description: "WCAG accessibility quick scan score",
   source: "9 WCAG 2.1 Level A/AA automated checks",
   unit: "points",

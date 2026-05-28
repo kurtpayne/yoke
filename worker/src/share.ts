@@ -145,7 +145,7 @@ function esc(s: string): string {
 
 function gradeColor(grade: string): string {
   if (grade === "A") return "#3fb950";
-  if (grade === "B") return "#3fb950";
+  if (grade === "B+" || grade === "B") return "#3fb950";
   if (grade === "C") return "#d29922";
   return "#f85149";  // D and F
 }
@@ -221,8 +221,8 @@ function generateOgSvg(data: SharePayload): string {
   <text x="200" y="420" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" text-anchor="middle"></text>
 
   <!-- Grade badge -->
-  <rect x="400" y="332" width="80" height="80" rx="16" fill="${gc}" opacity="0.15" stroke="${gc}" stroke-width="2"/>
-  <text x="440" y="372" fill="${gc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="48" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(grade)}</text>
+  <rect x="400" y="332" width="${grade.length > 1 ? 100 : 80}" height="80" rx="16" fill="${gc}" opacity="0.15" stroke="${gc}" stroke-width="2"/>
+  <text x="${grade.length > 1 ? 450 : 440}" y="372" fill="${gc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="${grade.length > 1 ? 40 : 48}" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(grade)}</text>
 
   <!-- Axis scores -->
   ${bars}
@@ -297,7 +297,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
     .score-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
     .score-num .val{font-size:48px;font-weight:700;color:${sc};line-height:1}
     .score-num .unit{font-size:14px;color:#8b949e;margin-top:2px}
-    .grade-badge{width:72px;height:72px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:${gc};background:${gc}1a;border:2px solid ${gc}33;flex-shrink:0}
+    .grade-badge{min-width:72px;height:72px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:${gc};background:${gc}1a;border:2px solid ${gc}33;flex-shrink:0;padding:0 8px}
     .axes{display:flex;flex-direction:column;gap:12px;margin-bottom:36px;position:relative}
     .axis-row{display:flex;align-items:center;gap:12px}
     .axis-label{width:100px;font-size:13px;color:#8b949e;text-align:right;flex-shrink:0}
@@ -316,7 +316,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
       .score-ring{width:110px;height:110px}
       .score-ring svg{width:110px;height:110px}
       .score-num .val{font-size:36px}
-      .grade-badge{width:56px;height:56px;font-size:32px}
+      .grade-badge{min-width:56px;width:auto;height:56px;font-size:32px}
     }
   </style>
 </head>

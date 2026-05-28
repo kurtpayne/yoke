@@ -85,7 +85,7 @@ export function computeComposite(axisScores: Record<Axis, number>, archetype: Ar
 }
 
 export function gradeFromComposite(score: number): string {
-  return score >= 90 ? "A" : score >= 80 ? "B" : score >= 65 ? "C" : score >= 50 ? "D" : "F";
+  return score >= 90 ? "A" : score >= 85 ? "B+" : score >= 80 ? "B" : score >= 65 ? "C" : score >= 50 ? "D" : "F";
 }
 
 export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: Partial<Record<ArchetypeName, Severity>>): Severity {
@@ -720,10 +720,21 @@ export function calculateDomainScore(opts: {
   // Trust meta-signals removed — trust_strong/trust_moderate were double-counting
   // underlying signals already scored individually, inflating Trust axis by ~15 points.
   if (opts.trustSignals) {
-    // DMARC reject → trust bonus (not double-counted from security)
+    // DMARC enforcement — bidirectional: reward reject, penalize weak/absent
     const dmarcRejecting = opts.trustSignals.signals.some(s => s.name === "DMARC Enforcement" && s.present && s.value?.includes("reject"));
     if (dmarcRejecting) {
       findings.push({ signal: "dmarc_reject", axis: "trust", severity: "good", label: "DMARC policy=reject prevents email spoofing", tradeoff: null, weight: 2 });
+    } else if (opts.emailAuth?.dmarc?.found) {
+      const policy = opts.emailAuth.dmarc.policy;
+      if (policy === "quarantine") {
+        findings.push({ signal: "dmarc_reject", axis: "trust", severity: "info", label: "DMARC policy=quarantine — partial email protection", tradeoff: "Upgrade to p=reject for full spoofing prevention.", weight: 2 });
+      } else {
+        // p=none or unrecognized
+        findings.push({ signal: "dmarc_reject", axis: "trust", severity: "low", label: "DMARC policy=none — monitoring only, no protection", tradeoff: "Move to quarantine/reject once reports look clean.", weight: 2 });
+      }
+    } else {
+      // No DMARC at all
+      findings.push({ signal: "dmarc_reject", axis: "trust", severity: "medium", label: "No DMARC — domain vulnerable to email spoofing", tradeoff: null, weight: 2 });
     }
 
     // Operational transparency bonus
@@ -763,7 +774,7 @@ export function calculateDomainScore(opts: {
   } else if (perf && perf.error) {
     // PageSpeed unavailable — don't penalize, but acknowledge the gap
     // This prevents score inflation when PageSpeed data is missing
-    findings.push({ signal: "pagespeed_unavailable", axis: "performance", severity: "medium", label: "PageSpeed Insights unavailable", tradeoff: null, weight: 3 });
+    findings.push({ signal: "pagespeed_unavailable", axis: "performance", severity: "low", label: "PageSpeed Insights unavailable", tradeoff: null, weight: 2 });
   }
 
   // Compression — removed: 275/275 = good, zero discrimination
@@ -901,6 +912,13 @@ export function calculateDomainScore(opts: {
         label: "Site unreachable — DNS resolves but no HTTP response",
         tradeoff: null, weight: 5,
       });
+      // Also tank Visibility — an unreachable site has zero web visibility
+      findings.push({
+        signal: "site_unreachable_visibility", axis: "visibility",
+        severity: "critical",
+        label: "Site unreachable — zero web visibility",
+        tradeoff: null, weight: 5,
+      });
     }
   }
 
@@ -931,21 +949,23 @@ export function calculateDomainScore(opts: {
 
   // ─── Trust Axis Findings ─────────────────────────────────────────
 
-  // Domain age (trust signal — graduated NRD thresholds aligned with industry)
+  // Domain age (trust signal — graduated thresholds, 10yr+ for "good")
   // Palo Alto: ≤32d = NRD; CF Email: 7d malicious, 30-45d suspicious; NextDNS: 30d block
   const ageDays = opts.rdap?.domain_age_days;
   if (ageDays != null) {
-    const severity = ageDays > 365 * 3 ? "good"
-      : ageDays > 365 ? "info"
-      : ageDays > 90 ? "low"
-      : ageDays > 30 ? "medium"
-      : ageDays > 7 ? "medium"
-      : "high";
-    const label = ageDays > 365 * 3 ? `Established domain (${Math.floor(ageDays / 365)}+ years)`
+    const severity = ageDays > 365 * 10 ? "good"
+      : ageDays > 365 * 5 ? "info"
+      : ageDays > 365 * 3 ? "low"
+      : ageDays > 365 ? "low"
+      : ageDays > 90 ? "medium"
+      : ageDays > 30 ? "high"
+      : "critical";
+    const label = ageDays > 365 * 10 ? `Established domain (${Math.floor(ageDays / 365)}+ years)`
+      : ageDays > 365 * 5 ? `Mature domain (${Math.floor(ageDays / 365)}+ years)`
+      : ageDays > 365 * 3 ? `Domain age: ${Math.floor(ageDays / 365)}+ years`
       : ageDays > 365 ? `Domain age: ${Math.floor(ageDays / 365)}+ years`
       : ageDays > 90 ? `Young domain (${ageDays} days)`
       : ageDays > 30 ? `Recently registered (${ageDays} days)`
-      : ageDays > 7 ? `Newly registered domain (${ageDays} days) — within NRD window`
       : `Newly registered domain (${ageDays} days) — high risk NRD`;
     findings.push({
       signal: "domain_age_trust", axis: "trust",
@@ -964,12 +984,12 @@ export function calculateDomainScore(opts: {
     });
   }
 
-  // Blocklist clean (also trust)
+  // Blocklist clean (also trust) — "not blocklisted" is neutral, not positive
   findings.push({
     signal: "blocklist_trust", axis: "trust",
-    severity: listedCount === 0 ? "info" : listedCount >= 2 ? "critical" : "high",
+    severity: listedCount === 0 ? "low" : listedCount >= 2 ? "critical" : "high",
     label: listedCount === 0 ? "Clean blocklist record" : `On ${listedCount} blocklist(s)`,
-    tradeoff: null, weight: listedCount === 0 ? 1 : 3,
+    tradeoff: null, weight: listedCount === 0 ? 2 : 3,
   });
 
   // GreyNoise
@@ -1032,17 +1052,41 @@ export function calculateDomainScore(opts: {
       findings.push({ signal: "tranco_rank", axis: "trust", severity: "info", label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 1 });
     }
     // Unranked = no finding (neutral, no penalty)
+  } else {
+    // No Tranco rank — domain is unranked, mild trust penalty
+    findings.push({ signal: "tranco_unranked", axis: "trust", severity: "low", label: "Domain not ranked in Tranco top 1M", tradeoff: null, weight: 2 });
   }
 
-  // Email auth completeness (trust signal — only show as strength when complete)
+  // Email auth completeness (trust signal — bidirectional: penalize incomplete, reward complete)
   if (opts.emailAuth) {
-    const complete = opts.emailAuth.spf.found && opts.emailAuth.dmarc.found && opts.emailAuth.dkim_selectors_found.length > 0;
+    const hasSpf = opts.emailAuth.spf.found;
+    const hasDmarc = opts.emailAuth.dmarc.found;
+    const hasDkim = opts.emailAuth.dkim_selectors_found.length > 0;
+    const complete = hasSpf && hasDmarc && hasDkim;
     if (complete) {
       findings.push({
         signal: "email_trust", axis: "trust",
         severity: "good",
         label: "Complete email authentication",
         tradeoff: null, weight: 3,
+      });
+    } else if (!hasSpf && !hasDmarc && !hasDkim) {
+      findings.push({
+        signal: "email_trust", axis: "trust",
+        severity: "high",
+        label: "No email authentication (missing SPF, DKIM, DMARC)",
+        tradeoff: null, weight: 3,
+      });
+    } else {
+      const missing: string[] = [];
+      if (!hasSpf) missing.push("SPF");
+      if (!hasDkim) missing.push("DKIM");
+      if (!hasDmarc) missing.push("DMARC");
+      findings.push({
+        signal: "email_trust", axis: "trust",
+        severity: "medium",
+        label: `Incomplete email auth (missing ${missing.join(", ")})`,
+        tradeoff: null, weight: 2,
       });
     }
   }
@@ -1084,6 +1128,21 @@ export function calculateDomainScore(opts: {
   // wayback removed — weight=0 dead code, no scoring impact
 
   // ─── Visibility Axis Findings ────────────────────────────────────
+
+  // Domain popularity (Tranco rank) — direct visibility measure
+  if (opts.trancoRank != null) {
+    if (opts.trancoRank <= 1000) {
+      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "good", label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()}) — elite web presence`, tradeoff: null, weight: 3 });
+    } else if (opts.trancoRank <= 10000) {
+      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "good", label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()}) — high traffic`, tradeoff: null, weight: 2 });
+    } else if (opts.trancoRank <= 100000) {
+      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "info", label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 2 });
+    } else {
+      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "low", label: `Tranco rank #${opts.trancoRank.toLocaleString()} — low traffic`, tradeoff: null, weight: 1 });
+    }
+  } else {
+    findings.push({ signal: "domain_popularity", axis: "visibility", severity: "medium", label: "Not ranked in Tranco top 1M — minimal measured traffic", tradeoff: null, weight: 2 });
+  }
 
   // Structured data
   const jsonLdTypes = (opts.jsonLd ?? []).map(j => j.type);
@@ -1404,7 +1463,7 @@ export function calculateDomainScore(opts: {
         signal: "bgp_unstable", axis: "reliability",
         severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
         label: `BGP route unstable (${nh.ripe_routing.bgp_updates_24h} updates in 24h)`,
-        tradeoff: null, weight: 4,
+        tradeoff: null, weight: 3,
       });
     }
     // bgp_stable removed — only 3 domains ever, unreliable data asymmetry
@@ -1446,7 +1505,17 @@ export function calculateDomainScore(opts: {
       axisScores[axis] = { score: 50, weight: AXIS_WEIGHTS[axis], findings: [], not_measured: true };
       continue;
     }
-    const score = computeAxisScore(axisFindings);
+    let score = computeAxisScore(axisFindings);
+
+    // Confidence dampening: blend sparse axes toward default to prevent
+    // high-confidence scores from limited data
+    const MIN_FINDINGS: Partial<Record<Axis, number>> = { security: 6, visibility: 4 };
+    const minRequired = MIN_FINDINGS[axis];
+    if (minRequired && axisFindings.length < minRequired) {
+      const confidence = axisFindings.length / minRequired;
+      score = Math.round(confidence * score + (1 - confidence) * 65);
+    }
+
     axisScores[axis] = { score, weight: AXIS_WEIGHTS[axis], findings: axisFindings };
   }
 
@@ -1484,9 +1553,9 @@ export function calculateDomainScore(opts: {
   // regardless of composite score — it's a credibility issue.
   if (opts.breaches && opts.breaches.found && !opts.breaches.check_failed) {
     const totalPwned = opts.breaches.total_pwned;
-    if (totalPwned > 500_000_000 && (grade === "A" || grade === "B")) {
+    if (totalPwned > 500_000_000 && (grade === "A" || grade === "B+" || grade === "B")) {
       grade = "B";
-    } else if (totalPwned > 100_000_000 && grade === "A") {
+    } else if (totalPwned > 100_000_000 && (grade === "A" || grade === "B+")) {
       grade = "B";
     }
   }

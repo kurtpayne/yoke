@@ -407,6 +407,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
 
 function gradeColor(grade: string): string {
   if (grade === "A") return "var(--success)";
+  if (grade === "B+") return "#56d364";
   if (grade === "B") return "#7ee787";
   if (grade === "C") return "var(--warning)";
   if (grade === "D") return "#ffa198";
