@@ -416,7 +416,7 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
   const secsLeft = Math.max(0, reset - now);
   const minsLeft = Math.ceil(secsLeft / 60);
 
-  const color = isOut ? "var(--danger)" : isLow ? "var(--warning, #d29922)" : "var(--cyan)";
+  const color = isOut ? "var(--danger)" : isLow ? "var(--warning, #d29922)" : "var(--dim)";
   const used = limit - remaining;
 
   return (
@@ -429,7 +429,7 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
         onClick={() => setExpanded(e => !e)}
         style={{
-          background: "var(--card-bg, #1c2028)",
+          background: "var(--surface-raised, var(--card-bg, #1c2028))",
           border: `1px solid ${isOut ? "var(--danger)" : "var(--border, #30363d)"}`,
           fontFamily: "var(--font-ui)",
           fontSize: "11px",
@@ -452,7 +452,7 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
             position: "absolute",
             top: "calc(100% + 6px)",
             right: 0,
-            background: "var(--card-bg, #1c2028)",
+            background: "var(--surface-raised, var(--card-bg, #1c2028))",
             border: "1px solid var(--border, #30363d)",
             borderRadius: "8px",
             padding: "10px 14px",
