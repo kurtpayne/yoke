@@ -18,6 +18,8 @@ import {
   PERF_SCORE, LCP, CLS, TTFB, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
   SEVERITY_SCORES, resolveSeverity,
 } from "../../config/scoring-thresholds";
+import { scanForVulnerableLibraries } from "../../data/vulnerable-libraries";
+import { analyzeNsDiversity } from "../../data/ns-providers";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -717,6 +719,158 @@ export function calculateDomainScore(opts: {
     }
   }
 
+  // ─── Security Headers Completeness (meta-signal) ────────────────
+  if (!opts.httpBlocked && opts.headers) {
+    const secHeaders = [
+      "strict-transport-security",
+      "content-security-policy",
+      "x-frame-options",
+      "x-content-type-options",
+      "referrer-policy",
+      "permissions-policy",
+    ];
+    const deployedCount = secHeaders.filter(h => !!opts.headers![h]).length;
+    const sev: Severity = deployedCount >= 6 ? "good" : deployedCount >= 4 ? "info" : deployedCount >= 2 ? "low" : "medium";
+    findings.push({
+      signal: "security_headers_completeness", axis: "security",
+      severity: sev,
+      label: `${deployedCount}/6 security headers deployed`,
+      tradeoff: null, weight: 2,
+    });
+  }
+
+  // ─── CSP Quality Gradation ──────────────────────────────────────
+  if (!opts.httpBlocked && opts.headers) {
+    const cspHeader = opts.headers["content-security-policy"] ?? "";
+    if (cspHeader) {
+      const hasUnsafeInline = /unsafe-inline/i.test(cspHeader);
+      const hasUnsafeEval = /unsafe-eval/i.test(cspHeader);
+      const hasWildcard = /(?:^|[\s;])(?:default-src|script-src)\s+[^;]*\*/i.test(cspHeader);
+      const hasDefaultSrc = /default-src/i.test(cspHeader);
+
+      if (hasUnsafeInline || hasUnsafeEval || hasWildcard) {
+        findings.push({
+          signal: "csp_quality", axis: "security",
+          severity: "low",
+          label: `CSP present but permissive (${[hasUnsafeInline && "unsafe-inline", hasUnsafeEval && "unsafe-eval", hasWildcard && "wildcard"].filter(Boolean).join(", ")})`,
+          tradeoff: "Tightening CSP may break inline scripts or third-party integrations.",
+          weight: 2,
+        });
+      } else if (hasDefaultSrc) {
+        findings.push({
+          signal: "csp_quality", axis: "security",
+          severity: "good",
+          label: "CSP is restrictive (no unsafe-* or wildcards)",
+          tradeoff: null, weight: 2,
+        });
+      } else {
+        findings.push({
+          signal: "csp_quality", axis: "security",
+          severity: "info",
+          label: "CSP present but missing default-src directive",
+          tradeoff: null, weight: 2,
+        });
+      }
+    }
+    // No CSP = skip (handled by csp_missing above)
+  }
+
+  // ─── Vulnerable JavaScript Libraries ────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const vulnResults = scanForVulnerableLibraries(opts.html);
+    if (vulnResults.length > 0) {
+      const hasHighSev = vulnResults.some(v => v.severity === "high" || v.severity === "critical");
+      const labels = vulnResults.slice(0, 3).map(v =>
+        `${v.library} ${v.version}${v.eol ? " (EOL)" : ""}${v.cves.length ? ` — ${v.cves[0]}` : ""}`
+      );
+      const extra = vulnResults.length > 3 ? ` (+${vulnResults.length - 3} more)` : "";
+      findings.push({
+        signal: "vulnerable_js_libraries", axis: "security",
+        severity: vulnResults.length >= 3 ? "high" : hasHighSev ? "medium" : "medium",
+        label: `Vulnerable JS: ${labels.join("; ")}${extra}`,
+        tradeoff: "Upgrading libraries may require code changes for breaking API differences.",
+        weight: 3,
+      });
+    } else {
+      findings.push({
+        signal: "vulnerable_js_libraries", axis: "security",
+        severity: "good",
+        label: "No known vulnerable JavaScript libraries detected",
+        tradeoff: null, weight: 1,
+      });
+    }
+  }
+
+  // ─── TLS Protocol Version ──────────────────────────────────────
+  if (opts.ssl && opts.ssl.protocols && opts.ssl.protocols.length > 0) {
+    const protocols = opts.ssl.protocols.map(p => p.toLowerCase());
+    const hasTls13 = protocols.some(p => p.includes("1.3"));
+    const hasTls12 = protocols.some(p => p.includes("1.2"));
+    const hasOldTls = protocols.some(p => p.includes("1.0") || p.includes("1.1") || p.includes("ssl"));
+
+    if (hasOldTls) {
+      findings.push({ signal: "tls_version", axis: "security", severity: "high", label: "Legacy TLS (1.0/1.1) still supported — vulnerable to downgrade attacks", tradeoff: "Disabling old TLS may drop support for very old clients.", weight: 3 });
+    } else if (hasTls13 && !hasTls12) {
+      findings.push({ signal: "tls_version", axis: "security", severity: "good", label: "TLS 1.3 only — best available encryption", tradeoff: null, weight: 2 });
+    } else if (hasTls13) {
+      findings.push({ signal: "tls_version", axis: "security", severity: "good", label: "TLS 1.3 + 1.2 supported", tradeoff: null, weight: 2 });
+    } else if (hasTls12) {
+      findings.push({ signal: "tls_version", axis: "security", severity: "info", label: "TLS 1.2 only (no TLS 1.3)", tradeoff: null, weight: 1 });
+    }
+  }
+
+  // ─── HSTS Max-Age Strength ──────────────────────────────────────
+  if (opts.headers && !opts.httpBlocked) {
+    const hstsHeader = opts.headers["strict-transport-security"] ?? "";
+    const maxAgeMatch = hstsHeader.match(/max-age\s*=\s*(\d+)/i);
+    if (maxAgeMatch) {
+      const maxAge = parseInt(maxAgeMatch[1], 10);
+      if (maxAge >= 31536000) { // 1 year
+        findings.push({ signal: "hsts_max_age", axis: "security", severity: "good", label: `HSTS max-age ≥1 year (${Math.floor(maxAge / 86400)}d)`, tradeoff: null, weight: 1 });
+      } else if (maxAge >= 15768000) { // ~6 months
+        findings.push({ signal: "hsts_max_age", axis: "security", severity: "info", label: `HSTS max-age ~6 months`, tradeoff: null, weight: 1 });
+      } else if (maxAge >= 86400) { // 1 day
+        findings.push({ signal: "hsts_max_age", axis: "security", severity: "low", label: `HSTS max-age too short (${Math.floor(maxAge / 86400)}d)`, tradeoff: null, weight: 1 });
+      } else {
+        findings.push({ signal: "hsts_max_age", axis: "security", severity: "medium", label: `HSTS max-age extremely short (${maxAge}s)`, tradeoff: null, weight: 2 });
+      }
+    }
+  }
+
+  // ─── Certificate Expiry Proximity ───────────────────────────────
+  if (opts.ssl?.valid_to) {
+    try {
+      const expiryDate = new Date(opts.ssl.valid_to);
+      const now = new Date();
+      const daysUntilExpiry = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntilExpiry < 1) {
+        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "critical", label: "SSL certificate expired or expiring today", tradeoff: null, weight: 4 });
+      } else if (daysUntilExpiry < 7) {
+        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "high", label: `SSL certificate expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? "s" : ""}`, tradeoff: null, weight: 3 });
+      } else if (daysUntilExpiry < 30) {
+        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "low", label: `SSL certificate expires in ${daysUntilExpiry} days`, tradeoff: null, weight: 2 });
+      } else if (daysUntilExpiry < 90) {
+        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "info", label: `SSL certificate expires in ${daysUntilExpiry} days`, tradeoff: null, weight: 1 });
+      } else {
+        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "good", label: `SSL certificate valid for ${daysUntilExpiry}+ days`, tradeoff: null, weight: 1 });
+      }
+    } catch { /* invalid date — skip */ }
+  }
+
+  // ─── Cross-Origin Isolation Headers ─────────────────────────────
+  if (opts.headers && !opts.httpBlocked) {
+    const hasCoop = !!opts.headers["cross-origin-opener-policy"];
+    const hasCoep = !!opts.headers["cross-origin-embedder-policy"];
+    const hasCorp = !!opts.headers["cross-origin-resource-policy"];
+    const coiCount = [hasCoop, hasCoep, hasCorp].filter(Boolean).length;
+    if (coiCount === 3) {
+      findings.push({ signal: "cross_origin_isolation", axis: "security", severity: "good", label: "Full cross-origin isolation (COOP+COEP+CORP)", tradeoff: null, weight: 1 });
+    } else if (coiCount >= 1) {
+      findings.push({ signal: "cross_origin_isolation", axis: "security", severity: "info", label: `Partial cross-origin isolation (${coiCount}/3 headers)`, tradeoff: null, weight: 1 });
+    }
+    // None = skip (too rare to penalize)
+  }
+
   // Trust meta-signals removed — trust_strong/trust_moderate were double-counting
   // underlying signals already scored individually, inflating Trust axis by ~15 points.
   if (opts.trustSignals) {
@@ -770,6 +924,30 @@ export function calculateDomainScore(opts: {
     if (perf.ttfb != null) {
       const ttfb = resolveSeverity(TTFB, perf.ttfb);
       findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(perf.ttfb)}ms`, tradeoff: null, weight: TTFB.weight, source: TTFB.source });
+    }
+
+    // TBT (Total Blocking Time) — JS execution blocking metric
+    if (perf.tbt != null) {
+      const tbtMs = perf.tbt;
+      const tbtSev: Severity = tbtMs < 200 ? "good" : tbtMs < 600 ? "low" : "medium";
+      findings.push({
+        signal: "tbt", axis: "performance",
+        severity: tbtSev,
+        label: `TBT: ${Math.round(tbtMs)}ms${tbtMs >= 600 ? " — excessive JS blocking" : ""}`,
+        tradeoff: null, weight: 2,
+      });
+    }
+
+    // FCP (First Contentful Paint) — initial rendering speed
+    if (perf.fcp != null) {
+      const fcpSec = perf.fcp / 1000;
+      const fcpSev: Severity = fcpSec < 1.8 ? "good" : fcpSec < 3.0 ? "low" : "medium";
+      findings.push({
+        signal: "fcp", axis: "performance",
+        severity: fcpSev,
+        label: `FCP: ${fcpSec.toFixed(1)}s`,
+        tradeoff: null, weight: 2,
+      });
     }
   } else if (perf && perf.error) {
     // PageSpeed unavailable — don't penalize, but acknowledge the gap
@@ -900,6 +1078,59 @@ export function calculateDomainScore(opts: {
   }
 
   // soa_present removed — 361/361 = good, every domain has SOA, zero discrimination
+
+  // ─── TCP Connection Time ────────────────────────────────────────
+  if (opts.networkHealth?.connection_timing) {
+    const tcpMs = opts.networkHealth.connection_timing.tcp_ms;
+    if (tcpMs < 100) {
+      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "good", label: `TCP connect: ${Math.round(tcpMs)}ms`, tradeoff: null, weight: 2 });
+    } else if (tcpMs < 300) {
+      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "info", label: `TCP connect: ${Math.round(tcpMs)}ms`, tradeoff: null, weight: 2 });
+    } else if (tcpMs < 1000) {
+      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "low", label: `TCP connect: ${Math.round(tcpMs)}ms — above average`, tradeoff: "Connection timing depends on server location relative to probe.", weight: 2 });
+    } else {
+      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "medium", label: `TCP connect: ${Math.round(tcpMs)}ms — very slow`, tradeoff: null, weight: 2 });
+    }
+  }
+
+  // ─── DNS Resolution Time ────────────────────────────────────────
+  if (opts.networkHealth?.connection_timing) {
+    const dnsMs = opts.networkHealth.connection_timing.dns_ms;
+    if (dnsMs < 50) {
+      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "good", label: `DNS resolution: ${Math.round(dnsMs)}ms`, tradeoff: null, weight: 2 });
+    } else if (dnsMs < 150) {
+      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "info", label: `DNS resolution: ${Math.round(dnsMs)}ms`, tradeoff: null, weight: 2 });
+    } else if (dnsMs < 500) {
+      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "low", label: `DNS resolution: ${Math.round(dnsMs)}ms — slow`, tradeoff: null, weight: 2 });
+    } else {
+      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "medium", label: `DNS resolution: ${Math.round(dnsMs)}ms — very slow`, tradeoff: null, weight: 2 });
+    }
+  }
+
+  // ─── NS Provider Diversity ──────────────────────────────────────
+  {
+    const nsRecords = dns.filter(r => r.type === "NS").map(r => r.data);
+    if (nsRecords.length >= 2) {
+      const nsDiversity = analyzeNsDiversity(nsRecords);
+      if (nsDiversity.isMultiProvider) {
+        findings.push({
+          signal: "ns_provider_diversity", axis: "reliability",
+          severity: "good",
+          label: `Multi-provider DNS (${nsDiversity.providers.join(", ")})`,
+          tradeoff: null, weight: 1,
+        });
+      } else if (nsDiversity.providers.length === 1) {
+        findings.push({
+          signal: "ns_provider_diversity", axis: "reliability",
+          severity: "info",
+          label: `Single DNS provider: ${nsDiversity.providers[0]}`,
+          tradeoff: "Multi-provider DNS improves resilience against provider outages.",
+          weight: 1,
+        });
+      }
+      // Unrecognized providers = skip
+    }
+  }
 
   // ─── NEW: Site Unreachable ───────────────────────────────────────
   // DNS resolves but no HTTP server responds — fundamentally broken
@@ -1127,6 +1358,52 @@ export function calculateDomainScore(opts: {
 
   // wayback removed — weight=0 dead code, no scoring impact
 
+  // ─── EV/OV Certificate Detection (Trust) ────────────────────────
+  if (opts.ssl?.subject) {
+    const sslSubject = opts.ssl.subject;
+    const hasOrg = /,?\s*O\s*=/.test(sslSubject);
+    const isEV = hasOrg && (/SERIALNUMBER\s*=/.test(sslSubject) || /2\.5\.4\.15/.test(sslSubject) || /1\.3\.6\.1\.4\.1\.311\.60\.2\.1/.test(sslSubject));
+    const orgMatch = sslSubject.match(/,?\s*O\s*=\s*([^,]+)/);
+    const orgName = orgMatch ? orgMatch[1].replace(/\\\\/g, "").trim() : null;
+    if (isEV && orgName) {
+      findings.push({ signal: "cert_validation_type", axis: "trust", severity: "good", label: `Extended Validation (EV) certificate — ${orgName}`, tradeoff: null, weight: 3 });
+    } else if (hasOrg && orgName) {
+      findings.push({ signal: "cert_validation_type", axis: "trust", severity: "good", label: `Organization Validated (OV) certificate — ${orgName}`, tradeoff: null, weight: 2 });
+    } else {
+      findings.push({ signal: "cert_validation_type", axis: "trust", severity: "info", label: "Domain Validated (DV) certificate only", tradeoff: null, weight: 1 });
+    }
+  }
+
+  // ─── Organizational Identity (Trust) ────────────────────────────
+  if (opts.legal && !opts.httpBlocked) {
+    const pages = opts.legal.pages_found ?? [];
+    const hasPrivacy = pages.some((p: string) => /privacy/i.test(p));
+    const hasTerms = pages.some((p: string) => /terms|tos|conditions/i.test(p));
+    const hasAbout = pages.some((p: string) => /about|company|team/i.test(p));
+    const orgCount = [hasPrivacy, hasTerms, hasAbout].filter(Boolean).length;
+    if (orgCount >= 3) {
+      findings.push({ signal: "organizational_identity", axis: "trust", severity: "good", label: "Privacy policy, terms, and about page found", tradeoff: null, weight: 2 });
+    } else if (orgCount >= 1) {
+      findings.push({ signal: "organizational_identity", axis: "trust", severity: "info", label: `${orgCount}/3 organizational pages found`, tradeoff: null, weight: 2 });
+    } else {
+      findings.push({ signal: "organizational_identity", axis: "trust", severity: "low", label: "No organizational identity pages (privacy, terms, about)", tradeoff: null, weight: 2 });
+    }
+  }
+
+  // ─── Cookie Consent Bidirectional (Trust) ───────────────────────
+  if (opts.cookieConsent && !opts.httpBlocked) {
+    if (!opts.cookieConsent.cmp_detected && opts.cookieSecurity && opts.cookieSecurity.cookies.length > 0) {
+      // Has cookies but no consent management = mild trust concern
+      findings.push({
+        signal: "cookie_consent_missing", axis: "trust",
+        severity: "low",
+        label: `${opts.cookieSecurity.cookies.length} cookies set without consent management`,
+        tradeoff: null, weight: 2,
+      });
+    }
+    // CMP detected is already scored as cookie_consent_cmp above
+  }
+
   // ─── Visibility Axis Findings ────────────────────────────────────
 
   // Domain popularity (Tranco rank) — direct visibility measure
@@ -1335,7 +1612,53 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // ─── Accessibility → Visibility Axis ───────────────────────────
+  // ─── Mobile Friendly ───────────────────────────────────────────
+  if (opts.html && !opts.httpBlocked) {
+    const viewportMatch = opts.html.match(/<meta[^>]+name\s*=\s*["']viewport["'][^>]+content\s*=\s*["']([^"']+)["']/i)
+      ?? opts.html.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+name\s*=\s*["']viewport["']/i);
+    if (viewportMatch) {
+      const viewportContent = viewportMatch[1].toLowerCase();
+      if (viewportContent.includes("width=device-width")) {
+        findings.push({ signal: "mobile_friendly", axis: "visibility", severity: "good", label: "Mobile-friendly viewport configured", tradeoff: null, weight: 2 });
+      } else {
+        findings.push({ signal: "mobile_friendly", axis: "visibility", severity: "low", label: "Viewport set but not responsive (missing width=device-width)", tradeoff: null, weight: 2 });
+      }
+    } else {
+      findings.push({
+        signal: "mobile_friendly", axis: "visibility",
+        severity: contextualSeverity("medium", arch, { infrastructure: "info", application: "low" }),
+        label: "No viewport meta tag — not mobile-friendly",
+        tradeoff: null, weight: 2,
+      });
+    }
+  }
+
+  // ─── OG Tag Completeness ───────────────────────────────────────
+  if (opts.socialMeta && !opts.httpBlocked) {
+    const og = opts.socialMeta.og;
+    const ogChecks = [og?.title, og?.description, og?.image, og?.url, og?.type];
+    const ogPresent = ogChecks.filter(Boolean).length;
+    const hasTwitterCard = !!opts.socialMeta.twitter?.card;
+    if (ogPresent >= 5) {
+      findings.push({
+        signal: "og_completeness", axis: "visibility",
+        severity: "good",
+        label: `Complete OG tags (${ogPresent}/5)${hasTwitterCard ? " + Twitter Card" : ""}`,
+        tradeoff: null, weight: 2,
+      });
+    } else if (ogPresent >= 3) {
+      findings.push({ signal: "og_completeness", axis: "visibility", severity: "info", label: `${ogPresent}/5 OG tags present`, tradeoff: null, weight: 2 });
+    } else if (ogPresent >= 1) {
+      findings.push({ signal: "og_completeness", axis: "visibility", severity: "low", label: `Only ${ogPresent}/5 OG tags — social sharing will look incomplete`, tradeoff: null, weight: 2 });
+    } else {
+      findings.push({
+        signal: "og_completeness", axis: "visibility",
+        severity: contextualSeverity("medium", arch, { infrastructure: "info" }),
+        label: "No Open Graph tags — social sharing will use browser defaults",
+        tradeoff: null, weight: 2,
+      });
+    }
+  }
   if (opts.accessibility) {
     const a11yScore = opts.accessibility.score;
     if (a11yScore >= 80) {
