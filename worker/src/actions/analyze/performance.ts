@@ -258,7 +258,7 @@ function parseCruxResponse(data: CruxApiResponse): CruxResult {
   return {
     lcp_p75: lcp ?? null,
     fcp_p75: fcp ?? null,
-    cls_p75: cls ?? null, // CrUX returns CLS as a decimal (e.g., 0.05)
+    cls_p75: cls != null ? Number(cls) : null, // CrUX returns CLS as string (e.g., "0.05") — coerce to number
     inp_p75: inp ?? null,
     ttfb_p75: ttfb ?? null,
     rtt_p75: rtt ?? null,
