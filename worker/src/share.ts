@@ -268,10 +268,10 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>${domain} scored ${score}/100 (${esc(grade)}) — Yoke</title>
+  <title>${domain} scored ${score} (${esc(grade)}) — Yoke</title>
   <meta name="description" content="Security ${data.a[0]} · Reliability ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
   <meta property="og:type" content="website"/>
-  <meta property="og:title" content="${domain} scored ${score}/100 (${esc(grade)}) — Yoke"/>
+  <meta property="og:title" content="${domain} scored ${score} (${esc(grade)}) — Yoke"/>
   <meta property="og:description" content="Security ${data.a[0]} · Reliability ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
   <meta property="og:image" content="${ogImageUrl}"/>
   <meta property="og:image:type" content="image/png"/>
@@ -279,7 +279,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
   <meta property="og:image:height" content="630"/>
   <meta property="og:url" content="${shareUrl}"/>
   <meta name="twitter:card" content="summary_large_image"/>
-  <meta name="twitter:title" content="${domain} scored ${score}/100 (${esc(grade)}) — Yoke"/>
+  <meta name="twitter:title" content="${domain} scored ${score} (${esc(grade)}) — Yoke"/>
   <meta name="twitter:description" content="Security ${data.a[0]} · Reliability ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]}"/>
   <meta name="twitter:image" content="${ogImageUrl}"/>
   <link rel="canonical" href="${shareUrl}"/>
@@ -419,9 +419,9 @@ export async function handleSharePage(request: Request, env: Env, token: string)
     const domain = esc(d.d);
     const html = `<!DOCTYPE html><html><head>
 <meta charset="utf-8"/>
-<title>${domain} scored ${d.s}/100 (${esc(d.g)}) — Yoke</title>
+<title>${domain} scored ${d.s} (${esc(d.g)}) — Yoke</title>
 <meta property="og:type" content="website"/>
-<meta property="og:title" content="${domain} scored ${d.s}/100 (${esc(d.g)}) — Yoke"/>
+<meta property="og:title" content="${domain} scored ${d.s} (${esc(d.g)}) — Yoke"/>
 <meta property="og:description" content="Security ${d.a[0]} · Reliability ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]} — Free domain intelligence report"/>
 <meta property="og:image" content="${esc(ogImageUrl)}"/>
 <meta property="og:image:type" content="image/png"/>
@@ -429,7 +429,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 <meta property="og:image:height" content="630"/>
 <meta property="og:url" content="${esc(shareUrl)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="${domain} scored ${d.s}/100 (${esc(d.g)}) — Yoke"/>
+<meta name="twitter:title" content="${domain} scored ${d.s} (${esc(d.g)}) — Yoke"/>
 <meta name="twitter:description" content="Security ${d.a[0]} · Reliability ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]}"/>
 <meta name="twitter:image" content="${esc(ogImageUrl)}"/>
 <link rel="canonical" href="${esc(shareUrl)}"/>
