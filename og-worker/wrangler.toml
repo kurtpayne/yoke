@@ -1,0 +1,4 @@
+name = "yoke-og"
+main = "dist/worker.js"
+compatibility_date = "2024-12-01"
+account_id = "b5cdaad4db136b796354280697e0ceb9"

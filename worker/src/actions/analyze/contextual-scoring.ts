@@ -1337,16 +1337,7 @@ export function calculateDomainScore(opts: {
     findings.push({ signal: "bimi_record", axis: "trust", severity: "good", label: "BIMI record present — email brand verification", tradeoff: null, weight: 1 });
   }
 
-  // ─── Phase 3: DMARC Policy Strength ─────────────────────────────
-  // reject is already scored via trust signals above; add granularity for weaker policies
-  if (opts.emailAuth?.dmarc?.found && opts.emailAuth.dmarc.policy) {
-    const dmarcPol = opts.emailAuth.dmarc.policy;
-    if (dmarcPol === "quarantine") {
-      findings.push({ signal: "dmarc_policy_strength", axis: "trust", severity: "info", label: "DMARC policy=quarantine — partial email protection", tradeoff: "Upgrade to p=reject for full spoofing prevention.", weight: 1 });
-    } else if (dmarcPol === "none") {
-      findings.push({ signal: "dmarc_policy_strength", axis: "trust", severity: "low", label: "DMARC policy=none — monitoring only, no email protection", tradeoff: "p=none is a first step. Move to quarantine/reject once reports look clean.", weight: 1 });
-    }
-  }
+  // dmarc_policy_strength removed — now handled by bidirectional dmarc_reject signal above
 
   // ─── Phase 3: ads.txt (publisher transparency) ──────────────────
   if (opts.wellKnown && arch === "content") {

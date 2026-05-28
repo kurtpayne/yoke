@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build src/index.ts --outfile=dist/worker.js --target=browser --minify --loader:.txt=text --external=*.wasm && cp src/resvg_bg.wasm dist/",
+    "build": "bun build src/index.ts --outfile=dist/worker.js --target=browser --minify --loader:.txt=text --external=*.wasm",
     "typecheck": "bun x tsc --noEmit",
     "dev": "npx wrangler dev"
   },

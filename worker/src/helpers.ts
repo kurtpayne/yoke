@@ -19,6 +19,8 @@ export interface Env {
   RATE_LIMIT_AVAILABILITY?: string;
   /** HMAC secret for signing share card URLs */
   SHARE_SECRET?: string;
+  /** OG image rendering worker (service binding — zero-latency, zero-cost) */
+  OG_WORKER?: { fetch: (input: RequestInfo, init?: RequestInit) => Promise<Response> };
   /** Analysis cache TTL override in hours (default: 1) */
   CACHE_TTL_HOURS?: string;
   /** Execution context for ctx.waitUntil — set per-request from the Worker fetch handler */

@@ -1,7 +1,6 @@
 // Share card system — payload encoding, OG tags, dynamic OG image, report card page
 // Route handlers for /r/:payload.:sig and /og/:payload.:sig.png (was .svg)
 
-import { svgToPng } from "./png-render";
 import type { Env } from "./helpers";
 import { getBaseUrl } from "./helpers";
 import { getHtmlSecurityHeaders } from "./spa";
@@ -464,7 +463,23 @@ export async function handleOgImage(request: Request, env: Env, token: string): 
   }
 
   const svg = generateOgSvg(parsed.data);
-  const png = await svgToPng(svg);
+
+  // Render SVG→PNG via the yoke-og service binding (isolates 2.4MB resvg-wasm)
+  if (!(env as any).OG_WORKER) {
+    return new Response("OG rendering service not configured", { status: 503 });
+  }
+  const ogResponse = await (env as any).OG_WORKER.fetch("http://og/render", {
+    method: "POST",
+    body: JSON.stringify({ svg, width: 1200, height: 630 }),
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!ogResponse.ok) {
+    const errText = await ogResponse.text();
+    console.error("[yoke:og] OG worker render failed:", errText);
+    return new Response("OG image rendering failed", { status: 500 });
+  }
+  const png = await ogResponse.arrayBuffer();
+
   return new Response(png, {
     headers: {
       "Content-Type": "image/png",
