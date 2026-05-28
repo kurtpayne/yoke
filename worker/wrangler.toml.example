@@ -25,3 +25,15 @@ database_name = "yoke-stats"
 # [[routes]]
 # pattern = "yourdomain.com/*"
 # zone_name = "yourdomain.com"
+
+# OG image rendering worker (SVG→PNG via resvg-wasm service binding)
+# Deploy og-worker/ first, then uncomment:
+# [[services]]
+# binding = "OG_WORKER"
+# service = "yoke-og"
+
+# KV namespace for reference data (retire.js DB, third-party patterns)
+# Create with: npx wrangler kv namespace create REFERENCE_DATA
+# [[kv_namespaces]]
+# binding = "REFERENCE_DATA"
+# id = "your-kv-namespace-id"

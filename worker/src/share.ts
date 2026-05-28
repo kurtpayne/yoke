@@ -465,10 +465,10 @@ export async function handleOgImage(request: Request, env: Env, token: string): 
   const svg = generateOgSvg(parsed.data);
 
   // Render SVG→PNG via the yoke-og service binding (isolates 2.4MB resvg-wasm)
-  if (!(env as any).OG_WORKER) {
+  if (!env.OG_WORKER) {
     return new Response("OG rendering service not configured", { status: 503 });
   }
-  const ogResponse = await (env as any).OG_WORKER.fetch("http://og/render", {
+  const ogResponse = await env.OG_WORKER.fetch("http://og/render", {
     method: "POST",
     body: JSON.stringify({ svg, width: 1200, height: 630 }),
     headers: { "Content-Type": "application/json" },

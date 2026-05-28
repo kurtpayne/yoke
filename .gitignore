@@ -39,3 +39,5 @@ HATCH-NOTES.md
 cli/yoke
 worker/src/resvg_bg.wasm
 worker/src/resvg.js
+og-worker/wrangler.toml
+og-worker/dist/
