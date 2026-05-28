@@ -1,5 +1,5 @@
-export async function getRecentLookups(db: D1Database, limit: number = 10) {
-  const safeLimit = Math.min(Math.max(1, limit), 50);
+export async function getRecentLookups(db: D1Database, limit: number = 8) {
+  const safeLimit = Math.min(Math.max(1, limit), 8);
   const rows = await db.prepare(
     "SELECT id, domain, results_json, analyzed_at FROM domain_lookups ORDER BY analyzed_at DESC LIMIT ?"
   ).bind(safeLimit * 3).all<{ id: number; domain: string; results_json: string; analyzed_at: number }>();

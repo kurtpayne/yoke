@@ -346,10 +346,9 @@ export default {
           return addHeaders(resp, rl.headers);
         }
 
-        // GET /api/recent
+        // GET /api/recent — internal, capped at 8 results for homepage
         if (method === "GET" && path === "/api/recent") {
-          const limit = parseInt(url.searchParams.get("limit") ?? "10");
-          const result = await getRecentLookups(env.DB, limit);
+          const result = await getRecentLookups(env.DB, 8);
           return json(result);
         }
 
