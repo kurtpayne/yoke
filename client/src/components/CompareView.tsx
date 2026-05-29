@@ -807,7 +807,7 @@ function scoreColor(score: number): string {
 function deltaDisplay(delta: number): { text: string; color: string } {
   if (delta > 0) return { text: `+${delta}`, color: "var(--success)" };
   if (delta < 0) return { text: `${delta}`, color: "var(--danger)" };
-  return { text: "=", color: "var(--dim)" };
+  return { text: "", color: "var(--dim)" };
 }
 
 // ─── Compact Score Card ──────────────────────────────────────────────
