@@ -1096,7 +1096,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                       </span>
                     </div>
                     <div className="flex items-center gap-2" style={{ fontSize: "11px" }}>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, minWidth: 28, textAlign: "right", flexShrink: 0 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, minWidth: 32, fontSize: "12px", textAlign: "right", flexShrink: 0 }}>
                         {ax.score1}
                       </span>
                       <div className="flex-1 relative" style={{ height: 8, borderRadius: 4 }}>
@@ -1113,7 +1113,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                           background: "#f97316", transition: "width 0.6s ease-out",
                         }} />
                       </div>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, minWidth: 28, textAlign: "left", flexShrink: 0 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, minWidth: 32, fontSize: "12px", textAlign: "left", flexShrink: 0 }}>
                         {ax.score2}
                       </span>
                     </div>
