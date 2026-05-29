@@ -25,7 +25,7 @@ import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, YOKE_VERSION } fro
 import type { Env } from "./helpers";
 import { logError } from "./logger";
 import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders, wantsJSON } from "./spa";
-import { handleShareSign, handleSharePage, handleOgImage, matchSharePath, matchOgImagePath } from "./share";
+import { handleShareSign, handleSharePage, handleOgImage, matchSharePath, matchOgImagePath, matchCompareSharePath, matchCompareOgImagePath, handleCompareSharePage, handleCompareOgImage } from "./share";
 import { getApiDocsHtml } from "./pages";
 import { scanForVulnerableLibraries, VULNERABLE_LIBRARIES } from "./data/vulnerable-libraries";
 import type { VulnerableLibrary } from "./data/vulnerable-libraries";
@@ -303,6 +303,18 @@ export default {
     const ogMatch = method === "GET" ? matchOgImagePath(path) : null;
     if (ogMatch) {
       return handleOgImage(request, env, ogMatch);
+    }
+
+    // ── Compare share card routes ──
+    // GET /c/:token — compare report card page with OG tags
+    const compareShareMatch = method === "GET" ? matchCompareSharePath(path) : null;
+    if (compareShareMatch) {
+      return handleCompareSharePage(request, env, compareShareMatch);
+    }
+    // GET /cog/:token.png — dynamic compare OG image
+    const compareOgMatch = method === "GET" ? matchCompareOgImagePath(path) : null;
+    if (compareOgMatch) {
+      return handleCompareOgImage(request, env, compareOgMatch);
     }
 
     // ── SPA routes: static pages, domain paths with content negotiation, compare paths ──

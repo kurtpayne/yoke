@@ -1,5 +1,6 @@
 // Share card system — payload encoding, OG tags, dynamic OG image, report card page
 // Route handlers for /r/:payload.:sig and /og/:payload.:sig.png (was .svg)
+// Compare share handlers: /c/:payload.:sig and /cog/:payload.:sig.png
 
 import type { Env } from "./helpers";
 import { getBaseUrl } from "./helpers";
@@ -16,6 +17,18 @@ interface SharePayload {
   g: string;  // grade
   a: number[]; // axis scores [security, reliability, trust, performance, visibility]
   t: number;  // unix timestamp (seconds)
+}
+
+interface CompareSharePayload {
+  d1: string;  // domain 1
+  d2: string;  // domain 2
+  s1: number;  // composite score 1
+  s2: number;  // composite score 2
+  g1: string;  // grade 1
+  g2: string;  // grade 2
+  a1: number[]; // axis scores 1 [security, reliability, trust, performance, visibility]
+  a2: number[]; // axis scores 2
+  t: number;   // unix timestamp (seconds)
 }
 
 // ─── Base64url helpers ───────────────────────────────────────────────
@@ -107,6 +120,25 @@ function parseShareToken(token: string): { payload: string; signature: string; d
   }
 }
 
+function parseCompareShareToken(token: string): { payload: string; signature: string; data: CompareSharePayload } | null {
+  const dotIdx = token.lastIndexOf(".");
+  if (dotIdx < 1) return null;
+  const payload = token.substring(0, dotIdx);
+  const signature = token.substring(dotIdx + 1);
+  try {
+    const jsonStr = bytesToText(base64urlDecode(payload));
+    const data = JSON.parse(jsonStr) as CompareSharePayload;
+    if (!data.d1 || !data.d2 || typeof data.s1 !== "number" || typeof data.s2 !== "number" ||
+        !data.g1 || !data.g2 || !Array.isArray(data.a1) || data.a1.length !== 5 ||
+        !Array.isArray(data.a2) || data.a2.length !== 5) {
+      return null;
+    }
+    return { payload, signature, data };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Signing endpoint ────────────────────────────────────────────────
 
 export async function handleShareSign(request: Request, env: Env): Promise<Response> {
@@ -121,7 +153,10 @@ export async function handleShareSign(request: Request, env: Env): Promise<Respo
   try {
     const jsonStr = bytesToText(base64urlDecode(body.payload));
     const data = JSON.parse(jsonStr);
-    if (!data.d || typeof data.s !== "number" || !data.g) {
+    // Accept single-domain payload (has 'd') or compare payload (has 'd1')
+    const isSingle = data.d && typeof data.s === "number" && data.g;
+    const isCompare = data.d1 && data.d2 && typeof data.s1 === "number" && typeof data.s2 === "number" && data.g1 && data.g2;
+    if (!isSingle && !isCompare) {
       throw new Error("Invalid payload shape");
     }
   } catch {
@@ -476,6 +511,370 @@ export async function handleOgImage(request: Request, env: Env, token: string): 
   if (!ogResponse.ok) {
     const errText = await ogResponse.text();
     console.error("[yoke:og] OG worker render failed:", errText);
+    return new Response("OG image rendering failed", { status: 500 });
+  }
+  const png = await ogResponse.arrayBuffer();
+
+  return new Response(png, {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=604800, immutable",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+// ─── Compare share routes ────────────────────────────────────────────
+
+const COMPARE_SHARE_PATH_RE = /^\/c\/(.+)$/;
+const COMPARE_OG_IMAGE_PATH_RE = /^\/cog\/(.+)\.png$/;
+
+export function matchCompareSharePath(path: string): string | null {
+  const m = COMPARE_SHARE_PATH_RE.exec(path);
+  return m ? m[1] : null;
+}
+
+export function matchCompareOgImagePath(path: string): string | null {
+  const m = COMPARE_OG_IMAGE_PATH_RE.exec(path);
+  return m ? m[1] : null;
+}
+
+// ─── Compare OG SVG ──────────────────────────────────────────────────
+
+function generateCompareOgSvg(data: CompareSharePayload): string {
+  const d1 = esc(data.d1.length > 24 ? data.d1.substring(0, 24) + "…" : data.d1);
+  const d2 = esc(data.d2.length > 24 ? data.d2.substring(0, 24) + "…" : data.d2);
+  const gc1 = gradeColor(data.g1);
+  const gc2 = gradeColor(data.g2);
+  const sc1 = scoreColor(data.s1);
+  const sc2 = scoreColor(data.s2);
+
+  // Use higher-scoring domain's grade color for the ambient glow
+  const glowColor = data.s1 >= data.s2 ? gc1 : gc2;
+
+  // Axis comparison bars — two bars per axis, matching single-domain bar style
+  const axisBars = AXIS_LABELS.map((label, i) => {
+    const v1 = data.a1[i];
+    const v2 = data.a2[i];
+    const c1 = scoreColor(v1);
+    const c2 = scoreColor(v2);
+    const y = 235 + i * 58;
+    const barMax = 400;
+    const w1 = Math.max(4, (v1 / 100) * barMax);
+    const w2 = Math.max(4, (v2 / 100) * barMax);
+    return `
+      <text x="570" y="${y + 16}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="15" text-anchor="end">${label}</text>
+      <rect x="590" y="${y}" width="${barMax}" height="20" rx="4" fill="#21262d"/>
+      <rect x="590" y="${y}" width="${w1}" height="20" rx="4" fill="${c1}" opacity="0.85"/>
+      <text x="1000" y="${y + 15}" fill="${c1}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="14" font-weight="600" text-anchor="start">${v1}</text>
+      <rect x="590" y="${y + 24}" width="${barMax}" height="20" rx="4" fill="#21262d"/>
+      <rect x="590" y="${y + 24}" width="${w2}" height="20" rx="4" fill="${c2}" opacity="0.7"/>
+      <text x="1000" y="${y + 39}" fill="${c2}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="14" font-weight="600" text-anchor="start">${v2}</text>
+    `;
+  }).join("");
+
+  // Score circle helper — same style as single-domain (stroke-width, inner fill, score text)
+  const scoreCircle = (cx: number, cy: number, score: number, sc: string, grade: string, gc: string, r: number) => {
+    const circum = 2 * Math.PI * r;
+    const gradeBadgeW = grade.length > 1 ? 80 : 64;
+    return `
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#21262d" stroke-width="8"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${sc}" stroke-width="8" stroke-dasharray="${(score / 100) * circum} ${circum}" stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})" opacity="0.7"/>
+      <circle cx="${cx}" cy="${cy}" r="${r - 16}" fill="#0d1117" opacity="0.5"/>
+      <text x="${cx}" y="${cy}" fill="${sc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="52" font-weight="700" text-anchor="middle" dominant-baseline="central">${score}</text>
+      <rect x="${cx - gradeBadgeW / 2}" y="${cy + r + 14}" width="${gradeBadgeW}" height="38" rx="10" fill="${gc}" opacity="0.15" stroke="${gc}" stroke-width="2"/>
+      <text x="${cx}" y="${cy + r + 33}" fill="${gc}" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="${grade.length > 1 ? 22 : 26}" font-weight="700" text-anchor="middle" dominant-baseline="central">${esc(grade)}</text>
+    `;
+  };
+
+  // Legend Y — right after last axis bar row
+  const legendY = 235 + 5 * 58 + 8;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${glowColor}" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="${glowColor}" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="invert">
+      <feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="200" fill="url(#glow)"/>
+
+  <!-- Border -->
+  <rect x="0.5" y="0.5" width="1199" height="629" rx="0" fill="none" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Yoke branding — same position as single-domain -->
+  <image x="56" y="50" width="28" height="28" href="${OX_LOGO_DATA_URI}" filter="url(#invert)" opacity="0.7"/>
+  <text x="92" y="72" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="18" font-weight="600" letter-spacing="2">YOKE</text>
+  <text x="170" y="72" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="14">DOMAIN COMPARISON</text>
+
+  <!-- Domain 1 name -->
+  <text x="60" y="130" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="34" font-weight="700">${d1}</text>
+
+  <!-- vs -->
+  <text x="60" y="160" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" font-weight="400" font-style="italic">vs</text>
+
+  <!-- Domain 2 name -->
+  <text x="60" y="192" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="34" font-weight="700">${d2}</text>
+
+  <!-- Divider -->
+  <line x1="60" y1="210" x2="520" y2="210" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Score circle — Domain 1 -->
+  ${scoreCircle(150, 380, data.s1, sc1, data.g1, gc1, 85)}
+  <text x="150" y="${380 + 85 + 62}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="12" text-anchor="middle">${d1}</text>
+
+  <!-- vs between circles -->
+  <text x="270" y="385" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" font-weight="400" font-style="italic" text-anchor="middle">vs</text>
+
+  <!-- Score circle — Domain 2 -->
+  ${scoreCircle(390, 380, data.s2, sc2, data.g2, gc2, 85)}
+  <text x="390" y="${380 + 85 + 62}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="12" text-anchor="middle">${d2}</text>
+
+  <!-- Axis comparison bars -->
+  ${axisBars}
+
+  <!-- Legend -->
+  <rect x="590" y="${legendY}" width="12" height="12" rx="3" fill="${sc1}" opacity="0.85"/>
+  <text x="608" y="${legendY + 10}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="12">${d1}</text>
+  <rect x="780" y="${legendY}" width="12" height="12" rx="3" fill="${sc2}" opacity="0.7"/>
+  <text x="798" y="${legendY + 10}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="12">${d2}</text>
+
+  <!-- Footer — same position as single-domain -->
+  <text x="60" y="585" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="13">yoke.lol — Free domain intelligence comparison</text>
+  <text x="1140" y="585" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="13" text-anchor="end">Analyzed ${new Date(data.t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</text>
+</svg>`;
+}
+
+// ─── Compare report card page ────────────────────────────────────────
+
+function generateCompareReportPage(data: CompareSharePayload, baseUrl: string, token: string): string {
+  const d1 = esc(data.d1);
+  const d2 = esc(data.d2);
+  const gc1 = gradeColor(data.g1);
+  const gc2 = gradeColor(data.g2);
+  const sc1 = scoreColor(data.s1);
+  const sc2 = scoreColor(data.s2);
+  const delta = data.s1 - data.s2;
+  const analyzedDate = new Date(data.t * 1000).toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+  const ogImageUrl = `${baseUrl}/cog/${esc(token)}.png`;
+  const shareUrl = `${baseUrl}/c/${esc(token)}`;
+
+  const axisBarsHtml = AXIS_LABELS.map((label, i) => {
+    const v1 = data.a1[i];
+    const v2 = data.a2[i];
+    const c1 = scoreColor(v1);
+    const c2 = scoreColor(v2);
+    return `
+      <div class="axis-row">
+        <span class="axis-label">${label}</span>
+        <div class="axis-bars">
+          <div class="axis-bar-track"><div class="axis-bar-fill" style="width:${Math.max(2, v1)}%;background:${c1}"></div></div>
+          <div class="axis-bar-track"><div class="axis-bar-fill" style="width:${Math.max(2, v2)}%;background:${c2};opacity:0.7"></div></div>
+        </div>
+        <span class="axis-vals">
+          <span style="color:${c1}">${v1}</span>
+          <span style="color:#484f58"> / </span>
+          <span style="color:${c2}">${v2}</span>
+        </span>
+      </div>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${d1} vs ${d2} — Yoke Comparison</title>
+  <meta name="description" content="${d1} (${data.s1}/${esc(data.g1)}) vs ${d2} (${data.s2}/${esc(data.g2)}) — Domain intelligence comparison"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:title" content="${d1} vs ${d2} — Yoke Comparison"/>
+  <meta property="og:description" content="${d1} scored ${data.s1} (${esc(data.g1)}) · ${d2} scored ${data.s2} (${esc(data.g2)}) — Domain intelligence comparison"/>
+  <meta property="og:image" content="${ogImageUrl}"/>
+  <meta property="og:image:type" content="image/png"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:url" content="${shareUrl}"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="${d1} vs ${d2} — Yoke Comparison"/>
+  <meta name="twitter:description" content="${d1} scored ${data.s1} (${esc(data.g1)}) · ${d2} scored ${data.s2} (${esc(data.g2)})"/>
+  <meta name="twitter:image" content="${ogImageUrl}"/>
+  <link rel="canonical" href="${shareUrl}"/>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0d1117;color:#e6edf3;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+    .card{background:#161b22;border:1px solid #30363d;border-radius:16px;max-width:600px;width:100%;padding:40px;position:relative;overflow:hidden}
+    .brand{display:flex;align-items:center;gap:8px;margin-bottom:28px;position:relative}
+    .brand-name{color:#8b949e;font-size:14px;font-weight:600;letter-spacing:2px}
+    .brand-sub{color:#484f58;font-size:12px}
+    .vs-header{text-align:center;margin-bottom:8px;position:relative}
+    .vs-header .domain{font-size:24px;font-weight:700;color:#e6edf3}
+    .vs-header .vs{font-size:14px;color:#484f58;font-style:italic;margin:4px 0}
+    .timestamp{font-size:13px;color:#484f58;margin-bottom:28px;text-align:center;position:relative}
+    .scores{display:flex;justify-content:center;gap:40px;margin-bottom:32px;position:relative}
+    .score-col{display:flex;flex-direction:column;align-items:center;gap:8px}
+    .score-ring{position:relative;width:100px;height:100px}
+    .score-ring svg{width:100px;height:100px}
+    .score-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:32px;font-weight:700;line-height:1}
+    .grade-badge{min-width:48px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;padding:0 6px}
+    .score-domain{font-size:11px;color:#8b949e;max-width:120px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .delta-badge{text-align:center;margin-bottom:28px;position:relative}
+    .delta-badge span{font-size:13px;font-weight:600;padding:4px 12px;border-radius:8px;background:#21262d}
+    .axes{display:flex;flex-direction:column;gap:10px;margin-bottom:32px;position:relative}
+    .axis-row{display:flex;align-items:center;gap:10px}
+    .axis-label{width:90px;font-size:12px;color:#8b949e;text-align:right;flex-shrink:0}
+    .axis-bars{flex:1;display:flex;flex-direction:column;gap:2px}
+    .axis-bar-track{height:8px;background:#21262d;border-radius:3px;overflow:hidden}
+    .axis-bar-fill{height:100%;border-radius:3px}
+    .axis-vals{width:68px;font-size:12px;font-weight:600;text-align:right;flex-shrink:0;font-family:monospace}
+    .cta{display:block;text-align:center;padding:14px 24px;background:var(--cta-bg,#3fb950);color:#0d1117;font-size:15px;font-weight:600;border-radius:10px;text-decoration:none;transition:opacity 0.15s;position:relative}
+    .cta:hover{opacity:0.85}
+    .footer{margin-top:24px;text-align:center;font-size:12px;color:#484f58}
+    .footer a{color:#8b949e;text-decoration:none}
+    .footer a:hover{text-decoration:underline}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <img src="${OX_LOGO_DATA_URI}" alt="Yoke" width="22" height="22" style="filter:brightness(0) invert(1);opacity:0.7"/>
+      <span class="brand-name">YOKE</span>
+      <span class="brand-sub">DOMAIN COMPARISON</span>
+    </div>
+    <div class="vs-header">
+      <div class="domain">${d1}</div>
+      <div class="vs">vs</div>
+      <div class="domain">${d2}</div>
+    </div>
+    <div class="timestamp">Analyzed on ${esc(analyzedDate)}</div>
+    <div class="scores">
+      <div class="score-col">
+        <div class="score-ring">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="#21262d" stroke-width="6"/>
+            <circle cx="50" cy="50" r="40" fill="none" stroke="${sc1}" stroke-width="6" stroke-dasharray="${(data.s1 / 100) * 251.3} 251.3" stroke-linecap="round" transform="rotate(-90 50 50)" opacity="0.8"/>
+          </svg>
+          <div class="score-num" style="color:${sc1}">${data.s1}</div>
+        </div>
+        <div class="grade-badge" style="color:${gc1};background:${gc1}1a;border:1.5px solid ${gc1}33">${esc(data.g1)}</div>
+        <div class="score-domain">${d1}</div>
+      </div>
+      <div class="score-col">
+        <div class="score-ring">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="40" fill="none" stroke="#21262d" stroke-width="6"/>
+            <circle cx="50" cy="50" r="40" fill="none" stroke="${sc2}" stroke-width="6" stroke-dasharray="${(data.s2 / 100) * 251.3} 251.3" stroke-linecap="round" transform="rotate(-90 50 50)" opacity="0.8"/>
+          </svg>
+          <div class="score-num" style="color:${sc2}">${data.s2}</div>
+        </div>
+        <div class="grade-badge" style="color:${gc2};background:${gc2}1a;border:1.5px solid ${gc2}33">${esc(data.g2)}</div>
+        <div class="score-domain">${d2}</div>
+      </div>
+    </div>
+    <div class="delta-badge"><span style="color:${delta > 0 ? "#3fb950" : delta < 0 ? "#f85149" : "#8b949e"}">${delta > 0 ? "+" : ""}${delta} point delta</span></div>
+    <div class="axes">${axisBarsHtml}</div>
+    <a class="cta" href="${baseUrl}/compare/${esc(data.d1)}/${esc(data.d2)}" style="--cta-bg:${gc1}">⚡ Full comparison on Yoke</a>
+  </div>
+  <div class="footer">
+    <a href="${baseUrl}">yoke.lol</a> — Free domain intelligence for everyone
+  </div>
+</body>
+</html>`;
+}
+
+// ─── Compare route handlers ──────────────────────────────────────────
+
+/** Handle GET /c/:token — compare report card page */
+export async function handleCompareSharePage(request: Request, env: Env, token: string): Promise<Response> {
+  const parsed = parseCompareShareToken(token);
+  if (!parsed) {
+    return new Response("Invalid compare share link", { status: 400, headers: { "Content-Type": "text/plain" } });
+  }
+  const valid = await verifyPayload(parsed.payload, parsed.signature, env);
+  if (!valid) {
+    return new Response("Invalid or tampered compare share link", { status: 400, headers: { "Content-Type": "text/plain" } });
+  }
+
+  const baseUrl = getBaseUrl(request, env);
+  const ua = request.headers.get("User-Agent") || "";
+
+  if (isBotUA(ua)) {
+    const d = parsed.data;
+    const ogImageUrl = `${baseUrl}/cog/${token}.png`;
+    const shareUrl = `${baseUrl}/c/${token}`;
+    const html = `<!DOCTYPE html><html><head>
+<meta charset="utf-8"/>
+<title>${esc(d.d1)} vs ${esc(d.d2)} — Yoke Comparison</title>
+<meta property="og:type" content="website"/>
+<meta property="og:title" content="${esc(d.d1)} vs ${esc(d.d2)} — Yoke Comparison"/>
+<meta property="og:description" content="${esc(d.d1)} scored ${d.s1} (${esc(d.g1)}) · ${esc(d.d2)} scored ${d.s2} (${esc(d.g2)}) — Domain intelligence comparison"/>
+<meta property="og:image" content="${esc(ogImageUrl)}"/>
+<meta property="og:image:type" content="image/png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:url" content="${esc(shareUrl)}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="${esc(d.d1)} vs ${esc(d.d2)} — Yoke Comparison"/>
+<meta name="twitter:description" content="${esc(d.d1)} scored ${d.s1} (${esc(d.g1)}) · ${esc(d.d2)} scored ${d.s2} (${esc(d.g2)})"/>
+<meta name="twitter:image" content="${esc(ogImageUrl)}"/>
+<link rel="canonical" href="${esc(shareUrl)}"/>
+</head><body></body></html>`;
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html;charset=UTF-8",
+        "Cache-Control": "public, max-age=86400",
+        ...getHtmlSecurityHeaders(baseUrl),
+      },
+    });
+  }
+
+  const html = generateCompareReportPage(parsed.data, baseUrl, token);
+  return new Response(html, {
+    headers: {
+      "Content-Type": "text/html;charset=UTF-8",
+      "Cache-Control": "public, max-age=86400",
+      ...getHtmlSecurityHeaders(baseUrl),
+    },
+  });
+}
+
+/** Handle GET /cog/:token.png — compare OG image as PNG */
+export async function handleCompareOgImage(request: Request, env: Env, token: string): Promise<Response> {
+  const parsed = parseCompareShareToken(token);
+  if (!parsed) {
+    return new Response("Invalid token", { status: 400, headers: { "Content-Type": "text/plain" } });
+  }
+  const valid = await verifyPayload(parsed.payload, parsed.signature, env);
+  if (!valid) {
+    return new Response("Invalid token", { status: 400, headers: { "Content-Type": "text/plain" } });
+  }
+
+  const svg = generateCompareOgSvg(parsed.data);
+
+  if (!env.OG_WORKER) {
+    return new Response("OG rendering service not configured", { status: 503 });
+  }
+  const ogResponse = await env.OG_WORKER.fetch("http://og/render", {
+    method: "POST",
+    body: JSON.stringify({ svg, width: 1200, height: 630 }),
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!ogResponse.ok) {
+    const errText = await ogResponse.text();
+    console.error("[yoke:og] Compare OG worker render failed:", errText);
     return new Response("OG image rendering failed", { status: 500 });
   }
   const png = await ogResponse.arrayBuffer();

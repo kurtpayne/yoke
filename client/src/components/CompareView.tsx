@@ -610,20 +610,89 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
 
 // ─── Compare Share Bar ───────────────────────────────────────────────
 
-function CompareShareBar({ domain1, domain2 }: { domain1: string; domain2: string }) {
-  const [copied, setCopied] = useState(false);
+// ─── Base64url helpers ───────────────────────────────────────────────
 
-  const shareUrl = `${window.location.origin}/compare/${domain1}/${domain2}`;
-  const shareText = `${domain1} vs ${domain2} — Domain Intelligence Comparison`;
+function base64urlEncode(bytes: Uint8Array): string {
+  let b64 = "";
+  const len = bytes.length;
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < len ? bytes[i + 1] : 0;
+    const b2 = i + 2 < len ? bytes[i + 2] : 0;
+    const triplet = (b0 << 16) | (b1 << 8) | b2;
+    b64 += chars[(triplet >> 18) & 0x3f];
+    b64 += chars[(triplet >> 12) & 0x3f];
+    b64 += i + 1 < len ? chars[(triplet >> 6) & 0x3f] : "";
+    b64 += i + 2 < len ? chars[triplet & 0x3f] : "";
+  }
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+const SHARE_AXIS_ORDER: Axis[] = ["security", "reliability", "trust", "performance", "visibility"];
+
+function buildComparePayload(data: CompareResult): string {
+  const ds1 = data.domain1.score as DomainScoreData | undefined;
+  const ds2 = data.domain2.score as DomainScoreData | undefined;
+  const a1 = SHARE_AXIS_ORDER.map(a => ds1?.axes?.[a]?.score ?? 0);
+  const a2 = SHARE_AXIS_ORDER.map(a => ds2?.axes?.[a]?.score ?? 0);
+  const obj = {
+    d1: data.domain1.domain,
+    d2: data.domain2.domain,
+    s1: data.comparison.composite.score1 ?? 0,
+    s2: data.comparison.composite.score2 ?? 0,
+    g1: data.comparison.composite.grade1 ?? "?",
+    g2: data.comparison.composite.grade2 ?? "?",
+    a1, a2,
+    t: Math.floor(Date.now() / 1000),
+  };
+  return base64urlEncode(new TextEncoder().encode(JSON.stringify(obj)));
+}
+
+async function getCompareSignedUrl(payload: string, origin: string): Promise<string> {
+  const resp = await fetch(`${origin}/api/share-sign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payload }),
+  });
+  if (!resp.ok) throw new Error("Failed to sign compare share payload");
+  const result = await resp.json() as { signature: string };
+  return `${origin}/c/${payload}.${result.signature}`;
+}
+
+function CompareShareBar({ data }: { data: CompareResult }) {
+  const [copied, setCopied] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const signingRef = useRef<Promise<string> | null>(null);
+
+  // Build signed URL on mount / data change
+  useEffect(() => {
+    const { score1, score2, grade1, grade2 } = data.comparison.composite;
+    if (score1 == null || score2 == null || !grade1 || !grade2) return;
+    const payload = buildComparePayload(data);
+    const promise = getCompareSignedUrl(payload, window.location.origin);
+    signingRef.current = promise;
+    promise.then(url => {
+      if (signingRef.current === promise) setShareUrl(url);
+    }).catch(() => {
+      // Fallback to plain compare URL
+      if (signingRef.current === promise) {
+        setShareUrl(`${window.location.origin}/compare/${data.domain1.domain}/${data.domain2.domain}`);
+      }
+    });
+  }, [data]);
+
+  const currentUrl = shareUrl ?? `${window.location.origin}/compare/${data.domain1.domain}/${data.domain2.domain}`;
+  const shareText = `${data.domain1.domain} vs ${data.domain2.domain} — Domain Intelligence Comparison`;
 
   const copyLink = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(currentUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       const input = document.createElement("input");
-      input.value = shareUrl;
+      input.value = currentUrl;
       document.body.appendChild(input);
       input.select();
       document.execCommand("copy");
@@ -631,36 +700,36 @@ function CompareShareBar({ domain1, domain2 }: { domain1: string; domain2: strin
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
-  }, [shareUrl]);
+  }, [currentUrl]);
 
   const shareToX = useCallback(() => {
     window.open(
-      `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`,
+      `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(currentUrl)}`,
       "_blank", "noopener,noreferrer,width=550,height=420"
     );
-  }, [shareUrl, shareText]);
+  }, [currentUrl, shareText]);
 
   const shareToLinkedIn = useCallback(() => {
     window.open(
-      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(currentUrl)}`,
       "_blank", "noopener,noreferrer,width=600,height=500"
     );
-  }, [shareUrl]);
+  }, [currentUrl]);
 
   const shareToReddit = useCallback(() => {
     window.open(
-      `https://reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`,
+      `https://reddit.com/submit?url=${encodeURIComponent(currentUrl)}&title=${encodeURIComponent(shareText)}`,
       "_blank", "noopener,noreferrer"
     );
-  }, [shareUrl, shareText]);
+  }, [currentUrl, shareText]);
 
   const nativeShare = useCallback(async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: shareText, text: shareText, url: shareUrl });
+        await navigator.share({ title: shareText, text: shareText, url: currentUrl });
       } catch { /* cancelled */ }
     }
-  }, [shareUrl, shareText]);
+  }, [currentUrl, shareText]);
 
   const hasNativeShare = typeof navigator !== "undefined" && !!navigator.share;
 
@@ -973,7 +1042,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
           </div>
 
           {/* Share bar */}
-          <CompareShareBar domain1={data.domain1.domain} domain2={data.domain2.domain} />
+          <CompareShareBar data={data} />
 
           {/* Radar plot */}
           <div className="panel p-4">
