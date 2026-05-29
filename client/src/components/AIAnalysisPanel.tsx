@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Sparkles, CheckCircle2, XCircle, Loader2, Zap, Target, Copy, Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Key, RotateCcw, Settings, ArrowUp } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
 import type { ScoreFinding, Axis, Severity } from "../api";
@@ -1220,6 +1220,17 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
                 <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>
                   {item.fixDescription}
                 </span>
+                {(() => {
+                  const effort = item.effort.toLowerCase();
+                  const isQuickWin = effort.includes("5 min") || effort.includes("10 min") || effort.includes("15 min") || effort.includes("one-line") || effort.includes("one response header");
+                  return isQuickWin ? (
+                    <span style={{
+                      fontSize: "9px", padding: "1px 5px", borderRadius: "3px",
+                      background: "rgba(210,153,34,0.15)", color: "var(--warning)",
+                      fontWeight: 700, letterSpacing: "0.02em", whiteSpace: "nowrap",
+                    }}>⚡ quick win</span>
+                  ) : null;
+                })()}
                 {item.fixLink && (
                   <a
                     href={item.fixLink.url}
@@ -1431,26 +1442,56 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamProgress, setStreamProgress] = useState(0);
   const streamContainerRef = useRef<HTMLDivElement>(null);
+  const progressAnimRef = useRef<number | null>(null);
+  const lastSignpostRef = useRef(-1);
 
-  // Estimate progress from JSON structure signposts
-  const estimateProgress = useCallback((text: string): number => {
-    const signposts: [string, number][] = [
-      ['"summary"', 8],
-      ['"posture"', 15],
-      ['"key_findings"', 30],
-      ['"cross_signal_insights"', 55],
-      ['"attack_surface"', 78],
-      ['"recommendations"', 90],
-    ];
-    let progress = 3; // started
-    for (const [key, pct] of signposts) {
-      if (text.includes(key)) progress = pct;
+  // Signpost targets — when we see a JSON key, we know where we are
+  const SIGNPOSTS: [string, number][] = useMemo(() => [
+    ['"summary"', 10],
+    ['"posture"', 16],
+    ['"key_findings"', 32],
+    ['"cross_signal_insights"', 58],
+    ['"attack_surface"', 80],
+    ['"recommendations"', 92],
+  ], []);
+
+  // Animate progress smoothly between signposts using ease-out cubic
+  const startProgressAnimation = useCallback((base: number, target: number, durationMs = 12000) => {
+    if (progressAnimRef.current) cancelAnimationFrame(progressAnimRef.current);
+    const startTime = performance.now();
+
+    const tick = () => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(elapsed / durationMs, 1);
+      // Ease-out cubic — fast start, slows near target so it never looks stuck
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = base + (target - base) * eased;
+      setStreamProgress(Math.round(current));
+      if (t < 1) {
+        progressAnimRef.current = requestAnimationFrame(tick);
+      }
+    };
+    progressAnimRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  // When streaming text updates, check for signposts and advance animation
+  const updateProgressFromText = useCallback((text: string) => {
+    let hitIdx = -1;
+    for (let i = SIGNPOSTS.length - 1; i >= 0; i--) {
+      if (text.includes(SIGNPOSTS[i][0])) { hitIdx = i; break; }
     }
-    // Within each section, interpolate based on chars since last signpost
-    const lastIdx = Math.max(...signposts.filter(([k]) => text.includes(k)).map(([k]) => text.lastIndexOf(k)), 0);
-    const charsSince = text.length - lastIdx;
-    const bonus = Math.min(charsSince / 200, 1) * 8; // up to 8% bonus within section
-    return Math.min(Math.round(progress + bonus), 98);
+    if (hitIdx > lastSignpostRef.current) {
+      lastSignpostRef.current = hitIdx;
+      const reached = SIGNPOSTS[hitIdx][1];
+      const nextTarget = hitIdx < SIGNPOSTS.length - 1 ? SIGNPOSTS[hitIdx + 1][1] : 98;
+      // Animate from the reached signpost toward the next one
+      startProgressAnimation(reached, nextTarget, 12000);
+    }
+  }, [SIGNPOSTS, startProgressAnimation]);
+
+  // Clean up animation on unmount
+  useEffect(() => {
+    return () => { if (progressAnimRef.current) cancelAnimationFrame(progressAnimRef.current); };
   }, []);
 
   const actionItems = analysisData ? generateActionItems(analysisData) : [];
@@ -1526,7 +1567,9 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       if (!res.body) throw new Error("No response body for streaming");
 
       setIsStreaming(true);
-      setStreamProgress(3);
+      setStreamProgress(0);
+      lastSignpostRef.current = -1;
+      startProgressAnimation(0, 8, 10000); // Animate 0→8% while waiting for first signpost
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
@@ -1555,7 +1598,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
             if (evt.chunk) {
               accumulated += evt.chunk;
               setStreamingText(accumulated);
-              setStreamProgress(estimateProgress(accumulated));
+              updateProgressFromText(accumulated);
             }
             if (evt.done) {
               // Parse the complete JSON
@@ -1576,6 +1619,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
               } catch {
                 setError("Failed to parse AI response");
               }
+              if (progressAnimRef.current) cancelAnimationFrame(progressAnimRef.current);
               setStreamProgress(100);
               setStreamingText("");
               setIsStreaming(false);
@@ -1623,101 +1667,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       {/* 1. Grade-Up Simulator (deterministic) */}
       {analysisData && <GradeUpSimulator data={analysisData} />}
 
-      {/* 2. Quick Wins (deterministic) */}
-      {analysisData && <QuickWinsPanel actionItems={actionItems} data={analysisData} />}
-
-      {/* 3. Top Priorities (deterministic) */}
-      <div style={{
-        background: "var(--card)", border: "1px solid var(--border)", borderRadius: "10px",
-        padding: "16px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-          <Target size={14} style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Key Findings</span>
-          <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto" }}>ranked by impact</span>
-        </div>
-        {actionItems.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 0 4px", fontSize: "13px", color: "var(--success)" }}>
-            <CheckCircle2 size={14} />
-            <span>This domain is well-configured. No critical issues found.</span>
-          </div>
-        ) : (() => {
-          const DEFAULT_VISIBLE = 5;
-          const hasMore = actionItems.length > DEFAULT_VISIBLE;
-          const visibleItems = prioritiesExpanded ? actionItems : actionItems.slice(0, DEFAULT_VISIBLE);
-          return (
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "10px" }}>
-            {visibleItems.map((item, i) => {
-              const severityColor = item.severity === "critical" ? "var(--danger)"
-                : item.severity === "high" ? "#f59e0b"
-                : item.severity === "medium" ? "var(--warning)"
-                : "var(--muted)";
-              const severityIcon = item.severity === "critical" ? "🔴"
-                : item.severity === "high" ? "🟠"
-                : item.severity === "medium" ? "🟡"
-                : "🟢";
-              const ref = findReferenceLink(item.title);
-
-              // Try to get a fix link from the grade-up engine
-              const plan = analysisData ? generateGradeUpPlan(analysisData) : null;
-              const gradeUpMatch = plan?.items.find(g =>
-                item.title.toLowerCase().includes(g.fixDescription.toLowerCase().slice(0, 15))
-              );
-              const fixLink = gradeUpMatch?.fixLink || null;
-
-              return (
-                <div key={i} style={{
-                  display: "flex", flexDirection: "column", gap: "3px",
-                  paddingLeft: "12px", borderLeft: `2px solid ${severityColor}`,
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "11px", flexShrink: 0 }}>{severityIcon}</span>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{item.title}</span>
-                    {(ref || fixLink) && (
-                      <a
-                        href={(fixLink || ref)!.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={(fixLink || ref)!.label}
-                        style={{ color: "var(--dim)", flexShrink: 0, opacity: 0.5, transition: "opacity 0.15s", display: "flex", alignItems: "center" }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
-                        onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
-                      >
-                        <ExternalLink size={10} />
-                      </a>
-                    )}
-                    {item.effort && (
-                      <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto", whiteSpace: "nowrap", flexShrink: 0 }}>{item.effort}</span>
-                    )}
-                  </div>
-                  <span style={{ fontSize: "12px", color: "var(--muted)", lineHeight: 1.4, paddingLeft: "17px" }}>{item.reason}</span>
-                </div>
-              );
-            })}
-            {hasMore && (
-              <button
-                onClick={() => setPrioritiesExpanded(prev => !prev)}
-                style={{
-                  background: "none", border: "none", cursor: "pointer", padding: "4px 0 0",
-                  display: "flex", alignItems: "center", gap: "4px",
-                  fontSize: "11px", color: "var(--muted)", transition: "color 0.15s",
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "var(--muted)")}
-              >
-                {prioritiesExpanded ? (
-                  <><ChevronUp size={12} /> Show less</>
-                ) : (
-                  <><ChevronDown size={12} /> Show {actionItems.length - DEFAULT_VISIBLE} more</>
-                )}
-              </button>
-            )}
-          </div>
-          );
-        })()}
-      </div>
-
-      {/* 4. Cross-Signal Insights (LLM) */}
+      {/* 2. Cross-Signal Insights (LLM) */}
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
           <Sparkles size={14} style={{ color: "var(--accent)" }} />
@@ -1756,7 +1706,6 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
                 height: "100%", borderRadius: "2px",
                 background: "var(--accent)",
                 width: `${streamProgress}%`,
-                transition: "width 0.4s ease-out",
               }} />
             </div>
             <div
