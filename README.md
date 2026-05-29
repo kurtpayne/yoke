@@ -26,7 +26,7 @@ curl yoke.lol/stripe.com | jq
 ## Features
 
 ### 📊 Contextual Scoring
-5-axis scoring (Security, Performance, Reliability, Trust, Visibility) with radar visualization. Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥65, D≥50, F<50. Auto-classifies sites into 7 archetypes (commerce, content, application, corporate, infrastructure, institutional, general) to adjust individual finding severity — missing HSTS is critical for e-commerce, low-priority for a blog. [Compare domains side-by-side](https://yoke.lol/compare/github.com/gitlab.com) with overlaid radar and per-axis deltas.
+5-axis scoring (Security, Performance, Reliability, Trust, Visibility) with radar visualization. Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥65, D≥50, F<50. Performance scoring is mobile-first (60% mobile + 40% desktop blending). Breach trust impact uses time decay — recent breaches weigh more heavily, while breaches older than 10 years have minimal impact. Auto-classifies sites into 7 archetypes (commerce, content, application, corporate, infrastructure, institutional, general) to adjust individual finding severity — missing HSTS is critical for e-commerce, low-priority for a blog. [Compare domains side-by-side](https://yoke.lol/compare/github.com/gitlab.com) with overlaid radar and per-axis deltas.
 
 ### 🔍 Core Analysis
 - **DNS** — A, AAAA, MX, NS, TXT, CNAME, CAA, SOA with TTL and provider detection
@@ -39,7 +39,7 @@ curl yoke.lol/stripe.com | jq
 - **Headers Audit** — CSP, HSTS, X-Frame-Options, and more with pass/fail grading
 - **Email Auth** — SPF, DKIM, DMARC, BIMI, MTA-STS, TLS-RPT
 - **DNSSEC** — DNSKEY and DS record verification
-- **Breach Detection** — HIBP database lookup
+- **Breach Detection** — HIBP database lookup with time-decay weighting
 - **Subdomain Scan** — 157 common prefixes across 12 categories + CT log discovery via CertSpotter
 - **Cookie Security** — Secure, HttpOnly, SameSite audit
 - **WAF Detection** — 11+ providers (Cloudflare, Sucuri, Imperva, Akamai, etc.)
@@ -55,13 +55,13 @@ curl yoke.lol/stripe.com | jq
 - **Accessibility** — 9 WCAG quick checks (labels, alt text, contrast, headings, landmarks)
 
 ### 📊 Performance & Business
-- **PageSpeed** — Lighthouse scores, Core Web Vitals (FCP, LCP, TBT, CLS), CrUX field data, cache analysis
+- **PageSpeed** — Lighthouse scores (mobile-first 60/40 blend), Core Web Vitals (FCP, LCP, TBT, CLS), CrUX field data, cache analysis
 - **Company Intel** — Wikidata + Brandfetch + Crunchbase enrichment
 - **Stock Data** — Live ticker, price, market cap, sparkline for public companies
 - **News & Social** — Bing News, Hacker News, social account discovery with rel="me" verification badges across 12+ platforms
 
 ### 🤖 AI Analysis
-6 AI personas (Security Analyst, SEO Expert, Developer, Business Analyst, Privacy Auditor, Performance Engineer). Powered by Claude via OpenRouter with 24h caching. BYO API key to bypass rate limits — includes model picker and prompt editor.
+6 AI personas (Security Analyst, SEO Expert, Developer, Business Analyst, Privacy Auditor, Performance Engineer). Powered by Claude via OpenRouter with 24h caching. BYO API key to bypass rate limits — your key is passed through to OpenRouter and never logged or stored. Includes model picker and prompt editor.
 
 ### 🔗 API & Sharing
 - **JSON API** — `curl yoke.lol/stripe.com | jq` — content-negotiated, no auth required
@@ -224,7 +224,7 @@ The CLI uses the same API as the web app and supports custom endpoints via confi
 |-------|------|---------|
 | **Frontend** | React 19, Tailwind v4, React Query, Leaflet | 21 lazy chunks, ~213KB initial JS |
 | **Backend** | Cloudflare Worker (TypeScript) | Zero dependencies, ~214KB bundled |
-| **Database** | Cloudflare D1 | SQLite at the edge — cache + rate limits + analytics |
+| **Database** | Cloudflare D1 + KV | D1 for cache + analytics; KV for rate-limit fallback |
 | **Proxy** | Go on Fly.io | HTTP probes, MaxMind GeoIP, check-host.net relay |
 | **Extension** | Chrome Manifest V3 | Side panel, zero dependencies |
 | **Build** | Bun + Vite | Node.js 22+ for Wrangler deploy |

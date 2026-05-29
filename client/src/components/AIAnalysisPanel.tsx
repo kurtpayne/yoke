@@ -1041,7 +1041,7 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
           <Key size={14} /> Unlock unlimited analysis
         </div>
         <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
-          Enter your own <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>OpenRouter API key</a> — stored locally, never sent to Yoke.
+          Enter your own <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>OpenRouter API key</a> — stored locally in your browser.
         </p>
         <div style={{ display: "flex", gap: "6px" }}>
           <input
