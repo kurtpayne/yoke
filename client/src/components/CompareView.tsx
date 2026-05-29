@@ -1077,48 +1077,46 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
             }}>
               Per-Axis Breakdown
             </div>
-            <div className="space-y-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {data.comparison.axes.map(ax => {
                 const d = deltaDisplay(ax.delta);
                 const isBigDiff = ax.absDelta >= 15;
                 return (
-                  <div key={ax.axis}>
-                    <div className="flex items-center justify-between" style={{ fontSize: "11px", marginBottom: 2 }}>
-                      <span style={{
-                        fontFamily: "var(--font-ui)", fontWeight: 600,
-                        color: isBigDiff ? "var(--text)" : "var(--dim)",
-                      }}>
-                        {AXIS_LABELS[ax.axis]}
-                        {isBigDiff && <span style={{ marginLeft: 4, fontSize: "9px", color: "var(--warning)" }}>★</span>}
-                      </span>
+                  <div key={ax.axis} className="flex items-center gap-2" style={{ minHeight: 20 }}>
+                    {/* Axis label + delta */}
+                    <div style={{
+                      fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 600,
+                      color: isBigDiff ? "var(--text)" : "var(--dim)",
+                      minWidth: 82, flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
+                    }}>
+                      {AXIS_LABELS[ax.axis]}
+                      {isBigDiff && <span style={{ fontSize: "9px", color: "var(--warning)" }}>★</span>}
                       {d.text && (
-                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: d.color, fontSize: "11px" }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: d.color }}>
                           {d.text}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2" style={{ fontSize: "11px" }}>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, minWidth: 28, fontSize: "11px", textAlign: "right", flexShrink: 0 }}>
-                        {ax.score1}
-                      </span>
-                      <div className="flex-1 relative" style={{ height: 8, borderRadius: 4 }}>
-                        {/* Background */}
-                        <div className="absolute inset-0 rounded" style={{ background: "var(--border)", opacity: 0.5 }} />
-                        {/* Domain 1 bar */}
-                        <div className="absolute top-0 left-0 rounded" style={{
-                          height: 4, width: `${ax.score1}%`,
-                          background: "var(--accent)", transition: "width 0.6s ease-out",
-                        }} />
-                        {/* Domain 2 bar */}
-                        <div className="absolute bottom-0 left-0 rounded" style={{
-                          height: 4, width: `${ax.score2}%`,
-                          background: "#f97316", transition: "width 0.6s ease-out",
-                        }} />
-                      </div>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, minWidth: 28, fontSize: "11px", textAlign: "left", flexShrink: 0 }}>
-                        {ax.score2}
-                      </span>
+                    {/* Score 1 */}
+                    <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, fontSize: "11px", minWidth: 22, textAlign: "right", flexShrink: 0 }}>
+                      {ax.score1}
+                    </span>
+                    {/* Bars */}
+                    <div className="flex-1 relative" style={{ height: 8, borderRadius: 4 }}>
+                      <div className="absolute inset-0 rounded" style={{ background: "var(--border)", opacity: 0.5 }} />
+                      <div className="absolute top-0 left-0 rounded" style={{
+                        height: 4, width: `${ax.score1}%`,
+                        background: "var(--accent)", transition: "width 0.6s ease-out",
+                      }} />
+                      <div className="absolute bottom-0 left-0 rounded" style={{
+                        height: 4, width: `${ax.score2}%`,
+                        background: "#f97316", transition: "width 0.6s ease-out",
+                      }} />
                     </div>
+                    {/* Score 2 */}
+                    <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, fontSize: "11px", minWidth: 22, textAlign: "left", flexShrink: 0 }}>
+                      {ax.score2}
+                    </span>
                   </div>
                 );
               })}
