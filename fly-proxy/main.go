@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -192,7 +193,11 @@ func checkAuth(r *http.Request) bool {
 		return true // ALLOW_OPEN_PROXY mode — startup already warned
 	}
 	auth := r.Header.Get("Authorization")
-	return auth == "Bearer "+secret
+	expected := "Bearer " + secret
+	if len(auth) != len(expected) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(auth), []byte(expected)) == 1
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {

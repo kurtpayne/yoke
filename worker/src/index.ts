@@ -340,7 +340,7 @@ export default {
         // POST /api/analyze
         if (method === "POST" && path === "/api/analyze") {
           // Admin key bypasses rate limit (for batch calibration / internal tools)
-          const adminBypass = env.ADMIN_KEY && request.headers.get("X-Admin-Key") === env.ADMIN_KEY;
+          const adminBypass = env.ADMIN_KEY && timingSafeEq(request.headers.get("X-Admin-Key") ?? "", env.ADMIN_KEY);
           const rl = adminBypass ? { blocked: null, headers: {} } : await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
           if (rl.blocked) { _track("analyze", 429); return rl.blocked; }
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
@@ -574,16 +574,12 @@ export default {
           // Fetch the page HTML
           let html = "";
           try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 10_000);
-            const resp = await fetch(`https://${domain}`, {
+            const resp = await safeFetchWithRedirects(`https://${domain}`, {
               headers: { "User-Agent": "YokeBot/1.0 (+https://yoke.lol)" },
-              redirect: "follow",
-              signal: controller.signal,
+              timeout: 10_000,
             });
-            clearTimeout(timeout);
             if (resp.ok) {
-              html = await resp.text();
+              html = await boundedText(resp, 5 * 1024 * 1024);
             }
           } catch (_) {
             // Site unreachable — return empty scan

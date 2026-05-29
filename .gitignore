@@ -15,6 +15,11 @@ dist/
 .wrangler/
 .mf/
 worker/wrangler.toml
+og-worker/wrangler.toml
+og-worker/dist/
+
+# Local deploy metadata (contains resource IDs)
+metadata.json
 
 # Fly.io — fly.toml is committed (no secrets)
 
@@ -34,15 +39,33 @@ Thumbs.db
 
 # Lockfiles (bun.lock is canonical)
 client/package-lock.json
-HATCH-NOTES.md
-*.zip
-cli/yoke
+worker/package-lock.json
+og-worker/package-lock.json
+
+# Vendored binaries
 worker/src/resvg_bg.wasm
 worker/src/resvg.js
-og-worker/wrangler.toml
-og-worker/dist/
+cli/yoke
+*.zip
 
 # Calibration data (large JSON files)
 calibration/results/
+calibration/post-calibration/results/
+calibration/post-phase3/results/
 calibration/*.log
 calibration/analysis-output.txt
+
+# Internal planning docs (not for public repo)
+BACKLOG.md
+LAUNCH-CHECKLIST.md
+CLAUDE-CODE-RECORDING-PROMPT.md
+CLAUDE-CODE-RECORDING-V2.md
+AI-PROMPT-REVIEW.md
+TECH-DEBT-AUDIT.md
+PERFORMANCE-AUDIT.md
+VIDEO-TREATMENT.md
+linkedin-launch-post.md
+social-profiles.md
+homebrew-tap-readme.md
+yoke-todo.md
+HATCH-NOTES.md

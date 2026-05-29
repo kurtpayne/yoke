@@ -95,7 +95,7 @@ jobs:
       - name: Generate wrangler.toml
         working-directory: worker
         run: |
-          cat > wrangler.toml << 'EOF'
+          cat > wrangler.toml << EOF
           name = "yoke"
           main = "dist/worker.js"
           compatibility_date = "2024-12-01"
@@ -110,12 +110,12 @@ jobs:
           [[d1_databases]]
           binding = "DB"
           database_name = "yoke-cache"
-          database_id = "ce2c3c22-a91c-4254-a80c-1cdc95c7ceb7"
+          database_id = "${{ secrets.D1_CACHE_DB_ID }}"
 
           [[d1_databases]]
           binding = "STATS_DB"
           database_name = "yoke-stats"
-          database_id = "6f29dfb9-b7ff-497f-a4aa-4dbb3b7dd6e1"
+          database_id = "${{ secrets.D1_STATS_DB_ID }}"
           EOF
           # Remove leading whitespace from heredoc
           sed -i 's/^          //' wrangler.toml
@@ -175,7 +175,7 @@ jobs:
         if: failure()
         working-directory: worker
         run: |
-          cat > wrangler.toml << 'EOF'
+          cat > wrangler.toml << EOF
           name = "yoke"
           main = "dist/worker.js"
           compatibility_date = "2024-12-01"
@@ -190,12 +190,12 @@ jobs:
           [[d1_databases]]
           binding = "DB"
           database_name = "yoke-cache"
-          database_id = "ce2c3c22-a91c-4254-a80c-1cdc95c7ceb7"
+          database_id = "${{ secrets.D1_CACHE_DB_ID }}"
 
           [[d1_databases]]
           binding = "STATS_DB"
           database_name = "yoke-stats"
-          database_id = "6f29dfb9-b7ff-497f-a4aa-4dbb3b7dd6e1"
+          database_id = "${{ secrets.D1_STATS_DB_ID }}"
           EOF
           sed -i 's/^          //' wrangler.toml
 

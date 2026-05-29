@@ -10,8 +10,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Load Cloudflare credentials
-set -a && source /home/hatch/.wrangler/.env && set +a
-export PATH="/home/hatch/.local/node22/bin:$PATH"
+WRANGLER_ENV="${HOME}/.wrangler/.env"
+if [ ! -f "$WRANGLER_ENV" ]; then
+  echo "Error: $WRANGLER_ENV not found" >&2; exit 1
+fi
+set -a && source "$WRANGLER_ENV" && set +a
+export PATH="${HOME}/.local/node22/bin:$PATH"
 
 WRANGLER="npx wrangler"
 CONFIG="--config worker/wrangler.toml"
