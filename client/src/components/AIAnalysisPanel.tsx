@@ -361,7 +361,7 @@ interface GradeUpItem {
   fixLink: { url: string; label: string } | null;
 }
 
-function getNextGrade(currentGrade: string): { grade: string; threshold: number } | null {
+function getNextGrade(currentGrade: string): { grade: string; min: number } | null {
   const idx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
   if (idx <= 0) return null; // already A+ or unknown
   return GRADE_THRESHOLDS[idx - 1];
@@ -387,7 +387,7 @@ function generateGradeUpPlan(data: AnalysisResult): { items: GradeUpItem[]; curr
   const next = getNextGrade(currentGrade);
   if (!next) return null; // already A+
 
-  const pointsNeeded = next.threshold - currentScore;
+  const pointsNeeded = next.min - currentScore;
   if (pointsNeeded <= 0) return null;
 
   const items: GradeUpItem[] = [];
@@ -514,7 +514,7 @@ function generateGradeUpPlan(data: AnalysisResult): { items: GradeUpItem[]; curr
   // Sort by biggest impact first
   items.sort((a, b) => b.pointGain - a.pointGain);
 
-  return { items, currentScore, currentGrade, targetGrade: next.grade, targetThreshold: next.threshold, pointsNeeded };
+  return { items, currentScore, currentGrade, targetGrade: next.grade, targetThreshold: next.min, pointsNeeded };
 }
 
 // ─── Resources / How-to-Fix Links ───────────────────────────────────
