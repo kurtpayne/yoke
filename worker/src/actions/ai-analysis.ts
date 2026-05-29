@@ -356,7 +356,8 @@ export async function getAIAnalysis(
 
   // Check cache first
   const cached = (await getFromCache(env.DB, normalized, "ai_analysis", AI_CACHE_TTL_MS)) as CachedAIResult | null;
-  if (cached) {
+  if (cached && cached.result?.cross_signal_insights) {
+    // Only serve cache if it has the new cross_signal_insights format
     return new Response(JSON.stringify({ ...cached, cached: true }), {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });

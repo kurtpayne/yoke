@@ -1470,13 +1470,16 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       if (!res.ok || json.error) {
         setError(json.error || `API error ${res.status}`);
       } else if (json.result) {
-        setInsightsResult(json.result);
-        _insightsCache[domain] = json.result;
-        if (json.analyzed_at) {
-          const meta = { analyzed_at: json.analyzed_at, cached: !!json.cached };
-          setAnalysisMetadata(meta);
-          _metadataCache[domain] = meta;
+        if (json.result.cross_signal_insights && json.result.cross_signal_insights.length > 0) {
+          setInsightsResult(json.result);
+          _insightsCache[domain] = json.result;
+          if (json.analyzed_at) {
+            const meta = { analyzed_at: json.analyzed_at, cached: !!json.cached };
+            setAnalysisMetadata(meta);
+            _metadataCache[domain] = meta;
+          }
         }
+        // If result lacks cross_signal_insights (old format), silently ignore — user can regenerate
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate analysis");
