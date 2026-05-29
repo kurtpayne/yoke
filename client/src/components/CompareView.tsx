@@ -632,10 +632,11 @@ function base64urlEncode(bytes: Uint8Array): string {
 const SHARE_AXIS_ORDER: Axis[] = ["security", "reliability", "trust", "performance", "visibility"];
 
 function buildComparePayload(data: CompareResult): string {
-  const ds1 = data.domain1.score as DomainScoreData | undefined;
-  const ds2 = data.domain2.score as DomainScoreData | undefined;
-  const a1 = SHARE_AXIS_ORDER.map(a => ds1?.axes?.[a]?.score ?? 0);
-  const a2 = SHARE_AXIS_ORDER.map(a => ds2?.axes?.[a]?.score ?? 0);
+  // Build axis arrays in the canonical share order from comparison axes
+  const axisMap1 = new Map(data.comparison.axes.map(a => [a.axis, a.score1]));
+  const axisMap2 = new Map(data.comparison.axes.map(a => [a.axis, a.score2]));
+  const a1 = SHARE_AXIS_ORDER.map(a => axisMap1.get(a) ?? 0);
+  const a2 = SHARE_AXIS_ORDER.map(a => axisMap2.get(a) ?? 0);
   const obj = {
     d1: data.domain1.domain,
     d2: data.domain2.domain,
