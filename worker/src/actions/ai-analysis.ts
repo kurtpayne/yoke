@@ -138,7 +138,11 @@ export function buildAIPrompt(analysisData: Record<string, unknown>): { system: 
 
 // ─── OpenRouter API Call ────────────────────────────────────────────
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
+// DeepSeek V3 via OpenRouter — much cheaper than Claude Sonnet while producing
+// excellent structured JSON output for our cross-signal insight use case.
+// Claude Sonnet 4: ~$3/$15 per 1M tokens; DeepSeek V3: ~$0.27/$1.10.
+// Quality is comparable for structured extraction / correlation tasks.
+const DEFAULT_MODEL = "deepseek/deepseek-chat-v3-0324";
 
 
 interface OpenRouterResponse {
@@ -187,7 +191,7 @@ async function callOpenRouter(
             { role: "user", content: user },
           ],
           temperature: 0.3,
-          max_tokens: 4000,
+          max_tokens: 2500,
         }),
       });
 
@@ -269,20 +273,18 @@ interface Recommendation {
   tool?: string;
 }
 
-interface PersonaInsights {
-  site_owner: string;
-  security_researcher: string;
-  competitor_analyst: string;
-  domain_buyer: string;
-  developer: string;
-  seo_professional: string;
+interface CrossSignalInsight {
+  insight: string;
+  signals_cited: string[];
+  severity: "info" | "low" | "medium" | "high";
+  actionable: boolean;
 }
 
 interface AIAnalysisResult {
   summary: string;
   posture: string;
   key_findings: KeyFinding[];
-  persona_insights: PersonaInsights;
+  cross_signal_insights: CrossSignalInsight[];
   attack_surface: string[];
   recommendations: Recommendation[];
   _usage?: {
@@ -385,7 +387,7 @@ export async function getAIAnalysis(
         used: count,
         reset: "~1 hour",
         diy_prompt: diyPrompt,
-        model_suggestion: "anthropic/claude-sonnet-4",
+        model_suggestion: "deepseek/deepseek-chat-v3-0324",
         instructions: "Copy the prompt below and paste it into ChatGPT, Claude, Gemini, or any AI assistant.",
       }), {
         status: 429,

@@ -1,16 +1,23 @@
 import { useState, useCallback, useEffect } from "react";
-import { Sparkles, Shield, Server, Gauge, TrendingUp, Search, Mail, AlertTriangle, CheckCircle2, Info, XCircle, Loader2, Zap, Target, Users, DollarSign, Code, BarChart3, Copy, Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Key, RotateCcw, Settings } from "lucide-react";
+import { Sparkles, CheckCircle2, XCircle, Loader2, Zap, Target, Copy, Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Key, RotateCcw, Settings, ArrowUp } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
+import type { ScoreFinding, Axis, Severity } from "../api";
 import { findReferenceLink } from "./DomainSignals";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
+interface CrossSignalInsight {
+  insight: string;
+  signals_cited: string[];
+  severity: "info" | "low" | "medium" | "high";
+  actionable: boolean;
+}
+
 interface AIAnalysisResult {
   summary: string;
   posture: string;
-  risk_level?: string;
   key_findings: Array<{ category: string; finding: string; severity: string; action: string }>;
-  persona_insights: Record<string, string>;
+  cross_signal_insights: CrossSignalInsight[];
   attack_surface: string[];
   recommendations: Array<{ priority: number; action: string; impact: string; effort: string; tool?: string }>;
   _usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -194,7 +201,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
     }
   }
 
-  // Social verification via rel="me" — check scoring findings for unverified social accounts
+  // Social verification via rel="me"
   if (data.domain_score?.axes?.visibility?.findings) {
     const visFindings = data.domain_score.axes.visibility.findings as Array<{ signal?: string; severity?: string; label?: string }>;
     const notVerified = visFindings.find(f => f.signal === "social_not_verified");
@@ -246,7 +253,6 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         visibility: "structured data, social meta, and accessibility",
       };
 
-      // Only add cross-axis insight if there's a meaningful gap
       if (weakest[1].score != null && strongest[1].score != null && strongest[1].score - weakest[1].score >= 15) {
         items.push({
           title: `Biggest opportunity: ${axisLabels[weakest[0]]}`,
@@ -254,11 +260,10 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
           effort: "See recommendations above",
           axis: weakest[0],
           severity: "medium",
-          impact: 80, // high impact for cross-axis — always show near top
+          impact: 80,
         });
       }
 
-      // Special insight: security strong but performance weak
       const secScore = axes.security?.score ?? 0;
       const perfScore = axes.performance?.score ?? 0;
       if (secScore >= 85 && perfScore < 70 && weakest[0] !== "performance") {
@@ -272,7 +277,6 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         });
       }
 
-      // Special insight: email auth dragging two axes
       if (axes.security?.score != null && axes.trust?.score != null) {
         const secFindings = axes.security.findings || [];
         const trustFindings = axes.trust.findings || [];
@@ -291,7 +295,6 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       }
     }
 
-    // Not-measured warning
     const notMeasured = (Object.entries(axes) as [AxisName, typeof axes[AxisName]][])
       .filter(([, v]) => v.not_measured);
     if (notMeasured.length > 0) {
@@ -310,14 +313,12 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
   // ─── Sort by impact, dedup by axis-severity ───────────────────────
   items.sort((a, b) => b.impact - a.impact);
 
-  // Ensure at least one cross-axis insight is in the top 5 displayed items
   if (items.length > 5) {
     const top5 = items.slice(0, 5);
     const hasCrossAxis = top5.some(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
     if (!hasCrossAxis) {
       const crossIdx = items.findIndex(i => i.title.startsWith("Biggest opportunity") || i.title.startsWith("Security is solid") || i.title.startsWith("Email auth impacts"));
       if (crossIdx >= 5) {
-        // Swap cross-axis insight into position 5 (last visible by default)
         const [crossItem] = items.splice(crossIdx, 1);
         items.splice(4, 0, crossItem);
       }
@@ -325,6 +326,311 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
   }
 
   return items;
+}
+
+// ─── Grade-Up Simulator Engine ──────────────────────────────────────
+
+const GRADE_THRESHOLDS = [
+  { grade: "A+", min: 95 },
+  { grade: "A", min: 90 },
+  { grade: "B+", min: 85 },
+  { grade: "B", min: 80 },
+  { grade: "C+", min: 75 },
+  { grade: "C", min: 65 },
+  { grade: "D", min: 50 },
+  { grade: "F", min: 0 },
+];
+
+const SEVERITY_SCORES: Record<string, number> = {
+  critical: 0, high: 15, medium: 40, low: 65, info: 82, good: 100,
+};
+
+const AXIS_WEIGHTS: Record<string, number> = {
+  security: 0.28, reliability: 0.25, trust: 0.12, performance: 0.20, visibility: 0.15,
+};
+
+interface GradeUpItem {
+  signal: string;
+  label: string;
+  axis: Axis;
+  currentSeverity: Severity;
+  weight: number;
+  pointGain: number; // estimated composite score improvement
+  effort: string;
+  fixDescription: string;
+  fixLink: { url: string; label: string } | null;
+}
+
+function getNextGrade(currentGrade: string): { grade: string; threshold: number } | null {
+  const idx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
+  if (idx <= 0) return null; // already A+ or unknown
+  return GRADE_THRESHOLDS[idx - 1];
+}
+
+function computeAxisScore(findings: ScoreFinding[]): number {
+  if (findings.length === 0) return 65;
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const f of findings) {
+    weightedSum += (SEVERITY_SCORES[f.severity] ?? 82) * f.weight;
+    totalWeight += f.weight;
+  }
+  return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 65;
+}
+
+function generateGradeUpPlan(data: AnalysisResult): { items: GradeUpItem[]; currentScore: number; currentGrade: string; targetGrade: string; targetThreshold: number; pointsNeeded: number } | null {
+  const score = data.domain_score;
+  if (!score) return null;
+
+  const currentScore = score.composite;
+  const currentGrade = score.grade;
+  const next = getNextGrade(currentGrade);
+  if (!next) return null; // already A+
+
+  const pointsNeeded = next.threshold - currentScore;
+  if (pointsNeeded <= 0) return null;
+
+  const items: GradeUpItem[] = [];
+
+  // For each axis, find non-good findings and compute what fixing each one would do
+  for (const [axisName, axisData] of Object.entries(score.axes) as [Axis, typeof score.axes[Axis]][]) {
+    if (axisData.not_measured || !axisData.findings) continue;
+    const axisWeight = AXIS_WEIGHTS[axisName] ?? 0.15;
+
+    for (const finding of axisData.findings) {
+      if (finding.severity === "good") continue;
+
+      // Simulate fixing this finding: change its severity to "good" and recalculate
+      const currentAxisScore = computeAxisScore(axisData.findings);
+      const fixedFindings = axisData.findings.map(f =>
+        f === finding ? { ...f, severity: "good" as Severity } : f
+      );
+      const newAxisScore = computeAxisScore(fixedFindings);
+      const axisDelta = newAxisScore - currentAxisScore;
+      const compositeDelta = Math.round(axisDelta * axisWeight * 10) / 10;
+
+      if (compositeDelta < 0.1) continue; // negligible impact
+
+      const effortMap: Record<string, string> = {
+        // Security
+        hsts: "~10 min — add one response header",
+        csp: "~1-2 hours — requires auditing scripts/styles",
+        x_content_type: "~5 min — one-line header",
+        permissions_policy: "~10 min — add response header",
+        referrer_policy: "~5 min — add response header",
+        ssl_grade: "~30 min — server config",
+        dnssec: "~30 min — registrar setting",
+        caa: "~10 min — DNS records",
+        email_spf: "~10 min — one DNS TXT record",
+        email_dkim: "~30 min — email provider config",
+        email_dmarc: "~15 min — one DNS TXT record",
+        dmarc_policy: "~5 min — DNS change (after sender audit)",
+        blocklist: "Varies — investigate and request delisting",
+        cookie_secure: "~30 min — update cookie settings",
+        security_txt: "~10 min — create /.well-known/security.txt",
+        server_version: "~10 min — strip version from headers",
+        // Performance
+        perf_score: "Varies — run Lighthouse for details",
+        lcp: "~1-2 hours — optimize images and loading",
+        cls: "~1 hour — fix layout shifts",
+        ttfb: "~30 min — server/CDN optimization",
+        compression: "~15 min — server/CDN config",
+        http2: "~30 min — server/CDN config",
+        caching: "~30 min — configure cache headers",
+        // Trust
+        domain_age_trust: "Cannot be changed — age increases naturally",
+        domain_expiry: "~5 min — renew at registrar",
+        // Reliability
+        ns_count: "~15 min — add nameservers at registrar",
+        ipv6: "~15 min — add AAAA records",
+        dns_consistency: "~30 min — verify DNS configuration",
+        // Visibility
+        structured_data: "~15 min — add JSON-LD to HTML",
+        social_meta: "~10 min — add meta tags",
+        social_verified: "~5 min — add rel=\"me\" links",
+        social_not_verified: "~5 min — add rel=\"me\" links",
+        accessibility: "~2-4 hours — fix WCAG issues",
+        sitemap: "~15 min — generate sitemap.xml",
+        robots_restrictive: "~10 min — update robots.txt",
+      };
+
+      const fixDescMap: Record<string, string> = {
+        hsts: "Add Strict-Transport-Security header",
+        csp: "Add Content-Security-Policy header",
+        x_content_type: "Add X-Content-Type-Options: nosniff",
+        permissions_policy: "Add Permissions-Policy header",
+        referrer_policy: "Add Referrer-Policy header",
+        ssl_grade: "Upgrade TLS configuration",
+        dnssec: "Enable DNSSEC at your registrar",
+        caa: "Add CAA DNS records",
+        email_spf: "Add SPF DNS record",
+        email_dkim: "Configure DKIM with email provider",
+        email_dmarc: "Add DMARC DNS record",
+        dmarc_policy: "Upgrade DMARC policy to quarantine/reject",
+        blocklist: "Investigate and request blocklist delisting",
+        cookie_secure: "Set Secure/HttpOnly/SameSite on cookies",
+        security_txt: "Create security.txt file",
+        server_version: "Remove server version from headers",
+        perf_score: "Optimize page performance",
+        lcp: "Reduce Largest Contentful Paint time",
+        cls: "Fix Cumulative Layout Shift issues",
+        ttfb: "Reduce Time to First Byte",
+        compression: "Enable gzip/brotli compression",
+        http2: "Upgrade to HTTP/2 or HTTP/3",
+        caching: "Configure proper cache headers",
+        domain_age_trust: "Domain age (increases naturally over time)",
+        domain_expiry: "Extend domain registration",
+        ns_count: "Add additional nameservers",
+        ipv6: "Add IPv6 (AAAA) DNS records",
+        dns_consistency: "Fix DNS propagation inconsistencies",
+        structured_data: "Add JSON-LD structured data",
+        social_meta: "Add Open Graph and Twitter Card meta tags",
+        social_verified: "Add rel=\"me\" verification links",
+        social_not_verified: "Verify social accounts with rel=\"me\"",
+        accessibility: "Improve WCAG accessibility",
+        sitemap: "Add sitemap.xml",
+        robots_restrictive: "Review restrictive robots.txt rules",
+      };
+
+      // Try to match signal to known effort/fix
+      const signalKey = finding.signal.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+      const effort = effortMap[signalKey] || "Varies";
+      const fixDescription = fixDescMap[signalKey] || finding.label;
+
+      items.push({
+        signal: finding.signal,
+        label: finding.label,
+        axis: axisName,
+        currentSeverity: finding.severity,
+        weight: finding.weight,
+        pointGain: compositeDelta,
+        effort,
+        fixDescription,
+        fixLink: getFixLink(finding, data),
+      });
+    }
+  }
+
+  // Sort by biggest impact first
+  items.sort((a, b) => b.pointGain - a.pointGain);
+
+  return { items, currentScore, currentGrade, targetGrade: next.grade, targetThreshold: next.threshold, pointsNeeded };
+}
+
+// ─── Resources / How-to-Fix Links ───────────────────────────────────
+
+function detectTechStack(data: AnalysisResult): { isWordPress: boolean; isCloudflare: boolean; cdn: string | null; server: string | null } {
+  const isWordPress = !!data.wordpress?.detected;
+  const isCloudflare = !!(data.hosting?.cdn?.toLowerCase().includes("cloudflare") || data.hosting?.provider?.toLowerCase().includes("cloudflare"));
+  const cdn = data.hosting?.cdn || null;
+  const server = data.hosting?.provider || null;
+  return { isWordPress, isCloudflare, cdn, server };
+}
+
+function getFixLink(finding: ScoreFinding, data: AnalysisResult): { url: string; label: string } | null {
+  const { isWordPress, isCloudflare } = detectTechStack(data);
+  const sig = finding.signal.toLowerCase();
+
+  // HSTS
+  if (sig.includes("hsts") || sig === "strict-transport-security" || finding.label.toLowerCase().includes("hsts")) {
+    if (isCloudflare) return { url: "https://developers.cloudflare.com/ssl/edge-certificates/additional-options/http-strict-transport-security/", label: "Cloudflare HSTS docs" };
+    if (isWordPress) return { url: "https://developer.wordpress.org/advanced-administration/security/hsts/", label: "WordPress HSTS guide" };
+    return { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security", label: "MDN HSTS reference" };
+  }
+
+  // CSP
+  if (sig.includes("csp") || sig.includes("content_security") || sig === "content-security-policy") {
+    if (isCloudflare) return { url: "https://developers.cloudflare.com/workers/examples/security-headers/", label: "Cloudflare security headers" };
+    return { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP", label: "MDN CSP guide" };
+  }
+
+  // DMARC
+  if (sig.includes("dmarc") || sig === "dmarc_policy") {
+    return { url: "https://dmarc.org/overview/", label: "DMARC setup guide" };
+  }
+
+  // SPF
+  if (sig.includes("spf") || sig === "email_spf") {
+    return { url: "https://www.cloudflare.com/learning/dns/dns-records/dns-spf-record/", label: "SPF record guide" };
+  }
+
+  // DKIM
+  if (sig.includes("dkim") || sig === "email_dkim") {
+    return { url: "https://www.cloudflare.com/learning/dns/dns-records/dns-dkim-record/", label: "DKIM setup guide" };
+  }
+
+  // Structured data
+  if (sig.includes("structured") || sig.includes("json_ld") || sig === "structured_data") {
+    if (isWordPress) return { url: "https://yoast.com/structured-data-schema-ultimate-guide/", label: "Yoast structured data guide" };
+    return { url: "https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data", label: "Google structured data guide" };
+  }
+
+  // Compression
+  if (sig.includes("compression") || sig === "compression") {
+    if (isCloudflare) return { url: "https://developers.cloudflare.com/speed/optimization/content/brotli/", label: "Cloudflare Brotli compression" };
+    return { url: "https://developer.mozilla.org/en-US/docs/Web/HTTP/Compression", label: "MDN compression guide" };
+  }
+
+  // HTTP/2
+  if (sig.includes("http2") || sig.includes("http_protocol") || sig === "http2") {
+    if (isCloudflare) return { url: "https://developers.cloudflare.com/speed/optimization/protocol/http2/", label: "Cloudflare HTTP/2 docs" };
+    return { url: "https://developer.mozilla.org/en-US/docs/Glossary/HTTP_2", label: "MDN HTTP/2 reference" };
+  }
+
+  // DNSSEC
+  if (sig.includes("dnssec")) {
+    if (isCloudflare) return { url: "https://developers.cloudflare.com/dns/dnssec/", label: "Cloudflare DNSSEC docs" };
+    return { url: "https://www.icann.org/resources/pages/dnssec-what-is-it-why-is-it-important-2019-03-05-en", label: "DNSSEC overview" };
+  }
+
+  // CAA
+  if (sig.includes("caa")) {
+    return { url: "https://blog.qualys.com/product-tech/2017/03/13/caa-mandated-by-cabrowser-forum", label: "CAA records guide" };
+  }
+
+  // Accessibility
+  if (sig.includes("accessibility") || sig.includes("a11y")) {
+    return { url: "https://www.w3.org/WAI/tips/developing/", label: "W3C accessibility tips" };
+  }
+
+  // Security.txt
+  if (sig.includes("security_txt")) {
+    return { url: "https://securitytxt.org/", label: "security.txt generator" };
+  }
+
+  // Social meta
+  if (sig.includes("social_meta") || sig.includes("og_") || sig.includes("twitter_")) {
+    return { url: "https://ogp.me/", label: "Open Graph protocol docs" };
+  }
+
+  // rel="me" verification
+  if (sig.includes("social_verified") || sig.includes("social_not_verified")) {
+    return { url: "https://indieweb.org/rel-me", label: "rel=\"me\" verification guide" };
+  }
+
+  // Sitemap
+  if (sig.includes("sitemap")) {
+    return { url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview", label: "Google sitemap guide" };
+  }
+
+  // SSL/TLS
+  if (sig.includes("ssl") || sig.includes("tls")) {
+    if (isCloudflare) return { url: "https://developers.cloudflare.com/ssl/edge-certificates/", label: "Cloudflare SSL docs" };
+    return { url: "https://www.ssllabs.com/ssltest/", label: "SSL Labs test" };
+  }
+
+  return null;
+}
+
+// ─── Quick Wins Filter ──────────────────────────────────────────────
+
+function getQuickWins(actionItems: ActionItem[]): ActionItem[] {
+  return actionItems.filter(item => {
+    const effort = item.effort.toLowerCase();
+    const isQuick = effort.includes("5 min") || effort.includes("10 min") || effort.includes("15 min") || effort.includes("one-line") || effort.includes("one response header");
+    const isHighImpact = item.severity === "high" || item.severity === "critical";
+    return isQuick || (isHighImpact && effort.includes("min"));
+  }).slice(0, 6);
 }
 
 // ─── BYO Key helpers ────────────────────────────────────────────────
@@ -335,6 +641,7 @@ const CUSTOM_PROMPT_KEY = "yoke_custom_prompt";
 const SETTINGS_OPEN_KEY = "yoke_settings_open";
 
 const AVAILABLE_MODELS = [
+  { id: "deepseek/deepseek-chat-v3-0324", label: "DeepSeek V3", provider: "DeepSeek" },
   { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", provider: "Anthropic" },
   { id: "anthropic/claude-opus-4", label: "Claude Opus 4", provider: "Anthropic" },
   { id: "openai/gpt-4o", label: "GPT-4o", provider: "OpenAI" },
@@ -350,7 +657,7 @@ function saveKey(key: string) {
   try { if (key) localStorage.setItem(STORAGE_KEY, key); else localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
 }
 function getSavedModel(): string {
-  try { return localStorage.getItem(MODEL_STORAGE_KEY) || "anthropic/claude-sonnet-4"; } catch { return "anthropic/claude-sonnet-4"; }
+  try { return localStorage.getItem(MODEL_STORAGE_KEY) || "deepseek/deepseek-chat-v3-0324"; } catch { return "deepseek/deepseek-chat-v3-0324"; }
 }
 function saveModel(model: string) {
   try { localStorage.setItem(MODEL_STORAGE_KEY, model); } catch { /* noop */ }
@@ -458,7 +765,6 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
 
   return (
     <div style={{ width: open ? "100%" : "auto" }}>
-      {/* Gear toggle button */}
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
       <button
         onClick={toggleOpen}
@@ -479,13 +785,12 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
       </button>
       </div>
 
-      {/* Expanded settings panel */}
       {open && (
         <div style={{
           marginTop: "10px", background: "var(--card)", border: "1px solid var(--border)",
           borderRadius: "10px", padding: "16px", display: "flex", flexDirection: "column", gap: "16px",
         }}>
-          {/* ── API Key Section ── */}
+          {/* API Key Section */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
               <Key size={12} style={{ color: "var(--accent)" }} />
@@ -499,7 +804,7 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
               <p style={{ margin: "0 0 6px 0" }}>
                 <strong style={{ color: "var(--text)" }}>Why?</strong> Yoke's AI analysis uses{" "}
                 <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>OpenRouter</a>
-                {" "}to access models like Claude, GPT-4o, and Gemini. Without a key, you get 10 analyses/hr on our shared key. With your own, you get unlimited access, model selection, and prompt editing.
+                {" "}to access models like DeepSeek, Claude, GPT-4o, and Gemini. Without a key, you get 10 analyses/hr on our shared key. With your own, you get unlimited access, model selection, and prompt editing.
               </p>
               <p style={{ margin: "0" }}>
                 <strong style={{ color: "var(--text)" }}>Privacy:</strong> Your key is stored in your browser's localStorage only — it's sent directly from your browser to OpenRouter, never to Yoke's servers. We can't see, log, or access it. <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>Privacy policy →</a>
@@ -552,98 +857,98 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
             )}
           </div>
 
-          {/* ── Model Selector (disabled without BYO key) ── */}
-            <div style={{ opacity: hasKey ? 1 : 0.45, pointerEvents: hasKey ? "auto" : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                <Sparkles size={12} style={{ color: "var(--accent)" }} />
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Model</span>
-                {!hasKey && <span style={{ fontSize: "10px", color: "var(--muted)", fontStyle: "italic" }}>requires API key</span>}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                {AVAILABLE_MODELS.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => handleModelChange(m.id)}
-                    disabled={!hasKey}
-                    style={{
-                      padding: "5px 10px", borderRadius: "6px",
-                      border: `1px solid ${model === m.id ? "var(--accent)" : "var(--border)"}`,
-                      background: model === m.id ? "rgba(88,166,255,0.12)" : "var(--bg)",
-                      color: model === m.id ? "var(--accent)" : "var(--muted)",
-                      cursor: hasKey ? "pointer" : "default", fontSize: "11px",
-                      fontWeight: model === m.id ? 600 : 400,
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {m.label}
-                    <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: "4px" }}>{m.provider}</span>
-                  </button>
-                ))}
-              </div>
+          {/* Model Selector */}
+          <div style={{ opacity: hasKey ? 1 : 0.45, pointerEvents: hasKey ? "auto" : "none" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+              <Sparkles size={12} style={{ color: "var(--accent)" }} />
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Model</span>
+              {!hasKey && <span style={{ fontSize: "10px", color: "var(--muted)", fontStyle: "italic" }}>requires API key</span>}
             </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+              {AVAILABLE_MODELS.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => handleModelChange(m.id)}
+                  disabled={!hasKey}
+                  style={{
+                    padding: "5px 10px", borderRadius: "6px",
+                    border: `1px solid ${model === m.id ? "var(--accent)" : "var(--border)"}`,
+                    background: model === m.id ? "rgba(88,166,255,0.12)" : "var(--bg)",
+                    color: model === m.id ? "var(--accent)" : "var(--muted)",
+                    cursor: hasKey ? "pointer" : "default", fontSize: "11px",
+                    fontWeight: model === m.id ? 600 : 400,
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {m.label}
+                  <span style={{ fontSize: "9px", opacity: 0.6, marginLeft: "4px" }}>{m.provider}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {/* ── Prompt Editor (disabled without BYO key) ── */}
-            <div style={{ opacity: hasKey ? 1 : 0.45, pointerEvents: hasKey ? "auto" : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-                <Code size={12} style={{ color: "var(--accent)" }} />
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Prompt</span>
-                {!hasKey && <span style={{ fontSize: "10px", color: "var(--muted)", fontStyle: "italic" }}>requires API key</span>}
+          {/* Prompt Editor */}
+          <div style={{ opacity: hasKey ? 1 : 0.45, pointerEvents: hasKey ? "auto" : "none" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+              <Sparkles size={12} style={{ color: "var(--accent)" }} />
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Prompt</span>
+              {!hasKey && <span style={{ fontSize: "10px", color: "var(--muted)", fontStyle: "italic" }}>requires API key</span>}
+              {promptEdited && (
+                <span style={{ fontSize: "9px", padding: "1px 6px", borderRadius: "4px", background: "rgba(210,153,34,0.15)", color: "var(--warning)" }}>
+                  edited
+                </span>
+              )}
+              <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>
                 {promptEdited && (
-                  <span style={{ fontSize: "9px", padding: "1px 6px", borderRadius: "4px", background: "rgba(210,153,34,0.15)", color: "var(--warning)" }}>
-                    edited
-                  </span>
-                )}
-                <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>
-                  {promptEdited && (
-                    <button onClick={handlePromptReset} title="Reset to default" style={{
-                      display: "flex", alignItems: "center", gap: "3px",
-                      padding: "2px 6px", borderRadius: "4px",
-                      border: "1px solid var(--border)", background: "transparent",
-                      color: "var(--muted)", cursor: "pointer", fontSize: "10px",
-                    }}>
-                      <RotateCcw size={9} /> Reset
-                    </button>
-                  )}
-                  <button onClick={handlePromptCopy} title="Copy prompt" style={{
+                  <button onClick={handlePromptReset} title="Reset to default" style={{
                     display: "flex", alignItems: "center", gap: "3px",
                     padding: "2px 6px", borderRadius: "4px",
                     border: "1px solid var(--border)", background: "transparent",
                     color: "var(--muted)", cursor: "pointer", fontSize: "10px",
                   }}>
-                    {promptCopied ? <Check size={9} /> : <Copy size={9} />}
-                    {promptCopied ? "Copied" : "Copy"}
+                    <RotateCcw size={9} /> Reset
                   </button>
-                </div>
-              </div>
-              <p style={{ fontSize: "10px", color: "var(--muted)", margin: "0 0 6px 0", lineHeight: 1.4 }}>
-                This is the exact prompt sent to the AI. Edit it to focus the analysis on what matters to you.
-              </p>
-              {promptLoading ? (
-                <div style={{
-                  height: "200px", display: "flex", alignItems: "center", justifyContent: "center",
-                  border: "1px solid var(--border)", borderRadius: "6px", background: "var(--bg)",
+                )}
+                <button onClick={handlePromptCopy} title="Copy prompt" style={{
+                  display: "flex", alignItems: "center", gap: "3px",
+                  padding: "2px 6px", borderRadius: "4px",
+                  border: "1px solid var(--border)", background: "transparent",
+                  color: "var(--muted)", cursor: "pointer", fontSize: "10px",
                 }}>
-                  <Loader2 size={14} style={{ color: "var(--muted)", animation: "spin 1s linear infinite" }} />
-                  <span style={{ fontSize: "11px", color: "var(--muted)", marginLeft: "8px" }}>Loading prompt…</span>
-                </div>
-              ) : (
-                <textarea
-                  value={promptText}
-                  onChange={e => handlePromptChange(e.target.value)}
-                  spellCheck={false}
-                  style={{
-                    width: "100%", height: "240px", padding: "10px", borderRadius: "6px",
-                    border: `1px solid ${promptEdited ? "var(--warning)" : "var(--border)"}`,
-                    background: "var(--bg)", color: "var(--text)",
-                    fontSize: "11px", fontFamily: "'SF Mono', Monaco, Consolas, monospace",
-                    lineHeight: 1.5, outline: "none", resize: "vertical",
-                    boxSizing: "border-box",
-                  }}
-                />
-              )}
+                  {promptCopied ? <Check size={9} /> : <Copy size={9} />}
+                  {promptCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
             </div>
+            <p style={{ fontSize: "10px", color: "var(--muted)", margin: "0 0 6px 0", lineHeight: 1.4 }}>
+              This is the exact prompt sent to the AI. Edit it to focus the analysis on what matters to you.
+            </p>
+            {promptLoading ? (
+              <div style={{
+                height: "200px", display: "flex", alignItems: "center", justifyContent: "center",
+                border: "1px solid var(--border)", borderRadius: "6px", background: "var(--bg)",
+              }}>
+                <Loader2 size={14} style={{ color: "var(--muted)", animation: "spin 1s linear infinite" }} />
+                <span style={{ fontSize: "11px", color: "var(--muted)", marginLeft: "8px" }}>Loading prompt…</span>
+              </div>
+            ) : (
+              <textarea
+                value={promptText}
+                onChange={e => handlePromptChange(e.target.value)}
+                spellCheck={false}
+                style={{
+                  width: "100%", height: "240px", padding: "10px", borderRadius: "6px",
+                  border: `1px solid ${promptEdited ? "var(--warning)" : "var(--border)"}`,
+                  background: "var(--bg)", color: "var(--text)",
+                  fontSize: "11px", fontFamily: "'SF Mono', Monaco, Consolas, monospace",
+                  lineHeight: 1.5, outline: "none", resize: "vertical",
+                  boxSizing: "border-box",
+                }}
+              />
+            )}
+          </div>
 
-          {/* ── Status footer ── */}
+          {/* Status footer */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
             paddingTop: "8px", borderTop: "1px solid var(--border)",
@@ -657,7 +962,7 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
               )}
             </span>
             <span style={{ opacity: 0.6 }}>
-              {hasKey ? AVAILABLE_MODELS.find(m => m.id === model)?.label || model : "Claude Sonnet 4"}
+              {hasKey ? AVAILABLE_MODELS.find(m => m.id === model)?.label || model : "DeepSeek V3"}
             </span>
           </div>
         </div>
@@ -677,7 +982,7 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
       await navigator.clipboard.writeText(data.diy_prompt);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-    } catch { /* fallback: textarea select */ }
+    } catch { /* fallback */ }
   };
 
   const handleKeySave = () => {
@@ -761,35 +1066,21 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
   );
 }
 
-// ─── Persona Definitions ────────────────────────────────────────────
-
-type PersonaKey = "security_researcher" | "developer" | "seo_professional" | "site_owner" | "competitor_analyst" | "domain_buyer";
-
-const PERSONAS: { key: PersonaKey; label: string; icon: typeof Shield; desc: string }[] = [
-  { key: "security_researcher", label: "Security", icon: Shield, desc: "Vulnerabilities, attack surface, and security posture" },
-  { key: "developer", label: "Developer", icon: Code, desc: "Tech stack, performance, and integration concerns" },
-  { key: "seo_professional", label: "SEO", icon: Search, desc: "Visibility, structured data, and discoverability" },
-  { key: "site_owner", label: "Owner", icon: Users, desc: "Overall health, trust signals, and compliance" },
-  { key: "competitor_analyst", label: "Competitor", icon: BarChart3, desc: "Market positioning, tech choices, and gaps" },
-  { key: "domain_buyer", label: "Buyer", icon: DollarSign, desc: "Domain value, age, history, and acquisition risk" },
-];
-
 // ─── AI Loading Indicator ───────────────────────────────────────────
 
-const ESTIMATED_SECONDS = 60;
+const ESTIMATED_SECONDS = 45;
 
 const LOADING_PHASES = [
   { at: 0, msg: "Preparing analysis data…" },
-  { at: 4, msg: "Sending to AI model…" },
-  { at: 8, msg: "Analyzing security posture…" },
-  { at: 16, msg: "Evaluating infrastructure & performance…" },
-  { at: 28, msg: "Synthesizing expert insights…" },
-  { at: 40, msg: "Formatting recommendations…" },
-  { at: 55, msg: "Still working — complex domains take longer…" },
-  { at: 75, msg: "Almost there…" },
+  { at: 3, msg: "Sending to AI model…" },
+  { at: 6, msg: "Finding cross-signal correlations…" },
+  { at: 14, msg: "Synthesizing insights across data points…" },
+  { at: 25, msg: "Formatting structured results…" },
+  { at: 38, msg: "Still working — complex domains take longer…" },
+  { at: 55, msg: "Almost there…" },
 ];
 
-function AILoadingIndicator({ personaLabel }: { personaLabel: string }) {
+function AILoadingIndicator() {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -811,94 +1102,326 @@ function AILoadingIndicator({ personaLabel }: { personaLabel: string }) {
         <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{elapsed}s</span>
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
-      <div style={{
-        height: "3px", borderRadius: "2px", background: "var(--border)", overflow: "hidden",
-      }}>
+      <div style={{ height: "3px", borderRadius: "2px", background: "var(--border)", overflow: "hidden" }}>
         <div style={{
-          height: "100%", borderRadius: "2px",
-          background: "var(--accent)",
-          width: `${progress * 100}%`,
-          transition: "width 1s linear",
+          height: "100%", borderRadius: "2px", background: "var(--accent)",
+          width: `${progress * 100}%`, transition: "width 1s linear",
         }} />
       </div>
       <span style={{ fontSize: "10px", color: "var(--muted)" }}>
-        Analysis typically takes 45–60s — feel free to explore other tabs while you wait
+        Cross-signal analysis typically takes 30–45s — feel free to explore other tabs while you wait
       </span>
     </div>
   );
 }
 
-// ─── AI Persona Insight Card ────────────────────────────────────────
+// ─── Grade-Up Simulator UI ──────────────────────────────────────────
 
-function PersonaInsightCard({
-  persona,
-  insight,
-  loading,
-  onGenerate,
-}: {
-  persona: typeof PERSONAS[number];
-  insight: string | null;
-  loading: boolean;
-  onGenerate: () => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
+function GradeUpSimulator({ data }: { data: AnalysisResult }) {
+  const [expanded, setExpanded] = useState(false);
+  const plan = generateGradeUpPlan(data);
 
-  if (insight === null && !loading) {
-    return (
-      <div style={{
-        background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
-        padding: "16px", textAlign: "center",
-      }}>
-        <p style={{ fontSize: "12px", color: "var(--muted)", marginBottom: "12px", lineHeight: 1.5 }}>
-          {persona.desc}
-        </p>
-        <button onClick={onGenerate} style={{
-          display: "inline-flex", alignItems: "center", gap: "6px",
-          padding: "7px 16px", borderRadius: "6px",
-          border: "1px solid var(--accent)", background: "rgba(88,166,255,0.1)",
-          color: "var(--accent)", cursor: "pointer", fontSize: "12px", fontWeight: 600,
+  if (!plan || plan.items.length === 0) {
+    if (data.domain_score?.grade === "A+") {
+      return (
+        <div style={{
+          background: "var(--card)", border: "1px solid var(--border)", borderRadius: "10px",
+          padding: "16px",
         }}>
-          <Sparkles size={12} />
-          Generate {persona.label} Analysis
-        </button>
-      </div>
-    );
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <ArrowUp size={14} style={{ color: "var(--success)" }} />
+            <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Grade-Up Simulator</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 0", fontSize: "13px", color: "var(--success)" }}>
+            <CheckCircle2 size={14} />
+            <span>You're already at A+! Maximum score achieved.</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
   }
 
-  if (loading) {
-    return <AILoadingIndicator personaLabel={persona.label} />;
-  }
+  const DEFAULT_VISIBLE = 5;
+  const visibleItems = expanded ? plan.items : plan.items.slice(0, DEFAULT_VISIBLE);
+  const hasMore = plan.items.length > DEFAULT_VISIBLE;
+
+  // Calculate running totals for visible items
+  let runningGain = 0;
+  const itemsWithRunning = visibleItems.map(item => {
+    runningGain += item.pointGain;
+    return { ...item, runningTotal: runningGain };
+  });
+
+  const totalGain = plan.items.reduce((sum, i) => sum + i.pointGain, 0);
+  const projectedScore = Math.min(100, Math.round(plan.currentScore + totalGain));
+  const projectedGrade = projectedScore >= 95 ? "A+" : projectedScore >= 90 ? "A" : projectedScore >= 85 ? "B+" : projectedScore >= 80 ? "B" : projectedScore >= 75 ? "C+" : projectedScore >= 65 ? "C" : projectedScore >= 50 ? "D" : "F";
+
+  const progressPct = Math.min(((plan.currentScore - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0)) / (plan.targetThreshold - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0))) * 100, 100);
+
+  const axisLabels: Record<string, string> = {
+    security: "Security", performance: "Performance", reliability: "Reliability",
+    trust: "Trust", visibility: "Visibility",
+  };
+  const axisColors: Record<string, string> = {
+    security: "#f85149", performance: "#58a6ff", reliability: "#7ee787",
+    trust: "#d2a221", visibility: "#bc8cff",
+  };
 
   return (
     <div style={{
-      background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
-      padding: "14px", fontSize: "13px", lineHeight: 1.7, color: "var(--text)",
+      background: "var(--card)", border: "1px solid var(--border)", borderRadius: "10px",
+      padding: "16px",
     }}>
-      <div
-        style={{ display: "flex", justifyContent: "space-between", cursor: "pointer", marginBottom: expanded ? "8px" : 0 }}
-        onClick={() => setExpanded(!expanded)}
-      >
-        <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-          {persona.label} Analysis
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+        <ArrowUp size={14} style={{ color: "var(--accent)" }} />
+        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Grade-Up Simulator</span>
+        <span style={{ fontSize: "11px", color: "var(--muted)", marginLeft: "auto" }}>
+          {plan.currentGrade} → {plan.targetGrade}
         </span>
-        {expanded ? <ChevronUp size={14} style={{ color: "var(--muted)" }} /> : <ChevronDown size={14} style={{ color: "var(--muted)" }} />}
       </div>
-      {expanded && <div>{insight}</div>}
+
+      {/* Progress bar toward next grade */}
+      <div style={{ marginBottom: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px" }}>
+          <span style={{ color: "var(--text)", fontWeight: 600 }}>{plan.currentScore} pts ({plan.currentGrade})</span>
+          <span style={{ color: "var(--muted)" }}>{plan.targetThreshold} pts ({plan.targetGrade})</span>
+        </div>
+        <div style={{ height: "6px", borderRadius: "3px", background: "var(--border)", overflow: "hidden" }}>
+          <div style={{
+            height: "100%", borderRadius: "3px",
+            background: "linear-gradient(90deg, var(--accent), #7ee787)",
+            width: `${Math.max(5, progressPct)}%`,
+            transition: "width 0.5s ease",
+          }} />
+        </div>
+        <div style={{ fontSize: "10px", color: "var(--muted)", marginTop: "3px" }}>
+          Need +{plan.pointsNeeded} points · fixing all items below → {projectedScore} pts ({projectedGrade})
+        </div>
+      </div>
+
+      {/* Fix items */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {itemsWithRunning.map((item, i) => (
+          <div key={i} style={{
+            display: "flex", alignItems: "flex-start", gap: "10px",
+            padding: "8px 10px", borderRadius: "6px",
+            background: "rgba(88,166,255,0.03)", border: "1px solid rgba(88,166,255,0.08)",
+          }}>
+            <span style={{
+              fontSize: "11px", fontWeight: 700, color: "var(--accent)",
+              minWidth: "20px", textAlign: "right", paddingTop: "1px",
+            }}>
+              {i + 1}.
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>
+                  {item.fixDescription}
+                </span>
+                {item.fixLink && (
+                  <a
+                    href={item.fixLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={item.fixLink.label}
+                    style={{ color: "var(--accent)", display: "flex", alignItems: "center", opacity: 0.6, transition: "opacity 0.15s" }}
+                    onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                    onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}
+                  >
+                    <ExternalLink size={10} />
+                  </a>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px", flexWrap: "wrap" }}>
+                <span style={{
+                  fontSize: "10px", padding: "1px 6px", borderRadius: "3px",
+                  background: `${axisColors[item.axis] || "var(--muted)"}15`,
+                  color: axisColors[item.axis] || "var(--muted)",
+                  fontWeight: 600,
+                }}>
+                  {axisLabels[item.axis] || item.axis}
+                </span>
+                <span style={{ fontSize: "10px", color: "var(--success)", fontWeight: 600 }}>
+                  +{item.pointGain.toFixed(1)} pts
+                </span>
+                {item.effort && item.effort !== "Varies" && (
+                  <span style={{ fontSize: "10px", color: "var(--muted)" }}>{item.effort}</span>
+                )}
+              </div>
+              {item.label !== item.fixDescription && (
+                <div style={{ fontSize: "10px", color: "var(--dim)", marginTop: "2px" }}>
+                  Current: {item.label}
+                </div>
+              )}
+            </div>
+            <span style={{
+              fontSize: "10px", color: "var(--muted)", whiteSpace: "nowrap",
+              paddingTop: "2px", fontVariantNumeric: "tabular-nums",
+            }}>
+              Σ +{item.runningTotal.toFixed(1)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(prev => !prev)}
+          style={{
+            background: "none", border: "none", cursor: "pointer", padding: "8px 0 0",
+            display: "flex", alignItems: "center", gap: "4px",
+            fontSize: "11px", color: "var(--muted)", transition: "color 0.15s",
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = "var(--text)")}
+          onMouseLeave={e => (e.currentTarget.style.color = "var(--muted)")}
+        >
+          {expanded ? (
+            <><ChevronUp size={12} /> Show less</>
+          ) : (
+            <><ChevronDown size={12} /> Show {plan.items.length - DEFAULT_VISIBLE} more</>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Quick Wins UI ──────────────────────────────────────────────────
+
+function QuickWinsPanel({ actionItems, data }: { actionItems: ActionItem[]; data: AnalysisResult }) {
+  const quickWins = getQuickWins(actionItems);
+  if (quickWins.length === 0) return null;
+
+  // Estimate total point gain from quick wins using the grade-up plan
+  const plan = generateGradeUpPlan(data);
+  const quickWinSignals = new Set(quickWins.map(q => q.title.toLowerCase()));
+
+  return (
+    <div style={{
+      background: "var(--card)", border: "1px solid rgba(210,153,34,0.2)", borderRadius: "10px",
+      padding: "16px",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+        <Zap size={14} style={{ color: "var(--warning)" }} />
+        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Quick Wins</span>
+        <span style={{ fontSize: "10px", color: "var(--muted)" }}>— do these in under 30 minutes</span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {quickWins.map((item, i) => {
+          const ref = findReferenceLink(item.title);
+          // Try to find matching fix link from the grade-up plan
+          const gradeUpMatch = plan?.items.find(g =>
+            g.fixDescription.toLowerCase().includes(item.title.toLowerCase().slice(0, 20)) ||
+            item.title.toLowerCase().includes(g.fixDescription.toLowerCase().slice(0, 20))
+          );
+          const fixLink = gradeUpMatch?.fixLink || null;
+
+          return (
+            <div key={i} style={{
+              display: "flex", alignItems: "flex-start", gap: "8px",
+              paddingLeft: "8px", borderLeft: "2px solid var(--warning)",
+            }}>
+              <span style={{ fontSize: "12px", color: "var(--warning)", fontWeight: 700, paddingTop: "1px" }}>
+                {i + 1}.
+              </span>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>{item.title}</span>
+                  {(ref || fixLink) && (
+                    <a
+                      href={(fixLink || ref)!.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={(fixLink || ref)!.label}
+                      style={{ color: "var(--dim)", opacity: 0.5, transition: "opacity 0.15s", display: "flex" }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
+                    >
+                      <ExternalLink size={10} />
+                    </a>
+                  )}
+                  <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto", whiteSpace: "nowrap" }}>{item.effort}</span>
+                </div>
+                <span style={{ fontSize: "11px", color: "var(--muted)", lineHeight: 1.3 }}>{item.reason}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Cross-Signal Insights UI ───────────────────────────────────────
+
+function CrossSignalInsightsCard({ insights }: { insights: CrossSignalInsight[] }) {
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
+  const severityColor = (s: string) =>
+    s === "high" ? "var(--danger)" : s === "medium" ? "var(--warning)" : s === "low" ? "#58a6ff" : "var(--muted)";
+  const severityIcon = (s: string) =>
+    s === "high" ? "🔴" : s === "medium" ? "🟡" : s === "low" ? "🔵" : "ℹ️";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {insights.map((insight, i) => (
+        <div
+          key={i}
+          style={{
+            background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
+            padding: "12px", cursor: "pointer",
+            borderLeftColor: severityColor(insight.severity), borderLeftWidth: "3px",
+          }}
+          onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+            <span style={{ fontSize: "11px", flexShrink: 0, paddingTop: "1px" }}>{severityIcon(insight.severity)}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "12px", color: "var(--text)", lineHeight: 1.5 }}>
+                {insight.insight}
+              </div>
+              {(expandedIdx === i || true) && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "6px" }}>
+                  {insight.signals_cited.map((sig, j) => (
+                    <span key={j} style={{
+                      fontSize: "9px", padding: "1px 6px", borderRadius: "3px",
+                      background: "rgba(88,166,255,0.1)", color: "var(--accent)",
+                      fontFamily: "monospace",
+                    }}>
+                      {sig}
+                    </span>
+                  ))}
+                  {insight.actionable && (
+                    <span style={{
+                      fontSize: "9px", padding: "1px 6px", borderRadius: "3px",
+                      background: "rgba(46,160,67,0.1)", color: "var(--success)",
+                    }}>
+                      actionable
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
 // ─── Main Component ─────────────────────────────────────────────────
 
-// Module-level cache so persona results survive tab switches (component remounts)
-const _personaCache: Record<string, Record<string, string>> = {};
+// Module-level cache so results survive tab switches
+const _insightsCache: Record<string, AIAnalysisResult> = {};
 const _metadataCache: Record<string, { analyzed_at: string; cached: boolean }> = {};
 
 export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: string; analysisData?: AnalysisResult; streaming?: boolean }) {
-  const [activePersona, setActivePersona] = useState<PersonaKey | null>(null);
-  const [personaResults, setPersonaResults] = useState<Record<string, string>>(() => _personaCache[domain] || {});
-  const [loadingPersona, setLoadingPersona] = useState<string | null>(null);
-  const [personaError, setPersonaError] = useState<string | null>(null);
+  const [insightsResult, setInsightsResult] = useState<AIAnalysisResult | null>(_insightsCache[domain] || null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState<RateLimitResponse | null>(null);
   const [analysisMetadata, setAnalysisMetadata] = useState<{ analyzed_at: string; cached: boolean } | null>(_metadataCache[domain] || null);
   const [, setKeyVersion] = useState(0);
@@ -907,11 +1430,11 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
 
   const actionItems = analysisData ? generateActionItems(analysisData) : [];
 
-  const generateForPersona = useCallback(async (personaKey: PersonaKey) => {
-    if (personaResults[personaKey]) return; // already cached
-    if (loadingPersona) return; // another request in flight — wait for it (it returns all personas)
-    setLoadingPersona(personaKey);
-    setPersonaError(null);
+  const generateInsights = useCallback(async () => {
+    if (insightsResult) return;
+    if (loading) return;
+    setLoading(true);
+    setError(null);
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -921,7 +1444,6 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       const bodyObj: Record<string, string> = { domain };
       if (savedKey && selectedModel) bodyObj.model = selectedModel;
 
-      // Retry with exponential backoff on 503
       let res: Response | null = null;
       const maxRetries = 3;
       for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -939,26 +1461,17 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
         const rl = await res.json() as RateLimitResponse;
         if (rl.rate_limited) {
           setRateLimited(rl);
-          setLoadingPersona(null);
+          setLoading(false);
           return;
         }
       }
 
       const json = await res.json() as AIAnalysisResponse;
       if (!res.ok || json.error) {
-        setPersonaError(json.error || `API error ${res.status}`);
-      } else if (json.result?.persona_insights) {
-        // Cache ALL persona results from this response
-        const insights = json.result.persona_insights;
-        setPersonaResults(prev => {
-          const next = { ...prev };
-          for (const [key, value] of Object.entries(insights)) {
-            if (value) next[key] = value;
-          }
-          // Persist to module-level cache so results survive tab switches
-          _personaCache[domain] = next;
-          return next;
-        });
+        setError(json.error || `API error ${res.status}`);
+      } else if (json.result) {
+        setInsightsResult(json.result);
+        _insightsCache[domain] = json.result;
         if (json.analyzed_at) {
           const meta = { analyzed_at: json.analyzed_at, cached: !!json.cached };
           setAnalysisMetadata(meta);
@@ -966,11 +1479,11 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
         }
       }
     } catch (err) {
-      setPersonaError(err instanceof Error ? err.message : "Failed to generate analysis");
+      setError(err instanceof Error ? err.message : "Failed to generate analysis");
     } finally {
-      setLoadingPersona(null);
+      setLoading(false);
     }
-  }, [domain, personaResults, selectedModel, loadingPersona]);
+  }, [domain, insightsResult, selectedModel, loading]);
 
   const handleKeyChange = (key: string) => {
     setKeyVersion(v => v + 1);
@@ -981,43 +1494,36 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
 
   const handleModelChange = (model: string) => {
     setSelectedModel(model);
-    // Clear cached persona results since model changed
-    setPersonaResults({});
-    delete _personaCache[domain];
+    setInsightsResult(null);
+    delete _insightsCache[domain];
   };
 
-  const handlePersonaClick = (key: PersonaKey) => {
-    if (streaming) return; // wait for analysis to finish
-    if (activePersona === key) {
-      setActivePersona(null); // toggle off
-    } else {
-      setActivePersona(key);
-      if (!personaResults[key]) {
-        generateForPersona(key);
-      }
-    }
-  };
-
-  // ─── Rate limited ───
+  // Rate limited
   if (rateLimited) {
     return <RateLimitView data={rateLimited} onKeySet={handleKeyChange} />;
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* ─── Advanced Settings (gear button + panel) ─── */}
+      {/* Advanced Settings */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
         <AdvancedSettings domain={domain} onKeyChange={handleKeyChange} onModelChange={handleModelChange} />
       </div>
 
-      {/* ─── Top Priorities ─── */}
+      {/* 1. Grade-Up Simulator (deterministic) */}
+      {analysisData && <GradeUpSimulator data={analysisData} />}
+
+      {/* 2. Quick Wins (deterministic) */}
+      {analysisData && <QuickWinsPanel actionItems={actionItems} data={analysisData} />}
+
+      {/* 3. Top Priorities (deterministic) */}
       <div style={{
         background: "var(--card)", border: "1px solid var(--border)", borderRadius: "10px",
         padding: "16px",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
           <Target size={14} style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Top Priorities</span>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>Key Findings</span>
           <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "auto" }}>ranked by impact</span>
         </div>
         {actionItems.length === 0 ? (
@@ -1041,6 +1547,14 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
                 : item.severity === "medium" ? "🟡"
                 : "🟢";
               const ref = findReferenceLink(item.title);
+
+              // Try to get a fix link from the grade-up engine
+              const plan = analysisData ? generateGradeUpPlan(analysisData) : null;
+              const gradeUpMatch = plan?.items.find(g =>
+                item.title.toLowerCase().includes(g.fixDescription.toLowerCase().slice(0, 15))
+              );
+              const fixLink = gradeUpMatch?.fixLink || null;
+
               return (
                 <div key={i} style={{
                   display: "flex", flexDirection: "column", gap: "3px",
@@ -1049,12 +1563,12 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <span style={{ fontSize: "11px", flexShrink: 0 }}>{severityIcon}</span>
                     <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{item.title}</span>
-                    {ref && (
+                    {(ref || fixLink) && (
                       <a
-                        href={ref.url}
+                        href={(fixLink || ref)!.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title={ref.label}
+                        title={(fixLink || ref)!.label}
                         style={{ color: "var(--dim)", flexShrink: 0, opacity: 0.5, transition: "opacity 0.15s", display: "flex", alignItems: "center" }}
                         onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
                         onMouseLeave={e => (e.currentTarget.style.opacity = "0.5")}
@@ -1093,76 +1607,43 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
         })()}
       </div>
 
-      {/* ─── AI Deep Dive — Persona Pills ─── */}
+      {/* 4. Cross-Signal Insights (LLM) */}
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
           <Sparkles size={14} style={{ color: "var(--accent)" }} />
           <span style={{ fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
-            AI Deep Dive
+            Cross-Signal Insights
           </span>
           <span style={{ fontSize: "10px", color: "var(--muted)", marginLeft: "4px" }}>
-            — click a perspective for AI-powered insights
+            — AI-powered correlations across your data
           </span>
-        </div>
-
-        {/* Persona pill tabs */}
-        <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>
-          {PERSONAS.map(({ key, label, icon: PIcon }) => {
-            const isActive = activePersona === key;
-            const hasResult = !!personaResults[key];
-            const isDisabled = streaming || (!!loadingPersona && loadingPersona !== key);
-            return (
-              <button
-                key={key}
-                onClick={() => !isDisabled && handlePersonaClick(key)}
-                disabled={isDisabled}
-                style={{
-                  display: "flex", alignItems: "center", gap: "5px",
-                  padding: "6px 12px", borderRadius: "20px",
-                  border: `1px solid ${isActive ? "var(--accent)" : hasResult ? "var(--success)" : "var(--border)"}`,
-                  background: isActive ? "rgba(88,166,255,0.1)" : hasResult ? "rgba(46,160,67,0.06)" : "transparent",
-                  color: isActive ? "var(--accent)" : hasResult ? "var(--success)" : "var(--muted)",
-                  cursor: isDisabled ? "not-allowed" : "pointer", fontSize: "11px",
-                  fontWeight: isActive ? 600 : 400,
-                  opacity: isDisabled ? 0.5 : 1,
-                  transition: "all 0.15s",
-                }}
-              >
-                <PIcon size={12} />
-                {label}
-                {hasResult && !isActive && <Check size={10} />}
-              </button>
-            );
-          })}
         </div>
 
         {/* Analysis timestamp */}
-        {analysisMetadata && Object.keys(personaResults).length > 0 && (
-          <div style={{ fontSize: "10px", color: "var(--muted)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+        {analysisMetadata && insightsResult && (
+          <div style={{ fontSize: "10px", color: "var(--muted)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
             {analysisMetadata.cached ? "Cached" : "Generated"} {new Date(analysisMetadata.analyzed_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
           </div>
         )}
 
-        {/* Active persona content */}
-        {activePersona && (
-          <PersonaInsightCard
-            persona={PERSONAS.find(p => p.key === activePersona)!}
-            insight={personaResults[activePersona] || null}
-            loading={loadingPersona === activePersona}
-            onGenerate={() => generateForPersona(activePersona)}
-          />
+        {/* Loading state */}
+        {loading && <AILoadingIndicator />}
+
+        {/* Results */}
+        {insightsResult && insightsResult.cross_signal_insights && (
+          <CrossSignalInsightsCard insights={insightsResult.cross_signal_insights} />
         )}
 
         {/* Error display */}
-        {personaError && (
+        {error && (
           <div style={{
             background: "rgba(248,81,73,0.1)", border: "1px solid rgba(248,81,73,0.3)",
             borderRadius: "8px", padding: "12px", display: "flex", alignItems: "center", gap: "8px",
           }}>
             <XCircle size={14} style={{ color: "var(--danger)" }} />
-            <span style={{ fontSize: "12px", color: "var(--danger)" }}>{personaError}</span>
+            <span style={{ fontSize: "12px", color: "var(--danger)" }}>{error}</span>
             <button
-              onClick={() => activePersona && generateForPersona(activePersona)}
+              onClick={() => { setInsightsResult(null); delete _insightsCache[domain]; generateInsights(); }}
               style={{
                 marginLeft: "auto", padding: "4px 10px", borderRadius: "4px",
                 border: "1px solid var(--border)", background: "var(--card)",
@@ -1174,8 +1655,8 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
           </div>
         )}
 
-        {/* No persona selected — subtle prompt */}
-        {!activePersona && Object.keys(personaResults).length === 0 && (
+        {/* Generate button */}
+        {!insightsResult && !loading && !error && (
           <div style={{
             textAlign: "center", padding: "20px",
             background: "var(--card)", border: "1px dashed var(--border)", borderRadius: "8px",
@@ -1189,10 +1670,21 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
               </>
             ) : (
               <>
-                <Sparkles size={20} style={{ color: "var(--muted)", opacity: 0.4, margin: "0 auto 8px" }} />
-                <p style={{ fontSize: "12px", color: "var(--muted)", margin: 0 }}>
-                  Select a perspective above for AI-powered analysis tailored to that role.
+                <p style={{ fontSize: "12px", color: "var(--muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
+                  AI finds non-obvious correlations between your signals — things like mismatched DMARC/DKIM configs, SSL/HSTS conflicts, or redundant third-party scripts.
                 </p>
+                <button
+                  onClick={generateInsights}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    padding: "8px 18px", borderRadius: "8px",
+                    border: "1px solid var(--accent)", background: "rgba(88,166,255,0.1)",
+                    color: "var(--accent)", cursor: "pointer", fontSize: "13px", fontWeight: 600,
+                  }}
+                >
+                  <Sparkles size={14} />
+                  Generate Cross-Signal Insights
+                </button>
               </>
             )}
           </div>
