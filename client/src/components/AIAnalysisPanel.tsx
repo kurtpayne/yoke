@@ -1494,8 +1494,25 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       setLoading(stream.loading);
       setIsStreaming(stream.isStreaming);
       setStreamingText(stream.streamingText);
-      setStreamProgress(stream.streamProgress);
       setError(stream.error);
+      // Recalculate progress from streaming text signposts (animation was lost on unmount)
+      if (stream.isStreaming && stream.streamingText) {
+        const signposts: [string, number][] = [
+          ['"summary"', 10], ['"posture"', 16], ['"key_findings"', 32],
+          ['"cross_signal_insights"', 58], ['"attack_surface"', 80], ['"recommendations"', 92],
+        ];
+        let progress = stream.streamProgress;
+        for (let i = signposts.length - 1; i >= 0; i--) {
+          if (stream.streamingText.includes(signposts[i][0])) {
+            progress = Math.max(progress, signposts[i][1]);
+            lastSignpostRef.current = i;
+            break;
+          }
+        }
+        setStreamProgress(progress);
+      } else {
+        setStreamProgress(stream.streamProgress);
+      }
     }
     return () => {
       const s = _inFlightStreams[domain];
@@ -1523,8 +1540,11 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       const t = Math.min(elapsed / durationMs, 1);
       // Ease-out cubic — fast start, slows near target so it never looks stuck
       const eased = 1 - Math.pow(1 - t, 3);
-      const current = base + (target - base) * eased;
-      setStreamProgress(Math.round(current));
+      const current = Math.round(base + (target - base) * eased);
+      setStreamProgress(current);
+      // Keep module-level stream in sync so remount gets the right value
+      const s = _inFlightStreams[domain];
+      if (s) s.streamProgress = current;
       if (t < 1) {
         progressAnimRef.current = requestAnimationFrame(tick);
       }
