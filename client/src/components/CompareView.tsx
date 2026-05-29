@@ -108,8 +108,18 @@ function useStreamingCompare() {
         if (controller.signal.aborted) return;
         switch (evt.type) {
           case "phase": {
-            const d = evt.data as { phase: string; label: string; total?: number };
-            setProgress(prev => ({ ...prev, label: d.label, total: d.total ?? prev.total }));
+            const d = evt.data as { phase: string; label: string; total?: number; checks?: Array<{ key: string; label: string }> };
+            setProgress(prev => {
+              const checks = new Map(prev.checks);
+              if (d.phase === "phase2" && d.checks) {
+                for (const c of d.checks) {
+                  if (!checks.has(c.key)) {
+                    checks.set(c.key, { label: c.label, done: false });
+                  }
+                }
+              }
+              return { ...prev, label: d.label, total: d.total ?? prev.total, checks };
+            });
             break;
           }
           case "result": {
@@ -1016,7 +1026,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                       </span>
                     </div>
                     <div className="flex items-center gap-2" style={{ fontSize: "11px" }}>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, minWidth: 22, textAlign: "right" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, minWidth: 28, textAlign: "right", flexShrink: 0 }}>
                         {ax.score1}
                       </span>
                       <div className="flex-1 relative" style={{ height: 8, borderRadius: 4 }}>
@@ -1033,7 +1043,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                           background: "#f97316", transition: "width 0.6s ease-out",
                         }} />
                       </div>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, minWidth: 22, textAlign: "left" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, minWidth: 28, textAlign: "left", flexShrink: 0 }}>
                         {ax.score2}
                       </span>
                     </div>
