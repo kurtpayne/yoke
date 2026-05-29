@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Sparkles, CheckCircle2, XCircle, Loader2, Zap, Target, Copy, Check, ChevronDown, ChevronUp, ExternalLink, Eye, EyeOff, Key, RotateCcw, Settings, ArrowUp } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
 import type { ScoreFinding, Axis, Severity } from "../api";
@@ -1427,21 +1427,33 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
   const [, setKeyVersion] = useState(0);
   const [selectedModel, setSelectedModel] = useState(getSavedModel);
   const [prioritiesExpanded, setPrioritiesExpanded] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const streamContainerRef = useRef<HTMLDivElement>(null);
 
   const actionItems = analysisData ? generateActionItems(analysisData) : [];
+
+  // Auto-scroll streaming container to bottom
+  useEffect(() => {
+    if (streamContainerRef.current && isStreaming) {
+      streamContainerRef.current.scrollTop = streamContainerRef.current.scrollHeight;
+    }
+  }, [streamingText, isStreaming]);
 
   const generateInsights = useCallback(async () => {
     if (insightsResult) return;
     if (loading) return;
     setLoading(true);
     setError(null);
+    setStreamingText("");
+    setIsStreaming(false);
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       const savedKey = getSavedKey();
       if (savedKey) headers["X-OpenRouter-Key"] = savedKey;
 
-      const bodyObj: Record<string, string> = { domain };
+      const bodyObj: Record<string, unknown> = { domain, stream: true };
       if (savedKey && selectedModel) bodyObj.model = selectedModel;
 
       let res: Response | null = null;
@@ -1466,25 +1478,92 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
         }
       }
 
-      const json = await res.json() as AIAnalysisResponse;
-      if (!res.ok || json.error) {
-        setError(json.error || `API error ${res.status}`);
-      } else if (json.result) {
-        if (json.result.cross_signal_insights && json.result.cross_signal_insights.length > 0) {
-          setInsightsResult(json.result);
-          _insightsCache[domain] = json.result;
-          if (json.analyzed_at) {
-            const meta = { analyzed_at: json.analyzed_at, cached: !!json.cached };
-            setAnalysisMetadata(meta);
-            _metadataCache[domain] = meta;
+      // If response is JSON (cached result or error), handle normally
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const json = await res.json() as AIAnalysisResponse;
+        if (!res.ok || json.error) {
+          setError(json.error || `API error ${res.status}`);
+        } else if (json.result) {
+          if (json.result.cross_signal_insights && json.result.cross_signal_insights.length > 0) {
+            setInsightsResult(json.result);
+            _insightsCache[domain] = json.result;
+            if (json.analyzed_at) {
+              const meta = { analyzed_at: json.analyzed_at, cached: !!json.cached };
+              setAnalysisMetadata(meta);
+              _metadataCache[domain] = meta;
+            }
           }
         }
-        // If result lacks cross_signal_insights (old format), silently ignore — user can regenerate
+        setLoading(false);
+        return;
+      }
+
+      // SSE streaming response
+      if (!res.body) throw new Error("No response body for streaming");
+
+      setIsStreaming(true);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          try {
+            const evt = JSON.parse(trimmed.slice(6));
+            if (evt.error) {
+              setError(evt.error);
+              setLoading(false);
+              setIsStreaming(false);
+              return;
+            }
+            if (evt.chunk) {
+              accumulated += evt.chunk;
+              setStreamingText(accumulated);
+            }
+            if (evt.done) {
+              // Parse the complete JSON
+              let jsonStr = accumulated.trim();
+              const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+              if (jsonMatch) jsonStr = jsonMatch[1].trim();
+              jsonStr = jsonStr.replace(/^\uFEFF/, '').trim();
+
+              try {
+                const parsed = JSON.parse(jsonStr) as AIAnalysisResult;
+                if (parsed.cross_signal_insights && parsed.cross_signal_insights.length > 0) {
+                  setInsightsResult(parsed);
+                  _insightsCache[domain] = parsed;
+                  const meta = { analyzed_at: new Date().toISOString(), cached: false };
+                  setAnalysisMetadata(meta);
+                  _metadataCache[domain] = meta;
+                }
+              } catch {
+                setError("Failed to parse AI response");
+              }
+              setStreamingText("");
+              setIsStreaming(false);
+            }
+          } catch {
+            // Skip malformed SSE lines
+          }
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate analysis");
     } finally {
       setLoading(false);
+      setIsStreaming(false);
     }
   }, [domain, insightsResult, selectedModel, loading]);
 
@@ -1498,6 +1577,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
   const handleModelChange = (model: string) => {
     setSelectedModel(model);
     setInsightsResult(null);
+    setStreamingText("");
     delete _insightsCache[domain];
   };
 
@@ -1629,8 +1709,34 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
           </div>
         )}
 
-        {/* Loading state */}
-        {loading && <AILoadingIndicator />}
+        {/* Loading / Streaming state */}
+        {loading && !isStreaming && <AILoadingIndicator />}
+        {isStreaming && (
+          <div style={{
+            background: "var(--card)", border: "1px solid var(--border)", borderRadius: "8px",
+            padding: "16px", display: "flex", flexDirection: "column", gap: "10px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Loader2 size={14} style={{ color: "var(--accent)", animation: "spin 1s linear infinite", flexShrink: 0 }} />
+              <span style={{ fontSize: "12px", color: "var(--text)" }}>Generating insights…</span>
+              <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+            </div>
+            <div
+              ref={streamContainerRef}
+              style={{
+                maxHeight: "300px", overflow: "auto",
+                fontFamily: "monospace", fontSize: "11px", lineHeight: 1.6,
+                color: "var(--muted)", whiteSpace: "pre-wrap", wordBreak: "break-word",
+                padding: "8px", borderRadius: "4px",
+                background: "rgba(0,0,0,0.15)",
+              }}
+            >
+              {streamingText}
+              <span style={{ opacity: 0.5, animation: "blink 1s step-end infinite" }}>▊</span>
+              <style>{`@keyframes blink { 0%,100% { opacity: 0.5 } 50% { opacity: 0 } }`}</style>
+            </div>
+          </div>
+        )}
 
         {/* Results */}
         {insightsResult && insightsResult.cross_signal_insights && (
@@ -1646,7 +1752,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
             <XCircle size={14} style={{ color: "var(--danger)" }} />
             <span style={{ fontSize: "12px", color: "var(--danger)" }}>{error}</span>
             <button
-              onClick={() => { setInsightsResult(null); delete _insightsCache[domain]; generateInsights(); }}
+              onClick={() => { setInsightsResult(null); setStreamingText(""); delete _insightsCache[domain]; generateInsights(); }}
               style={{
                 marginLeft: "auto", padding: "4px 10px", borderRadius: "4px",
                 border: "1px solid var(--border)", background: "var(--card)",

@@ -3,6 +3,14 @@ import { AI_CACHE_TTL_MS } from "../config/cache";
 import { logWarn, logError } from "../logger";
 import { logApiError } from "../api-errors";
 
+// ─── SSE streaming headers ──────────────────────────────────────────
+const SSE_HEADERS: Record<string, string> = {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache",
+  "Connection": "keep-alive",
+  ...CORS_HEADERS,
+};
+
 // ─── System Prompt ──────────────────────────────────────────────────
 
 // AI analysis prompt — extracted to prompts/ai-analysis.txt for easy editing.
@@ -336,15 +344,139 @@ async function cleanupOldRateLimits(db: D1Database): Promise<void> {
   } catch { /* cleanup failure is non-critical */ }
 }
 
+// ─── Streaming OpenRouter Call ──────────────────────────────────────
+// Returns a ReadableStream that yields SSE events with content chunks.
+// After the stream completes, the full assembled response is cached.
+
+function streamOpenRouter(
+  apiKey: string,
+  analysisData: Record<string, unknown>,
+  referer?: string,
+): { stream: ReadableStream; fullContent: Promise<string> } {
+  const { system, user } = buildAIPrompt(analysisData);
+  let resolveContent: (v: string) => void;
+  let rejectContent: (e: Error) => void;
+  const fullContent = new Promise<string>((res, rej) => { resolveContent = res; rejectContent = rej; });
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": referer || "https://github.com/yokedotlol/yoke",
+            "X-Title": "Yoke Domain Intelligence",
+          },
+          body: JSON.stringify({
+            model: DEFAULT_MODEL,
+            messages: [
+              { role: "system", content: system },
+              { role: "user", content: user },
+            ],
+            temperature: 0.3,
+            max_tokens: 2500,
+            stream: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          const errMsg = `OpenRouter API error ${response.status}: ${errText.slice(0, 200)}`;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`));
+          controller.close();
+          rejectContent!(new Error(errMsg));
+          return;
+        }
+
+        if (!response.body) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "No response body" })}\n\n`));
+          controller.close();
+          rejectContent!(new Error("No response body"));
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          // Keep the last potentially incomplete line in the buffer
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === "data: [DONE]") continue;
+            if (!trimmed.startsWith("data: ")) continue;
+
+            try {
+              const json = JSON.parse(trimmed.slice(6));
+              const content = json.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulated += content;
+                // Forward chunk to client
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ chunk: content })}\n\n`));
+              }
+            } catch {
+              // Skip malformed SSE lines
+            }
+          }
+        }
+
+        // Send completion event
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
+        controller.close();
+        resolveContent!(accumulated);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Stream failed";
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
+          controller.close();
+        } catch { /* controller already closed */ }
+        rejectContent!(err instanceof Error ? err : new Error(msg));
+      }
+    },
+  });
+
+  return { stream, fullContent };
+}
+
+// ─── Parse and cache streamed result ────────────────────────────────
+
+function parseAIContent(content: string): AIAnalysisResult | null {
+  let jsonStr = content.trim();
+  const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) jsonStr = jsonMatch[1].trim();
+  jsonStr = jsonStr.replace(/^\uFEFF/, '').trim();
+
+  try {
+    const parsed = JSON.parse(jsonStr) as AIAnalysisResult;
+    if (parsed.summary && parsed.posture && Array.isArray(parsed.key_findings)) {
+      return parsed;
+    }
+  } catch { /* invalid JSON */ }
+  return null;
+}
+
 // ─── Main Export ────────────────────────────────────────────────────
 
 export async function getAIAnalysis(
   domain: string,
   env: Env,
-  options?: { clientIP?: string }
+  options?: { clientIP?: string; stream?: boolean; ctx?: ExecutionContext }
 ): Promise<Response> {
   const normalized = normalizeDomain(domain);
   const clientIP = options?.clientIP || "unknown";
+  const wantStream = options?.stream ?? false;
 
   // Must have platform key
   if (!env.OPENROUTER_API_KEY) {
@@ -354,10 +486,9 @@ export async function getAIAnalysis(
     });
   }
 
-  // Check cache first
+  // Check cache first — return JSON even if stream was requested
   const cached = (await getFromCache(env.DB, normalized, "ai_analysis", AI_CACHE_TTL_MS)) as CachedAIResult | null;
   if (cached && cached.result?.cross_signal_insights) {
-    // Only serve cache if it has the new cross_signal_insights format
     return new Response(JSON.stringify({ ...cached, cached: true }), {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
@@ -379,7 +510,6 @@ export async function getAIAnalysis(
     await ensureRateLimitTable(env.STATS_DB);
     const count = await getRateLimitCount(env.STATS_DB, clientIP);
     if (count >= AI_HOURLY_LIMIT) {
-      // Build the DIY prompt for the rate-limited user
       const { system, user } = buildAIPrompt(analysisCache);
       const diyPrompt = `${system}\n\n---\n\n${user}`;
       return new Response(JSON.stringify({
@@ -402,18 +532,50 @@ export async function getAIAnalysis(
         },
       });
     }
-    // Reserve the slot BEFORE calling OpenRouter to prevent race conditions.
     const rlResult = await env.STATS_DB.prepare(
       "INSERT INTO ai_rate_limits (ip, ts) VALUES (?, ?)"
     ).bind(clientIP, Math.floor(Date.now() / 1000)).run();
     rateLimitRowId = rlResult.meta?.last_row_id as number | undefined;
   } catch (rateLimitErr) {
-    // Rate limit check failed (STATS_DB issue)
     logError("AI rate-limit DB error", { error: rateLimitErr instanceof Error ? rateLimitErr.message : String(rateLimitErr) });
-    // Fail-open with logging — D1 hiccups shouldn't block AI analysis entirely
     logWarn("Proceeding without rate limit check due to STATS_DB error");
   }
 
+  // ─── Streaming path ────────────────────────────────────────────────
+  if (wantStream) {
+    const { stream, fullContent } = streamOpenRouter(env.OPENROUTER_API_KEY!, analysisCache, env.BASE_URL);
+
+    // Cache the assembled result after stream completes (fire-and-forget)
+    const cachePromise = fullContent.then(async (content) => {
+      const parsed = parseAIContent(content);
+      if (parsed) {
+        const responseData: CachedAIResult = {
+          result: parsed,
+          analyzed_at: new Date().toISOString(),
+          domain: normalized,
+        };
+        await setCache(env.DB, normalized, "ai_analysis", responseData);
+      }
+      try { await cleanupOldRateLimits(env.STATS_DB); } catch { /* non-critical */ }
+    }).catch(async (err) => {
+      // Stream failed — release rate limit slot
+      if (rateLimitRowId) {
+        try {
+          await env.STATS_DB.prepare("DELETE FROM ai_rate_limits WHERE id = ?").bind(rateLimitRowId).run();
+        } catch { /* non-critical */ }
+      }
+      logApiError(env.STATS_DB, { api: "openrouter", status: 0, message: (err instanceof Error ? err.message : String(err)).slice(0, 200), domain: normalized });
+    });
+
+    // Use waitUntil to keep the worker alive for caching after response is sent
+    if (options?.ctx) {
+      options.ctx.waitUntil(cachePromise);
+    }
+
+    return new Response(stream, { headers: SSE_HEADERS });
+  }
+
+  // ─── Non-streaming path (fallback) ─────────────────────────────────
   try {
     const result = await callOpenRouter(env.OPENROUTER_API_KEY!, analysisCache, env.BASE_URL);
 
@@ -423,10 +585,8 @@ export async function getAIAnalysis(
       domain: normalized,
     };
 
-    // Cache the result
     await setCache(env.DB, normalized, "ai_analysis", responseData);
 
-    // Probabilistic cleanup of old rate limit entries
     try {
       await cleanupOldRateLimits(env.STATS_DB);
     } catch { /* non-critical */ }
@@ -435,7 +595,6 @@ export async function getAIAnalysis(
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
     });
   } catch (err) {
-    // OpenRouter call failed — best-effort release of the rate limit slot
     if (rateLimitRowId) {
       try {
         await env.STATS_DB.prepare(
