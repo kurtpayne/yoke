@@ -1429,7 +1429,29 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
   const [prioritiesExpanded, setPrioritiesExpanded] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [streamProgress, setStreamProgress] = useState(0);
   const streamContainerRef = useRef<HTMLDivElement>(null);
+
+  // Estimate progress from JSON structure signposts
+  const estimateProgress = useCallback((text: string): number => {
+    const signposts: [string, number][] = [
+      ['"summary"', 8],
+      ['"posture"', 15],
+      ['"key_findings"', 30],
+      ['"cross_signal_insights"', 55],
+      ['"attack_surface"', 78],
+      ['"recommendations"', 90],
+    ];
+    let progress = 3; // started
+    for (const [key, pct] of signposts) {
+      if (text.includes(key)) progress = pct;
+    }
+    // Within each section, interpolate based on chars since last signpost
+    const lastIdx = Math.max(...signposts.filter(([k]) => text.includes(k)).map(([k]) => text.lastIndexOf(k)), 0);
+    const charsSince = text.length - lastIdx;
+    const bonus = Math.min(charsSince / 200, 1) * 8; // up to 8% bonus within section
+    return Math.min(Math.round(progress + bonus), 98);
+  }, []);
 
   const actionItems = analysisData ? generateActionItems(analysisData) : [];
 
@@ -1447,6 +1469,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
     setError(null);
     setStreamingText("");
     setIsStreaming(false);
+    setStreamProgress(0);
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -1503,6 +1526,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       if (!res.body) throw new Error("No response body for streaming");
 
       setIsStreaming(true);
+      setStreamProgress(3);
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
@@ -1531,6 +1555,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
             if (evt.chunk) {
               accumulated += evt.chunk;
               setStreamingText(accumulated);
+              setStreamProgress(estimateProgress(accumulated));
             }
             if (evt.done) {
               // Parse the complete JSON
@@ -1551,6 +1576,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
               } catch {
                 setError("Failed to parse AI response");
               }
+              setStreamProgress(100);
               setStreamingText("");
               setIsStreaming(false);
             }
@@ -1578,6 +1604,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
     setSelectedModel(model);
     setInsightsResult(null);
     setStreamingText("");
+    setStreamProgress(0);
     delete _insightsCache[domain];
   };
 
@@ -1719,7 +1746,18 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <Loader2 size={14} style={{ color: "var(--accent)", animation: "spin 1s linear infinite", flexShrink: 0 }} />
               <span style={{ fontSize: "12px", color: "var(--text)" }}>Generating insights…</span>
+              <span style={{ fontSize: "11px", color: "var(--muted)", marginLeft: "auto" }}>{streamProgress}%</span>
               <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+            </div>
+            <div style={{
+              height: "3px", borderRadius: "2px", background: "rgba(255,255,255,0.08)", overflow: "hidden",
+            }}>
+              <div style={{
+                height: "100%", borderRadius: "2px",
+                background: "var(--accent)",
+                width: `${streamProgress}%`,
+                transition: "width 0.4s ease-out",
+              }} />
             </div>
             <div
               ref={streamContainerRef}
@@ -1752,7 +1790,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
             <XCircle size={14} style={{ color: "var(--danger)" }} />
             <span style={{ fontSize: "12px", color: "var(--danger)" }}>{error}</span>
             <button
-              onClick={() => { setInsightsResult(null); setStreamingText(""); delete _insightsCache[domain]; generateInsights(); }}
+              onClick={() => { setInsightsResult(null); setStreamingText(""); setStreamProgress(0); delete _insightsCache[domain]; generateInsights(); }}
               style={{
                 marginLeft: "auto", padding: "4px 10px", borderRadius: "4px",
                 border: "1px solid var(--border)", background: "var(--card)",
