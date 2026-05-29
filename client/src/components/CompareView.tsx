@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { analyzeStream, type StreamEvent } from "../api";
-import { Search, Loader2, ArrowLeftRight, X, CheckCircle2, Circle } from "lucide-react";
+import { Search, Loader2, ArrowLeftRight, X, CheckCircle2, Circle, Link2, Share2 } from "lucide-react";
 import type { CompareResult, AnalysisResult, Axis, AxisScoreData, DomainScoreData, ArchetypeName } from "../utils/types";
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -254,6 +254,11 @@ function gridPolygon(level: number): string {
   }).join(" ");
 }
 
+/** Compute edge stroke opacity from raw axis score (0–100) */
+function radarEdgeOpacity(score: number): number {
+  return 0.15 + (Math.max(score - 25, 0) / 75) * 0.55;
+}
+
 interface CompareRadarProps {
   axes1: Record<Axis, AxisScoreData>;
   axes2: Record<Axis, AxisScoreData>;
@@ -264,9 +269,24 @@ interface CompareRadarProps {
 function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
   const [animProgress, setAnimProgress] = useState(0);
   const [hoveredAxis, setHoveredAxis] = useState<Axis | null>(null);
+  const [isLight, setIsLight] = useState(() => {
+    const theme = document.documentElement.getAttribute("data-theme");
+    return theme === "light" || theme === "newsprint" || theme === "botanical" || theme === "rose";
+  });
   const rafRef = useRef<number>(0);
   const uidRef = useRef(`cr-${Math.random().toString(36).slice(2, 8)}`);
   const crUid = uidRef.current;
+
+  // React to theme changes
+  useEffect(() => {
+    const check = () => {
+      const theme = document.documentElement.getAttribute("data-theme");
+      setIsLight(theme === "light" || theme === "newsprint" || theme === "botanical" || theme === "rose");
+    };
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const start = performance.now();
@@ -284,6 +304,26 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
 
   const vals1 = AXES.map(a => (axes1[a].score ?? 0) * animProgress);
   const vals2 = AXES.map(a => (axes2[a].score ?? 0) * animProgress);
+  const rawScores1 = AXES.map(a => axes1[a].score ?? 0);
+  const rawScores2 = AXES.map(a => axes2[a].score ?? 0);
+
+  // Animated vertex positions for edge gradients
+  const vertices1 = AXES.map((_, i) => {
+    const angle = (2 * Math.PI * i) / AXES.length;
+    const r = (vals1[i] / 100) * RADIUS;
+    return polarToCartesian(angle, r);
+  });
+  const vertices2 = AXES.map((_, i) => {
+    const angle = (2 * Math.PI * i) / AXES.length;
+    const r = (vals2[i] / 100) * RADIUS;
+    return polarToCartesian(angle, r);
+  });
+
+  // Gradient parameters — theme-aware
+  const coreColor = isLight ? "var(--bg)" : "#ffffff";
+  const coreOpacity = isLight ? 0.6 : 0.1;
+  const edgeSaturation = isLight ? 0.7 : 0.85;
+  const d2Color = "#f97316";
 
   return (
     <div className="compare-radar-container">
@@ -294,7 +334,7 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
           <span style={{ color: "var(--text)", fontWeight: 600 }}>{domain1}</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span style={{ width: 12, height: 3, background: "#f97316", display: "inline-block", borderRadius: 2 }} />
+          <span style={{ width: 12, height: 3, background: d2Color, display: "inline-block", borderRadius: 2, backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 4px, var(--bg) 4px, var(--bg) 6px)" }} />
           <span style={{ color: "var(--text)", fontWeight: 600 }}>{domain2}</span>
         </span>
       </div>
@@ -307,8 +347,8 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
           style={{ overflow: "visible" }}
           preserveAspectRatio="xMidYMid meet"
         >
-          {/* Subtle glow filter for grid */}
           <defs>
+            {/* Grid glow filter */}
             <filter id={`${crUid}-gg`} x="-10%" y="-10%" width="120%" height="120%">
               <feGaussianBlur stdDeviation="0.8" result="b" />
               <feMerge>
@@ -316,9 +356,89 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
                 <feMergeNode in="SourceGraphic" />
               </feMerge>
             </filter>
+
+            {/* ── Domain 1 (accent) gradient defs ── */}
+            <radialGradient id={`${crUid}-rg1`} gradientUnits="userSpaceOnUse" cx={CENTER} cy={CENTER} r={RADIUS}>
+              <stop offset="0%" stopColor={coreColor} stopOpacity={coreOpacity} />
+              <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.04} />
+              <stop offset="12%" stopColor="var(--accent)" stopOpacity={0.08} />
+              <stop offset="25%" stopColor="var(--accent)" stopOpacity={0.15} />
+              <stop offset="40%" stopColor="var(--accent)" stopOpacity={0.25} />
+              <stop offset="55%" stopColor="var(--accent)" stopOpacity={0.38} />
+              <stop offset="70%" stopColor="var(--accent)" stopOpacity={0.52} />
+              <stop offset="85%" stopColor="var(--accent)" stopOpacity={0.68} />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity={edgeSaturation} />
+            </radialGradient>
+            <clipPath id={`${crUid}-clip1`}>
+              <polygon points={polygonPoints(vals1)} />
+            </clipPath>
+            <filter id={`${crUid}-egl1`} x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.5" />
+            </filter>
+
+            {/* Per-edge linear gradients for Domain 1 (stroke + glow) */}
+            {AXES.map((_, i) => {
+              const j = (i + 1) % AXES.length;
+              const [x0, y0] = vertices1[i];
+              const [x1, y1] = vertices1[j];
+              const op0 = radarEdgeOpacity(rawScores1[i]);
+              const op1 = radarEdgeOpacity(rawScores1[j]);
+              return (
+                <g key={`d1-eg-defs-${i}`}>
+                  <linearGradient id={`${crUid}-eg1-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                    <stop offset="0%" stopColor="var(--accent)" stopOpacity={op0} />
+                    <stop offset="100%" stopColor="var(--accent)" stopOpacity={op1} />
+                  </linearGradient>
+                  <linearGradient id={`${crUid}-eglg1-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                    <stop offset="0%" stopColor="var(--accent)" stopOpacity={op0 * 0.35} />
+                    <stop offset="100%" stopColor="var(--accent)" stopOpacity={op1 * 0.35} />
+                  </linearGradient>
+                </g>
+              );
+            })}
+
+            {/* ── Domain 2 (orange) gradient defs ── */}
+            <radialGradient id={`${crUid}-rg2`} gradientUnits="userSpaceOnUse" cx={CENTER} cy={CENTER} r={RADIUS}>
+              <stop offset="0%" stopColor={coreColor} stopOpacity={coreOpacity * 0.6} />
+              <stop offset="5%" stopColor={d2Color} stopOpacity={0.03} />
+              <stop offset="12%" stopColor={d2Color} stopOpacity={0.06} />
+              <stop offset="25%" stopColor={d2Color} stopOpacity={0.10} />
+              <stop offset="40%" stopColor={d2Color} stopOpacity={0.18} />
+              <stop offset="55%" stopColor={d2Color} stopOpacity={0.28} />
+              <stop offset="70%" stopColor={d2Color} stopOpacity={0.38} />
+              <stop offset="85%" stopColor={d2Color} stopOpacity={0.50} />
+              <stop offset="100%" stopColor={d2Color} stopOpacity={edgeSaturation * 0.7} />
+            </radialGradient>
+            <clipPath id={`${crUid}-clip2`}>
+              <polygon points={polygonPoints(vals2)} />
+            </clipPath>
+            <filter id={`${crUid}-egl2`} x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2" />
+            </filter>
+
+            {/* Per-edge linear gradients for Domain 2 (stroke + glow) */}
+            {AXES.map((_, i) => {
+              const j = (i + 1) % AXES.length;
+              const [x0, y0] = vertices2[i];
+              const [x1, y1] = vertices2[j];
+              const op0 = radarEdgeOpacity(rawScores2[i]);
+              const op1 = radarEdgeOpacity(rawScores2[j]);
+              return (
+                <g key={`d2-eg-defs-${i}`}>
+                  <linearGradient id={`${crUid}-eg2-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                    <stop offset="0%" stopColor={d2Color} stopOpacity={op0 * 0.9} />
+                    <stop offset="100%" stopColor={d2Color} stopOpacity={op1 * 0.9} />
+                  </linearGradient>
+                  <linearGradient id={`${crUid}-eglg2-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                    <stop offset="0%" stopColor={d2Color} stopOpacity={op0 * 0.25} />
+                    <stop offset="100%" stopColor={d2Color} stopOpacity={op1 * 0.25} />
+                  </linearGradient>
+                </g>
+              );
+            })}
           </defs>
 
-          {/* Grid lines — accent-tinted */}
+          {/* Grid lines — accent-tinted with subtle glow */}
           {[25, 50, 75, 100].map(level => {
             const op = level === 100 ? 0.22 : level === 75 ? 0.14 : level === 50 ? 0.09 : 0.05;
             return (
@@ -344,47 +464,101 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             );
           })}
 
-          {/* Domain 1 — solid fill */}
-          <polygon
-            points={polygonPoints(vals1)}
-            fill="var(--accent)"
-            fillOpacity={0.12}
-            stroke="var(--accent)"
-            strokeWidth={2}
-            strokeLinejoin="round"
-          />
+          {/* ── Domain 1: radial gradient fill clipped to data polygon ── */}
+          <g clipPath={`url(#${crUid}-clip1)`}>
+            <circle cx={CENTER} cy={CENTER} r={RADIUS} fill={`url(#${crUid}-rg1)`} />
+          </g>
 
-          {/* Domain 2 — dashed outline with lighter fill */}
-          <polygon
-            points={polygonPoints(vals2)}
-            fill="#f97316"
-            fillOpacity={0.08}
-            stroke="#f97316"
-            strokeWidth={2}
-            strokeDasharray="6 3"
-            strokeLinejoin="round"
-          />
+          {/* Domain 1: edge glow — blurred wider strokes behind crisp edges */}
+          {AXES.map((_, i) => {
+            const j = (i + 1) % AXES.length;
+            const [x0, y0] = vertices1[i];
+            const [x1, y1] = vertices1[j];
+            return (
+              <line key={`glow1-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
+                stroke={`url(#${crUid}-eglg1-${i})`} strokeWidth={5}
+                strokeLinecap="round" filter={`url(#${crUid}-egl1)`} />
+            );
+          })}
 
-          {/* Axis labels */}
+          {/* Domain 1: edge strokes — per-segment gradient */}
+          {AXES.map((_, i) => {
+            const j = (i + 1) % AXES.length;
+            const [x0, y0] = vertices1[i];
+            const [x1, y1] = vertices1[j];
+            return (
+              <line key={`edge1-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
+                stroke={`url(#${crUid}-eg1-${i})`} strokeWidth={1.5}
+                strokeLinecap="round" />
+            );
+          })}
+
+          {/* ── Domain 2: radial gradient fill clipped to data polygon ── */}
+          <g clipPath={`url(#${crUid}-clip2)`}>
+            <circle cx={CENTER} cy={CENTER} r={RADIUS} fill={`url(#${crUid}-rg2)`} />
+          </g>
+
+          {/* Domain 2: edge glow — lighter than domain 1 */}
+          {AXES.map((_, i) => {
+            const j = (i + 1) % AXES.length;
+            const [x0, y0] = vertices2[i];
+            const [x1, y1] = vertices2[j];
+            return (
+              <line key={`glow2-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
+                stroke={`url(#${crUid}-eglg2-${i})`} strokeWidth={4}
+                strokeLinecap="round" filter={`url(#${crUid}-egl2)`} />
+            );
+          })}
+
+          {/* Domain 2: edge strokes — dashed, per-segment gradient */}
+          {AXES.map((_, i) => {
+            const j = (i + 1) % AXES.length;
+            const [x0, y0] = vertices2[i];
+            const [x1, y1] = vertices2[j];
+            return (
+              <line key={`edge2-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
+                stroke={`url(#${crUid}-eg2-${i})`} strokeWidth={1.5}
+                strokeLinecap="round" strokeDasharray="6 3" />
+            );
+          })}
+
+          {/* Center dot */}
+          <circle cx={CENTER} cy={CENTER} r={1.5} fill={coreColor} opacity={coreOpacity * 0.8} />
+
+          {/* Axis labels with scores */}
           {AXES.map((axis, i) => {
             const angle = (2 * Math.PI * i) / AXES.length;
             const labelR = RADIUS + 22;
             const [x, y] = polarToCartesian(angle, labelR);
             const isHovered = hoveredAxis === axis;
             return (
-              <text key={axis} x={x} y={y}
-                textAnchor="middle" dominantBaseline="central"
-                style={{
-                  fontFamily: "var(--font-ui)", fontSize: "10px",
-                  fontWeight: isHovered ? 600 : 500,
-                  fill: isHovered ? "var(--text)" : "var(--dim)",
-                  cursor: "default", transition: "fill 0.15s",
-                }}
-                onMouseEnter={() => setHoveredAxis(axis)}
-                onMouseLeave={() => setHoveredAxis(null)}
-              >
-                {AXIS_LABELS[axis]}
-              </text>
+              <g key={axis}>
+                <text x={x} y={y}
+                  textAnchor="middle" dominantBaseline="central"
+                  style={{
+                    fontFamily: "var(--font-ui)", fontSize: "10px",
+                    fontWeight: isHovered ? 600 : 500,
+                    fill: isHovered ? "var(--text)" : "var(--dim)",
+                    cursor: "default", transition: "fill 0.15s",
+                  }}
+                  onMouseEnter={() => setHoveredAxis(axis)}
+                  onMouseLeave={() => setHoveredAxis(null)}
+                >
+                  {AXIS_LABELS[axis]}
+                </text>
+                {/* Score pair under label */}
+                <text x={x} y={y + 12}
+                  textAnchor="middle" dominantBaseline="central"
+                  style={{
+                    fontFamily: "var(--font-mono)", fontSize: "9px", fontWeight: 600,
+                    opacity: isHovered ? 1 : 0.6,
+                  }}
+                >
+                  <tspan fill="var(--accent)">{rawScores1[i]}</tspan>
+                  <tspan fill="var(--dim)"> / </tspan>
+                  <tspan fill={d2Color}>{rawScores2[i]}</tspan>
+                </text>
+              </g>
             );
           })}
 
@@ -412,7 +586,7 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             }}>
             <span style={{ color: "var(--accent)", fontWeight: 600 }}>{axes1[hoveredAxis].score ?? "N/M"}</span>
             <span style={{ color: "var(--dim)", margin: "0 4px" }}>vs</span>
-            <span style={{ color: "#f97316", fontWeight: 600 }}>{axes2[hoveredAxis].score ?? "N/M"}</span>
+            <span style={{ color: d2Color, fontWeight: 600 }}>{axes2[hoveredAxis].score ?? "N/M"}</span>
             <span style={{ color: "var(--dim)", marginLeft: 6 }}>
               ({(axes1[hoveredAxis].score ?? 0) - (axes2[hoveredAxis].score ?? 0) > 0 ? "+" : ""}
               {(axes1[hoveredAxis].score ?? 0) - (axes2[hoveredAxis].score ?? 0)})
@@ -421,6 +595,114 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Compare Share Bar ───────────────────────────────────────────────
+
+function CompareShareBar({ domain1, domain2 }: { domain1: string; domain2: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const shareUrl = `${window.location.origin}/compare/${domain1}/${domain2}`;
+  const shareText = `${domain1} vs ${domain2} — Domain Intelligence Comparison`;
+
+  const copyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.createElement("input");
+      input.value = shareUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [shareUrl]);
+
+  const shareToX = useCallback(() => {
+    window.open(
+      `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`,
+      "_blank", "noopener,noreferrer,width=550,height=420"
+    );
+  }, [shareUrl, shareText]);
+
+  const shareToLinkedIn = useCallback(() => {
+    window.open(
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
+      "_blank", "noopener,noreferrer,width=600,height=500"
+    );
+  }, [shareUrl]);
+
+  const shareToReddit = useCallback(() => {
+    window.open(
+      `https://reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`,
+      "_blank", "noopener,noreferrer"
+    );
+  }, [shareUrl, shareText]);
+
+  const nativeShare = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: shareText, text: shareText, url: shareUrl });
+      } catch { /* cancelled */ }
+    }
+  }, [shareUrl, shareText]);
+
+  const hasNativeShare = typeof navigator !== "undefined" && !!navigator.share;
+
+  return (
+    <div className="share-bar">
+      <button type="button" className="share-btn share-copy" onClick={copyLink} title="Copy permalink">
+        <Link2 size={12} />
+        <span>{copied ? "Copied!" : "Copy link"}</span>
+      </button>
+      <button type="button" className="share-btn" onClick={shareToX} title="Share on X">
+        <CmpXIcon />
+        <span className="share-label-wide">Share</span>
+      </button>
+      <button type="button" className="share-btn" onClick={shareToLinkedIn} title="Share on LinkedIn">
+        <CmpLinkedInIcon />
+        <span className="share-label-wide">Share</span>
+      </button>
+      <button type="button" className="share-btn" onClick={shareToReddit} title="Share on Reddit">
+        <CmpRedditIcon />
+        <span className="share-label-wide">Share</span>
+      </button>
+      {hasNativeShare && (
+        <button type="button" className="share-btn" onClick={nativeShare} title="Share">
+          <Share2 size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* Tiny inline SVG icons for social platforms (local to avoid circular import) */
+function CmpXIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function CmpLinkedInIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+    </svg>
+  );
+}
+
+function CmpRedditIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z" />
+    </svg>
   );
 }
 
@@ -679,6 +961,9 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
               />
             </div>
           </div>
+
+          {/* Share bar */}
+          <CompareShareBar domain1={data.domain1.domain} domain2={data.domain2.domain} />
 
           {/* Radar plot */}
           <div className="panel p-4">
