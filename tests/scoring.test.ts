@@ -176,14 +176,16 @@ describe('Composite Score Computation', () => {
 
 describe('Grade Assignment', () => {
   it('should assign correct grades (production thresholds)', () => {
-    expect(gradeFromComposite(100)).toBe("A");
-    expect(gradeFromComposite(95)).toBe("A");
+    expect(gradeFromComposite(100)).toBe("A+");
+    expect(gradeFromComposite(95)).toBe("A+");
     expect(gradeFromComposite(90)).toBe("A");
     expect(gradeFromComposite(89)).toBe("B+");
     expect(gradeFromComposite(85)).toBe("B+");
     expect(gradeFromComposite(84)).toBe("B");
     expect(gradeFromComposite(80)).toBe("B");
-    expect(gradeFromComposite(79)).toBe("C");
+    expect(gradeFromComposite(79)).toBe("C+");
+    expect(gradeFromComposite(75)).toBe("C+");
+    expect(gradeFromComposite(74)).toBe("C");
     expect(gradeFromComposite(65)).toBe("C");
     expect(gradeFromComposite(64)).toBe("D");
     expect(gradeFromComposite(50)).toBe("D");

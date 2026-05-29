@@ -26,7 +26,7 @@ curl yoke.lol/stripe.com | jq
 ## Features
 
 ### 📊 Contextual Scoring
-5-axis scoring (Security, Performance, Reliability, Trust, Visibility) with radar visualization. Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A≥90, B+≥85, B≥80, C≥65, D≥50, F<50. Auto-classifies sites into 7 archetypes (commerce, content, application, corporate, infrastructure, institutional, general) to adjust individual finding severity — missing HSTS is critical for e-commerce, low-priority for a blog. [Compare domains side-by-side](https://yoke.lol/compare/github.com/gitlab.com) with overlaid radar and per-axis deltas.
+5-axis scoring (Security, Performance, Reliability, Trust, Visibility) with radar visualization. Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥65, D≥50, F<50. Auto-classifies sites into 7 archetypes (commerce, content, application, corporate, infrastructure, institutional, general) to adjust individual finding severity — missing HSTS is critical for e-commerce, low-priority for a blog. [Compare domains side-by-side](https://yoke.lol/compare/github.com/gitlab.com) with overlaid radar and per-axis deltas.
 
 ### 🔍 Core Analysis
 - **DNS** — A, AAAA, MX, NS, TXT, CNAME, CAA, SOA with TTL and provider detection

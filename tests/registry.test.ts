@@ -18,6 +18,8 @@ describe('Phase 2 Check Registry', () => {
     "blocklists",
     "ssl",
     "performance",
+    "performance_desktop",
+    "crux",
     "_status",
     "llms_txt",
     "wayback",
@@ -65,8 +67,8 @@ describe('Phase 2 Check Registry', () => {
     }
   });
 
-  it('should have 27 checks (Phase 2 total)', () => {
-    expect(registry.length).toBe(27);
+  it('should have 29 checks (Phase 2 total)', () => {
+    expect(registry.length).toBe(29);
   });
 
   it('should have a default value defined for every check', () => {
