@@ -624,13 +624,16 @@ function getFixLink(finding: ScoreFinding, data: AnalysisResult): { url: string;
 
 // ─── Quick Wins Filter ──────────────────────────────────────────────
 
+/** Unified quick win classification — used by both the Quick Wins section and the ⚡ badge */
+function isQuickWinItem(item: ActionItem): boolean {
+  const effort = item.effort.toLowerCase();
+  const isQuickEffort = effort.includes("5 min") || effort.includes("10 min") || effort.includes("15 min") || effort.includes("30 min") || effort.includes("one-line") || effort.includes("one response header");
+  const isHighImpact = item.severity === "high" || item.severity === "critical";
+  return isQuickEffort || (isHighImpact && effort.includes("min"));
+}
+
 function getQuickWins(actionItems: ActionItem[]): ActionItem[] {
-  return actionItems.filter(item => {
-    const effort = item.effort.toLowerCase();
-    const isQuick = effort.includes("5 min") || effort.includes("10 min") || effort.includes("15 min") || effort.includes("one-line") || effort.includes("one response header");
-    const isHighImpact = item.severity === "high" || item.severity === "critical";
-    return isQuick || (isHighImpact && effort.includes("min"));
-  }).slice(0, 6);
+  return actionItems.filter(isQuickWinItem).slice(0, 6);
 }
 
 // ─── BYO Key helpers ────────────────────────────────────────────────
@@ -807,7 +810,7 @@ function AdvancedSettings({ domain, onKeyChange, onModelChange }: {
                 {" "}to access models like DeepSeek, Claude, GPT-4o, and Gemini. Without a key, you get 10 analyses/hr on our shared key. With your own, you get unlimited access, model selection, and prompt editing.
               </p>
               <p style={{ margin: "0" }}>
-                <strong style={{ color: "var(--text)" }}>Privacy:</strong> Your key is stored in your browser's localStorage only — it's sent directly from your browser to OpenRouter, never to Yoke's servers. We can't see, log, or access it. <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>Privacy policy →</a>
+                <strong style={{ color: "var(--text)" }}>Privacy:</strong> Your key is stored in your browser's localStorage and sent to Yoke's server when you request an AI analysis. We don't log or store your key — it's used only for that single API call to OpenRouter and then discarded. <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "none" }}>Privacy policy →</a>
               </p>
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
@@ -1155,6 +1158,8 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
 
   const totalGain = plan.items.reduce((sum, i) => sum + i.pointGain, 0);
   const projectedScore = Math.min(100, Math.round(plan.currentScore + totalGain));
+  // TODO: These grade thresholds are duplicated from server-side gradeFromComposite()
+  // in contextual-scoring.ts. Consider exposing via /api/scoring or a shared constants file.
   const projectedGrade = projectedScore >= 95 ? "A+" : projectedScore >= 90 ? "A" : projectedScore >= 85 ? "B+" : projectedScore >= 80 ? "B" : projectedScore >= 75 ? "C+" : projectedScore >= 65 ? "C" : projectedScore >= 50 ? "D" : "F";
 
   const progressPct = Math.min(((plan.currentScore - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0)) / (plan.targetThreshold - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0))) * 100, 100);
@@ -1222,7 +1227,7 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
                 </span>
                 {(() => {
                   const effort = item.effort.toLowerCase();
-                  const isQuickWin = effort.includes("5 min") || effort.includes("10 min") || effort.includes("15 min") || effort.includes("one-line") || effort.includes("one response header");
+                  const isQuickWin = isQuickWinItem(item);
                   return isQuickWin ? (
                     <span style={{
                       fontSize: "9px", padding: "1px 5px", borderRadius: "3px",

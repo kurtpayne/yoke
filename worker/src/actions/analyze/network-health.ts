@@ -106,11 +106,47 @@ export async function checkDnsPropagation(domain: string): Promise<DnsPropagatio
         : { name: "Unknown", ips: [] as string[], response_time_ms: 0, status: "error" as const }
     );
 
-    // Determine consistency — compare IP sets from resolvers that returned successfully
+    // Determine consistency — use overlap analysis instead of exact match.
+    // CDN/GeoDNS/load balancers intentionally return different IP subsets to
+    // different resolvers. Only flag inconsistency when a resolver returns IPs
+    // with ZERO overlap with ALL other resolvers, or returns NXDOMAIN while
+    // others succeed.
     const successfulSets = resolvers
       .filter((r) => r.status === "ok" && r.ips.length > 0)
-      .map((r) => r.ips.join(","));
-    const consistent = successfulSets.length > 0 && new Set(successfulSets).size === 1;
+      .map((r) => new Set(r.ips));
+    const failedWithNoIps = resolvers.filter((r) => r.status === "ok" && r.ips.length === 0);
+    const hasNxdomainWhileOthersSucceed = failedWithNoIps.length > 0 && successfulSets.length > 0;
+
+    let consistent = true;
+    if (hasNxdomainWhileOthersSucceed) {
+      // One resolver says the domain doesn't exist while others return IPs
+      consistent = false;
+    } else if (successfulSets.length >= 2) {
+      // Check each resolver's IPs against all others — flag only if a resolver
+      // has ZERO overlap with every other resolver
+      for (let i = 0; i < successfulSets.length; i++) {
+        const setA = successfulSets[i];
+        let hasOverlapWithAny = false;
+        for (let j = 0; j < successfulSets.length; j++) {
+          if (i === j) continue;
+          for (const ip of setA) {
+            if (successfulSets[j].has(ip)) {
+              hasOverlapWithAny = true;
+              break;
+            }
+          }
+          if (hasOverlapWithAny) break;
+        }
+        // If only one resolver and it returned IPs, that's fine
+        if (successfulSets.length === 1) {
+          hasOverlapWithAny = true;
+        }
+        if (!hasOverlapWithAny) {
+          consistent = false;
+          break;
+        }
+      }
+    }
 
     // Collect unique IPs across all resolvers
     const allIps = new Set<string>();
@@ -208,6 +244,20 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
       14618,  // Amazon (alt)
       396982, // Google Cloud
       209242, // Cloudflare (alt)
+      32934,  // Meta
+      714,    // Apple
+      2906,   // Netflix
+      16276,  // OVH
+      36459,  // GitHub
+      46489,  // Twitch
+      19551,  // Incapsula/Imperva
+      30148,  // Sucuri
+      24940,  // Hetzner
+      63949,  // Akamai/Linode
+      398101, // StackPath/Highwinds
+      13414,  // Twitter/X
+      36183,  // Akamai (CDN)
+      16591,  // Google Fiber
     ]);
     const isAnycast = asn !== null && ANYCAST_ASNS.has(asn);
     let stability: RipeRouting["routing_stability"] = null;

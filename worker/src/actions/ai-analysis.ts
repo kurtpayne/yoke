@@ -31,7 +31,34 @@ import SYSTEM_PROMPT_RAW from "../../../prompts/ai-analysis.txt";
 const SYSTEM_PROMPT = SYSTEM_PROMPT_RAW;
 
 // ─── Data Sanitizer ─────────────────────────────────────────────────
-// Strip verbose fields to keep token count low
+// Strip verbose fields to keep token count low, and sanitize against prompt injection
+
+const MAX_STRING_LENGTH = 500;
+
+/** Truncate long string values and strip HTML/XML tags to prevent prompt injection */
+function sanitizeStringValue(value: string): string {
+  // Strip HTML/XML-like tags that could contain instructions
+  let cleaned = value.replace(/<[^>]*>/g, "");
+  // Truncate and mark
+  if (cleaned.length > MAX_STRING_LENGTH) {
+    cleaned = cleaned.slice(0, MAX_STRING_LENGTH) + " [truncated]";
+  }
+  return cleaned;
+}
+
+/** Recursively sanitize all string values in an object */
+function deepSanitizeStrings(obj: unknown): unknown {
+  if (typeof obj === "string") return sanitizeStringValue(obj);
+  if (Array.isArray(obj)) return obj.map(deepSanitizeStrings);
+  if (obj && typeof obj === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = deepSanitizeStrings(val);
+    }
+    return result;
+  }
+  return obj;
+}
 
 function sanitizeForLLM(data: Record<string, unknown>): Record<string, unknown> {
   const sanitized = { ...data };
@@ -144,7 +171,8 @@ function sanitizeForLLM(data: Record<string, unknown>): Record<string, unknown> 
     sanitized.network_health = nh;
   }
 
-  return sanitized;
+  // Deep sanitize all remaining string values against prompt injection
+  return deepSanitizeStrings(sanitized) as Record<string, unknown>;
 }
 
 // ─── Prompt Builder (shared by AI call and DIY copy) ────────────────
@@ -181,8 +209,10 @@ async function callOpenRouter(
   apiKey: string,
   analysisData: Record<string, unknown>,
   referer?: string,
+  model?: string,
 ): Promise<AIAnalysisResult> {
   const { system, user } = buildAIPrompt(analysisData);
+  const useModel = model || DEFAULT_MODEL;
 
   const maxRetries = 3;
   let lastError: Error | null = null;
@@ -204,13 +234,13 @@ async function callOpenRouter(
           "X-Title": "Yoke Domain Intelligence",
         },
         body: JSON.stringify({
-          model: DEFAULT_MODEL,
+          model: useModel,
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },
           ],
           temperature: 0.3,
-          max_tokens: 2500,
+          max_tokens: 4000,
         }),
       });
 
@@ -233,25 +263,10 @@ async function callOpenRouter(
 
       const content = data.choices[0].message.content.trim();
 
-      // Parse JSON from the response — handle potential markdown wrapping
-      let jsonStr = content;
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        jsonStr = jsonMatch[1].trim();
-      }
-      // Strip BOM and extra whitespace that some models emit
-      jsonStr = jsonStr.replace(/^\uFEFF/, '').trim();
-
-      let parsed: AIAnalysisResult;
-      try {
-        parsed = JSON.parse(jsonStr);
-      } catch { /* invalid JSON */
+      // Use shared parser (handles markdown fences, truncated JSON, BOM)
+      const parsed = parseAIContent(content);
+      if (!parsed) {
         throw new Error(`Failed to parse LLM response as JSON: ${content.slice(0, 200)}`);
-      }
-
-      // Validate required fields
-      if (!parsed.summary || !parsed.posture || !Array.isArray(parsed.key_findings)) {
-        throw new Error("LLM response missing required fields (summary, posture, key_findings)");
       }
 
       // Attach token usage for transparency
@@ -322,6 +337,7 @@ interface CachedAIResult {
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
 const AI_HOURLY_LIMIT = 10;
+const AI_DOMAIN_HOURLY_LIMIT = 3; // max 3 AI analyses per domain per hour
 
 async function ensureRateLimitTable(db: D1Database): Promise<void> {
   await db.prepare(
@@ -340,11 +356,7 @@ async function getRateLimitCount(db: D1Database, ip: string): Promise<number> {
   return row?.cnt ?? 0;
 }
 
-async function recordRateLimitHit(db: D1Database, ip: string): Promise<void> {
-  await db.prepare(
-    "INSERT INTO ai_rate_limits (ip, ts) VALUES (?, ?)"
-  ).bind(ip, Math.floor(Date.now() / 1000)).run();
-}
+// recordRateLimitHit removed — rate limit insertion is done inline in getAIAnalysis
 
 async function cleanupOldRateLimits(db: D1Database): Promise<void> {
   // Probabilistic cleanup: 5% chance per request, delete entries older than 2 hours
@@ -352,7 +364,39 @@ async function cleanupOldRateLimits(db: D1Database): Promise<void> {
   try {
     const cutoff = Math.floor(Date.now() / 1000) - 7200;
     await db.prepare("DELETE FROM ai_rate_limits WHERE ts < ?").bind(cutoff).run();
+    await db.prepare("DELETE FROM ai_domain_rate_limits WHERE ts < ?").bind(cutoff).run();
   } catch { /* cleanup failure is non-critical */ }
+}
+
+// ─── Domain-level rate limiting ─────────────────────────────────────
+
+async function ensureDomainRateLimitTable(db: D1Database): Promise<void> {
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS ai_domain_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL, ts INTEGER NOT NULL DEFAULT 0)"
+  ).run();
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_ai_domain_rate_domain_ts ON ai_domain_rate_limits(domain, ts)"
+  ).run();
+}
+
+async function getDomainRateLimitCount(db: D1Database, domain: string): Promise<number> {
+  try {
+    await ensureDomainRateLimitTable(db);
+    const cutoff = Math.floor(Date.now() / 1000) - 3600;
+    const row = await db.prepare(
+      "SELECT COUNT(*) as cnt FROM ai_domain_rate_limits WHERE domain = ? AND ts > ?"
+    ).bind(domain, cutoff).first<{ cnt: number }>();
+    return row?.cnt ?? 0;
+  } catch { return 0; }
+}
+
+async function recordDomainRateLimitHit(db: D1Database, domain: string): Promise<void> {
+  try {
+    await ensureDomainRateLimitTable(db);
+    await db.prepare(
+      "INSERT INTO ai_domain_rate_limits (domain, ts) VALUES (?, ?)"
+    ).bind(domain, Math.floor(Date.now() / 1000)).run();
+  } catch { /* non-critical */ }
 }
 
 // ─── Streaming OpenRouter Call ──────────────────────────────────────
@@ -363,8 +407,10 @@ function streamOpenRouter(
   apiKey: string,
   analysisData: Record<string, unknown>,
   referer?: string,
+  model?: string,
 ): { stream: ReadableStream; fullContent: Promise<string> } {
   const { system, user } = buildAIPrompt(analysisData);
+  const useModel = model || DEFAULT_MODEL;
   let resolveContent: (v: string) => void;
   let rejectContent: (e: Error) => void;
   const fullContent = new Promise<string>((res, rej) => { resolveContent = res; rejectContent = rej; });
@@ -383,13 +429,13 @@ function streamOpenRouter(
             "X-Title": "Yoke Domain Intelligence",
           },
           body: JSON.stringify({
-            model: DEFAULT_MODEL,
+            model: useModel,
             messages: [
               { role: "system", content: system },
               { role: "user", content: user },
             ],
             temperature: 0.3,
-            max_tokens: 2500,
+            max_tokens: 4000,
             stream: true,
           }),
         });
@@ -465,16 +511,44 @@ function streamOpenRouter(
 
 function parseAIContent(content: string): AIAnalysisResult | null {
   let jsonStr = content.trim();
+  // Try standard markdown fence extraction
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) jsonStr = jsonMatch[1].trim();
+  // Fallback: if output was truncated and closing ``` is missing, strip opening fence
+  else if (jsonStr.startsWith("```")) {
+    jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").trim();
+  }
   jsonStr = jsonStr.replace(/^\uFEFF/, '').trim();
 
+  // Try direct parse first
   try {
     const parsed = JSON.parse(jsonStr) as AIAnalysisResult;
     if (parsed.summary && parsed.posture && Array.isArray(parsed.key_findings)) {
       return parsed;
     }
-  } catch { /* invalid JSON */ }
+  } catch { /* invalid JSON — try salvage */ }
+
+  // Fallback: try to salvage truncated JSON by closing open structures
+  try {
+    let salvaged = jsonStr;
+    // Close any unclosed strings
+    const quoteCount = (salvaged.match(/(?<!\\)"/g) || []).length;
+    if (quoteCount % 2 !== 0) salvaged += '"';
+    // Close arrays and objects
+    const openBraces = (salvaged.match(/{/g) || []).length;
+    const closeBraces = (salvaged.match(/}/g) || []).length;
+    const openBrackets = (salvaged.match(/\[/g) || []).length;
+    const closeBrackets = (salvaged.match(/]/g) || []).length;
+    // Remove trailing comma before closing
+    salvaged = salvaged.replace(/,\s*$/, "");
+    for (let i = 0; i < openBrackets - closeBrackets; i++) salvaged += "]";
+    for (let i = 0; i < openBraces - closeBraces; i++) salvaged += "}";
+    const parsed = JSON.parse(salvaged) as AIAnalysisResult;
+    if (parsed.summary && parsed.posture && Array.isArray(parsed.key_findings)) {
+      return parsed;
+    }
+  } catch { /* salvage failed */ }
+
   return null;
 }
 
@@ -483,14 +557,18 @@ function parseAIContent(content: string): AIAnalysisResult | null {
 export async function getAIAnalysis(
   domain: string,
   env: Env,
-  options?: { clientIP?: string; stream?: boolean; ctx?: ExecutionContext }
+  options?: { clientIP?: string; stream?: boolean; ctx?: ExecutionContext; byoKey?: string; byoModel?: string }
 ): Promise<Response> {
   const normalized = normalizeDomain(domain);
   const clientIP = options?.clientIP || "unknown";
   const wantStream = options?.stream ?? false;
+  // BYO key passthrough — use client's key when provided, fall back to platform key
+  const apiKey = options?.byoKey || env.OPENROUTER_API_KEY;
+  const model = options?.byoModel || DEFAULT_MODEL;
+  const isByoKey = !!options?.byoKey;
 
-  // Must have platform key
-  if (!env.OPENROUTER_API_KEY) {
+  // Must have either platform key or BYO key
+  if (!apiKey) {
     return new Response(JSON.stringify({ error: "AI analysis not configured" }), {
       status: 503,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -519,8 +597,9 @@ export async function getAIAnalysis(
     });
   }
 
-  // Rate limiting
+  // Rate limiting — skip for BYO key users (they're using their own credits)
   let rateLimitRowId: number | undefined;
+  if (!isByoKey) {
   try {
     await ensureRateLimitTable(env.STATS_DB);
     const count = await getRateLimitCount(env.STATS_DB, clientIP);
@@ -547,18 +626,84 @@ export async function getAIAnalysis(
         },
       });
     }
+    // Domain-level rate limit — prevent hammering the same domain
+    const domainCount = await getDomainRateLimitCount(env.STATS_DB, normalized);
+    if (domainCount >= AI_DOMAIN_HOURLY_LIMIT) {
+      return new Response(JSON.stringify({
+        rate_limited: true,
+        limit: AI_DOMAIN_HOURLY_LIMIT,
+        used: domainCount,
+        reset: "~1 hour",
+        message: `This domain has been analyzed ${domainCount} times in the last hour. Results are cached — the analysis doesn't change that fast.`,
+      }), {
+        status: 429,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS, "Retry-After": "3600" },
+      });
+    }
     const rlResult = await env.STATS_DB.prepare(
       "INSERT INTO ai_rate_limits (ip, ts) VALUES (?, ?)"
     ).bind(clientIP, Math.floor(Date.now() / 1000)).run();
     rateLimitRowId = rlResult.meta?.last_row_id as number | undefined;
+    await recordDomainRateLimitHit(env.STATS_DB, normalized);
   } catch (rateLimitErr) {
     logError("AI rate-limit DB error", { error: rateLimitErr instanceof Error ? rateLimitErr.message : String(rateLimitErr) });
-    logWarn("Proceeding without rate limit check due to STATS_DB error");
+    // KV fallback: if D1 is unreachable but KV is available, use it for rate limiting (I13)
+    if (env.REFERENCE_DATA) {
+      try {
+        const window = Math.floor(Date.now() / 3600000); // hourly window
+        const kvKey = `ratelimit:${clientIP}:ai:${window}`;
+        const existing = await env.REFERENCE_DATA.get(kvKey);
+        const count = existing ? parseInt(existing, 10) : 0;
+        if (count >= AI_HOURLY_LIMIT) {
+          const { system, user } = buildAIPrompt(analysisCache);
+          const diyPrompt = `${system}\n\n---\n\n${user}`;
+          return new Response(JSON.stringify({
+            rate_limited: true, limit: AI_HOURLY_LIMIT, used: count, reset: "~1 hour",
+            diy_prompt: diyPrompt, model_suggestion: "deepseek/deepseek-chat-v3-0324",
+            instructions: "Copy the prompt below and paste it into ChatGPT, Claude, Gemini, or any AI assistant.",
+          }), {
+            status: 429,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS, "Retry-After": "3600" },
+          });
+        }
+        // Domain-level KV rate limit
+        const domainKvKey = `ratelimit:domain:${normalized}:ai:${window}`;
+        const domainExisting = await env.REFERENCE_DATA.get(domainKvKey);
+        const domainCount = domainExisting ? parseInt(domainExisting, 10) : 0;
+        if (domainCount >= AI_DOMAIN_HOURLY_LIMIT) {
+          return new Response(JSON.stringify({
+            rate_limited: true, limit: AI_DOMAIN_HOURLY_LIMIT, used: domainCount, reset: "~1 hour",
+            message: `This domain has been analyzed ${domainCount} times in the last hour. Results are cached.`,
+          }), {
+            status: 429,
+            headers: { "Content-Type": "application/json", ...CORS_HEADERS, "Retry-After": "3600" },
+          });
+        }
+        // Increment counters with 2hr TTL
+        await env.REFERENCE_DATA.put(kvKey, String(count + 1), { expirationTtl: 7200 });
+        await env.REFERENCE_DATA.put(domainKvKey, String(domainCount + 1), { expirationTtl: 7200 });
+        logWarn("AI rate-limit: using KV fallback (D1 unavailable)");
+      } catch (kvErr) {
+        logError("AI rate-limit KV fallback also failed", { error: kvErr instanceof Error ? kvErr.message : String(kvErr) });
+        // Both D1 and KV failed — fail closed
+        return new Response(JSON.stringify({ error: "AI analysis temporarily unavailable — rate limit service error" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        });
+      }
+    } else {
+    // Fail closed on DB error — return 503 instead of allowing unlimited requests
+    return new Response(JSON.stringify({ error: "AI analysis temporarily unavailable — rate limit service error" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
+    }
   }
+  } // end BYO key rate-limit skip
 
   // ─── Streaming path ────────────────────────────────────────────────
   if (wantStream) {
-    const { stream, fullContent } = streamOpenRouter(env.OPENROUTER_API_KEY!, analysisCache, env.BASE_URL);
+    const { stream, fullContent } = streamOpenRouter(apiKey!, analysisCache, env.BASE_URL, model);
 
     // Cache the assembled result after stream completes (fire-and-forget)
     const cachePromise = fullContent.then(async (content) => {
@@ -592,7 +737,7 @@ export async function getAIAnalysis(
 
   // ─── Non-streaming path (fallback) ─────────────────────────────────
   try {
-    const result = await callOpenRouter(env.OPENROUTER_API_KEY!, analysisCache, env.BASE_URL);
+    const result = await callOpenRouter(apiKey!, analysisCache, env.BASE_URL, model);
 
     const responseData: CachedAIResult = {
       result,

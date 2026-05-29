@@ -54,14 +54,10 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[], env:
 // KEEP:
 //   Barracuda (b.barracudacentral.org) — reliable, no false positives on major domains
 //   SpamCop (bl.spamcop.net) — reliable, low false positive rate
-//   SORBS (dnsbl.sorbs.net) — reliable, no false positives on major domains
-//
-// FIXED (were returning false positives):
-//   Spamhaus ZEN (zen.spamhaus.org) — returns 127.255.255.254 when queried via
-//     public resolvers (dns.google). This is NOT a real listing — it means
-//     "query blocked, use Spamhaus DQS instead". Code now filters this out.
 //
 // REMOVED:
+//   SORBS (dnsbl.sorbs.net) — notorious for listing entire /24 blocks, high false positive
+//     rate for shared/CDN IPs. Removed to reduce noise.
 //   CBL (cbl.abuseat.org) — redundant with Spamhaus ZEN. CBL is the data source
 //     for Spamhaus XBL, which is already included in ZEN. Also returns
 //     127.255.255.254 via public resolvers (same issue as Spamhaus).
@@ -83,35 +79,59 @@ export const BLOCKLISTS = [
   { name: "Spamhaus ZEN", zone: "zen.spamhaus.org" },
   { name: "Barracuda", zone: "b.barracudacentral.org" },
   { name: "SpamCop", zone: "bl.spamcop.net" },
-  { name: "SORBS", zone: "dnsbl.sorbs.net" },
 ] as const;
 
 export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<BlocklistResult[]> {
-  const aRecord = dnsRecords.find((r) => r.type === "A");
-  if (!aRecord) return [];
-  const reversed = aRecord.data.split(".").reverse().join(".");
+  const aRecords = dnsRecords.filter((r) => r.type === "A");
+  if (aRecords.length === 0) return [];
+
+  // Known CDN ASN prefixes — skip blocklist checks for CDN IPs since they're
+  // shared infrastructure and listings reflect neighbors, not the domain
+  // (CDN detection happens elsewhere, but we do a basic check here)
   const results: BlocklistResult[] = [];
-  const checks = BLOCKLISTS.map(async (bl) => {
-    try {
-      const res = await fetchWithTimeout(`https://dns.google/resolve?name=${reversed}.${bl.zone}&type=A`, { timeout: 4000 });
-      const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
-      const returnIp = data.Answer?.[0]?.data ?? null;
 
-      // Filter out DNSBL error responses — these are NOT real listings.
-      // 127.255.255.254 = "queried via public resolver, blocked"
-      // 127.255.255.255 = "incorrect DNSBL name"
-      const isErrorResponse = returnIp !== null && DNSBL_ERROR_CODES.has(returnIp);
-      const listed = data.Status === 0 && !!data.Answer?.length && !isErrorResponse;
+  // Check all A records, not just the first
+  for (const aRecord of aRecords) {
+    const reversed = aRecord.data.split(".").reverse().join(".");
+    const checks = BLOCKLISTS.map(async (bl) => {
+      try {
+        const res = await fetchWithTimeout(`https://dns.google/resolve?name=${reversed}.${bl.zone}&type=A`, { timeout: 4000 });
+        const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
+        const returnIp = data.Answer?.[0]?.data ?? null;
 
-      results.push({
-        name: bl.name,
-        zone: bl.zone,
-        listed,
-        detail: isErrorResponse ? "query blocked (public resolver)" : listed ? returnIp : null,
-      });
-    } catch { results.push({ name: bl.name, zone: bl.zone, listed: false, detail: "check failed" }); }
-  });
-  await Promise.allSettled(checks);
+        // Filter out DNSBL error responses — these are NOT real listings.
+        const isErrorResponse = returnIp !== null && DNSBL_ERROR_CODES.has(returnIp);
+        const listed = data.Status === 0 && !!data.Answer?.length && !isErrorResponse;
+
+        // Distinguish Spamhaus PBL (policy-based, not spam) from SBL (real listings)
+        let detail = isErrorResponse ? "query blocked (public resolver)" : listed ? returnIp : null;
+        let isPbl = false;
+        if (listed && bl.name === "Spamhaus ZEN" && returnIp) {
+          // 127.0.0.10-11 = PBL (Policy Block List) — not spam, just residential/dynamic IP policy
+          if (returnIp === "127.0.0.10" || returnIp === "127.0.0.11") {
+            isPbl = true;
+            detail = `PBL (policy-based, not spam): ${returnIp}`;
+          }
+        }
+
+        // Only add if not already listed for this blocklist (dedup across A records)
+        if (!results.some(r => r.name === bl.name && r.listed)) {
+          results.push({
+            name: bl.name,
+            zone: bl.zone,
+            listed: listed && !isPbl, // PBL is not a real listing — don't count it
+            detail,
+          });
+        }
+      } catch {
+        if (!results.some(r => r.name === bl.name)) {
+          results.push({ name: bl.name, zone: bl.zone, listed: false, detail: "check failed" });
+        }
+      }
+    });
+    await Promise.allSettled(checks);
+  }
+
   return results;
 }
 

@@ -496,12 +496,15 @@ export default {
         // POST /api/ai-analysis — AI-powered domain analysis (10/hr per IP)
         if (method === "POST" && path === "/api/ai-analysis") {
           await trackUsage(env.STATS_DB, "ai-analysis");
-          const body = await parseBody<{ domain?: string; stream?: boolean }>(request);
+          const body = await parseBody<{ domain?: string; stream?: boolean; model?: string }>(request);
           if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           _track("ai-analysis", 200, domain);
-          return getAIAnalysis(domain, env, { clientIP, stream: !!body.stream, ctx });
+          // BYO API key passthrough — when present, use the client's OpenRouter key
+          const byoKey = request.headers.get("X-OpenRouter-Key") || undefined;
+          const byoModel = body.model || undefined;
+          return getAIAnalysis(domain, env, { clientIP, stream: !!body.stream, ctx, byoKey, byoModel });
         }
 
         // POST /api/ai-prompt — returns the assembled prompt for the prompt editor (no LLM call)

@@ -36,8 +36,9 @@ export const PERF_SCORE: ThresholdConfig = {
   unit: "points",
   bands: [
     { min: 90, severity: "good", label: "Performance score {value}/100" },
-    { min: 70, severity: "low", label: "Performance score {value}/100" },
-    { min: 40, severity: "medium", label: "Performance score {value}/100" },
+    { min: 70, severity: "info", label: "Performance score {value}/100" },
+    { min: 50, severity: "low", label: "Performance score {value}/100" },
+    { min: 30, severity: "medium", label: "Performance score {value}/100" },
     { min: 0, severity: "high", label: "Low performance score {value}/100" },
   ],
 };
@@ -62,7 +63,7 @@ export const CLS: ThresholdConfig = {
   unit: "score",
   bands: [
     { max: 0.1, severity: "good", label: "CLS: {value}" },
-    { max: 0.25, severity: "medium", label: "CLS: {value}" },
+    { max: 0.25, severity: "low", label: "CLS: {value}" },
     { min: 0.25, severity: "high", label: "CLS: {value}" },
   ],
 };
@@ -74,7 +75,7 @@ export const TTFB: ThresholdConfig = {
   unit: "ms",
   bands: [
     { max: 800, severity: "good", label: "TTFB: {value}ms" },
-    { max: 1800, severity: "medium", label: "TTFB: {value}ms" },
+    { max: 1800, severity: "low", label: "TTFB: {value}ms" },
     { min: 1800, severity: "high", label: "TTFB: {value}ms" },
   ],
 };
@@ -111,12 +112,11 @@ export const DOMAIN_AGE: ThresholdConfig = {
   source: "NextDNS NRD: domains <30 days are newly registered; industry treats <1 year as young",
   unit: "days",
   bands: [
-    { min: 3650, severity: "good", label: "Established domain ({value} days)" },      // 10+ years
-    { min: 1825, severity: "info", label: "Mature domain ({value} days)" },            // 5-10 years
-    { min: 1095, severity: "low", label: "Domain age: {value} days" },                 // 3-5 years
-    { min: 365, severity: "low", label: "Domain age: {value} days" },                  // 1-3 years
-    { min: 90, severity: "medium", label: "Young domain ({value} days)" },             // 90d-1yr
-    { min: 30, severity: "high", label: "Recently registered ({value} days)" },        // 30-90d
+    { min: 1825, severity: "good", label: "Established domain ({value} days)" },       // 5+ years
+    { min: 1095, severity: "info", label: "Mature domain ({value} days)" },             // 3-5 years
+    { min: 365, severity: "low", label: "Domain age: {value} days" },                   // 1-3 years
+    { min: 90, severity: "medium", label: "Young domain ({value} days)" },              // 90d-1yr
+    { min: 30, severity: "high", label: "Recently registered ({value} days)" },         // 30-90d
     { min: 0, severity: "critical", label: "Newly registered domain ({value} days) — high risk NRD" }, // <30d
   ],
 };
@@ -136,12 +136,50 @@ export const DOMAIN_EXPIRY: ThresholdConfig = {
 // ─── Reliability ─────────────────────────────────────────────────────
 
 export const NS_COUNT: ThresholdConfig = {
-  signal: "ns_count", axis: "reliability", weight: 3,
+  signal: "ns_count", axis: "reliability", weight: 2, // Aligned with contextual-scoring ns_redundancy weight (M1)
   description: "Number of authoritative nameservers — more = better redundancy",
   bands: [
     { min: 4, severity: "good", label: "{value} nameservers" },
     { min: 2, severity: "info", label: "{value} nameservers" },
     { min: 0, severity: "medium", label: "Only {value} nameserver" },
+  ],
+};
+
+// ─── Visibility ──────────────────────────────────────────────────────
+
+export const INP: ThresholdConfig = {
+  signal: "inp", axis: "performance", weight: 3,
+  description: "Interaction to Next Paint — responsiveness to user interactions",
+  source: "Web Vitals: ≤200ms good, ≤500ms needs improvement, >500ms poor (web.dev/inp)",
+  unit: "ms",
+  bands: [
+    { max: 200, severity: "good", label: "INP: {value}ms" },
+    { max: 500, severity: "low", label: "INP: {value}ms" },
+    { min: 500, severity: "medium", label: "INP: {value}ms" },
+  ],
+};
+
+export const FCP: ThresholdConfig = {
+  signal: "fcp", axis: "performance", weight: 2,
+  description: "First Contentful Paint — time until first content renders",
+  source: "Web Vitals: ≤1.8s good, ≤3.0s needs improvement, >3.0s poor (web.dev/fcp)",
+  unit: "seconds",
+  bands: [
+    { max: 1.8, severity: "good", label: "FCP: {value}s" },
+    { max: 3.0, severity: "low", label: "FCP: {value}s" },
+    { min: 3.0, severity: "medium", label: "FCP: {value}s" },
+  ],
+};
+
+export const TBT: ThresholdConfig = {
+  signal: "tbt", axis: "performance", weight: 2,
+  description: "Total Blocking Time — JS execution blocking the main thread",
+  source: "Lighthouse: <200ms good, <600ms needs improvement, ≥600ms poor",
+  unit: "ms",
+  bands: [
+    { max: 200, severity: "good", label: "TBT: {value}ms" },
+    { max: 600, severity: "low", label: "TBT: {value}ms" },
+    { min: 600, severity: "medium", label: "TBT: {value}ms — excessive JS blocking" },
   ],
 };
 
@@ -162,7 +200,7 @@ export const A11Y_SCORE: ThresholdConfig = {
 // ─── All configs for API export ──────────────────────────────────────
 
 export const ALL_THRESHOLDS: ThresholdConfig[] = [
-  PERF_SCORE, LCP, CLS, TTFB,
+  PERF_SCORE, LCP, CLS, TTFB, INP, FCP, TBT,
   SSL_GRADE, BLOCKLIST,
   DOMAIN_AGE, DOMAIN_EXPIRY,
   NS_COUNT,

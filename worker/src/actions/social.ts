@@ -131,6 +131,19 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string, env?:
   // Strategy 2: Probe common URL patterns (only if few found via HTML)
   if (accounts.length < 3) {
     const baseName = domain.split(".")[0] ?? domain;
+    // Skip probing for generic/word-like domain names that produce false positives
+    // (e.g., "security.com" → finds unrelated @security on every platform)
+    const SKIP_PROBE_NAMES = new Set([
+      "www", "mail", "ftp", "blog", "shop", "store", "app", "api", "web",
+      "security", "support", "help", "news", "info", "data", "cloud",
+      "login", "admin", "test", "dev", "staging", "demo", "status",
+      "media", "video", "music", "photo", "images", "files", "docs",
+      "home", "about", "contact", "search", "tools", "health", "money",
+      "travel", "food", "tech", "code", "design", "art", "game", "play",
+    ]);
+    const shouldProbe = baseName.length >= 3 && !SKIP_PROBE_NAMES.has(baseName.toLowerCase());
+
+    if (shouldProbe) {
     const probeUrls: Array<{ platform: string; url: string; username: string }> = [
       { platform: "Twitter/X", url: `https://x.com/${baseName}`, username: baseName },
       { platform: "GitHub", url: `https://github.com/${baseName}`, username: baseName },
@@ -149,6 +162,7 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string, env?:
       } catch { /* probe failed */ }
     });
     await Promise.allSettled(probes);
+    }
   }
 
   // Sort: rel-me first, then homepage, then probe

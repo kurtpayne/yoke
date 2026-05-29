@@ -35,12 +35,18 @@ const CATEGORY_PATTERNS: CategoryPattern[] = [
     patterns: [
       /google-analytics\.com/i, /googletagmanager\.com/i, /gtag/i,
       /segment\.(com|io)/i, /mixpanel\.com/i, /hotjar\.com/i,
-      /plausible\.io/i, /usefathom\.com/i, /fathom/i,
       /amplitude\.com/i, /heap(analytics)?\.com/i,
-      /matomo\.(org|cloud)/i, /piwik/i, /umami\./i,
       /analytics\.google\.com/i, /ga\.js/i, /gtm\.js/i,
       /stats\.wp\.com/i, /parsely\.com/i, /chartbeat\.com/i,
       /clicky\.com/i, /statcounter\.com/i,
+    ],
+  },
+  {
+    category: "Privacy-Respecting Analytics",
+    patterns: [
+      /plausible\.io/i, /usefathom\.com/i, /fathom/i,
+      /matomo\.(org|cloud)/i, /piwik/i, /umami\./i,
+      /simpleanalytics\.com/i, /simple-analytics/i,
     ],
   },
   {
@@ -186,13 +192,54 @@ function isFirstParty(scriptDomain: string, pageDomain: string): boolean {
   // Subdomain of page domain
   if (sd.endsWith(`.${pd}`)) return true;
 
-  // Same registered domain (basic check: compare last 2 parts)
+  // Same registered domain — handle common ccTLDs (.co.uk, .com.au, etc.)
+  // by comparing last 3 parts for known two-part TLDs, last 2 otherwise
+  const TWO_PART_TLDS = new Set([
+    "co.uk", "org.uk", "me.uk", "ac.uk", "gov.uk", "net.uk",
+    "com.au", "net.au", "org.au", "edu.au", "gov.au",
+    "co.nz", "net.nz", "org.nz",
+    "co.za", "org.za", "web.za",
+    "co.in", "net.in", "org.in",
+    "co.jp", "or.jp", "ne.jp", "ac.jp",
+    "co.kr", "or.kr",
+    "com.br", "net.br", "org.br",
+    "com.mx", "org.mx",
+    "com.cn", "net.cn", "org.cn",
+    "com.tw", "org.tw", "net.tw",
+    "com.sg", "org.sg", "net.sg",
+    "co.il", "org.il", "net.il",
+    "co.th", "or.th", "in.th",
+    "com.ar", "com.co", "com.pe",
+    "co.id", "or.id", "web.id",
+    "com.my", "net.my", "org.my",
+    "com.ph", "net.ph", "org.ph",
+    "com.pk", "net.pk", "org.pk",
+    "com.ng", "org.ng",
+    "com.eg", "org.eg",
+    "com.tr", "org.tr", "net.tr",
+    "com.ua", "org.ua", "net.ua",
+    "co.ke", "or.ke",
+  ]);
+
   const sdParts = sd.split(".");
   const pdParts = pd.split(".");
-  if (sdParts.length >= 2 && pdParts.length >= 2) {
-    const sdRoot = sdParts.slice(-2).join(".");
-    const pdRoot = pdParts.slice(-2).join(".");
-    if (sdRoot === pdRoot) return true;
+  const sdTld2 = sdParts.length >= 3 ? sdParts.slice(-2).join(".") : "";
+  const pdTld2 = pdParts.length >= 3 ? pdParts.slice(-2).join(".") : "";
+
+  if (TWO_PART_TLDS.has(sdTld2) || TWO_PART_TLDS.has(pdTld2)) {
+    // Compare last 3 parts (registrable domain for two-part TLDs)
+    if (sdParts.length >= 3 && pdParts.length >= 3) {
+      const sdRoot = sdParts.slice(-3).join(".");
+      const pdRoot = pdParts.slice(-3).join(".");
+      if (sdRoot === pdRoot) return true;
+    }
+  } else {
+    // Standard: compare last 2 parts
+    if (sdParts.length >= 2 && pdParts.length >= 2) {
+      const sdRoot = sdParts.slice(-2).join(".");
+      const pdRoot = pdParts.slice(-2).join(".");
+      if (sdRoot === pdRoot) return true;
+    }
   }
 
   return false;
@@ -260,6 +307,8 @@ export function analyzeThirdPartyScripts(html: string, domain: string): ThirdPar
   const hasConsent = !!categories["Consent / Privacy"];
 
   // Check for tracking before consent
+  // Privacy-respecting analytics (Plausible, Fathom, Umami, etc.) are cookieless
+  // and GDPR-compliant by design — don't count them as tracking
   const trackingCategories = ["Analytics", "Advertising", "Heatmaps / Session Recording", "Social"];
   const hasTracking = trackingCategories.some(cat => !!categories[cat]);
 

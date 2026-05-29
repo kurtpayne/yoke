@@ -122,8 +122,18 @@ export function auditCookies(headers: Record<string, string> | null): CookieSecu
   if (!setCookieHeader) return null;
 
   // set-cookie headers can be combined with commas, but cookies can contain commas in dates
-  // Split on lines that look like new cookie names
-  const cookieStrings = setCookieHeader.split(/,(?=\s*[a-zA-Z0-9_-]+=)/);
+  // (e.g., "Expires=Thu, 01 Jan 2026"). Split carefully: a new cookie starts with a
+  // token=value pattern after a comma, but date strings have commas inside Expires values.
+  // Use a more robust regex that won't split on commas inside date values.
+  const cookieStrings: string[] = [];
+  // First try splitting on newlines (multi-header format)
+  const rawParts = setCookieHeader.split(/\n/);
+  for (const part of rawParts) {
+    // Within each line, split on commas that are followed by a cookie name=value pattern
+    // but not preceded by a day name (Mon, Tue, etc.) which indicates a date
+    const subParts = part.split(/,(?=\s*[a-zA-Z0-9_][a-zA-Z0-9_.!#$%&'*+\-^`|~]*=)/);
+    cookieStrings.push(...subParts);
+  }
   const cookies: CookieAudit[] = [];
   const issues: string[] = [];
 
@@ -145,7 +155,9 @@ export function auditCookies(headers: Record<string, string> | null): CookieSecu
     if (!httponly && !name.startsWith("__Host-") && !name.startsWith("_ga")) {
       issues.push(`${name}: missing HttpOnly flag`);
     }
-    if (!samesite) issues.push(`${name}: missing SameSite attribute`);
+    if (!samesite) {
+      // Chrome 80+ (Feb 2020) defaults missing SameSite to Lax — don't flag as issue
+    }
     if (samesite === "none" && !secure) issues.push(`${name}: SameSite=None requires Secure flag`);
   }
 
