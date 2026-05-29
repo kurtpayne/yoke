@@ -265,6 +265,10 @@ export function robotsCliCommands(domain: string): CliCommand[] {
 export function availabilityCliCommands(domain: string): CliCommand[] {
   return [
     { label: "Global HTTP Check", platforms: { linux: `curl -sH "Accept: application/json" "https://check-host.net/check-http?host=https://${domain}&max_nodes=10"`, windows: `curl -sH "Accept: application/json" "https://check-host.net/check-http?host=https://${domain}&max_nodes=10"` } },
+    { label: "Get Check Results", platforms: { linux: `curl -sH "Accept: application/json" "https://check-host.net/check-result/<REQUEST_ID>" | jq`, windows: `curl -sH "Accept: application/json" "https://check-host.net/check-result/<REQUEST_ID>" | jq` } },
+    { label: "Global Ping", platforms: { linux: `curl -sH "Accept: application/json" "https://check-host.net/check-ping?host=${domain}&max_nodes=10"`, windows: `curl -sH "Accept: application/json" "https://check-host.net/check-ping?host=${domain}&max_nodes=10"` } },
+    { label: "Global TCP Check", platforms: { linux: `curl -sH "Accept: application/json" "https://check-host.net/check-tcp?host=${domain}:443&max_nodes=10"`, windows: `curl -sH "Accept: application/json" "https://check-host.net/check-tcp?host=${domain}:443&max_nodes=10"` } },
+    { label: "Global DNS Check", platforms: { linux: `curl -sH "Accept: application/json" "https://check-host.net/check-dns?host=${domain}&max_nodes=10"`, windows: `curl -sH "Accept: application/json" "https://check-host.net/check-dns?host=${domain}&max_nodes=10"` } },
   ];
 }
 
