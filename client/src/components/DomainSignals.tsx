@@ -66,6 +66,8 @@ function buildSignals(data: AnalysisResult, streaming?: boolean): Signal[] {
   if (sslGrade) {
     if (sslGrade.startsWith("A"))
       signals.push({ type: "strength", text: `SSL Grade ${sslGrade}`, detail: data.ssl?.issuer ? `Issued by ${data.ssl.issuer}` : undefined });
+    else if (sslGrade === "Valid")
+      signals.push({ type: "strength", text: "SSL certificate verified", detail: data.ssl?.issuer ? `Issued by ${data.ssl.issuer}` : "HTTPS connection confirmed" });
     else if (sslGrade.startsWith("B"))
       signals.push({ type: "notice", text: `SSL Grade ${sslGrade}`, detail: "Good but not optimal — consider upgrading configuration" });
     else

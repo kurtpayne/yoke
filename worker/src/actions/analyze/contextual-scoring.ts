@@ -344,7 +344,7 @@ export function calculateDomainScore(opts: {
   if (sslGrade) {
     if (sslGrade === "Valid") {
       // Fallback confirmed HTTPS works but SSL Labs didn't provide a letter grade
-      findings.push({ signal: "ssl_grade", axis: "security", severity: "good", label: "SSL certificate valid (detailed grade unavailable)", tradeoff: null, weight: 3 });
+      findings.push({ signal: "ssl_grade", axis: "security", severity: "good", label: "SSL certificate verified", tradeoff: null, weight: 3 });
     } else if (sslGrade.startsWith("A")) {
       findings.push({ signal: "ssl_grade", axis: "security", severity: "good", label: `SSL grade ${sslGrade}`, tradeoff: null, weight: 3 });
     } else if (sslGrade.startsWith("B")) {
