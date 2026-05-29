@@ -1429,21 +1429,79 @@ function CrossSignalInsightsCard({ insights }: { insights: CrossSignalInsight[] 
 const _insightsCache: Record<string, AIAnalysisResult> = {};
 const _metadataCache: Record<string, { analyzed_at: string; cached: boolean }> = {};
 
+// Module-level stream state — survives component unmount/remount during tab switches.
+// The fetch reader loop keeps running in the background; when the component remounts
+// it picks up the current streaming state and re-subscribes to updates.
+interface InFlightStream {
+  domain: string;
+  loading: boolean;
+  isStreaming: boolean;
+  streamingText: string;
+  streamProgress: number;
+  error: string | null;
+  // Subscribers: the mounted component registers its state setters here.
+  // When unmounted, subscribers is empty and updates go to the cache only.
+  subscribers: Set<{
+    setLoading: (v: boolean) => void;
+    setIsStreaming: (v: boolean) => void;
+    setStreamingText: (v: string) => void;
+    setStreamProgress: (v: number) => void;
+    setError: (v: string | null) => void;
+    setInsightsResult: (v: AIAnalysisResult | null) => void;
+    setAnalysisMetadata: (v: { analyzed_at: string; cached: boolean } | null) => void;
+  }>;
+}
+const _inFlightStreams: Record<string, InFlightStream> = {};
+
+function notifySubscribers(stream: InFlightStream) {
+  for (const sub of stream.subscribers) {
+    sub.setLoading(stream.loading);
+    sub.setIsStreaming(stream.isStreaming);
+    sub.setStreamingText(stream.streamingText);
+    sub.setStreamProgress(stream.streamProgress);
+    sub.setError(stream.error);
+  }
+}
+
 export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: string; analysisData?: AnalysisResult; streaming?: boolean }) {
+  // Initialize state from module-level caches and in-flight streams
+  const inFlight = _inFlightStreams[domain];
   const [insightsResult, setInsightsResult] = useState<AIAnalysisResult | null>(_insightsCache[domain] || null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(inFlight?.loading || false);
+  const [error, setError] = useState<string | null>(inFlight?.error || null);
   const [rateLimited, setRateLimited] = useState<RateLimitResponse | null>(null);
   const [analysisMetadata, setAnalysisMetadata] = useState<{ analyzed_at: string; cached: boolean } | null>(_metadataCache[domain] || null);
   const [, setKeyVersion] = useState(0);
   const [selectedModel, setSelectedModel] = useState(getSavedModel);
   const [prioritiesExpanded, setPrioritiesExpanded] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [streamProgress, setStreamProgress] = useState(0);
+  const [streamingText, setStreamingText] = useState(inFlight?.streamingText || "");
+  const [isStreaming, setIsStreaming] = useState(inFlight?.isStreaming || false);
+  const [streamProgress, setStreamProgress] = useState(inFlight?.streamProgress || 0);
   const streamContainerRef = useRef<HTMLDivElement>(null);
   const progressAnimRef = useRef<number | null>(null);
   const lastSignpostRef = useRef(-1);
+
+  // Subscribe to in-flight stream updates on mount, unsubscribe on unmount
+  useEffect(() => {
+    const sub = {
+      setLoading, setIsStreaming, setStreamingText, setStreamProgress,
+      setError, setInsightsResult, setAnalysisMetadata,
+    };
+    const stream = _inFlightStreams[domain];
+    if (stream) {
+      stream.subscribers.add(sub);
+      // Sync current state on subscribe (in case it changed between render and effect)
+      setLoading(stream.loading);
+      setIsStreaming(stream.isStreaming);
+      setStreamingText(stream.streamingText);
+      setStreamProgress(stream.streamProgress);
+      setError(stream.error);
+    }
+    return () => {
+      const s = _inFlightStreams[domain];
+      if (s) s.subscribers.delete(sub);
+    };
+  }, [domain]);
 
   // Signpost targets — when we see a JSON key, we know where we are
   const SIGNPOSTS: [string, number][] = useMemo(() => [
@@ -1506,11 +1564,25 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
   const generateInsights = useCallback(async () => {
     if (insightsResult) return;
     if (loading) return;
+    // Don't start a new stream if one is already in flight for this domain
+    if (_inFlightStreams[domain]) return;
+
     setLoading(true);
     setError(null);
     setStreamingText("");
     setIsStreaming(false);
     setStreamProgress(0);
+
+    // Register in-flight stream at module level
+    const sub = {
+      setLoading, setIsStreaming, setStreamingText, setStreamProgress,
+      setError, setInsightsResult, setAnalysisMetadata,
+    };
+    const stream: InFlightStream = {
+      domain, loading: true, isStreaming: false, streamingText: "",
+      streamProgress: 0, error: null, subscribers: new Set([sub]),
+    };
+    _inFlightStreams[domain] = stream;
 
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -1537,7 +1609,9 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
         const rl = await res.json() as RateLimitResponse;
         if (rl.rate_limited) {
           setRateLimited(rl);
-          setLoading(false);
+          stream.loading = false;
+          notifySubscribers(stream);
+          delete _inFlightStreams[domain];
           return;
         }
       }
@@ -1547,29 +1621,34 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
       if (contentType.includes("application/json")) {
         const json = await res.json() as AIAnalysisResponse;
         if (!res.ok || json.error) {
-          setError(json.error || `API error ${res.status}`);
+          stream.error = json.error || `API error ${res.status}`;
+          stream.loading = false;
+          notifySubscribers(stream);
         } else if (json.result) {
           if (json.result.cross_signal_insights && json.result.cross_signal_insights.length > 0) {
-            setInsightsResult(json.result);
             _insightsCache[domain] = json.result;
+            for (const s of stream.subscribers) s.setInsightsResult(json.result);
             if (json.analyzed_at) {
               const meta = { analyzed_at: json.analyzed_at, cached: !!json.cached };
-              setAnalysisMetadata(meta);
               _metadataCache[domain] = meta;
+              for (const s of stream.subscribers) s.setAnalysisMetadata(meta);
             }
           }
+          stream.loading = false;
+          notifySubscribers(stream);
         }
-        setLoading(false);
+        delete _inFlightStreams[domain];
         return;
       }
 
       // SSE streaming response
       if (!res.body) throw new Error("No response body for streaming");
 
-      setIsStreaming(true);
-      setStreamProgress(0);
+      stream.isStreaming = true;
+      stream.streamProgress = 0;
+      notifySubscribers(stream);
       lastSignpostRef.current = -1;
-      startProgressAnimation(0, 8, 10000); // Animate 0→8% while waiting for first signpost
+      startProgressAnimation(0, 8, 10000);
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
@@ -1590,14 +1669,17 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
           try {
             const evt = JSON.parse(trimmed.slice(6));
             if (evt.error) {
-              setError(evt.error);
-              setLoading(false);
-              setIsStreaming(false);
+              stream.error = evt.error;
+              stream.loading = false;
+              stream.isStreaming = false;
+              notifySubscribers(stream);
+              delete _inFlightStreams[domain];
               return;
             }
             if (evt.chunk) {
               accumulated += evt.chunk;
-              setStreamingText(accumulated);
+              stream.streamingText = accumulated;
+              for (const s of stream.subscribers) s.setStreamingText(accumulated);
               updateProgressFromText(accumulated);
             }
             if (evt.done) {
@@ -1610,19 +1692,21 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
               try {
                 const parsed = JSON.parse(jsonStr) as AIAnalysisResult;
                 if (parsed.cross_signal_insights && parsed.cross_signal_insights.length > 0) {
-                  setInsightsResult(parsed);
                   _insightsCache[domain] = parsed;
+                  for (const s of stream.subscribers) s.setInsightsResult(parsed);
                   const meta = { analyzed_at: new Date().toISOString(), cached: false };
-                  setAnalysisMetadata(meta);
                   _metadataCache[domain] = meta;
+                  for (const s of stream.subscribers) s.setAnalysisMetadata(meta);
                 }
               } catch {
-                setError("Failed to parse AI response");
+                stream.error = "Failed to parse AI response";
+                for (const s of stream.subscribers) s.setError(stream.error);
               }
               if (progressAnimRef.current) cancelAnimationFrame(progressAnimRef.current);
-              setStreamProgress(100);
-              setStreamingText("");
-              setIsStreaming(false);
+              stream.streamProgress = 100;
+              stream.streamingText = "";
+              stream.isStreaming = false;
+              notifySubscribers(stream);
             }
           } catch {
             // Skip malformed SSE lines
@@ -1630,10 +1714,13 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate analysis");
+      stream.error = err instanceof Error ? err.message : "Failed to generate analysis";
+      for (const s of stream.subscribers) s.setError(stream.error);
     } finally {
-      setLoading(false);
-      setIsStreaming(false);
+      stream.loading = false;
+      stream.isStreaming = false;
+      notifySubscribers(stream);
+      delete _inFlightStreams[domain];
     }
   }, [domain, insightsResult, selectedModel, loading]);
 
@@ -1650,6 +1737,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
     setStreamingText("");
     setStreamProgress(0);
     delete _insightsCache[domain];
+    delete _inFlightStreams[domain];
   };
 
   // Rate limited
@@ -1739,7 +1827,7 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
             <XCircle size={14} style={{ color: "var(--danger)" }} />
             <span style={{ fontSize: "12px", color: "var(--danger)" }}>{error}</span>
             <button
-              onClick={() => { setInsightsResult(null); setStreamingText(""); setStreamProgress(0); delete _insightsCache[domain]; generateInsights(); }}
+              onClick={() => { setInsightsResult(null); setStreamingText(""); setStreamProgress(0); delete _insightsCache[domain]; delete _inFlightStreams[domain]; generateInsights(); }}
               style={{
                 marginLeft: "auto", padding: "4px 10px", borderRadius: "4px",
                 border: "1px solid var(--border)", background: "var(--card)",

@@ -3,6 +3,17 @@ import { AI_CACHE_TTL_MS } from "../config/cache";
 import { logWarn, logError } from "../logger";
 import { logApiError } from "../api-errors";
 
+// ─── Content-based cache key ────────────────────────────────────────
+// Hash the analysis input so AI cache invalidates when signals change.
+async function hashAnalysisInput(data: unknown): Promise<string> {
+  const json = JSON.stringify(data);
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(json));
+  const arr = new Uint8Array(buf);
+  let hex = "";
+  for (let i = 0; i < 8; i++) hex += arr[i].toString(16).padStart(2, "0"); // 16-char prefix
+  return hex;
+}
+
 // ─── SSE streaming headers ──────────────────────────────────────────
 const SSE_HEADERS: Record<string, string> = {
   "Content-Type": "text/event-stream",
@@ -486,14 +497,6 @@ export async function getAIAnalysis(
     });
   }
 
-  // Check cache first — return JSON even if stream was requested
-  const cached = (await getFromCache(env.DB, normalized, "ai_analysis", AI_CACHE_TTL_MS)) as CachedAIResult | null;
-  if (cached && cached.result?.cross_signal_insights) {
-    return new Response(JSON.stringify({ ...cached, cached: true }), {
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-    });
-  }
-
   // Get the analysis data for this domain (from cache or fresh)
   const analysisCache = (await getFromCache(env.DB, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
 
@@ -502,6 +505,18 @@ export async function getAIAnalysis(
       JSON.stringify({ error: "Domain not yet analyzed. Run a standard analysis first." }),
       { status: 400, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
     );
+  }
+
+  // Content-keyed AI cache: hash the analysis input so cache auto-invalidates when signals change
+  const inputHash = await hashAnalysisInput(analysisCache);
+  const aiCacheType = `ai_analysis:${inputHash}`;
+
+  // Check cache — serve if signals haven't changed (TTL is just a safety net)
+  const cached = (await getFromCache(env.DB, normalized, aiCacheType, AI_CACHE_TTL_MS)) as CachedAIResult | null;
+  if (cached && cached.result?.cross_signal_insights) {
+    return new Response(JSON.stringify({ ...cached, cached: true }), {
+      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+    });
   }
 
   // Rate limiting
@@ -554,7 +569,7 @@ export async function getAIAnalysis(
           analyzed_at: new Date().toISOString(),
           domain: normalized,
         };
-        await setCache(env.DB, normalized, "ai_analysis", responseData);
+        await setCache(env.DB, normalized, aiCacheType, responseData);
       }
       try { await cleanupOldRateLimits(env.STATS_DB); } catch { /* non-critical */ }
     }).catch(async (err) => {
@@ -585,7 +600,7 @@ export async function getAIAnalysis(
       domain: normalized,
     };
 
-    await setCache(env.DB, normalized, "ai_analysis", responseData);
+    await setCache(env.DB, normalized, aiCacheType, responseData);
 
     try {
       await cleanupOldRateLimits(env.STATS_DB);

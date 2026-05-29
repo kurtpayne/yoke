@@ -165,7 +165,20 @@ const html = `<!DOCTYPE html>
         <main id="main-content"><h1>Yoke — Domain Intelligence</h1><p>JavaScript is required to use Yoke. Please enable JavaScript in your browser settings.</p></main>
         <footer role="contentinfo"><p>&copy; 2026 Yoke</p><nav aria-label="Legal"><a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a></nav></footer>
       </noscript>
+      <!-- CLS skeleton: reserves layout space before React mounts -->
+      <div id="shell" aria-hidden="true" style="min-height:100vh;background:var(--bg,#0f1419);padding:24px 24px 48px">
+        <div style="max-width:1440px;margin:0 auto">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;height:24px">
+            <div style="width:24px;height:24px;border-radius:4px;background:var(--border,#21262d)"></div>
+            <div style="width:48px;height:18px;border-radius:4px;background:var(--border,#21262d)"></div>
+            <div style="width:1px;height:16px;background:var(--border,#21262d);margin:0 4px"></div>
+            <div style="width:120px;height:14px;border-radius:4px;background:var(--border,#21262d)"></div>
+          </div>
+          <div style="height:46px;border-radius:8px;background:var(--surface,#161b22)"></div>
+        </div>
+      </div>
     </div>
+    <script>try{var t=localStorage.getItem("yoke-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
     <script type="module" src="/${jsPath}"></script>
   </body>
 </html>`;
