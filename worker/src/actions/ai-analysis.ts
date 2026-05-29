@@ -576,7 +576,7 @@ export async function getAIAnalysis(
   }
 
   // Get the analysis data for this domain (from cache or fresh)
-  const analysisCache = (await getFromCache(env.DB, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
+  const analysisCache = (await getFromCache(env.REFERENCE_DATA!, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
 
   if (!analysisCache) {
     return new Response(
@@ -590,7 +590,7 @@ export async function getAIAnalysis(
   const aiCacheType = `ai_analysis:${inputHash}`;
 
   // Check cache — serve if signals haven't changed (TTL is just a safety net)
-  const cached = (await getFromCache(env.DB, normalized, aiCacheType, AI_CACHE_TTL_MS)) as CachedAIResult | null;
+  const cached = (await getFromCache(env.REFERENCE_DATA!, normalized, aiCacheType, AI_CACHE_TTL_MS)) as CachedAIResult | null;
   if (cached && cached.result?.cross_signal_insights) {
     return new Response(JSON.stringify({ ...cached, cached: true }), {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -714,7 +714,7 @@ export async function getAIAnalysis(
           analyzed_at: new Date().toISOString(),
           domain: normalized,
         };
-        await setCache(env.DB, normalized, aiCacheType, responseData);
+        await setCache(env.REFERENCE_DATA!, normalized, aiCacheType, responseData);
       }
       try { await cleanupOldRateLimits(env.STATS_DB); } catch { /* non-critical */ }
     }).catch(async (err) => {
@@ -745,7 +745,7 @@ export async function getAIAnalysis(
       domain: normalized,
     };
 
-    await setCache(env.DB, normalized, aiCacheType, responseData);
+    await setCache(env.REFERENCE_DATA!, normalized, aiCacheType, responseData);
 
     try {
       await cleanupOldRateLimits(env.STATS_DB);

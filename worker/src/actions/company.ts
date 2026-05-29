@@ -227,15 +227,15 @@ async function searchWikidataByName(domain: string, statsDb?: D1Database): Promi
   return null;
 }
 
-export async function getCompanyInfo(db: D1Database, rawDomain: string, force?: boolean, statsDb?: D1Database) {
+export async function getCompanyInfo(kv: KVNamespace, rawDomain: string, force?: boolean, statsDb?: D1Database) {
   const domain = normalizeDomain(rawDomain);
 
   // Check company cache (24h)
   if (!force) {
-  const cachedCompany = await getFromCache(db, domain, "company_info", 24 * 60 * 60 * 1000);
+  const cachedCompany = await getFromCache(kv, domain, "company_info", 24 * 60 * 60 * 1000);
   if (cachedCompany) {
     const c = cachedCompany as { company: CompanyData | null; stock: StockData | null; crunchbase_url: string | null };
-    const cachedStock = await getFromCache(db, domain, "stock_quote", 15 * 60 * 1000) as StockData | null;
+    const cachedStock = await getFromCache(kv, domain, "stock_quote", 15 * 60 * 1000) as StockData | null;
     return { company: c.company, stock: cachedStock ?? c.stock, crunchbase_url: c.crunchbase_url, cached: true };
   }
   }
@@ -315,13 +315,13 @@ export async function getCompanyInfo(db: D1Database, rawDomain: string, force?: 
             currency: meta.currency ?? null,
             sparkline: sparkline && sparkline.length >= 2 ? sparkline : null,
           };
-          await setCache(db, domain, "stock_quote", stock);
+          await setCache(kv, domain, "stock_quote", stock, 15 * 60 * 1000);
         }
       }
     } catch { /* stock fetch failed */ }
   }
 
   const result = { company, stock, crunchbase_url };
-  await setCache(db, domain, "company_info", result);
+  await setCache(kv, domain, "company_info", result, 24 * 60 * 60 * 1000);
   return { ...result, cached: false };
 }

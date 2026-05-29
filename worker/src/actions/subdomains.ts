@@ -1,9 +1,9 @@
 import { normalizeDomain, fetchWithTimeout, getFromCache, setCache } from "../helpers";
 import { logApiError } from "../api-errors";
 
-export async function getSubdomains(db: D1Database, rawDomain: string, statsDb?: D1Database) {
+export async function getSubdomains(kv: KVNamespace, rawDomain: string, statsDb?: D1Database) {
   const domain = normalizeDomain(rawDomain);
-  const cached = await getFromCache(db, domain, "subdomains", 60 * 60 * 1000);
+  const cached = await getFromCache(kv, domain, "subdomains", 60 * 60 * 1000);
   if (cached) return { ...(cached as { subdomains: string[] }), cached: true };
 
   try {
@@ -24,7 +24,7 @@ export async function getSubdomains(db: D1Database, rawDomain: string, statsDb?:
     }
     const sorted = [...subs].sort();
     const result = { subdomains: sorted.slice(0, 200) };
-    await setCache(db, domain, "subdomains", result);
+    await setCache(kv, domain, "subdomains", result, 60 * 60 * 1000);
     return { ...result, cached: false };
   } catch (e) {
     if (statsDb) logApiError(statsDb, { api: "crt.sh", status: 0, message: String(e).slice(0, 200), domain });

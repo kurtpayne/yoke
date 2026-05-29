@@ -10,22 +10,24 @@ type Strategy = "mobile" | "desktop";
 export async function checkPageSpeed(
   domain: string,
   ttfbFallback: number | null,
-  db?: D1Database,
+  kv?: KVNamespace,
   apiKey?: string,
   flyAuthSecret?: string,
   statsDb?: D1Database,
   strategy: Strategy = "mobile",
 ): Promise<PerformanceResult> {
   const cacheType = strategy === "desktop" ? "performance_desktop" : "performance";
+  const kvKey = `cache:${cacheType}:${domain}`;
 
-  // Check separate performance cache (24h TTL)
-  if (db) {
+  // Check KV cache (24h TTL)
+  if (kv) {
     try {
-      const cached = await db.prepare(
-        `SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = ? ORDER BY cached_at DESC LIMIT 1`
-      ).bind(domain, cacheType).first<{ data_json: string; cached_at: number }>();
-      if (cached && Date.now() - cached.cached_at < PERF_CACHE_TTL_MS) {
-        return JSON.parse(cached.data_json) as PerformanceResult;
+      const raw = await kv.get(kvKey, "text");
+      if (raw) {
+        const envelope = JSON.parse(raw) as { data: PerformanceResult; cached_at: number };
+        if (Date.now() - envelope.cached_at < PERF_CACHE_TTL_MS) {
+          return envelope.data;
+        }
       }
     } catch { /* cache miss */ }
   }
@@ -44,11 +46,10 @@ export async function checkPageSpeed(
       result.strategy = strategy;
       if (result.score != null) {
         // Cache successful results for 24h
-        if (db) {
+        if (kv) {
           try {
-            await db.prepare(
-              "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, ?, ?, ?)"
-            ).bind(domain, cacheType, JSON.stringify(result), Date.now()).run();
+            const envelope = { data: result, cached_at: Date.now() };
+            await kv.put(kvKey, JSON.stringify(envelope), { expirationTtl: Math.ceil(PERF_CACHE_TTL_MS / 1000) });
           } catch { /* ignore */ }
         }
         return result;
@@ -63,12 +64,11 @@ export async function checkPageSpeed(
   }
 
   // Fallback to direct API
-  const directResult = await tryPageSpeedDirect(domain, ttfbFallback, db, apiKey, statsDb, strategy);
-  if (db && directResult.score != null) {
+  const directResult = await tryPageSpeedDirect(domain, ttfbFallback, kv, apiKey, statsDb, strategy);
+  if (kv && directResult.score != null) {
     try {
-      await db.prepare(
-        "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, ?, ?, ?)"
-      ).bind(domain, cacheType, JSON.stringify(directResult), Date.now()).run();
+      const envelope = { data: directResult, cached_at: Date.now() };
+      await kv.put(kvKey, JSON.stringify(envelope), { expirationTtl: Math.ceil(PERF_CACHE_TTL_MS / 1000) });
     } catch { /* ignore */ }
   }
   return directResult;
@@ -77,7 +77,7 @@ export async function checkPageSpeed(
 async function tryPageSpeedDirect(
   domain: string,
   ttfbFallback: number | null,
-  db?: D1Database,
+  kv?: KVNamespace,
   apiKey?: string,
   statsDb?: D1Database,
   strategy: Strategy = "mobile",
@@ -131,20 +131,20 @@ async function tryPageSpeedDirect(
 export async function checkCrux(
   domain: string,
   apiKey?: string,
-  db?: D1Database,
+  kv?: KVNamespace,
   statsDb?: D1Database,
 ): Promise<CruxResult | null> {
   if (!apiKey) return null;
 
   // Check cache (24h TTL)
-  if (db) {
+  if (kv) {
     try {
-      const cached = await db.prepare(
-        "SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = 'crux' ORDER BY cached_at DESC LIMIT 1"
-      ).bind(domain).first<{ data_json: string; cached_at: number }>();
-      if (cached && Date.now() - cached.cached_at < PERF_CACHE_TTL_MS) {
-        const parsed = JSON.parse(cached.data_json) as CruxResult | null;
-        return parsed;
+      const raw = await kv.get(`cache:crux:${domain}`, "text");
+      if (raw) {
+        const envelope = JSON.parse(raw) as { data: CruxResult | null; cached_at: number };
+        if (Date.now() - envelope.cached_at < PERF_CACHE_TTL_MS) {
+          return envelope.data;
+        }
       }
     } catch { /* cache miss */ }
   }
@@ -187,11 +187,10 @@ export async function checkCrux(
       const result = parseCruxResponse(data);
 
       // Cache result
-      if (db) {
+      if (kv) {
         try {
-          await db.prepare(
-            "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'crux', ?, ?)"
-          ).bind(domain, JSON.stringify(result), Date.now()).run();
+          const envelope = { data: result, cached_at: Date.now() };
+          await kv.put(`cache:crux:${domain}`, JSON.stringify(envelope), { expirationTtl: Math.ceil(PERF_CACHE_TTL_MS / 1000) });
         } catch { /* ignore */ }
       }
 
@@ -199,11 +198,10 @@ export async function checkCrux(
     }
 
     // No CrUX data for any origin variant — cache the null result
-    if (db) {
+    if (kv) {
       try {
-        await db.prepare(
-          "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'crux', ?, ?)"
-        ).bind(domain, "null", Date.now()).run();
+        const envelope = { data: null, cached_at: Date.now() };
+        await kv.put(`cache:crux:${domain}`, JSON.stringify(envelope), { expirationTtl: Math.ceil(PERF_CACHE_TTL_MS / 1000) });
       } catch { /* ignore */ }
     }
     return null;

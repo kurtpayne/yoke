@@ -83,11 +83,11 @@ const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 const BATCH_SIZE = 15;
 const BATCH_DELAY = 50; // ms between batches
 
-export async function scanSubdomains(db: D1Database, rawDomain: string): Promise<SubdomainScanResult> {
+export async function scanSubdomains(kv: KVNamespace, rawDomain: string): Promise<SubdomainScanResult> {
   const domain = normalizeDomain(rawDomain);
 
   // Check cache
-  const cached = await getFromCache(db, domain, "subdomain_scan", CACHE_TTL);
+  const cached = await getFromCache(kv, domain, "subdomain_scan", CACHE_TTL);
   if (cached) return { ...(cached as SubdomainScanResult), cached: true };
 
   // Resolve apex IPs first
@@ -144,7 +144,7 @@ export async function scanSubdomains(db: D1Database, rawDomain: string): Promise
 
   // Cache
   try {
-    await setCache(db, domain, "subdomain_scan", result);
+    await setCache(kv, domain, "subdomain_scan", result, CACHE_TTL);
   } catch { /* ignore */ }
 
   return result;

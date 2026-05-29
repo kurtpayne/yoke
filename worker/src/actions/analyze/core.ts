@@ -2,7 +2,7 @@
 // Single source of truth for all analysis logic.
 // Both the JSON endpoint and the SSE streaming endpoint use this.
 
-import { type Env, normalizeDomain, maybePruneCache, backgroundWork } from "../../helpers";
+import { type Env, normalizeDomain, backgroundWork } from "../../helpers";
 import { getAnalysisCacheTtlMs } from "../../config/cache";
 import { analyzeWordPress } from "../wordpress";
 import { type BreachResult } from "../breaches";
@@ -284,16 +284,17 @@ export async function runAnalysis(
   const onResult = callbacks?.onResult ?? (async () => {});
 
   // ── Cache check ──────────────────────────────────────────────────
-  if (!skipCache) {
+  if (!skipCache && env.REFERENCE_DATA) {
     try {
-      const cached = await env.DB.prepare(
-        "SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = 'analysis' ORDER BY cached_at DESC LIMIT 1"
-      ).bind(domain).first<{ data_json: string; cached_at: number }>();
-      if (cached && Date.now() - cached.cached_at < getAnalysisCacheTtlMs(env)) {
-        const parsed = JSON.parse(cached.data_json);
-        return { kind: "cached", data: { ...parsed, cached: true, cached_at: cached.cached_at } };
+      const raw = await env.REFERENCE_DATA.get(`cache:analysis:${domain}`, "text");
+      if (raw) {
+        const envelope = JSON.parse(raw) as { data: unknown; cached_at: number };
+        if (Date.now() - envelope.cached_at < getAnalysisCacheTtlMs(env)) {
+          const parsed = envelope.data as AnalysisResult;
+          return { kind: "cached", data: { ...parsed, cached: true, cached_at: envelope.cached_at } };
+        }
       }
-    } catch (e) { console.warn(`[yoke:cache] D1 read failed for ${domain}:`, e instanceof Error ? e.message : e); }
+    } catch (e) { console.warn(`[yoke:cache] KV read failed for ${domain}:`, e instanceof Error ? e.message : e); }
   }
 
   // ── Phase 0: Quick NXDOMAIN check ────────────────────────────────
@@ -301,11 +302,12 @@ export async function runAnalysis(
     const quickData = await dohQuery(domain, "A");
     if (quickData && quickData.Status === 3) {
       const nxResult = makeNxdomainResult(domain);
-      try {
-        await env.DB.prepare(
-          "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)"
-        ).bind(domain, JSON.stringify(nxResult), Date.now()).run();
-      } catch { /* ignore */ }
+      if (env.REFERENCE_DATA) {
+        try {
+          const envelope = { data: nxResult, cached_at: Date.now() };
+          await env.REFERENCE_DATA.put(`cache:analysis:${domain}`, JSON.stringify(envelope), { expirationTtl: Math.max(60, Math.ceil(getAnalysisCacheTtlMs(env) / 1000)) });
+        } catch { /* ignore */ }
+      }
       return { kind: "nxdomain", data: nxResult };
     }
   } catch { /* DNS check failed, proceed with full analysis */ }
@@ -716,8 +718,6 @@ export async function runAnalysis(
   // All post-analysis D1 writes are non-blocking background work.
   // They use ctx.waitUntil() so they continue after the response is sent.
 
-  const resultJson = JSON.stringify(result);
-
   // Historical score logging (non-critical)
   if (domainScore) {
     backgroundWork(env, (async () => {
@@ -813,31 +813,36 @@ export async function runAnalysis(
   // shouldn't poison the cache for 24h
   const siteIsUp = result.status?.is_up !== false;
   backgroundWork(env, (async () => {
+    if (!env.REFERENCE_DATA) return;
+    const cacheTtlSec = Math.max(60, Math.ceil(getAnalysisCacheTtlMs(env) / 1000));
+
     if (siteIsUp) {
       try {
-        await env.DB.prepare(
-          "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, 'analysis', ?, ?)"
-        ).bind(domain, resultJson, Date.now()).run();
-      } catch (e) { console.warn(`[yoke:cache] D1 write failed for ${domain}:`, e instanceof Error ? e.message : e); }
+        const envelope = { data: result, cached_at: Date.now() };
+        await env.REFERENCE_DATA.put(`cache:analysis:${domain}`, JSON.stringify(envelope), { expirationTtl: cacheTtlSec });
+      } catch (e) { console.warn(`[yoke:cache] KV write failed for ${domain}:`, e instanceof Error ? e.message : e); }
     } else {
       console.log(`[yoke:cache] Skipping cache write for ${domain} — site unreachable`);
     }
 
+    // Recent lookups: maintain a JSON array in KV, prepend new entry, trim to 500
     try {
-      const summaryJson = JSON.stringify({
+      const summaryJson = {
+        domain,
+        analyzed_at: new Date().toISOString(),
         is_up: result.status?.is_up ?? null,
         ssl_grade: result.ssl?.grade ?? null,
         score: domainScore?.composite ?? null,
         grade: domainScore?.grade ?? null,
         archetype: domainScore?.archetype?.detected ?? null,
-      });
-      await env.DB.prepare(
-        "INSERT INTO domain_lookups (domain, results_json, analyzed_at) VALUES (?, ?, ?)"
-      ).bind(domain, summaryJson, Date.now()).run();
-    } catch (e) { console.warn(`[yoke:lookups] D1 write failed for ${domain}:`, e instanceof Error ? e.message : e); }
-
-    // Probabilistic cache cleanup
-    await maybePruneCache(env.DB);
+      };
+      const existingRaw = await env.REFERENCE_DATA.get("recent:index", "text");
+      const existing: unknown[] = existingRaw ? JSON.parse(existingRaw) : [];
+      existing.unshift(summaryJson);
+      // Trim to 500 entries
+      if (existing.length > 500) existing.length = 500;
+      await env.REFERENCE_DATA.put("recent:index", JSON.stringify(existing));
+    } catch (e) { console.warn(`[yoke:lookups] KV write failed for ${domain}:`, e instanceof Error ? e.message : e); }
   })());
 
   return { kind: "complete", data: result };

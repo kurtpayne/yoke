@@ -288,7 +288,7 @@ export default {
 
     // Status page — server-rendered, public
     if (method === "GET" && path === "/status") {
-      return renderStatusPage(env.DB, baseUrl);
+      return renderStatusPage(env.STATS_DB, baseUrl);
     }
 
     // Usage dashboard — admin-only, basic auth with ADMIN_KEY secret
@@ -374,7 +374,7 @@ export default {
 
         // GET /api/recent — internal, capped at 8 results for homepage
         if (method === "GET" && path === "/api/recent") {
-          const result = await getRecentLookups(env.DB, 8);
+          const result = await getRecentLookups(env.REFERENCE_DATA!, 8);
           return json(result);
         }
 
@@ -384,7 +384,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getSubdomains(env.DB, domain, env.STATS_DB);
+          const result = await getSubdomains(env.REFERENCE_DATA!, domain, env.STATS_DB);
           await trackUsage(env.STATS_DB, "subdomains");
           _track("subdomains", 200, domain);
           return json(result);
@@ -394,7 +394,7 @@ export default {
         if (method === "GET" && path === "/api/subdomains") {
           const domain = cleanDomain(url.searchParams.get("domain") || "");
           if (!domain) return json({ error: "domain query parameter is required (e.g., /api/subdomains?domain=example.com)", code: "MISSING_DOMAIN" }, 400);
-          const result = await getSubdomains(env.DB, domain, env.STATS_DB);
+          const result = await getSubdomains(env.REFERENCE_DATA!, domain, env.STATS_DB);
           await trackUsage(env.STATS_DB, "subdomains");
           _track("subdomains", 200, domain);
           return json(result);
@@ -408,7 +408,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await scanSubdomains(env.DB, domain);
+          const result = await scanSubdomains(env.REFERENCE_DATA!, domain);
           await trackUsage(env.STATS_DB, "subdomain-scan");
           _track("subdomain-scan", 200, domain);
           return addHeaders(json(result), rl.headers);
@@ -420,7 +420,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getCompanyInfo(env.DB, domain, body.force, env.STATS_DB);
+          const result = await getCompanyInfo(env.REFERENCE_DATA!, domain, body.force, env.STATS_DB);
           await trackUsage(env.STATS_DB, "company");
           _track("company", 200, domain);
           return json(result);
@@ -432,7 +432,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getNews(env.DB, domain, env.STATS_DB);
+          const result = await getNews(env.REFERENCE_DATA!, domain, env.STATS_DB);
           await trackUsage(env.STATS_DB, "news");
           _track("news", 200, domain);
           return json(result);
@@ -444,7 +444,7 @@ export default {
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
-          const result = await getSocialAccounts(env.DB, domain, env);
+          const result = await getSocialAccounts(env.REFERENCE_DATA!, domain, env);
           await trackUsage(env.STATS_DB, "social");
           _track("social", 200, domain);
           return json(result);
@@ -461,7 +461,7 @@ export default {
           if (!ipv4Re.test(ip) && !ipv6Re.test(ip)) {
             return json({ error: "Invalid IP address format" }, 400);
           }
-          const result = await getReverseIP(env.DB, ip);
+          const result = await getReverseIP(env.REFERENCE_DATA!, ip);
           await trackUsage(env.STATS_DB, "reverse-ip");
           _track("reverse-ip", 200);
           return json(result);
@@ -514,7 +514,7 @@ export default {
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const normalized = domain.toLowerCase();
-          const analysisCache = (await getFromCache(env.DB, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
+          const analysisCache = (await getFromCache(env.REFERENCE_DATA!, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
           if (!analysisCache) {
             return json({ error: "Domain not yet analyzed. Run a standard analysis first." }, 400);
           }
@@ -524,7 +524,7 @@ export default {
 
         // GET /api/health — API error observability dashboard
         if (method === "GET" && path === "/api/health") {
-          const health = await getApiHealth(env.DB);
+          const health = await getApiHealth(env.STATS_DB);
           return json(health);
         }
 
@@ -645,10 +645,21 @@ export default {
 
           // Bulk type-based purge: DELETE /api/cache?type=ai_analysis
           const cacheType = url.searchParams.get("type");
-          if (path === "/api/cache" && cacheType) {
+          if (path === "/api/cache" && cacheType && env.REFERENCE_DATA) {
             try {
-              const res = await env.DB.prepare("DELETE FROM domain_cache WHERE cache_type = ?").bind(cacheType).run();
-              return adminJson({ ok: true, type: cacheType, deleted: res.meta?.changes ?? 0 });
+              // KV: list all keys with the cache type prefix and delete them
+              const prefix = `cache:${cacheType}:`;
+              let cursor: string | undefined;
+              let deleted = 0;
+              do {
+                const list = await env.REFERENCE_DATA.list({ prefix, cursor, limit: 1000 });
+                for (const key of list.keys) {
+                  await env.REFERENCE_DATA.delete(key.name);
+                  deleted++;
+                }
+                cursor = list.list_complete ? undefined : list.cursor;
+              } while (cursor);
+              return adminJson({ ok: true, type: cacheType, deleted });
             } catch (e) {
               return adminJson({ error: "Failed to clear cache" }, 500);
             }
@@ -656,12 +667,28 @@ export default {
 
           const domain = cleanDomain(path.replace("/api/cache/", ""));
           if (!domain) return adminJson({ error: "Invalid domain" }, 400);
-          try {
-            await env.DB.prepare("DELETE FROM domain_cache WHERE domain = ?").bind(domain).run();
-            return adminJson({ ok: true, domain, message: "Cache cleared" });
-          } catch (e) {
-            return adminJson({ error: "Failed to clear cache" }, 500);
+          if (env.REFERENCE_DATA) {
+            try {
+              // Delete all cache entries for this domain
+              const prefix = `cache:`;
+              let cursor: string | undefined;
+              let deleted = 0;
+              do {
+                const list = await env.REFERENCE_DATA.list({ prefix, cursor, limit: 1000 });
+                for (const key of list.keys) {
+                  if (key.name.endsWith(`:${domain}`)) {
+                    await env.REFERENCE_DATA.delete(key.name);
+                    deleted++;
+                  }
+                }
+                cursor = list.list_complete ? undefined : list.cursor;
+              } while (cursor);
+              return adminJson({ ok: true, domain, message: `Cache cleared (${deleted} keys)` });
+            } catch (e) {
+              return adminJson({ error: "Failed to clear cache" }, 500);
+            }
           }
+          return adminJson({ ok: true, domain, message: "No KV namespace available" });
         }
 
         // GET /api/cleanup — scheduled D1 cleanup (admin-only)
@@ -670,19 +697,12 @@ export default {
         if (method === "GET" && path === "/api/cleanup") {
           const authErr = checkAdminAuth(request, env.ADMIN_KEY);
           if (authErr) return authErr;
-          const cutoff7d = Date.now() - (7 * 24 * 60 * 60 * 1000);
           const cutoff1d = Date.now() - (24 * 60 * 60 * 1000);
+          const cutoff7d = Date.now() - (7 * 24 * 60 * 60 * 1000);
           const results: Record<string, string> = {};
-          try {
-            const cacheRes = await env.DB.prepare("DELETE FROM domain_cache WHERE cached_at < ?").bind(cutoff7d).run();
-            results.domain_cache = `${cacheRes.meta?.changes ?? "?"} rows deleted (>7 days old)`;
-          } catch (e) { results.domain_cache = `error: ${e instanceof Error ? e.message : String(e)}`; }
-          try {
-            const lookupRes = await env.DB.prepare(
-              "DELETE FROM domain_lookups WHERE id NOT IN (SELECT id FROM domain_lookups ORDER BY analyzed_at DESC LIMIT 500)"
-            ).run();
-            results.domain_lookups = `${lookupRes.meta?.changes ?? "?"} rows deleted (keeping 500 most recent)`;
-          } catch (e) { results.domain_lookups = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          // KV cache: TTL handles expiry automatically — no manual cleanup needed
+          results.domain_cache = "KV TTL handles expiry automatically";
+          results.domain_lookups = "Recent lookups maintained as KV JSON array";
           try {
             const rlRes = await env.STATS_DB.prepare("DELETE FROM ai_rate_limits WHERE date < date('now', '-1 day')").run();
             results.ai_rate_limits = `${rlRes.meta?.changes ?? "?"} expired rows deleted`;

@@ -1,10 +1,10 @@
 import { normalizeDomain, fetchWithTimeout, getFromCache, setCache, boundedText, safeFetchWithRedirects } from "../helpers";
 import type { Env } from "../helpers";
 
-export async function getSocialAccounts(db: D1Database, rawDomain: string, env?: Env, skipCache = false) {
+export async function getSocialAccounts(kv: KVNamespace, rawDomain: string, env?: Env, skipCache = false) {
   const domain = normalizeDomain(rawDomain);
   if (!skipCache) {
-    const cached = await getFromCache(db, domain, "social_accounts", 24 * 60 * 60 * 1000);
+    const cached = await getFromCache(kv, domain, "social_accounts", 24 * 60 * 60 * 1000);
     if (cached) {
       const c = cached as { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> };
       return { accounts: c.accounts, cached: true };
@@ -169,6 +169,6 @@ export async function getSocialAccounts(db: D1Database, rawDomain: string, env?:
   accounts.sort((a, b) => (TRUST_RANK[b.found_via] ?? 0) - (TRUST_RANK[a.found_via] ?? 0));
 
   const result = { accounts };
-  await setCache(db, domain, "social_accounts", result);
+  await setCache(kv, domain, "social_accounts", result, 24 * 60 * 60 * 1000);
   return { ...result, cached: false };
 }

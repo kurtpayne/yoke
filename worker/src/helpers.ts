@@ -1,6 +1,5 @@
 // Cloudflare Worker environment bindings
 export interface Env {
-  DB: D1Database;
   STATS_DB: D1Database;
   ASSETS: { fetch: (request: Request) => Promise<Response> };
   OPENROUTER_API_KEY?: string;
@@ -229,37 +228,35 @@ export async function boundedText(response: Response, maxBytes: number = 2 * 102
   return chunks.map(c => decoder.decode(c, { stream: true })).join("") + decoder.decode();
 }
 
-// ─── D1 Cache Helpers ────────────────────────────────────────────────
+// ─── KV Cache Helpers ────────────────────────────────────────────────
 
-export async function getFromCache(db: D1Database, domain: string, cacheType: string, ttlMs: number): Promise<unknown | null> {
-  const row = await db.prepare(
-    "SELECT data_json, cached_at FROM domain_cache WHERE domain = ? AND cache_type = ? ORDER BY cached_at DESC LIMIT 1"
-  ).bind(domain, cacheType).first<{ data_json: string; cached_at: number }>();
-  if (row && Date.now() - row.cached_at < ttlMs) return JSON.parse(row.data_json);
-  return null;
+/** Build a KV cache key from domain + cache type. */
+function cacheKey(domain: string, cacheType: string): string {
+  return `cache:${cacheType}:${domain}`;
 }
 
-export async function setCache(db: D1Database, domain: string, cacheType: string, data: unknown): Promise<void> {
-  await db.prepare(
-    "INSERT OR REPLACE INTO domain_cache (domain, cache_type, data_json, cached_at) VALUES (?, ?, ?, ?)"
-  ).bind(domain, cacheType, JSON.stringify(data), Date.now()).run();
+/** Convert a TTL in milliseconds to whole seconds (minimum 60 for KV). */
+function ttlSeconds(ttlMs: number): number {
+  return Math.max(60, Math.ceil(ttlMs / 1000));
 }
 
-// ─── D1 Cache Cleanup ────────────────────────────────────────────────
-// Probabilistic cleanup: ~5% of requests trigger a cleanup pass to prevent
-// unbounded table growth. Deletes expired cache rows and old lookup rows.
-
-export async function maybePruneCache(db: D1Database): Promise<void> {
-  if (Math.random() > 0.05) return; // 5% chance
+export async function getFromCache(kv: KVNamespace, domain: string, cacheType: string, ttlMs: number): Promise<unknown | null> {
   try {
-    // Delete cache rows older than 48 hours (all TTLs are ≤24h, so 48h gives margin)
-    const cutoff48h = Date.now() - (48 * 60 * 60 * 1000);
-    await db.prepare("DELETE FROM domain_cache WHERE cached_at < ?").bind(cutoff48h).run();
-    // Keep only the most recent 500 lookup rows
-    await db.prepare(
-      "DELETE FROM domain_lookups WHERE id NOT IN (SELECT id FROM domain_lookups ORDER BY analyzed_at DESC LIMIT 500)"
-    ).run();
-  } catch (e) { console.warn('[yoke:prune] cache cleanup failed:', e instanceof Error ? e.message : e); }
+    const raw = await kv.get(cacheKey(domain, cacheType), "text");
+    if (!raw) return null;
+    const envelope = JSON.parse(raw) as { data: unknown; cached_at: number };
+    // Double-check TTL in case KV expiry is lagging (eventual consistency)
+    if (Date.now() - envelope.cached_at > ttlMs) return null;
+    return envelope.data;
+  } catch { return null; }
+}
+
+export async function setCache(kv: KVNamespace, domain: string, cacheType: string, data: unknown, ttlMs?: number): Promise<void> {
+  const envelope = { data, cached_at: Date.now() };
+  const expirationTtl = ttlMs ? ttlSeconds(ttlMs) : 86400; // default 24h
+  try {
+    await kv.put(cacheKey(domain, cacheType), JSON.stringify(envelope), { expirationTtl });
+  } catch (e) { console.warn(`[yoke:cache] KV write failed for ${cacheType}:${domain}:`, e instanceof Error ? e.message : e); }
 }
 
 // ─── Background Work Helper ──────────────────────────────────────────

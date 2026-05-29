@@ -201,10 +201,10 @@ The CLI uses the same API as the web app and supports custom endpoints via confi
 │  │ React SPA   │──────▶│  Cloudflare Worker    │   │
 │  │ (Tailwind,  │       │  (zero-dep router)    │   │
 │  │  React Query│       │                       │   │
-│  │  Leaflet)   │       │  ┌─────────────────┐  │   │
-│  └─────────────┘       │  │  D1 (SQLite)    │  │   │
-│                         │  └─────────────────┘  │   │
-│  ┌─────────────┐       └───────┬────────────────┘   │
+│  │  Leaflet)   │       │  ┌───────┐ ┌───────┐  │   │
+│  └─────────────┘       │  │  D1   │ │  KV   │  │   │
+│                         │  │(stats)│ │(cache)│  │   │
+│  ┌─────────────┐       │  └───────┘ └───────┘  │   │
 │  │Chrome Ext.  │─ iframe ──────┘       │            │
 │  └─────────────┘                       │            │
 └────────────────────────────────┼───────┼────────────┘
@@ -224,7 +224,7 @@ The CLI uses the same API as the web app and supports custom endpoints via confi
 |-------|------|---------|
 | **Frontend** | React 19, Tailwind v4, React Query, Leaflet | 21 lazy chunks, ~213KB initial JS |
 | **Backend** | Cloudflare Worker (TypeScript) | Zero dependencies, ~214KB bundled |
-| **Database** | Cloudflare D1 + KV | D1 for cache + analytics; KV for rate-limit fallback |
+| **Database** | Cloudflare D1 + KV | D1 for stats/analytics; KV for cache + rate limiting + reference data |
 | **Proxy** | Go on Fly.io | HTTP probes, MaxMind GeoIP, check-host.net relay |
 | **Extension** | Chrome Manifest V3 | Side panel, zero dependencies |
 | **Build** | Bun + Vite | Node.js 22+ for Wrangler deploy |
@@ -257,14 +257,12 @@ cd worker && bun install && cd ..
 cp worker/wrangler.toml.example worker/wrangler.toml
 # Edit wrangler.toml — fill in account_id, D1 database IDs, route
 
-# 3. Create D1 databases
-wrangler d1 create yoke-cache
+# 3. Create D1 database (stats only — cache uses KV)
 wrangler d1 create yoke-stats
 # Update wrangler.toml with the database IDs
 
-# 4. Run migrations
-wrangler d1 execute yoke-cache --file=worker/migrations/0001_init.sql
-wrangler d1 execute yoke-cache --file=worker/migrations/0002_domain_scores.sql
+# 4. Run migrations (stats tables only — cache is KV-based)
+wrangler d1 execute yoke-stats --file=worker/migrations/0002_domain_scores.sql
 
 # 5. Set secrets (all optional — each prompt asks for the value interactively)
 wrangler secret put BASE_URL              # Your instance URL (enables self-analysis)
@@ -377,17 +375,17 @@ openssl rand -hex 32
 # Usage dashboard (also available at /usage in the browser)
 curl -u admin:YOUR_KEY https://your-instance.com/usage
 
-# D1 cleanup — stale cache, old lookups, expired rate limits
+# D1 cleanup — old stats, expired rate limits (cache is auto-cleaned via KV TTL)
 curl -u admin:YOUR_KEY https://your-instance.com/api/cleanup
 
-# Purge cached analysis for a specific domain
+# Purge cached analysis for a specific domain (KV-backed)
 curl -u admin:YOUR_KEY -X DELETE https://your-instance.com/api/cache/example.com
 
-# Purge all AI analysis cache
+# Purge all AI analysis cache (KV-backed)
 curl -u admin:YOUR_KEY -X DELETE "https://your-instance.com/api/cache?type=ai_analysis"
 ```
 
-Run `/api/cleanup` daily via cron to keep D1 lean.
+Run `/api/cleanup` daily via cron to keep D1 stats lean. Cache cleanup is automatic via KV TTL expiry.
 
 ### Rate Limit Bypass
 

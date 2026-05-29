@@ -58,14 +58,14 @@ export interface BreachItem {
 
 let catalogCache: { data: HibpBreach[]; fetchedAt: number } | null = null;
 
-async function getBreachCatalog(db: D1Database): Promise<HibpBreach[]> {
+async function getBreachCatalog(kv: KVNamespace, statsDb?: D1Database): Promise<HibpBreach[]> {
   // In-memory cache first (survives within a single Worker invocation chain)
   if (catalogCache && Date.now() - catalogCache.fetchedAt < BREACH_CATALOG_CACHE_TTL_MS) {
     return catalogCache.data;
   }
 
-  // D1 cache
-  const cached = await getFromCache(db, "_global_", "hibp_breaches", BREACH_CATALOG_CACHE_TTL_MS);
+  // KV cache
+  const cached = await getFromCache(kv, "_global_", "hibp_breaches", BREACH_CATALOG_CACHE_TTL_MS);
   if (cached) {
     const data = cached as HibpBreach[];
     catalogCache = { data, fetchedAt: Date.now() };
@@ -84,22 +84,22 @@ async function getBreachCatalog(db: D1Database): Promise<HibpBreach[]> {
 
     if (!res.ok) {
       logError("HIBP API error", { status: res.status, api: "hibp" });
-      logApiError(db, { api: "hibp", status: res.status, message: `Breach catalog fetch failed` });
+      if (statsDb) logApiError(statsDb, { api: "hibp", status: res.status, message: `Breach catalog fetch failed` });
       return [];
     }
 
     const data = (await res.json()) as HibpBreach[];
 
-    // Cache in D1
+    // Cache in KV
     try {
-      await setCache(db, "_global_", "hibp_breaches", data);
+      await setCache(kv, "_global_", "hibp_breaches", data, BREACH_CATALOG_CACHE_TTL_MS);
     } catch (e) { console.warn('[yoke:breaches] catalog cache write failed:', e instanceof Error ? e.message : e); }
 
     catalogCache = { data, fetchedAt: Date.now() };
     return data;
   } catch (err) {
     logError("Failed to fetch HIBP catalog", { error: err instanceof Error ? err.message : String(err), api: "hibp" });
-    logApiError(db, { api: "hibp", status: 0, message: String(err).slice(0, 100) });
+    if (statsDb) logApiError(statsDb, { api: "hibp", status: 0, message: String(err).slice(0, 100) });
     return [];
   }
 }
@@ -126,12 +126,12 @@ function extractBaseDomain(domain: string): string {
   return domain;
 }
 
-export async function checkBreaches(domain: string, db: D1Database): Promise<BreachResult> {
+export async function checkBreaches(domain: string, kv: KVNamespace, statsDb?: D1Database): Promise<BreachResult> {
   // Check per-domain cache first
-  const cached = await getFromCache(db, domain, "breaches", BREACH_RESULT_CACHE_TTL_MS);
+  const cached = await getFromCache(kv, domain, "breaches", BREACH_RESULT_CACHE_TTL_MS);
   if (cached) return cached as BreachResult;
 
-  const catalog = await getBreachCatalog(db);
+  const catalog = await getBreachCatalog(kv, statsDb);
   if (catalog.length === 0) {
     return { found: false, count: 0, total_pwned: 0, items: [], check_failed: true };
   }
@@ -186,7 +186,7 @@ export async function checkBreaches(domain: string, db: D1Database): Promise<Bre
 
   // Cache
   try {
-    await setCache(db, domain, "breaches", result);
+    await setCache(kv, domain, "breaches", result, BREACH_RESULT_CACHE_TTL_MS);
   } catch (e) { console.warn(`[yoke:breaches] result cache write failed for ${domain}:`, e instanceof Error ? e.message : e); }
 
   return result;
