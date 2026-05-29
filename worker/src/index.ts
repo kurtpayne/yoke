@@ -257,6 +257,14 @@ export default {
     const baseUrl = getBaseUrl(request, env);
     const host = new URL(baseUrl).hostname;
 
+    // security.txt — vulnerability disclosure contact
+    if (method === "GET" && (path === "/.well-known/security.txt" || path === "/security.txt")) {
+      return new Response(
+        `Contact: mailto:hello@yoke.lol\nExpires: 2027-06-01T00:00:00.000Z\nPreferred-Languages: en\nCanonical: ${baseUrl}/.well-known/security.txt`,
+        { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
+      );
+    }
+
     if (method === "GET" && path === "/robots.txt") {
       return new Response(
         `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml`,

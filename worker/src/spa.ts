@@ -22,6 +22,7 @@ export function getHtmlSecurityHeaders(baseUrl?: string): Record<string, string>
       "font-src 'self'; frame-ancestors 'self' https://*.chromiumapp.org; base-uri 'self'; form-action 'self'",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
     "Cross-Origin-Opener-Policy": "same-origin",
+    "X-Frame-Options": "SAMEORIGIN",
   };
 }
 
@@ -197,7 +198,7 @@ export async function handleSPARoute(
   // /cli is a client-side rendered page — serve the SPA shell
   if (method === "GET" && path === "/cli") {
     const indexHtml = await getIndexHtml(env, request.url);
-    return htmlResponse(indexHtml, { "Cache-Control": "public, max-age=300" }, baseUrl);
+    return htmlResponse(indexHtml, { "Cache-Control": "public, max-age=1800" }, baseUrl);
   }
 
   // ── Domain path: content negotiation ──
@@ -222,7 +223,7 @@ export async function handleSPARoute(
       description: `Free domain intelligence report for ${domain} — DNS, SSL, WHOIS, security audit, tech stack, performance, and more.`,
       url: `${baseUrl}/${domain}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300", "Vary": "Accept" }, baseUrl);
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=1800", "Vary": "Accept" }, baseUrl);
   }
 
   // ── Compare path: SPA with OG tags ──
@@ -235,7 +236,7 @@ export async function handleSPARoute(
       description: `Side-by-side domain comparison of ${d1} and ${d2} — security, performance, reliability, trust, and visibility scores.`,
       url: `${baseUrl}/compare/${d1}/${d2}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=300", "Vary": "Accept" }, baseUrl);
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=1800", "Vary": "Accept" }, baseUrl);
   }
 
   // ── Domain with trailing path: /github.com/kurtpayne → redirect to /github.com ──
@@ -295,7 +296,7 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
         "X-Yoke-Cache": isCached ? "HIT" : "MISS",
         "X-Yoke-Version": YOKE_VERSION,
         "X-Yoke-Docs": `${baseUrl}/api/docs`,
-        "Cache-Control": "public, max-age=300",
+        "Cache-Control": "public, max-age=1800",
         "Vary": "Accept",
       },
     });
@@ -359,5 +360,5 @@ export async function serveAssetOrFallback(request: Request, env: Env): Promise<
 
   // No matching asset — SPA fallback: serve index.html for client-side routing
   const indexHtml = await getIndexHtml(env, request.url);
-  return htmlResponse(indexHtml, { "Cache-Control": "public, max-age=300" });
+  return htmlResponse(indexHtml, { "Cache-Control": "public, max-age=1800" });
 }
