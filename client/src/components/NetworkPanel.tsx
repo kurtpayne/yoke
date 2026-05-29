@@ -1,6 +1,6 @@
 import { MapPin, ShieldAlert, Wifi } from "lucide-react";
 import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
-import { CliButton, ipInfoCliCommands, blocklistCliCommands } from "./CliModal";
+import { CliButton, ipInfoCliCommands, blocklistCliCommands, httpProtocolCliCommands } from "./CliModal";
 import type { AnalysisResult } from "../utils/types";
 
 export function IpInfoPanel({ data }: { data: AnalysisResult }) {
@@ -72,7 +72,7 @@ export function HttpProtocolsPanel({ data }: { data: AnalysisResult }) {
   if (!proto) return null;
 
   return (
-    <Panel title="HTTP Protocols" icon={<Wifi size={14} />}>
+    <Panel title="HTTP Protocols" icon={<Wifi size={14} />} badge={<CliButton commands={httpProtocolCliCommands(data.domain)} domain={data.domain} />}>
       <DataRow
         label="HTTP/2"
         value={<StatusBadge status={proto.http2 ? "pass" : "neutral"} label={proto.http2 ? "Supported" : "Not detected"} />}
