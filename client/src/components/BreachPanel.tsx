@@ -1,6 +1,7 @@
 import { ShieldAlert, ShieldCheck, ExternalLink, AlertTriangle } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import { Panel } from "./Panel";
+import { CliButton, breachCliCommands } from "./CliModal";
 import type { AnalysisResult, BreachItem } from "../utils/types";
 
 function formatCount(n: number): string {
@@ -165,7 +166,7 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
   );
 
   return (
-    <Panel title="Data Breaches" icon={icon} badge={badge}>
+    <Panel title="Data Breaches" icon={icon} badge={<><CliButton commands={breachCliCommands(data.domain)} domain={data.domain} />{badge}</>}>
       <div className="p-4">
         {found ? (
           <div className="space-y-2">

@@ -1,5 +1,6 @@
 import { Share2, Image, AlertCircle, CheckCircle } from "lucide-react";
 import { Panel, DataRow, StatusBadge } from "./Panel";
+import { CliButton, ogPreviewCliCommands } from "./CliModal";
 import type { AnalysisResult } from "../utils/types";
 
 export function OgPreviewPanel({ data }: { data: AnalysisResult }) {
@@ -18,6 +19,7 @@ export function OgPreviewPanel({ data }: { data: AnalysisResult }) {
       icon={<Share2 size={14} />}
       badge={
         <div className="flex items-center gap-1.5">
+          <CliButton commands={ogPreviewCliCommands(data.domain)} domain={data.domain} />
           <StatusBadge status={sm.score >= 80 ? "pass" : sm.score >= 50 ? "warn" : "fail"} label={`${sm.score}%`} />
         </div>
       }

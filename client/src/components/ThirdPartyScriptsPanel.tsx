@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FileCode, ChevronDown, ChevronRight, AlertTriangle, Shield, Zap } from "lucide-react";
 import { Panel, StatusBadge } from "./Panel";
+import { CliButton, thirdPartyScriptsCliCommands } from "./CliModal";
 import type { AnalysisResult, ScriptCategoryData } from "../utils/types";
 
 // ─── Category icons/colors ──────────────────────────────────────────
@@ -120,6 +121,7 @@ export function ThirdPartyScriptsPanel({ data }: { data: AnalysisResult }) {
       icon={<FileCode size={14} />}
       badge={
         <div className="flex gap-1.5">
+          <CliButton commands={thirdPartyScriptsCliCommands(data.domain)} domain={data.domain} />
           <StatusBadge
             status={tps.third_party > 10 ? "warn" : tps.third_party > 0 ? "info" : "pass"}
             label={`${tps.third_party} third-party`}

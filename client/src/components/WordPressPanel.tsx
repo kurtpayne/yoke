@@ -1,5 +1,6 @@
 import { Puzzle, Shield, Paintbrush, Package, Zap, Search, ShoppingCart, Globe, Code2, Server } from "lucide-react";
 import { Panel, DataRow, StatusBadge } from "./Panel";
+import { CliButton, wordpressCliCommands } from "./CliModal";
 import type { AnalysisResult } from "../utils/types";
 
 const categoryIcons: Record<string, typeof Puzzle> = {
@@ -55,6 +56,7 @@ export function WordPressPanel({ data }: { data: AnalysisResult }) {
       icon={<Puzzle size={14} />}
       badge={
         <div className="flex items-center gap-1.5">
+          <CliButton commands={wordpressCliCommands(data.domain)} domain={data.domain} />
           {wp.version && <StatusBadge status="info" label={`v${wp.version}`} />}
           <StatusBadge status="pass" label={`${pluginCount} plugin${pluginCount !== 1 ? "s" : ""}`} />
         </div>

@@ -241,6 +241,8 @@ export function blocklistCliCommands(ip: string): CliCommand[] {
 
 export function performanceCliCommands(domain: string): CliCommand[] {
   return [
+    { label: "PageSpeed Insights", platforms: { linux: `curl -s "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${domain}&strategy=mobile&key=YOUR_API_KEY" | jq '{score: .lighthouseResult.categories.performance.score, lcp: .lighthouseResult.audits["largest-contentful-paint"].displayValue, cls: .lighthouseResult.audits["cumulative-layout-shift"].displayValue, fcp: .lighthouseResult.audits["first-contentful-paint"].displayValue}'`, windows: `curl -s "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${domain}&strategy=mobile&key=YOUR_API_KEY" | jq "{score: .lighthouseResult.categories.performance.score, lcp: .lighthouseResult.audits["""largest-contentful-paint"""].displayValue}"` } },
+    { label: "PageSpeed (no key)", platforms: { linux: `curl -s "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${domain}&strategy=mobile" | jq '.lighthouseResult.categories.performance.score'`, windows: `curl -s "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=https://${domain}&strategy=mobile" | jq ".lighthouseResult.categories.performance.score"` } },
     { label: "Response Timing", platforms: { linux: `curl -sI -o /dev/null -w 'HTTP/%{http_version} %{http_code}\\nTTFB: %{time_starttransfer}s\\nTotal: %{time_total}s\\nSize: %{size_download} bytes\\n' https://${domain}`, windows: `curl -sI -o nul -w "HTTP/%{http_version} %{http_code}\\nTTFB: %{time_starttransfer}s\\nTotal: %{time_total}s\\nSize: %{size_download} bytes\\n" https://${domain}` } },
     { label: "Ping", platforms: { linux: `ping -c 4 ${domain}`, windows: `ping -n 4 ${domain}` } },
     { label: "Traceroute", platforms: { linux: `traceroute ${domain}`, windows: `tracert ${domain}` } },
@@ -278,4 +280,74 @@ export function networkHealthCliCommands(domain: string, ip?: string): CliComman
     cmds.push({ label: "RIPE Routing Status", platforms: { linux: `curl -s "https://stat.ripe.net/data/routing-status/data.json?resource=${ip}" | jq '.data.visibility'`, windows: `curl -s "https://stat.ripe.net/data/routing-status/data.json?resource=${ip}" | jq ".data.visibility"` } });
   }
   return cmds;
+}
+
+
+export function breachCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "HIBP Breaches", platforms: { linux: `curl -s -H "hibp-api-key: YOUR_API_KEY" "https://haveibeenpwned.com/api/v3/breaches?domain=${domain}" | jq '.[].Name'`, windows: `curl -s -H "hibp-api-key: YOUR_API_KEY" "https://haveibeenpwned.com/api/v3/breaches?domain=${domain}" | jq ".[].Name"` } },
+    { label: "HIBP Breach Count", platforms: { linux: `curl -s "https://haveibeenpwned.com/api/v3/breaches" | jq '[.[] | select(.Domain=="${domain}")] | length'`, windows: `curl -s "https://haveibeenpwned.com/api/v3/breaches" | jq "[.[] | select(.Domain==\"${domain}\")] | length"` } },
+  ];
+}
+
+export function httpProtocolCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "HTTP/2 Support", platforms: { linux: `curl -sI --http2 -o /dev/null -w '%{http_version}' https://${domain}`, windows: `curl -sI --http2 -o nul -w "%{http_version}" https://${domain}` } },
+    { label: "HTTP/3 Support", platforms: { linux: `curl -sI --http3-only -o /dev/null -w '%{http_version}' https://${domain} 2>/dev/null || echo "HTTP/3 not supported by this curl build"`, windows: `curl -sI --http3-only -o nul -w "%{http_version}" https://${domain} 2>nul` } },
+    { label: "HSTS Header", platforms: { linux: `curl -sI https://${domain} | grep -i strict-transport-security`, windows: `curl -sI https://${domain} | findstr /I strict-transport-security` } },
+  ];
+}
+
+export function techStackCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "Server Header", platforms: { linux: `curl -sI https://${domain} | grep -i '^server:'`, windows: `curl -sI https://${domain} | findstr /I "^server:"` } },
+    { label: "X-Powered-By", platforms: { linux: `curl -sI https://${domain} | grep -i '^x-powered-by'`, windows: `curl -sI https://${domain} | findstr /I "x-powered-by"` } },
+    { label: "Generator Meta", platforms: { linux: `curl -sL https://${domain} | grep -ioP '<meta[^>]+name="?generator"?[^>]+content="?\\K[^">/]+'`, windows: `curl -sL https://${domain} | findstr /I "generator"` } },
+    { label: "Cookie Frameworks", platforms: { linux: `curl -sI https://${domain} | grep -i '^set-cookie' | head -5`, windows: `curl -sI https://${domain} | findstr /I "set-cookie"` } },
+  ];
+}
+
+export function wordpressCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "WP Version", platforms: { linux: `curl -sL https://${domain} | grep -oP 'wp-includes/[^"]+\\.js\\?ver=\\K[0-9.]+'| head -1`, windows: `curl -sL https://${domain} | findstr /I "wp-includes"` } },
+    { label: "REST API", platforms: { linux: `curl -s https://${domain}/wp-json/ | jq '{name, url, namespaces}'`, windows: `curl -s https://${domain}/wp-json/ | jq "{name, url, namespaces}"` } },
+    { label: "Active Theme", platforms: { linux: `curl -sL https://${domain} | grep -oP '/wp-content/themes/\\K[^/]+' | sort -u | head -1`, windows: `curl -sL https://${domain} | findstr /I "wp-content/themes"` } },
+    { label: "Plugin Detection", platforms: { linux: `curl -sL https://${domain} | grep -oP '/wp-content/plugins/\\K[^/]+' | sort -u`, windows: `curl -sL https://${domain} | findstr /I "wp-content/plugins"` } },
+  ];
+}
+
+export function structuredDataCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "JSON-LD", platforms: { linux: `curl -sL https://${domain} | grep -oP '<script[^>]+type="application/ld\\+json"[^>]*>\\K[^<]+' | jq '.["@type"]'`, windows: `curl -sL https://${domain} | findstr /I "application/ld+json"` } },
+    { label: "Schema.org Types", platforms: { linux: `curl -sL https://${domain} | grep -oP '"@type"\\s*:\\s*"\\K[^"]+' | sort -u`, windows: `curl -sL https://${domain} | findstr /I "@type"` } },
+  ];
+}
+
+export function ogPreviewCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "Open Graph Tags", platforms: { linux: `curl -sL https://${domain} | grep -iE '<meta[^>]+(og:|twitter:)[^>]+>' | head -20`, windows: `curl -sL https://${domain} | findstr /I "og: twitter:"` } },
+    { label: "OG Image", platforms: { linux: `curl -sL https://${domain} | grep -oP '<meta[^>]+property="og:image"[^>]+content="\\K[^"]+'`, windows: `curl -sL https://${domain} | findstr /I "og:image"` } },
+    { label: "Favicon", platforms: { linux: `curl -sL https://${domain} | grep -ioP '<link[^>]+rel="[^"]*icon[^"]*"[^>]+href="\\K[^"]+'`, windows: `curl -sL https://${domain} | findstr /I "icon"` } },
+  ];
+}
+
+export function thirdPartyScriptsCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "External Scripts", platforms: { linux: `curl -sL https://${domain} | grep -oP '<script[^>]+src="\\K[^"]+' | grep -v '${domain}' | sort -u`, windows: `curl -sL https://${domain} | findstr /I "<script" | findstr /I "src="` } },
+    { label: "Tracking Pixels", platforms: { linux: `curl -sL https://${domain} | grep -ioE '(google-analytics|googletagmanager|facebook\\.net|connect\\.facebook|analytics|gtag|fbq|_ga)' | sort -u`, windows: `curl -sL https://${domain} | findstr /I "google-analytics googletagmanager facebook.net gtag"` } },
+  ];
+}
+
+export function cacheCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "Cache Headers", platforms: { linux: `curl -sI https://${domain} | grep -iE '(cache-control|expires|etag|last-modified|age|cf-cache|x-cache)'`, windows: `curl -sI https://${domain} | findstr /I "cache-control expires etag last-modified age cf-cache x-cache"` } },
+    { label: "CDN Detection", platforms: { linux: `curl -sI https://${domain} | grep -iE '(cf-ray|x-cdn|x-served-by|x-cache|via|server: cloudflare|server: AmazonS3)'`, windows: `curl -sI https://${domain} | findstr /I "cf-ray x-cdn x-served-by x-cache via"` } },
+  ];
+}
+
+export function subdomainCliCommands(domain: string): CliCommand[] {
+  return [
+    { label: "Certificate Transparency", platforms: { linux: `curl -s "https://crt.sh/?q=%25.${domain}&output=json" | jq -r '.[].name_value' | sort -u | head -20`, windows: `curl -s "https://crt.sh/?q=%25.${domain}&output=json" | jq -r ".[].name_value" | sort` } },
+    { label: "Common Subdomains", platforms: { linux: `for sub in www mail ftp api dev staging app cdn; do dig +short $sub.${domain} A | grep -q . && echo "$sub.${domain}"; done`, windows: `for %s in (www mail ftp api dev staging app cdn) do @nslookup %s.${domain} 2>nul | findstr /I "Address" && echo %s.${domain}` } },
+  ];
 }

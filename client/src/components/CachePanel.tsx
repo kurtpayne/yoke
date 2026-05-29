@@ -1,5 +1,6 @@
 import { Database, Clock, Globe, RefreshCw, AlertTriangle } from "lucide-react";
 import { Panel, DataRow, StatusBadge } from "./Panel";
+import { CliButton, cacheCliCommands } from "./CliModal";
 import { Tooltip } from "./Tooltip";
 import type { AnalysisResult } from "../utils/types";
 
@@ -45,10 +46,13 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
       title="Cache Headers"
       icon={<Database size={14} />}
       badge={
-        <StatusBadge
-          status={VERDICT_COLORS[cache.verdict] ?? "neutral"}
-          label={cache.verdict.charAt(0).toUpperCase() + cache.verdict.slice(1)}
-        />
+        <div className="flex items-center gap-1.5">
+          <CliButton commands={cacheCliCommands(data.domain)} domain={data.domain} />
+          <StatusBadge
+            status={VERDICT_COLORS[cache.verdict] ?? "neutral"}
+            label={cache.verdict.charAt(0).toUpperCase() + cache.verdict.slice(1)}
+          />
+        </div>
       }
     >
       {/* TTL */}

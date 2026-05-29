@@ -1,5 +1,6 @@
 import { Layers } from "lucide-react";
 import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
+import { CliButton, techStackCliCommands } from "./CliModal";
 import type { AnalysisResult } from "../utils/types";
 
 const confidenceLabel: Record<string, string> = { high: "high", medium: "med", low: "low" };
@@ -8,7 +9,7 @@ const confidenceColor: Record<string, string> = { high: "var(--success)", medium
 export function TechStackPanel({ data }: { data: AnalysisResult }) {
   const tech = data.tech_stack;
   if (!tech || tech.length === 0) return (
-    <Panel title="Tech Stack" icon={<Layers size={14} />}>
+    <Panel title="Tech Stack" icon={<Layers size={14} />} badge={<CliButton commands={techStackCliCommands(data.domain)} domain={data.domain} />}>
       <ErrorState message="No technologies detected" />
     </Panel>
   );

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Code, Check, AlertTriangle, XCircle, ChevronDown, ChevronRight } from "lucide-react";
 import { Panel, StatusBadge } from "./Panel";
+import { CliButton, structuredDataCliCommands } from "./CliModal";
 import type { AnalysisResult, SchemaValidationItem, FieldValidation } from "../utils/types";
 
 // ─── Status Helpers ──────────────────────────────────────────────────
@@ -232,6 +233,7 @@ export function StructuredDataPanel({ data }: { data: AnalysisResult }) {
       icon={<Code size={14} />}
       badge={
         <div className="flex gap-1.5">
+          <CliButton commands={structuredDataCliCommands(data.domain)} domain={data.domain} />
           {completeCount > 0 && <StatusBadge status="pass" label={`${completeCount} valid`} />}
           {issueCount > 0 && <StatusBadge status="warn" label={`${issueCount} issues`} />}
         </div>

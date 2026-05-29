@@ -1,5 +1,6 @@
 import { ArrowRight, FileCode } from "lucide-react";
 import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
+import { CliButton, httpProtocolCliCommands } from "./CliModal";
 import type { AnalysisResult } from "../utils/types";
 
 export function RedirectPanel({ data }: { data: AnalysisResult }) {
@@ -57,7 +58,7 @@ export function RedirectPanel({ data }: { data: AnalysisResult }) {
 export function HeadersPanel({ data }: { data: AnalysisResult }) {
   const headers = data.headers;
   if (!headers) return (
-    <Panel title="HTTP Headers" icon={<FileCode size={14} />}>
+    <Panel title="HTTP Headers" icon={<FileCode size={14} />} badge={<CliButton commands={httpProtocolCliCommands(data.domain)} domain={data.domain} />}>
       <ErrorState message="HTTP headers unavailable" />
     </Panel>
   );

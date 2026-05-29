@@ -1,13 +1,14 @@
 import { Activity, Globe, ExternalLink, Clock, Shield, Radio } from "lucide-react";
 import type { AnalysisResult, NetworkHealthData } from "../api";
 import { Panel, DataRow, StatusBadge } from "./Panel";
+import { CliButton, networkHealthCliCommands } from "./CliModal";
 
 export function NetworkHealthPanel({ data }: { data: AnalysisResult }) {
   const nh = data.network_health;
   if (!nh) return null;
 
   return (
-    <Panel title="Network Health" icon={<Activity size={14} />}>
+    <Panel title="Network Health" icon={<Activity size={14} />} badge={<CliButton commands={networkHealthCliCommands(data.domain, data.ip_info?.ip)} domain={data.domain} ip={data.ip_info?.ip} />}>
       {nh.dns_propagation && <DnsPropagationSection data={nh.dns_propagation} />}
       {nh.connection_timing && <ConnectionTimingSection data={nh.connection_timing} />}
       {nh.ripe_routing && <RipeRoutingSection data={nh.ripe_routing} />}

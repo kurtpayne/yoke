@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Search, Loader2, Globe, Server, ChevronDown, ChevronRight } from "lucide-react";
 import { api } from "../api";
 import { Panel } from "./Panel";
+import { CliButton, subdomainCliCommands } from "./CliModal";
 import type { SubdomainScanResult, ResolvedSubdomain } from "../utils/types";
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -104,11 +105,14 @@ export function SubdomainScanPanel({ domain }: { domain: string }) {
       title="Subdomain Scan"
       icon={<Search size={14} />}
       badge={
-        data ? (
-          <span className="badge badge-info" style={{ fontSize: "10px" }}>
-            {data.total_found} found
-          </span>
-        ) : null
+        <div className="flex items-center gap-1.5">
+          <CliButton commands={subdomainCliCommands(domain)} domain={domain} />
+          {data ? (
+            <span className="badge badge-info" style={{ fontSize: "10px" }}>
+              {data.total_found} found
+            </span>
+          ) : null}
+        </div>
       }
     >
       {!data && !scan.isPending && (
