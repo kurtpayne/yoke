@@ -17,7 +17,7 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
 
   if (!enabled) {
     return (
-      <Panel title="Global Availability" icon={<Globe size={14} />}>
+      <Panel title="Global Availability" icon={<Globe size={14} />} badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}>
         <div className="p-4 flex flex-col items-center gap-3">
           <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", textAlign: "center" }}>
             HTTP connectivity checks + DNS resolution from multiple providers
@@ -41,7 +41,7 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
 
   if (isPending) {
     return (
-      <Panel title="Global Availability" icon={<Globe size={14} />}>
+      <Panel title="Global Availability" icon={<Globe size={14} />} badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}>
         <div className="p-4 text-center">
           <div className="inline-flex items-center gap-2">
             <RefreshCw size={14} className="animate-spin" style={{ color: "var(--accent)" }} />
@@ -57,7 +57,7 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
   if (error) return <ErrorState message={`Availability check failed: ${String(error)}`} />;
   if (!data?.results?.length) {
     return (
-      <Panel title="Global Availability" icon={<Globe size={14} />}>
+      <Panel title="Global Availability" icon={<Globe size={14} />} badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}>
         <div className="p-4 flex flex-col items-center gap-2">
           <StatusBadge status="warn" label="Check returned no results" />
           <button
