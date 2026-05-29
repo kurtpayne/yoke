@@ -1077,13 +1077,13 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
             }}>
               Per-Axis Breakdown
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {data.comparison.axes.map(ax => {
                 const d = deltaDisplay(ax.delta);
                 const isBigDiff = ax.absDelta >= 15;
                 return (
                   <div key={ax.axis}>
-                    <div className="flex items-center justify-between mb-1" style={{ fontSize: "11px" }}>
+                    <div className="flex items-center justify-between" style={{ fontSize: "11px", marginBottom: 2 }}>
                       <span style={{
                         fontFamily: "var(--font-ui)", fontWeight: 600,
                         color: isBigDiff ? "var(--text)" : "var(--dim)",
@@ -1091,12 +1091,14 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                         {AXIS_LABELS[ax.axis]}
                         {isBigDiff && <span style={{ marginLeft: 4, fontSize: "9px", color: "var(--warning)" }}>★</span>}
                       </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: d.color, fontSize: "11px" }}>
-                        {d.text}
-                      </span>
+                      {d.text && (
+                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: d.color, fontSize: "11px" }}>
+                          {d.text}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2" style={{ fontSize: "11px" }}>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, minWidth: 32, fontSize: "12px", textAlign: "right", flexShrink: 0 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, minWidth: 28, fontSize: "11px", textAlign: "right", flexShrink: 0 }}>
                         {ax.score1}
                       </span>
                       <div className="flex-1 relative" style={{ height: 8, borderRadius: 4 }}>
@@ -1113,7 +1115,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                           background: "#f97316", transition: "width 0.6s ease-out",
                         }} />
                       </div>
-                      <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, minWidth: 32, fontSize: "12px", textAlign: "left", flexShrink: 0 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, minWidth: 28, fontSize: "11px", textAlign: "left", flexShrink: 0 }}>
                         {ax.score2}
                       </span>
                     </div>
