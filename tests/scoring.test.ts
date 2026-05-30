@@ -186,7 +186,9 @@ describe('Grade Assignment', () => {
     expect(gradeFromComposite(79)).toBe("C+");
     expect(gradeFromComposite(75)).toBe("C+");
     expect(gradeFromComposite(74)).toBe("C");
-    expect(gradeFromComposite(65)).toBe("C");
+    expect(gradeFromComposite(70)).toBe("C");
+    expect(gradeFromComposite(69)).toBe("D+");
+    expect(gradeFromComposite(65)).toBe("D+");
     expect(gradeFromComposite(64)).toBe("D");
     expect(gradeFromComposite(50)).toBe("D");
     expect(gradeFromComposite(49)).toBe("F");

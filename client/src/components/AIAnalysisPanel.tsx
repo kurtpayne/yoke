@@ -1160,7 +1160,7 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
   const projectedScore = Math.min(100, Math.round(plan.currentScore + totalGain));
   // TODO: These grade thresholds are duplicated from server-side gradeFromComposite()
   // in contextual-scoring.ts. Consider exposing via /api/scoring or a shared constants file.
-  const projectedGrade = projectedScore >= 95 ? "A+" : projectedScore >= 90 ? "A" : projectedScore >= 85 ? "B+" : projectedScore >= 80 ? "B" : projectedScore >= 75 ? "C+" : projectedScore >= 65 ? "C" : projectedScore >= 50 ? "D" : "F";
+  const projectedGrade = projectedScore >= 95 ? "A+" : projectedScore >= 90 ? "A" : projectedScore >= 85 ? "B+" : projectedScore >= 80 ? "B" : projectedScore >= 75 ? "C+" : projectedScore >= 70 ? "C" : projectedScore >= 65 ? "D+" : projectedScore >= 50 ? "D" : "F";
 
   const progressPct = Math.min(((plan.currentScore - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0)) / (plan.targetThreshold - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0))) * 100, 100);
 
