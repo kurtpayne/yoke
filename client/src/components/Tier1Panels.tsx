@@ -1,6 +1,8 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   Eye,
   Globe,
@@ -10,6 +12,7 @@ import {
   Shield,
   XCircle,
 } from "lucide-react";
+import { useState } from "react";
 import type { AnalysisResult } from "../utils/types";
 import { DataRow, Panel, StatusBadge } from "./Panel";
 import { Tooltip } from "./Tooltip";
@@ -110,8 +113,127 @@ export function CertTransparencyPanel({ data }: { data: AnalysisResult }) {
             </div>
           </div>
         )}
+        {ct.certs && ct.certs.length > 0 && <CertIssuanceHistory certs={ct.certs} />}
       </div>
     </Panel>
+  );
+}
+
+// ─── Cert Issuance History (collapsible) ────────────────────────────
+
+function CertIssuanceHistory({
+  certs,
+}: {
+  certs: Array<{ issuer: string; not_before: string; not_after: string; dns_names: string[] }>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const sorted = [...certs].sort((a, b) => new Date(b.not_before).getTime() - new Date(a.not_before).getTime());
+  const shown = expanded ? sorted : sorted.slice(0, 5);
+  const hasMore = sorted.length > 5;
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    } catch {
+      return iso;
+    }
+  };
+
+  const isExpired = (iso: string) => new Date(iso).getTime() < Date.now();
+
+  return (
+    <div>
+      <span
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "10px",
+          color: "var(--dim)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+        }}
+      >
+        Issuance History
+      </span>
+      <div
+        className="mt-1"
+        style={{ maxHeight: expanded ? "400px" : undefined, overflowY: expanded ? "auto" : undefined }}
+      >
+        {shown.map((cert, i) => (
+          <div
+            key={`cert-${i}`}
+            style={{
+              padding: "6px 0",
+              borderBottom: i < shown.length - 1 ? "1px solid var(--border-muted)" : "none",
+            }}
+          >
+            <div className="flex items-center gap-1.5" style={{ fontFamily: "var(--font-ui)", fontSize: "11px" }}>
+              <span className="badge badge-info" style={{ fontSize: "9px", flexShrink: 0 }}>
+                {cert.issuer}
+              </span>
+              <span style={{ color: "var(--dim)", fontSize: "10px" }}>
+                {formatDate(cert.not_before)} → {formatDate(cert.not_after)}
+              </span>
+              {isExpired(cert.not_after) && (
+                <span style={{ color: "var(--danger, #e55)", fontSize: "9px", fontWeight: 600 }}>expired</span>
+              )}
+            </div>
+            {cert.dns_names.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {cert.dns_names.slice(0, 8).map((name) => (
+                  <span
+                    key={name}
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "10px",
+                      color: "var(--fg)",
+                      background: "var(--surface)",
+                      padding: "1px 4px",
+                      borderRadius: "3px",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    {name}
+                  </span>
+                ))}
+                {cert.dns_names.length > 8 && (
+                  <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
+                    +{cert.dns_names.length - 8}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: "none",
+            border: "none",
+            padding: "4px 0",
+            cursor: "pointer",
+            fontFamily: "var(--font-ui)",
+            fontSize: "11px",
+            color: "var(--accent)",
+          }}
+        >
+          {expanded ? (
+            <>
+              <ChevronDown size={11} /> Show less
+            </>
+          ) : (
+            <>
+              <ChevronRight size={11} /> Show all {sorted.length} certificates
+            </>
+          )}
+        </button>
+      )}
+    </div>
   );
 }
 

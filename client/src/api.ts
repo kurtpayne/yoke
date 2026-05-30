@@ -252,6 +252,7 @@ export interface AnalysisResult {
   ssl: {
     grade: string | null;
     issuer: string | null;
+    subject: string | null;
     valid_from: string | null;
     valid_to: string | null;
     protocols: string[];
@@ -676,6 +677,7 @@ export interface CertTransparencyData {
   total_certs: number;
   has_wildcard: boolean;
   issuers: string[];
+  certs?: Array<{ issuer: string; not_before: string; not_after: string; dns_names: string[] }>;
   error: string | null;
 }
 

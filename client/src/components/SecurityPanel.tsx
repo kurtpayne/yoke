@@ -103,6 +103,7 @@ export function SslPanel({ data }: { data: AnalysisResult }) {
           {ssl.error}
         </div>
       )}
+      {ssl.subject && ssl.subject !== data.domain && <DataRow label="Subject" value={ssl.subject} />}
       {ssl.issuer && <DataRow label="Issuer" value={ssl.issuer} />}
       {ssl.valid_from && <DataRow label="Valid From" value={formatDate(ssl.valid_from)} />}
       {ssl.valid_to && <DataRow label="Valid To" value={formatDate(ssl.valid_to)} />}
