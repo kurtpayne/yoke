@@ -72,4 +72,6 @@ export type {
   ConnectionTimingData,
   OutageLinksData,
   DnsResolverResultData,
+  ResolverResult,
+  RecursiveDnsResult,
 } from "../api";

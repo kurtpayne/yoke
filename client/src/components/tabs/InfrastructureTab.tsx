@@ -8,6 +8,7 @@ import { DnssecPanel, HostingPanel } from "../NewPanels";
 import { ShodanPanel } from "../ShodanPanel";
 import { AvailabilityPanel } from "../AvailabilityPanel";
 import { SubdomainScanPanel } from "../SubdomainScanPanel";
+import { RecursiveDnsPanel } from "../RecursiveDnsPanel";
 import { GreenHostingPanel } from "../Tier1Panels";
 import { NetworkHealthPanel } from "../NetworkHealthPanel";
 import type { AnalysisResult } from "../../utils/types";
@@ -28,6 +29,7 @@ export default function InfrastructureTab({ data }: { data: AnalysisResult }) {
     { id: "availability", node: <AvailabilityPanel domain={domain} /> },
     { id: "shodan", node: <ShodanPanel data={data} /> },
     { id: "subdomain-scan", node: <SubdomainScanPanel domain={domain} /> },
+    { id: "recursive-dns", node: <RecursiveDnsPanel domain={domain} /> },
     { id: "redirects", node: <RedirectPanel data={data} /> },
   ];
 

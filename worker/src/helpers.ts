@@ -16,6 +16,7 @@ export interface Env {
   RATE_LIMIT_COMPARE?: string;
   RATE_LIMIT_SUBDOMAIN?: string;
   RATE_LIMIT_AVAILABILITY?: string;
+  RATE_LIMIT_RECURSIVE_DNS?: string;
   /** HMAC secret for signing share card URLs */
   SHARE_SECRET?: string;
   /** OG image rendering worker (service binding — zero-latency, zero-cost) */
