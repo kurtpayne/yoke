@@ -13,10 +13,17 @@ import type {
 
 // ─── Tier 1: Certificate Transparency (CertSpotter) ─────────────────
 
+/** Extract CN from a full X.509 Distinguished Name string (e.g. "C=US, O=Let's Encrypt, CN=R3" → "R3") */
+function extractCN(dn: string | undefined | null): string | null {
+  if (!dn) return null;
+  const match = dn.match(/CN=([^,]+)/i);
+  return match?.[1]?.trim() ?? null;
+}
+
 export async function checkCertTransparency(domain: string): Promise<CertTransparencyResult> {
   try {
     const res = await fetchWithTimeout(
-      `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(domain)}&include_subdomains=true&expand=dns_names`,
+      `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(domain)}&include_subdomains=true&expand=dns_names&expand=issuer`,
       { timeout: 10000 },
     );
     if (!res.ok)
@@ -30,7 +37,7 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
       };
     const issuances = (await res.json()) as Array<{
       dns_names: string[];
-      issuer?: { name?: string };
+      issuer?: { name?: string; friendly_name?: string };
       not_before?: string;
       not_after?: string;
     }>;
@@ -50,8 +57,8 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
           dnsNames.push(name);
         }
       }
-      const issuerName = iss.issuer?.name ?? "Unknown";
-      if (iss.issuer?.name) issuersSet.add(iss.issuer.name);
+      const issuerName = iss.issuer?.friendly_name ?? extractCN(iss.issuer?.name) ?? "Unknown";
+      if (issuerName !== "Unknown") issuersSet.add(issuerName);
       if (iss.not_before) {
         certs.push({
           issuer: issuerName,

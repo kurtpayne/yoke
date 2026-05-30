@@ -829,8 +829,8 @@ export function calculateDomainScore(opts: {
         const unauthorizedCAs = new Set<string>();
         let unauthorizedCertCount = 0;
         for (const cert of recentCerts) {
-          // Issuer from certspotter is a DN like "C=US, O=Let's Encrypt, CN=R3"
-          // Extract the O= (Organization) field for matching
+          // Issuer is a friendly name like "Sectigo" or "DigiCert" (from CertSpotter expand=issuer),
+          // or a full DN like "C=US, O=Let's Encrypt, CN=R3" as fallback — extract org for matching
           const orgMatch = cert.issuer.match(/O=([^,]+)/i);
           const issuerOrg = orgMatch ? orgMatch[1].trim().toLowerCase() : cert.issuer.toLowerCase();
           // Check if any authorized CA domain appears in the issuer org name
