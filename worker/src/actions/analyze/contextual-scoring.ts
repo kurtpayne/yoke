@@ -1105,10 +1105,10 @@ export function calculateDomainScore(opts: {
         findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "critical", label: "SSL certificate expired or expiring today", tradeoff: null, weight: 4 });
       } else if (daysUntilExpiry < 7) {
         findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "high", label: `SSL certificate expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? "s" : ""}`, tradeoff: null, weight: 3 });
+      } else if (daysUntilExpiry < 14) {
+        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "medium", label: `SSL certificate expires in ${daysUntilExpiry} days`, tradeoff: null, weight: 2 });
       } else if (daysUntilExpiry < 30) {
         findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "low", label: `SSL certificate expires in ${daysUntilExpiry} days`, tradeoff: null, weight: 2 });
-      } else if (daysUntilExpiry < 90) {
-        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "info", label: `SSL certificate expires in ${daysUntilExpiry} days`, tradeoff: null, weight: 1 });
       } else {
         findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "good", label: `SSL certificate valid for ${daysUntilExpiry}+ days`, tradeoff: null, weight: 1 });
       }
@@ -1352,7 +1352,7 @@ export function calculateDomainScore(opts: {
   const nsCount = dns.filter(r => r.type === "NS").length;
   findings.push({
     signal: "ns_redundancy", axis: "reliability",
-    severity: nsCount >= 4 ? "good" : nsCount >= 2 ? "info" : "medium",
+    severity: nsCount >= 2 ? "good" : "medium",
     label: `${nsCount} nameserver${nsCount !== 1 ? "s" : ""}`,
     tradeoff: null, weight: 2,
   });

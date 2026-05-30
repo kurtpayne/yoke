@@ -511,6 +511,8 @@ const LEGAL_PATTERNS: Array<{ name: string; patterns: RegExp[] }> = [
   { name: "Accessibility", patterns: [/\/accessibility/i, /\/a11y\b/i] },
   { name: "GDPR", patterns: [/\/gdpr/i, /data[_-]?protection/i] },
   { name: "Imprint", patterns: [/\/imprint/i, /\/impressum/i] },
+  { name: "About", patterns: [/\/about/i, /about[_-]?us/i, /\/company$/i] },
+  { name: "Team", patterns: [/\/team/i, /our[_-]?team/i, /\/people/i, /\/leadership/i] },
 ];
 
 const CONSENT_PROVIDERS: Array<{ name: string; pattern: RegExp }> = [

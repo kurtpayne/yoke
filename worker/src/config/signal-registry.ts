@@ -451,8 +451,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [2, 2],
   },
   dns_resolution_time: {
-    axis: "reliability", label: "DNS Resolution Time", actionable: true, canBeNonGood: true,
-    effort: "~15 min — optimize DNS provider/TTL", fixDescription: "Optimize DNS resolution time",
+    axis: "reliability", label: "DNS Resolution Time", actionable: false, canBeNonGood: true,
     weightRange: [2, 2],
   },
   ns_provider_diversity: {
