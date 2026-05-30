@@ -7,28 +7,29 @@ import { getBaseUrl } from "./helpers";
 import { getHtmlSecurityHeaders } from "./spa";
 
 // ─── Ox Mark Logo (base64 PNG) ───────────────────────────────────────
-const OX_LOGO_DATA_URI = "data:image/png;base64,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";
+const OX_LOGO_DATA_URI =
+  "data:image/png;base64,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";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
 interface SharePayload {
-  d: string;  // domain
-  s: number;  // composite score
-  g: string;  // grade
+  d: string; // domain
+  s: number; // composite score
+  g: string; // grade
   a: number[]; // axis scores [security, reliability, trust, performance, visibility]
-  t: number;  // unix timestamp (seconds)
+  t: number; // unix timestamp (seconds)
 }
 
 interface CompareSharePayload {
-  d1: string;  // domain 1
-  d2: string;  // domain 2
-  s1: number;  // composite score 1
-  s2: number;  // composite score 2
-  g1: string;  // grade 1
-  g2: string;  // grade 2
+  d1: string; // domain 1
+  d2: string; // domain 2
+  s1: number; // composite score 1
+  s2: number; // composite score 2
+  g1: string; // grade 1
+  g2: string; // grade 2
   a1: number[]; // axis scores 1 [security, reliability, trust, performance, visibility]
   a2: number[]; // axis scores 2
-  t: number;   // unix timestamp (seconds)
+  t: number; // unix timestamp (seconds)
 }
 
 // ─── Base64url helpers ───────────────────────────────────────────────
@@ -76,13 +77,10 @@ async function getHmacKey(env: Env): Promise<CryptoKey> {
   if (!secret) {
     throw new Error("SHARE_SECRET environment variable is not configured — share feature is unavailable");
   }
-  return crypto.subtle.importKey(
-    "raw",
-    textToBytes(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"],
-  );
+  return crypto.subtle.importKey("raw", textToBytes(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+    "verify",
+  ]);
 }
 
 async function signPayload(payload: string, env: Env): Promise<string> {
@@ -121,7 +119,9 @@ function parseShareToken(token: string): { payload: string; signature: string; d
   }
 }
 
-function parseCompareShareToken(token: string): { payload: string; signature: string; data: CompareSharePayload } | null {
+function parseCompareShareToken(
+  token: string,
+): { payload: string; signature: string; data: CompareSharePayload } | null {
   const dotIdx = token.lastIndexOf(".");
   if (dotIdx < 1) return null;
   const payload = token.substring(0, dotIdx);
@@ -129,9 +129,18 @@ function parseCompareShareToken(token: string): { payload: string; signature: st
   try {
     const jsonStr = bytesToText(base64urlDecode(payload));
     const data = JSON.parse(jsonStr) as CompareSharePayload;
-    if (!data.d1 || !data.d2 || typeof data.s1 !== "number" || typeof data.s2 !== "number" ||
-        !data.g1 || !data.g2 || !Array.isArray(data.a1) || data.a1.length !== 5 ||
-        !Array.isArray(data.a2) || data.a2.length !== 5) {
+    if (
+      !data.d1 ||
+      !data.d2 ||
+      typeof data.s1 !== "number" ||
+      typeof data.s2 !== "number" ||
+      !data.g1 ||
+      !data.g2 ||
+      !Array.isArray(data.a1) ||
+      data.a1.length !== 5 ||
+      !Array.isArray(data.a2) ||
+      data.a2.length !== 5
+    ) {
       return null;
     }
     return { payload, signature, data };
@@ -143,7 +152,7 @@ function parseCompareShareToken(token: string): { payload: string; signature: st
 // ─── Signing endpoint ────────────────────────────────────────────────
 
 export async function handleShareSign(request: Request, env: Env): Promise<Response> {
-  const body = await request.json() as { payload?: string };
+  const body = (await request.json()) as { payload?: string };
   if (!body.payload || typeof body.payload !== "string") {
     return new Response(JSON.stringify({ error: "payload is required" }), {
       status: 400,
@@ -156,7 +165,8 @@ export async function handleShareSign(request: Request, env: Env): Promise<Respo
     const data = JSON.parse(jsonStr);
     // Accept single-domain payload (has 'd') or compare payload (has 'd1')
     const isSingle = data.d && typeof data.s === "number" && data.g;
-    const isCompare = data.d1 && data.d2 && typeof data.s1 === "number" && typeof data.s2 === "number" && data.g1 && data.g2;
+    const isCompare =
+      data.d1 && data.d2 && typeof data.s1 === "number" && typeof data.s2 === "number" && data.g1 && data.g2;
     if (!isSingle && !isCompare) {
       throw new Error("Invalid payload shape");
     }
@@ -175,20 +185,25 @@ export async function handleShareSign(request: Request, env: Env): Promise<Respo
 // ─── HTML helpers ────────────────────────────────────────────────────
 
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/'/g, "&#39;");
 }
 
 function gradeColor(grade: string): string {
   if (grade === "A") return "#3fb950";
   if (grade === "B+" || grade === "B") return "#3fb950";
   if (grade === "C") return "#d29922";
-  return "#f85149";  // D and F
+  return "#f85149"; // D and F
 }
 
 function scoreColor(score: number): string {
-  if (score >= 80) return "#3fb950";  // green (matches --success)
-  if (score >= 60) return "#d29922";  // amber (matches --warning)
-  return "#f85149";                   // red (matches --danger)
+  if (score >= 80) return "#3fb950"; // green (matches --success)
+  if (score >= 60) return "#d29922"; // amber (matches --warning)
+  return "#f85149"; // red (matches --danger)
 }
 
 const AXIS_LABELS = ["Security", "Reliability", "Trust", "Performance", "Visibility"];
@@ -203,17 +218,19 @@ function generateOgSvg(data: SharePayload): string {
   const sc = scoreColor(score);
 
   // 1200×630 SVG
-  const bars = data.a.map((val, i) => {
-    const y = 230 + i * 60;
-    const barWidth = Math.max(4, (val / 100) * 460);
-    const color = scoreColor(val);
-    return `
+  const bars = data.a
+    .map((val, i) => {
+      const y = 230 + i * 60;
+      const barWidth = Math.max(4, (val / 100) * 460);
+      const color = scoreColor(val);
+      return `
       <text x="660" y="${y + 4}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" text-anchor="end">${AXIS_LABELS[i]}</text>
       <rect x="680" y="${y - 12}" width="460" height="24" rx="4" fill="#21262d"/>
       <rect x="680" y="${y - 12}" width="${barWidth}" height="24" rx="4" fill="${color}" opacity="0.85"/>
       <text x="1152" y="${y + 4}" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="15" text-anchor="end">${val}</text>
     `;
-  }).join("");
+    })
+    .join("");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
@@ -243,7 +260,7 @@ function generateOgSvg(data: SharePayload): string {
   <text x="170" y="72" fill="#484f58" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="14">DOMAIN INTELLIGENCE</text>
 
   <!-- Domain name -->
-  <text x="60" y="146" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="46" font-weight="700">${domain.length > 28 ? domain.substring(0, 28) + "…" : domain}</text>
+  <text x="60" y="146" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="46" font-weight="700">${domain.length > 28 ? `${domain.substring(0, 28)}…` : domain}</text>
 
   <!-- Divider -->
   <line x1="60" y1="175" x2="580" y2="175" stroke="#30363d" stroke-width="1"/>
@@ -277,15 +294,20 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
   const gc = gradeColor(grade);
   const sc = scoreColor(score);
   const analyzedDate = new Date(data.t * 1000).toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
   const ogImageUrl = `${baseUrl}/og/${esc(token)}.png`;
   const shareUrl = `${baseUrl}/r/${esc(token)}`;
 
-  const axisBarsHtml = data.a.map((val, i) => {
-    const color = scoreColor(val);
-    return `
+  const axisBarsHtml = data.a
+    .map((val, i) => {
+      const color = scoreColor(val);
+      return `
       <div class="axis-row">
         <span class="axis-label">${AXIS_LABELS[i]}</span>
         <div class="axis-bar-track">
@@ -293,7 +315,8 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
         </div>
         <span class="axis-val" style="color:${color}">${val}</span>
       </div>`;
-  }).join("");
+    })
+    .join("");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -381,7 +404,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
     <a class="cta" href="${baseUrl}/${esc(data.d)}">🔍 Analyze ${domain} now</a>
   </div>
   <div class="footer">
-    <a href="${baseUrl}">yoke.lol</a> — Free domain intelligence for everyone
+    <a href="${baseUrl}">${new URL(baseUrl).hostname}</a> — Free domain intelligence for everyone
   </div>
 </body>
 </html>`;
@@ -487,7 +510,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 }
 
 /** Handle GET /og/:token.png — dynamic OG image as PNG */
-export async function handleOgImage(request: Request, env: Env, token: string): Promise<Response> {
+export async function handleOgImage(_request: Request, env: Env, token: string): Promise<Response> {
   const parsed = parseShareToken(token);
   if (!parsed) {
     return new Response("Invalid token", { status: 400, headers: { "Content-Type": "text/plain" } });
@@ -543,8 +566,8 @@ export function matchCompareOgImagePath(path: string): string | null {
 // ─── Compare OG SVG ──────────────────────────────────────────────────
 
 function generateCompareOgSvg(data: CompareSharePayload): string {
-  const d1 = esc(data.d1.length > 24 ? data.d1.substring(0, 24) + "…" : data.d1);
-  const d2 = esc(data.d2.length > 24 ? data.d2.substring(0, 24) + "…" : data.d2);
+  const d1 = esc(data.d1.length > 24 ? `${data.d1.substring(0, 24)}…` : data.d1);
+  const d2 = esc(data.d2.length > 24 ? `${data.d2.substring(0, 24)}…` : data.d2);
   const gc1 = gradeColor(data.g1);
   const gc2 = gradeColor(data.g2);
   const sc1 = scoreColor(data.s1);
@@ -667,8 +690,12 @@ function generateCompareReportPage(data: CompareSharePayload, baseUrl: string, t
   const sc2 = scoreColor(data.s2);
   const delta = data.s1 - data.s2;
   const analyzedDate = new Date(data.t * 1000).toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
   const ogImageUrl = `${baseUrl}/cog/${esc(token)}.png`;
   const shareUrl = `${baseUrl}/c/${esc(token)}`;
@@ -790,7 +817,7 @@ function generateCompareReportPage(data: CompareSharePayload, baseUrl: string, t
     <a class="cta" href="${baseUrl}/compare/${esc(data.d1)}/${esc(data.d2)}" style="--cta-bg:${gc1}">⚡ Full comparison on Yoke</a>
   </div>
   <div class="footer">
-    <a href="${baseUrl}">yoke.lol</a> — Free domain intelligence for everyone
+    <a href="${baseUrl}">${new URL(baseUrl).hostname}</a> — Free domain intelligence for everyone
   </div>
 </body>
 </html>`;
@@ -806,7 +833,10 @@ export async function handleCompareSharePage(request: Request, env: Env, token: 
   }
   const valid = await verifyPayload(parsed.payload, parsed.signature, env);
   if (!valid) {
-    return new Response("Invalid or tampered compare share link", { status: 400, headers: { "Content-Type": "text/plain" } });
+    return new Response("Invalid or tampered compare share link", {
+      status: 400,
+      headers: { "Content-Type": "text/plain" },
+    });
   }
 
   const baseUrl = getBaseUrl(request, env);
@@ -853,7 +883,7 @@ export async function handleCompareSharePage(request: Request, env: Env, token: 
 }
 
 /** Handle GET /cog/:token.png — compare OG image as PNG */
-export async function handleCompareOgImage(request: Request, env: Env, token: string): Promise<Response> {
+export async function handleCompareOgImage(_request: Request, env: Env, token: string): Promise<Response> {
   const parsed = parseCompareShareToken(token);
   if (!parsed) {
     return new Response("Invalid token", { status: 400, headers: { "Content-Type": "text/plain" } });

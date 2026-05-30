@@ -1,53 +1,66 @@
 // Minimal Cloudflare Worker router — no external dependencies
 // Replaces Hono with a tiny hand-rolled router for zero-dependency deployment
 
+import { buildAIPrompt, getAIAnalysis } from "./actions/ai-analysis";
 import { analyzeDomain } from "./actions/analyze";
-import { analyzeDomainStream } from "./actions/analyze-stream";
-import { compareDomains } from "./actions/compare";
-import { checkGlobalAvailability } from "./actions/availability";
-import { getRecentLookups } from "./actions/recent";
-import { getSubdomains } from "./actions/subdomains";
-import { scanSubdomains } from "./actions/subdomain-scan";
-import { getApiHealth } from "./api-errors";
-import { renderStatusPage } from "./status-page";
-import { ALL_THRESHOLDS, SEVERITY_SCORES } from "./config/scoring-thresholds";
 import { AXIS_WEIGHTS } from "./actions/analyze/contextual-scoring";
-import {
-  GRADE_THRESHOLDS,
-  NON_ACTIONABLE_SIGNALS,
-  EFFORT_MAP,
-  FIX_DESC_MAP,
-} from "./config/signal-registry";
+import { analyzeDomainStream } from "./actions/analyze-stream";
+import { checkGlobalAvailability } from "./actions/availability";
 import { getCompanyInfo } from "./actions/company";
+import { compareDomains } from "./actions/compare";
 import { getNews } from "./actions/news";
-import { getSocialAccounts } from "./actions/social";
+import { getRecentLookups } from "./actions/recent";
 import { getReverseIP } from "./actions/reverse-ip";
+import { getSocialAccounts } from "./actions/social";
+import { scanSubdomains } from "./actions/subdomain-scan";
+import { getSubdomains } from "./actions/subdomains";
 import { getDomainSuggestions } from "./actions/suggestions";
-import { getAIAnalysis, buildAIPrompt } from "./actions/ai-analysis";
-import { trackUsage, getUsageStats } from "./usage-tracking";
-import { renderUsagePage } from "./usage-page";
-import { trackRequest } from "./request-tracking";
-
-import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, YOKE_VERSION, MIN_CLIENT_VERSION, safeFetchWithRedirects, boundedText } from "./helpers";
-import type { Env } from "./helpers";
-import { logError } from "./logger";
-import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders, wantsJSON } from "./spa";
-import { handleShareSign, handleSharePage, handleOgImage, matchSharePath, matchOgImagePath, matchCompareSharePath, matchCompareOgImagePath, handleCompareSharePage, handleCompareOgImage } from "./share";
-import { getApiDocsHtml } from "./pages";
-import { scanForVulnerableLibraries, VULNERABLE_LIBRARIES } from "./data/vulnerable-libraries";
-import type { VulnerableLibrary } from "./data/vulnerable-libraries";
+import { getApiHealth } from "./api-errors";
+import { ALL_THRESHOLDS, SEVERITY_SCORES } from "./config/scoring-thresholds";
+import { EFFORT_MAP, FIX_DESC_MAP, GRADE_THRESHOLDS, NON_ACTIONABLE_SIGNALS } from "./config/signal-registry";
 import { loadData } from "./data/kv-loader";
+import type { VulnerableLibrary } from "./data/vulnerable-libraries";
+import { scanForVulnerableLibraries, VULNERABLE_LIBRARIES } from "./data/vulnerable-libraries";
+import type { Env } from "./helpers";
+
+import {
+  boundedText,
+  CORS_HEADERS,
+  cleanDomain,
+  getBaseUrl,
+  getFromCache,
+  safeFetchWithRedirects,
+  YOKE_VERSION,
+} from "./helpers";
+import { logError } from "./logger";
+import { getApiDocsHtml } from "./pages";
+import { trackRequest } from "./request-tracking";
+import {
+  handleCompareOgImage,
+  handleCompareSharePage,
+  handleOgImage,
+  handleSharePage,
+  handleShareSign,
+  matchCompareOgImagePath,
+  matchCompareSharePath,
+  matchOgImagePath,
+  matchSharePath,
+} from "./share";
+import { getHtmlSecurityHeaders, handleSPARoute, serveAssetOrFallback, wantsJSON } from "./spa";
+import { renderStatusPage } from "./status-page";
+import { renderUsagePage } from "./usage-page";
+import { getUsageStats, trackUsage } from "./usage-tracking";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────
 
 function getRateLimits(env: Env): Record<string, { limit: number; windowSecs: number }> {
   return {
-    "/api/analyze": { limit: parseInt(env.RATE_LIMIT_ANALYZE || "50"), windowSecs: 3600 },
-    "/api/compare": { limit: parseInt(env.RATE_LIMIT_COMPARE || "50"), windowSecs: 3600 },
-    "/api/subdomain-scan": { limit: parseInt(env.RATE_LIMIT_SUBDOMAIN || "30"), windowSecs: 3600 },
-    "/api/availability": { limit: parseInt(env.RATE_LIMIT_AVAILABILITY || "60"), windowSecs: 3600 },
+    "/api/analyze": { limit: parseInt(env.RATE_LIMIT_ANALYZE || "50", 10), windowSecs: 3600 },
+    "/api/compare": { limit: parseInt(env.RATE_LIMIT_COMPARE || "50", 10), windowSecs: 3600 },
+    "/api/subdomain-scan": { limit: parseInt(env.RATE_LIMIT_SUBDOMAIN || "30", 10), windowSecs: 3600 },
+    "/api/availability": { limit: parseInt(env.RATE_LIMIT_AVAILABILITY || "60", 10), windowSecs: 3600 },
     "/api/js-audit": { limit: 20, windowSecs: 3600 },
-    "/api/recursive-dns": { limit: parseInt(env.RATE_LIMIT_RECURSIVE_DNS || "30"), windowSecs: 3600 },
+    "/api/recursive-dns": { limit: parseInt(env.RATE_LIMIT_RECURSIVE_DNS || "30", 10), windowSecs: 3600 },
   };
 }
 
@@ -56,7 +69,9 @@ let rateLimitTableReady = false;
 async function ensureRateLimitTable(db: D1Database): Promise<void> {
   if (rateLimitTableReady) return;
   await db.batch([
-    db.prepare("CREATE TABLE IF NOT EXISTS endpoint_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, endpoint TEXT NOT NULL, ts INTEGER NOT NULL)"),
+    db.prepare(
+      "CREATE TABLE IF NOT EXISTS endpoint_rate_limits (id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT NOT NULL, endpoint TEXT NOT NULL, ts INTEGER NOT NULL)",
+    ),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_endpoint_rate_ip_ts ON endpoint_rate_limits(ip, endpoint, ts)"),
   ]);
   rateLimitTableReady = true;
@@ -90,21 +105,27 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
       "Retry-After": String(secsLeft),
     };
     return {
-      blocked: new Response(JSON.stringify({
-        error: "Rate limit exceeded",
-        code: "RATE_LIMITED",
-        limit: config.limit,
-        remaining: 0,
-        reset: cachedResetAt,
-        window: `${config.windowSecs / 3600} hour`,
-        retry_after: secsLeft,
-        self_host: "https://github.com/yokedotlol/yoke#self-hosting",
-        message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
-      }), { status: 429, headers: {
-        "Content-Type": "application/json",
-        ...CORS_HEADERS,
-        ...rlHeaders,
-      } }),
+      blocked: new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          code: "RATE_LIMITED",
+          limit: config.limit,
+          remaining: 0,
+          reset: cachedResetAt,
+          window: `${config.windowSecs / 3600} hour`,
+          retry_after: secsLeft,
+          self_host: "https://github.com/yokedotlol/yoke#self-hosting",
+          message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            ...CORS_HEADERS,
+            ...rlHeaders,
+          },
+        },
+      ),
       headers: rlHeaders,
     };
   } else if (cachedResetAt) {
@@ -116,12 +137,12 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
     const cutoff = now - config.windowSecs;
     // Get count + oldest request in window (to calculate real reset time)
     const [countRow, oldestRow] = await db.batch([
-      db.prepare(
-        "SELECT COUNT(*) as cnt FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?"
-      ).bind(ip, endpoint, cutoff),
-      db.prepare(
-        "SELECT MIN(ts) as oldest FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?"
-      ).bind(ip, endpoint, cutoff),
+      db
+        .prepare("SELECT COUNT(*) as cnt FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?")
+        .bind(ip, endpoint, cutoff),
+      db
+        .prepare("SELECT MIN(ts) as oldest FROM endpoint_rate_limits WHERE ip = ? AND endpoint = ? AND ts > ?")
+        .bind(ip, endpoint, cutoff),
     ]);
     const count = (countRow.results?.[0] as { cnt: number } | undefined)?.cnt ?? 0;
     const oldest = (oldestRow.results?.[0] as { oldest: number | null } | undefined)?.oldest;
@@ -138,30 +159,43 @@ async function checkRateLimit(db: D1Database, ip: string, endpoint: string, env:
         "Retry-After": String(Math.max(1, resetAt - now)),
       };
       return {
-        blocked: new Response(JSON.stringify({
-          error: "Rate limit exceeded",
-          code: "RATE_LIMITED",
-          limit: config.limit,
-          remaining: 0,
-          reset: resetAt,
-          window: `${config.windowSecs / 3600} hour`,
-          retry_after: config.windowSecs,
-          self_host: "https://github.com/yokedotlol/yoke#self-hosting",
-          message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
-        }), { status: 429, headers: {
-          "Content-Type": "application/json",
-          ...CORS_HEADERS,
-          ...rlHeaders,
-        } }),
+        blocked: new Response(
+          JSON.stringify({
+            error: "Rate limit exceeded",
+            code: "RATE_LIMITED",
+            limit: config.limit,
+            remaining: 0,
+            reset: resetAt,
+            window: `${config.windowSecs / 3600} hour`,
+            retry_after: config.windowSecs,
+            self_host: "https://github.com/yokedotlol/yoke#self-hosting",
+            message: "For heavy usage, self-host Yoke with no limits. See our setup guide.",
+          }),
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/json",
+              ...CORS_HEADERS,
+              ...rlHeaders,
+            },
+          },
+        ),
         headers: rlHeaders,
       };
     }
     // Record this request
-    await db.prepare("INSERT INTO endpoint_rate_limits (ip, endpoint, ts) VALUES (?, ?, ?)").bind(ip, endpoint, now).run();
+    await db
+      .prepare("INSERT INTO endpoint_rate_limits (ip, endpoint, ts) VALUES (?, ?, ?)")
+      .bind(ip, endpoint, now)
+      .run();
     // Probabilistic cleanup: 2% chance, delete entries older than 2 hours
     if (Math.random() < 0.02) {
       const old = now - 7200;
-      await db.prepare("DELETE FROM endpoint_rate_limits WHERE ts < ?").bind(old).run().catch(() => {});
+      await db
+        .prepare("DELETE FROM endpoint_rate_limits WHERE ts < ?")
+        .bind(old)
+        .run()
+        .catch(() => {});
     }
     const remaining = config.limit - count - 1; // -1 for the request we just recorded
     return {
@@ -255,9 +289,9 @@ export default {
     // Handle CORS preflight
     if (method === "OPTIONS") {
       const allowHeaders = "Content-Type";
-      return new Response(null, { 
-        status: 204, 
-        headers: { ...CORS_HEADERS, "Access-Control-Allow-Headers": allowHeaders }
+      return new Response(null, {
+        status: 204,
+        headers: { ...CORS_HEADERS, "Access-Control-Allow-Headers": allowHeaders },
       });
     }
 
@@ -268,29 +302,46 @@ export default {
     // security.txt — vulnerability disclosure contact
     if (method === "GET" && (path === "/.well-known/security.txt" || path === "/security.txt")) {
       return new Response(
-        `Contact: mailto:hello@yoke.lol\nExpires: 2027-06-01T00:00:00.000Z\nPreferred-Languages: en\nCanonical: ${baseUrl}/.well-known/security.txt`,
-        { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
+        `Contact: mailto:hello@${host}\nExpires: 2027-06-01T00:00:00.000Z\nPreferred-Languages: en\nCanonical: ${baseUrl}/.well-known/security.txt`,
+        {
+          headers: {
+            "Content-Type": "text/plain;charset=UTF-8",
+            "Cache-Control": "public, max-age=86400",
+            ...CORS_HEADERS,
+          },
+        },
       );
     }
 
     if (method === "GET" && path === "/robots.txt") {
-      return new Response(
-        `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml`,
-        { headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
-      );
+      return new Response(`User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml`, {
+        headers: { "Content-Type": "text/plain", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS },
+      });
     }
 
     if (method === "GET" && path === "/sitemap.xml") {
       return new Response(
         `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${baseUrl}</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n  <url><loc>${baseUrl}/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>\n  <url><loc>${baseUrl}/api/docs</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>\n  <url><loc>${baseUrl}/status</loc><changefreq>hourly</changefreq><priority>0.5</priority></url>\n  <url><loc>${baseUrl}/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n  <url><loc>${baseUrl}/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>\n</urlset>`,
-        { headers: { "Content-Type": "application/xml;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
+        {
+          headers: {
+            "Content-Type": "application/xml;charset=UTF-8",
+            "Cache-Control": "public, max-age=86400",
+            ...CORS_HEADERS,
+          },
+        },
       );
     }
 
     if (method === "GET" && path === "/llms.txt") {
       return new Response(
         `# Yoke — Free Domain Intelligence & OSINT Tool\n\n> Yoke is a free, open-source domain intelligence tool at ${baseUrl}\n\n## What Yoke Does\n\nYoke provides instant, comprehensive analysis of any internet domain. Enter a domain name and get detailed intelligence across security, infrastructure, technology, performance, and business dimensions.\n\n## Key Capabilities\n\n- DNS Analysis: A, AAAA, MX, NS, TXT, CNAME, SOA records with DNSSEC validation\n- SSL/TLS: Certificate details, chain validation, SSL Labs grading, CAA records\n- WHOIS/RDAP: Registrar, registration and expiry dates, domain age\n- Security Audit: HTTP security headers, Mozilla Observatory scoring, cookie security\n- Data Breaches: HIBP breach detection with time-decay scoring\n- Threat Intelligence: Shodan port/vulnerability data, GreyNoise IP classification\n- Technology Detection: Frameworks, CMS, CDN, WAF, deep WordPress fingerprinting\n- Email Authentication: SPF, DKIM, DMARC validation\n- Performance: Google PageSpeed, Core Web Vitals (mobile-first 60/40 blend), compression\n- Certificate Transparency: CT log monitoring for subdomain discovery\n- Business Intelligence: Company enrichment via Wikidata, Brandfetch, Crunchbase\n- AI Analysis: LLM-powered analysis from 6 expert personas\n\n## Free JSON API\n\nNo authentication required.\n\ncurl ${host}/stripe.com | jq\ncurl "${host}/stripe.com?pretty"\ncurl -s ${host}/stripe.com | jq '.ssl'\n\n## Links\n\n- Web UI: ${baseUrl}\n- API Docs: ${baseUrl}/api/docs\n- Chrome Extension: Chrome Web Store\n- Source: https://github.com/yokedotlol/yoke\n- License: MIT`,
-        { headers: { "Content-Type": "text/plain;charset=UTF-8", "Cache-Control": "public, max-age=86400", ...CORS_HEADERS } }
+        {
+          headers: {
+            "Content-Type": "text/plain;charset=UTF-8",
+            "Cache-Control": "public, max-age=86400",
+            ...CORS_HEADERS,
+          },
+        },
       );
     }
 
@@ -303,7 +354,7 @@ export default {
     if (path === "/usage" || path === "/api/usage") {
       const authErr = checkAdminAuth(request, env.ADMIN_KEY);
       if (authErr) return authErr;
-      const days = parseInt(url.searchParams.get("days") ?? "30");
+      const days = parseInt(url.searchParams.get("days") ?? "30", 10);
       const stats = await getUsageStats(env.STATS_DB, days);
       if (path === "/api/usage") return adminJson(stats);
       return renderUsagePage(env.STATS_DB, days);
@@ -339,7 +390,10 @@ export default {
 
     // API routes
     if (path.startsWith("/api/")) {
-      const clientIP = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+      const clientIP =
+        request.headers.get("cf-connecting-ip") ||
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        "unknown";
       const _t0 = Date.now();
       const _track = (endpoint: string, status: number, domain?: string) => {
         trackRequest(env, request, { endpoint, domain, status, latencyMs: Date.now() - _t0 });
@@ -349,17 +403,26 @@ export default {
         if (method === "POST" && path === "/api/analyze") {
           // Admin key bypasses rate limit (for batch calibration / internal tools)
           const adminBypass = env.ADMIN_KEY && timingSafeEq(request.headers.get("X-Admin-Key") ?? "", env.ADMIN_KEY);
-          const rl = adminBypass ? { blocked: null, headers: {} } : await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
-          if (rl.blocked) { _track("analyze", 429); return rl.blocked; }
+          const rl = adminBypass
+            ? { blocked: null, headers: {} }
+            : await checkRateLimit(env.STATS_DB, clientIP, "/api/analyze", env);
+          if (rl.blocked) {
+            _track("analyze", 429);
+            return rl.blocked;
+          }
           const body = await parseBody<{ domain?: string; force?: boolean }>(request);
-          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
+          if (!body.domain || typeof body.domain !== "string")
+            return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const skipCache = body.force === true;
           await trackUsage(env.STATS_DB, "analyze");
           // Support SSE streaming when client requests it
           const wantsStream = request.headers.get("Accept") === "text/event-stream";
-          if (wantsStream) { _track("analyze", 200, domain); return analyzeDomainStream(domain, env, skipCache, rl.headers); }
+          if (wantsStream) {
+            _track("analyze", 200, domain);
+            return analyzeDomainStream(domain, env, skipCache, rl.headers);
+          }
           const resp = await analyzeDomain(domain, env, skipCache);
           _track("analyze", resp.status, domain);
           return addHeaders(resp, rl.headers);
@@ -368,9 +431,13 @@ export default {
         // POST /api/compare
         if (method === "POST" && path === "/api/compare") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/compare", env);
-          if (rl.blocked) { _track("compare", 429); return rl.blocked; }
+          if (rl.blocked) {
+            _track("compare", 429);
+            return rl.blocked;
+          }
           const body = await parseBody<{ domain1?: string; domain2?: string }>(request);
-          if (!body.domain1 || !body.domain2) return json({ error: "domain1 and domain2 are required", code: "MISSING_DOMAIN" }, 400);
+          if (!body.domain1 || !body.domain2)
+            return json({ error: "domain1 and domain2 are required", code: "MISSING_DOMAIN" }, 400);
           const d1 = cleanDomain(body.domain1);
           const d2 = cleanDomain(body.domain2);
           if (!d1 || !d2) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
@@ -401,7 +468,14 @@ export default {
         // GET /api/subdomains?domain=X — subdomain enumeration (GET alias)
         if (method === "GET" && path === "/api/subdomains") {
           const domain = cleanDomain(url.searchParams.get("domain") || "");
-          if (!domain) return json({ error: "domain query parameter is required (e.g., /api/subdomains?domain=example.com)", code: "MISSING_DOMAIN" }, 400);
+          if (!domain)
+            return json(
+              {
+                error: "domain query parameter is required (e.g., /api/subdomains?domain=example.com)",
+                code: "MISSING_DOMAIN",
+              },
+              400,
+            );
           const result = await getSubdomains(env.REFERENCE_DATA!, domain, env.STATS_DB);
           await trackUsage(env.STATS_DB, "subdomains");
           _track("subdomains", 200, domain);
@@ -411,7 +485,10 @@ export default {
         // POST /api/subdomain-scan
         if (method === "POST" && path === "/api/subdomain-scan") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/subdomain-scan", env);
-          if (rl.blocked) { _track("subdomain-scan", 429); return rl.blocked; }
+          if (rl.blocked) {
+            _track("subdomain-scan", 429);
+            return rl.blocked;
+          }
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
@@ -478,14 +555,21 @@ export default {
         // POST /api/availability
         if (method === "POST" && path === "/api/availability") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/availability", env);
-          if (rl.blocked) { _track("availability", 429); return rl.blocked; }
+          if (rl.blocked) {
+            _track("availability", 429);
+            return rl.blocked;
+          }
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           // CF Workers expose request.cf with IncomingRequestCfProperties
           const cf = (request as Request & { cf?: { colo?: string; country?: string; city?: string } }).cf;
-          const result = await checkGlobalAvailability(domain, { colo: cf?.colo, country: cf?.country, city: cf?.city }, env);
+          const result = await checkGlobalAvailability(
+            domain,
+            { colo: cf?.colo, country: cf?.country, city: cf?.city },
+            env,
+          );
           await trackUsage(env.STATS_DB, "availability");
           _track("availability", 200, domain);
           return addHeaders(json(result), rl.headers);
@@ -505,7 +589,8 @@ export default {
         if (method === "POST" && path === "/api/ai-analysis") {
           await trackUsage(env.STATS_DB, "ai-analysis");
           const body = await parseBody<{ domain?: string; stream?: boolean; model?: string }>(request);
-          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
+          if (!body.domain || typeof body.domain !== "string")
+            return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           _track("ai-analysis", 200, domain);
@@ -518,11 +603,17 @@ export default {
         // POST /api/ai-prompt — returns the assembled prompt for the prompt editor (no LLM call)
         if (method === "POST" && path === "/api/ai-prompt") {
           const body = await parseBody<{ domain?: string }>(request);
-          if (!body.domain || typeof body.domain !== "string") return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
+          if (!body.domain || typeof body.domain !== "string")
+            return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
           if (!domain) return json({ error: "Invalid domain format", code: "INVALID_DOMAIN" }, 400);
           const normalized = domain.toLowerCase();
-          const analysisCache = (await getFromCache(env.REFERENCE_DATA!, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
+          const analysisCache = (await getFromCache(
+            env.REFERENCE_DATA!,
+            normalized,
+            "analysis",
+            60 * 60 * 1000,
+          )) as Record<string, unknown> | null;
           if (!analysisCache) {
             return json({ error: "Domain not yet analyzed. Run a standard analysis first." }, 400);
           }
@@ -546,18 +637,18 @@ export default {
           const body = await parseBody<{ domain?: string; tab?: string }>(request);
           if (!body.tab) return json({ error: "tab required" }, 400);
           try {
-            await env.STATS_DB.prepare(
-              "INSERT INTO tab_views (tab, domain, ts) VALUES (?, ?, ?)"
-            ).bind(body.tab, body.domain || "", Date.now()).run();
+            await env.STATS_DB.prepare("INSERT INTO tab_views (tab, domain, ts) VALUES (?, ?, ?)")
+              .bind(body.tab, body.domain || "", Date.now())
+              .run();
           } catch (e: unknown) {
             if (e instanceof Error && e.message?.includes("no such table")) {
               await env.STATS_DB.exec(
-                "CREATE TABLE IF NOT EXISTS tab_views (id INTEGER PRIMARY KEY AUTOINCREMENT, tab TEXT NOT NULL, domain TEXT, ts INTEGER NOT NULL)"
+                "CREATE TABLE IF NOT EXISTS tab_views (id INTEGER PRIMARY KEY AUTOINCREMENT, tab TEXT NOT NULL, domain TEXT, ts INTEGER NOT NULL)",
               );
               await env.STATS_DB.exec("CREATE INDEX IF NOT EXISTS idx_tab_views_tab ON tab_views(tab, ts)");
-              await env.STATS_DB.prepare(
-                "INSERT INTO tab_views (tab, domain, ts) VALUES (?, ?, ?)"
-              ).bind(body.tab, body.domain || "", Date.now()).run();
+              await env.STATS_DB.prepare("INSERT INTO tab_views (tab, domain, ts) VALUES (?, ?, ?)")
+                .bind(body.tab, body.domain || "", Date.now())
+                .run();
             }
           }
           return json({ ok: true });
@@ -567,8 +658,13 @@ export default {
         // POST /api/js-audit {domain} — deep JS vulnerability scan
         if ((method === "GET" || method === "POST") && path === "/api/js-audit") {
           const adminBypass = env.ADMIN_KEY && request.headers.get("X-Admin-Key") === env.ADMIN_KEY;
-          const rl = adminBypass ? { blocked: null, headers: {} } : await checkRateLimit(env.STATS_DB, clientIP, "/api/js-audit", env);
-          if (rl.blocked) { _track("js-audit", 429); return rl.blocked; }
+          const rl = adminBypass
+            ? { blocked: null, headers: {} }
+            : await checkRateLimit(env.STATS_DB, clientIP, "/api/js-audit", env);
+          if (rl.blocked) {
+            _track("js-audit", 429);
+            return rl.blocked;
+          }
 
           let domain: string | null = null;
           if (method === "GET") {
@@ -597,15 +693,18 @@ export default {
           }
 
           if (!html) {
-            return addHeaders(json({
-              domain,
-              error: null,
-              libraries_found: [],
-              total_scripts_scanned: 0,
-              scan_date: new Date().toISOString(),
-              database: "inline-curated",
-              note: "Could not fetch page HTML — site may be unreachable",
-            }), rl.headers);
+            return addHeaders(
+              json({
+                domain,
+                error: null,
+                libraries_found: [],
+                total_scripts_scanned: 0,
+                scan_date: new Date().toISOString(),
+                database: "inline-curated",
+                note: "Could not fetch page HTML — site may be unreachable",
+              }),
+              rl.headers,
+            );
           }
 
           // Try KV for extended vulnerability DB, fall back to inline
@@ -619,26 +718,32 @@ export default {
           const results = scanForVulnerableLibraries(html);
 
           _track("js-audit", 200);
-          return addHeaders(json({
-            domain,
-            libraries_found: results.map(r => ({
-              name: r.library,
-              version: r.version,
-              vulnerable: r.cves.length > 0,
-              cves: r.cves,
-              severity: r.severity,
-              eol: r.eol || false,
-            })),
-            total_libraries_checked: VULNERABLE_LIBRARIES.length,
-            scan_date: new Date().toISOString(),
-            database: dbSource,
-          }), rl.headers);
+          return addHeaders(
+            json({
+              domain,
+              libraries_found: results.map((r) => ({
+                name: r.library,
+                version: r.version,
+                vulnerable: r.cves.length > 0,
+                cves: r.cves,
+                severity: r.severity,
+                eol: r.eol || false,
+              })),
+              total_libraries_checked: VULNERABLE_LIBRARIES.length,
+              scan_date: new Date().toISOString(),
+              database: dbSource,
+            }),
+            rl.headers,
+          );
         }
 
         // POST /api/recursive-dns — trace DNS resolution across multiple public resolvers
         if (method === "POST" && path === "/api/recursive-dns") {
           const rl = await checkRateLimit(env.STATS_DB, clientIP, "/api/recursive-dns", env);
-          if (rl.blocked) { _track("recursive-dns", 429); return rl.blocked; }
+          if (rl.blocked) {
+            _track("recursive-dns", 429);
+            return rl.blocked;
+          }
           const body = await parseBody<{ domain?: string }>(request);
           if (!body.domain) return json({ error: "domain is required", code: "MISSING_DOMAIN" }, 400);
           const domain = cleanDomain(body.domain);
@@ -676,8 +781,15 @@ export default {
             },
           ];
 
-          interface DnsAnswer { type: number; data: string; TTL?: number; }
-          interface DnsResponse { Status: number; Answer?: DnsAnswer[]; }
+          interface DnsAnswer {
+            type: number;
+            data: string;
+            TTL?: number;
+          }
+          interface DnsResponse {
+            Status: number;
+            Answer?: DnsAnswer[];
+          }
 
           async function queryResolver(cfg: ResolverConfig) {
             const start = Date.now();
@@ -735,38 +847,46 @@ export default {
           const results = await Promise.all(resolvers.map(queryResolver));
 
           // Consensus: all resolvers with status "ok" return the same sorted A records
-          const okResolvers = results.filter(r => r.status === "ok");
+          const okResolvers = results.filter((r) => r.status === "ok");
           let consensus = false;
           if (okResolvers.length > 1) {
             const first = okResolvers[0].a_records.slice().sort().join(",");
-            consensus = okResolvers.every(r => r.a_records.slice().sort().join(",") === first);
+            consensus = okResolvers.every((r) => r.a_records.slice().sort().join(",") === first);
           } else if (okResolvers.length === 1) {
             consensus = true;
           }
 
           await trackUsage(env.STATS_DB, "recursive-dns");
           _track("recursive-dns", 200, domain);
-          return addHeaders(json({
-            domain,
-            resolvers: results,
-            consensus,
-            timestamp: new Date().toISOString(),
-          }), rl.headers);
+          return addHeaders(
+            json({
+              domain,
+              resolvers: results,
+              consensus,
+              timestamp: new Date().toISOString(),
+            }),
+            rl.headers,
+          );
         }
 
         // GET /api/scoring — transparent scoring methodology
         if (method === "GET" && path === "/api/scoring") {
-          return json({
-            description: "Yoke domain scoring methodology. All thresholds, weights, and severity mappings used to calculate the 5-axis composite score.",
-            axis_weights: AXIS_WEIGHTS,
-            severity_scores: SEVERITY_SCORES,
-            grade_thresholds: GRADE_THRESHOLDS,
-            non_actionable_signals: NON_ACTIONABLE_SIGNALS,
-            effort_map: EFFORT_MAP,
-            fix_desc_map: FIX_DESC_MAP,
-            thresholds: ALL_THRESHOLDS,
-            archetype_note: "Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥70, D+≥65, D≥50, F<50. Performance blending is mobile-first (60% mobile + 40% desktop). Breach trust impact uses time decay: <1yr 1.0×, 1–3yr 0.75×, 3–5yr 0.50×, 5–10yr 0.25×, >10yr 0.10×; unknown-date breaches get 0.50×; grade cap only applies to breaches <3 years old. Site archetype is detected for contextual severity adjustments on individual findings.",
-          }, 200);
+          return json(
+            {
+              description:
+                "Yoke domain scoring methodology. All thresholds, weights, and severity mappings used to calculate the 5-axis composite score.",
+              axis_weights: AXIS_WEIGHTS,
+              severity_scores: SEVERITY_SCORES,
+              grade_thresholds: GRADE_THRESHOLDS,
+              non_actionable_signals: NON_ACTIONABLE_SIGNALS,
+              effort_map: EFFORT_MAP,
+              fix_desc_map: FIX_DESC_MAP,
+              thresholds: ALL_THRESHOLDS,
+              archetype_note:
+                "Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥70, D+≥65, D≥50, F<50. Performance blending is mobile-first (60% mobile + 40% desktop). Breach trust impact uses time decay: <1yr 1.0×, 1–3yr 0.75×, 3–5yr 0.50×, 5–10yr 0.25×, >10yr 0.10×; unknown-date breaches get 0.50×; grade cap only applies to breaches <3 years old. Site archetype is detected for contextual severity adjustments on individual findings.",
+            },
+            200,
+          );
         }
 
         // DELETE /api/cache/:domain — purge cached analysis for a domain (admin-only)
@@ -792,7 +912,7 @@ export default {
                 cursor = list.list_complete ? undefined : list.cursor;
               } while (cursor);
               return adminJson({ ok: true, type: cacheType, deleted });
-            } catch (e) {
+            } catch (_e) {
               return adminJson({ error: "Failed to clear cache" }, 500);
             }
           }
@@ -816,7 +936,7 @@ export default {
                 cursor = list.list_complete ? undefined : list.cursor;
               } while (cursor);
               return adminJson({ ok: true, domain, message: `Cache cleared (${deleted} keys)` });
-            } catch (e) {
+            } catch (_e) {
               return adminJson({ error: "Failed to clear cache" }, 500);
             }
           }
@@ -829,24 +949,34 @@ export default {
         if (method === "GET" && path === "/api/cleanup") {
           const authErr = checkAdminAuth(request, env.ADMIN_KEY);
           if (authErr) return authErr;
-          const cutoff1d = Date.now() - (24 * 60 * 60 * 1000);
-          const cutoff7d = Date.now() - (7 * 24 * 60 * 60 * 1000);
+          const cutoff1d = Date.now() - 24 * 60 * 60 * 1000;
+          const cutoff7d = Date.now() - 7 * 24 * 60 * 60 * 1000;
           const results: Record<string, string> = {};
           // KV cache: TTL handles expiry automatically — no manual cleanup needed
           results.domain_cache = "KV TTL handles expiry automatically";
           results.domain_lookups = "Recent lookups maintained as KV JSON array";
           try {
-            const rlRes = await env.STATS_DB.prepare("DELETE FROM ai_rate_limits WHERE date < date('now', '-1 day')").run();
+            const rlRes = await env.STATS_DB.prepare(
+              "DELETE FROM ai_rate_limits WHERE date < date('now', '-1 day')",
+            ).run();
             results.ai_rate_limits = `${rlRes.meta?.changes ?? "?"} expired rows deleted`;
-          } catch (e) { results.ai_rate_limits = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          } catch (e) {
+            results.ai_rate_limits = `error: ${e instanceof Error ? e.message : String(e)}`;
+          }
           try {
-            const rlRes2 = await env.STATS_DB.prepare("DELETE FROM endpoint_rate_limits WHERE ts < ?").bind(cutoff1d).run();
+            const rlRes2 = await env.STATS_DB.prepare("DELETE FROM endpoint_rate_limits WHERE ts < ?")
+              .bind(cutoff1d)
+              .run();
             results.endpoint_rate_limits = `${rlRes2.meta?.changes ?? "?"} expired rows deleted`;
-          } catch (e) { results.endpoint_rate_limits = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          } catch (e) {
+            results.endpoint_rate_limits = `error: ${e instanceof Error ? e.message : String(e)}`;
+          }
           try {
             const errRes = await env.STATS_DB.prepare("DELETE FROM api_errors WHERE ts < ?").bind(cutoff7d).run();
             results.api_errors = `${errRes.meta?.changes ?? "?"} rows deleted (>7 days old)`;
-          } catch (e) { results.api_errors = `error: ${e instanceof Error ? e.message : String(e)}`; }
+          } catch (e) {
+            results.api_errors = `error: ${e instanceof Error ? e.message : String(e)}`;
+          }
           // request_meta: infinite retention — no pruning
           return adminJson({ ok: true, cleaned_at: new Date().toISOString(), results });
         }
@@ -872,7 +1002,8 @@ export default {
                 rate_limit: "50 req/hr",
               },
               "POST /api/analyze": {
-                description: "Full domain analysis. Supports SSE streaming (Accept: text/event-stream) or JSON response.",
+                description:
+                  "Full domain analysis. Supports SSE streaming (Accept: text/event-stream) or JSON response.",
                 body: '{"domain": "example.com"}',
                 rate_limit: "50 req/hr",
               },
@@ -901,7 +1032,8 @@ export default {
                 rate_limit: "30 req/hr",
               },
               "POST /api/ai-analysis": {
-                description: "AI-powered domain analysis from 6 expert personas. Requires OpenRouter API key via X-OpenRouter-Key header or server-side config.",
+                description:
+                  "AI-powered domain analysis from 6 expert personas. Requires OpenRouter API key via X-OpenRouter-Key header or server-side config.",
                 body: '{"domain": "example.com", "model": "optional-model-id"}',
                 rate_limit: "none (API-key gated)",
               },
@@ -966,7 +1098,7 @@ export default {
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Internal server error";
         // Return 400 for JSON parse errors (malformed request body)
-        const status = (err instanceof SyntaxError) ? 400 : 500;
+        const status = err instanceof SyntaxError ? 400 : 500;
         return json({ error: msg }, status);
       }
     }
@@ -977,8 +1109,11 @@ export default {
 
     // Catch-all: if a non-browser client hits an unrecognized path that doesn't look like a static asset,
     // return a JSON error instead of SPA HTML (helps curl users who mistype domains)
-    if (wantsJSON(request) && !path.includes('.')) {
-      return json({ error: "Invalid domain format", hint: "Use a fully-qualified domain name (e.g., example.com)" }, 400);
+    if (wantsJSON(request) && !path.includes(".")) {
+      return json(
+        { error: "Invalid domain format", hint: "Use a fully-qualified domain name (e.g., example.com)" },
+        400,
+      );
     }
 
     return serveAssetOrFallback(request, env);

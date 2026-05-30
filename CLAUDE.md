@@ -37,7 +37,7 @@ CF Workers cannot `fetch()` their own domain (creates a loop). Yoke detects self
 
 ### Signal Registry (`worker/src/config/signal-registry.ts`)
 
-Single source of truth for all ~135 scoring signals. Every signal declares its axis, actionability, effort, fix description, and severity. Derived constants (`NON_ACTIONABLE`, `EFFORT_MAP`, `FIX_DESC_MAP`, etc.) are exported for use across server and client.
+Single source of truth for all ~136 scoring signals. Every signal declares its axis, actionability, effort, fix description, and severity. Derived constants (`NON_ACTIONABLE`, `EFFORT_MAP`, `FIX_DESC_MAP`, etc.) are exported for use across server and client.
 
 When adding a signal:
 1. Add it to `signal-registry.ts`
