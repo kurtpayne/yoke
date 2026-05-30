@@ -3375,16 +3375,29 @@ export function calculateDomainScore(opts: {
   if (opts.networkHealth) {
     const nh = opts.networkHealth;
 
-    // DNS inconsistency
+    // DNS inconsistency — skip when behind a CDN, since CDN anycast intentionally
+    // returns different edge IPs to different resolvers (geo-routing, not misconfiguration)
+    const isBehindCdnForDns = !!opts.hosting?.cdn;
     if (nh.dns_propagation && !nh.dns_propagation.consistent) {
-      findings.push({
-        signal: "dns_inconsistent",
-        axis: "reliability",
-        severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
-        label: "DNS records inconsistent across resolvers",
-        tradeoff: "DNS propagation may still be in progress, or you're using geo-DNS.",
-        weight: 3,
-      });
+      if (isBehindCdnForDns) {
+        findings.push({
+          signal: "dns_consistent",
+          axis: "reliability",
+          severity: "good",
+          label: `DNS varies across resolvers (expected: ${opts.hosting!.cdn} anycast)`,
+          tradeoff: null,
+          weight: 1,
+        });
+      } else {
+        findings.push({
+          signal: "dns_inconsistent",
+          axis: "reliability",
+          severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
+          label: "DNS records inconsistent across resolvers",
+          tradeoff: "DNS propagation may still be in progress, or you're using geo-DNS.",
+          weight: 3,
+        });
+      }
     } else if (nh.dns_propagation?.consistent) {
       findings.push({
         signal: "dns_consistent",
