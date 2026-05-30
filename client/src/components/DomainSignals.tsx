@@ -145,8 +145,14 @@ function buildSignals(data: AnalysisResult, streaming?: boolean): Signal[] {
   // ─── Security Headers ───
   if (!httpBlocked && data.headers?.security_grade) {
     const sg = data.headers.security_grade;
-    if (sg === "A+" || sg === "A") signals.push({ type: "strength", text: "Strong security headers", detail: sg === "A+" ? `Grade ${sg}` : undefined });
-    else if (sg === "B+" || sg === "B") signals.push({ type: "strength", text: "Good security headers", detail: `Grade ${sg}` });
+    if (sg === "A+" || sg === "A")
+      signals.push({
+        type: "strength",
+        text: "Strong security headers",
+        detail: sg === "A+" ? `Grade ${sg}` : undefined,
+      });
+    else if (sg === "B+" || sg === "B")
+      signals.push({ type: "strength", text: "Good security headers", detail: `Grade ${sg}` });
     else if (sg === "C+" || sg === "C")
       signals.push({ type: "notice", text: "Moderate security headers", detail: `Grade ${sg} — some headers missing` });
     else if (sg !== "N/A") signals.push({ type: "notice", text: "Weak security headers", detail: `Grade ${sg}` });

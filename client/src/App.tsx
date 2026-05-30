@@ -508,8 +508,10 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
       style={{ position: "relative", display: "inline-flex" }}
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
+      role="status"
     >
-      <div
+      <button
+        type="button"
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
         onClick={() => setExpanded((e) => !e)}
         style={{
@@ -532,7 +534,7 @@ function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo |
             {remaining}/{limit}
           </span>
         )}
-      </div>
+      </button>
       {expanded && (
         <div
           style={{
@@ -655,6 +657,7 @@ function RateLimitError({ message, onRetry }: { message: string; onRetry: () => 
         on Cloudflare Workers + Fly.io free tiers.
       </p>
       <button
+        type="button"
         onClick={onRetry}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-md"
         style={{
@@ -970,6 +973,7 @@ export function App() {
                     Analysis failed: {String(analyze.error)}
                   </span>
                   <button
+                    type="button"
                     onClick={() => doAnalyze()}
                     className="flex items-center gap-1.5 px-3 py-1 rounded-md"
                     style={{
@@ -1028,7 +1032,9 @@ export function App() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => analyze.mutate(analyze.data!.domain, { force: true })}
+                  onClick={() => {
+                    if (analyze.data) analyze.mutate(analyze.data.domain, { force: true });
+                  }}
                   disabled={analyze.isPending}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all"
                   style={{

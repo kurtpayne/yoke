@@ -112,6 +112,7 @@ CORS headers are applied by the `json()` helper in `helpers.ts` for public endpo
 - **DNS inconsistency is expected for distributed hosting** — sites using CDN anycast, geo-DNS, or multi-datacenter hosting intentionally return different IPs to different resolvers. The scoring logic suppresses this when a CDN is detected OR when the site is up with multiple IPs. Don't flag it as a problem.
 - **The 5 axes are: Security, Performance, Infrastructure, Trust, Visibility** — "Infrastructure" (formerly "Reliability") measures DNS hygiene and hosting best practices, not actual uptime. D1 column names still say `reliability_score` (internal storage only).
 - **Social account detection depends on `rel="me"` links in served HTML** — adding a link to `client/build.ts` doesn't make it detectable until the build is deployed and the target site's HTML is re-fetched.
+- **Pre-commit hooks live in `.githooks/`** — git must be configured with `git config core.hooksPath .githooks` for them to run. If `git-filter-repo` or a fresh clone resets local config, hooks silently stop working. After any repo reset, re-run the config command.
 
 ## Anti-Patterns — Don't Do These
 
