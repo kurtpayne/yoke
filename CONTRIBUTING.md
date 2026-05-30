@@ -12,14 +12,17 @@ cd client && bun install && cd ..
 cd worker && bun install && cd ..
 
 # Run tests
-bun test
+npx vitest run
+
+# Type check (must pass with zero errors — CI enforces this)
+cd worker && bun run typecheck
 
 # Local development
-bun run dev:client          # Vite dev server for the SPA
-cd worker && bun run dev    # Wrangler dev for the worker (needs wrangler.toml)
+cd client && bun run dev        # Vite dev server for the SPA
+cd worker && bun run dev        # Wrangler dev for the worker (needs wrangler.toml)
 ```
 
-No Cloudflare account needed for running tests. You'll need one for local Worker development (`wrangler dev`).
+No Cloudflare account needed for running tests. You'll need one for local Worker development (`wrangler dev`). See `README.md` for full self-hosting setup.
 
 ## Project Structure
 
@@ -33,16 +36,26 @@ yoke/
 │   │   └── *.ts             # Individual checks (ssl.ts, rdap.ts, etc.)
 │   ├── actions/             # API action handlers
 │   ├── actions/analyze/     # Analysis pipeline (core.ts orchestrator)
-│   ├── config/              # Scoring thresholds, cache config
-│   ├── helpers.ts           # Shared utilities, SSRF protection, CORS
+│   ├── config/              # Signal registry, scoring thresholds, cache config
+│   │   ├── signal-registry.ts   # Single source of truth for all scoring signals
+│   │   ├── scoring-thresholds.ts # Archetype weights + axis definitions
+│   │   └── contextual-scoring-types.ts
+│   ├── helpers.ts           # Shared utilities, SSRF protection, CORS, KV cache
 │   ├── logger.ts            # Structured JSON logger
 │   └── spa.ts               # SPA serving, OG tag injection, CSP
 ├── client/src/              # React SPA (Vite + TypeScript)
+├── client/build.ts          # Client build script (generates dist/index.html from template)
 ├── fly-proxy/               # Go HTTP probe (SSL grading, GeoIP, SSRF-safe fetch)
 ├── extension/               # Chrome extension (Manifest V3, side panel)
-├── tests/                   # Vitest test suite
-└── cli/                     # CLI client (Go, planned)
+├── cli/                     # Go CLI (goreleaser, Homebrew tap)
+├── prompts/                 # AI analysis prompt (.txt, imported by worker)
+└── tests/                   # Vitest test suite (192 tests)
 ```
+
+### Storage
+
+- **KV** (`REFERENCE_DATA`) — all caching. Domain results, recent lookups, AI analysis, subdomain scans. TTL-based expiry.
+- **D1** (`yoke-stats`) — durable stats only. Rate limits, endpoint usage, domain scores, daily snapshots, tab analytics.
 
 ## Adding a New Analysis Check
 
@@ -67,9 +80,9 @@ const myCheck: Check = {
     // ctx.httpResponseTimeMs — HTTP probe time from Phase 1
     // ctx.instanceHost     — for self-analysis bypass
 
-    const resp = await fetch(`https://api.example.com/${ctx.domain}`);
-    const data = await resp.json();
-    return data;
+    const resp = await fetchWithTimeout(`https://api.example.com/${ctx.domain}`, {}, 5000);
+    const text = await boundedText(resp);
+    return JSON.parse(text);
   },
 };
 
@@ -78,32 +91,40 @@ export default myCheck;
 
 ### 2. Register it
 
-Add your check to `worker/src/checks/registry.ts`:
+Add your check to `worker/src/checks/registry.ts`. Append to the end — order matters for streaming progress.
+
+### 3. Add the scoring signal
+
+If your check produces a scoring signal, add it to `worker/src/config/signal-registry.ts`:
 
 ```typescript
-import myCheck from './my-check';
-
-export const registry: Check[] = [
-  // ... existing checks
-  myCheck,
-];
+my_signal: {
+  axis: 'security',       // security | reliability | trust | performance | visibility
+  actionable: true,
+  effort: 'low',          // low | medium | high
+  fix: 'Enable the thing to improve security.',
+},
 ```
 
-### 3. Run tests
+Then wire it into `worker/src/actions/analyze/contextual-scoring.ts` to push findings.
+
+### 4. Add tests
+
+Add a test in `tests/` for the expected output shape and graceful failure. Run:
 
 ```bash
-bun test
+npx vitest run
+cd worker && bun run typecheck   # must have zero errors
 ```
-
-The registry order test will verify your check is properly registered.
 
 ### What makes a good check?
 
 - **Free public API** — no API key required (or has a generous free tier)
 - **Fast** — under 5 seconds. Checks run in parallel but slow ones delay the overall result
-- **Graceful failure** — returns `null` or a default on error, never throws
+- **Graceful failure** — returns the `default` value on error, never throws
 - **No PII** — don't send user data to third parties beyond the domain name
 - **Bounded reads** — use `boundedText()` from helpers to cap response body sizes
+- **Timeouts** — use `fetchWithTimeout()` for all external calls
 
 ## Working on the Fly Proxy
 
@@ -119,6 +140,14 @@ Key constraints:
 - Response bodies must use `io.LimitReader` (1MB cap)
 - Error messages to clients must not leak internal details
 
+## Working on the CLI
+
+The Go CLI at `cli/` is distributed via goreleaser and Homebrew (`yokedotlol/homebrew-tap`). It streams SSE analysis results and supports compare, AI analysis, and custom prompts. See `cli/README.md` for usage.
+
+## Client Build
+
+**Important:** The HTML shell (`client/dist/index.html`) is generated from a hardcoded template literal in `client/build.ts`, NOT from `client/index.html`. If you need to change meta tags, footer links, inline scripts, or the noscript fallback — edit the template in `build.ts`.
+
 ## Code Style
 
 - **TypeScript** everywhere (worker + client + tests)
@@ -127,20 +156,22 @@ Key constraints:
 - **Error handling** — fail gracefully. Individual check failures should never crash the pipeline
 - **No `as any`** — the codebase is fully typed
 - **Timeouts** — use `fetchWithTimeout()` from helpers for all external calls
+- **Bounded reads** — use `boundedText()` for all `.text()` calls on external responses
 
 ## Testing
 
 Tests use [Vitest](https://vitest.dev/) and live in `tests/`:
 
 ```bash
-bun test                    # Run all tests
-bun test -- --watch         # Watch mode
-bun test -- scoring         # Run specific test file
+npx vitest run              # Run all tests (192 tests)
+npx vitest run --watch      # Watch mode
+npx vitest run scoring      # Run specific test file
 ```
 
 ### What needs tests?
 
 - Scoring logic and threshold boundaries
+- Signal registry enforcement (consistency between registry, scoring, and UI)
 - Detection fingerprints (tech stack, WordPress, WAF)
 - Helper/utility functions
 - WHOIS/RDAP parsing for new TLD formats
@@ -148,11 +179,13 @@ bun test -- scoring         # Run specific test file
 
 ## Pull Request Checklist
 
-- [ ] `bun test` passes
-- [ ] No TypeScript errors (`cd worker && bunx tsc --noEmit`)
+- [ ] `npx vitest run` passes (all 192 tests)
+- [ ] `cd worker && bun run typecheck` passes with zero errors
 - [ ] New checks include a test for the expected output shape
+- [ ] New scoring signals are added to `signal-registry.ts`
 - [ ] No hardcoded secrets or API keys
 - [ ] Errors are handled — no empty `catch {}` blocks without logging
+- [ ] External fetches use `fetchWithTimeout()` and `boundedText()`
 - [ ] Commit message is descriptive
 
 ## What Reviewers Look For

@@ -13,13 +13,17 @@ worker/src/          → Cloudflare Worker (TypeScript). Hand-rolled router, NO 
 client/src/          → React SPA (Vite + TypeScript). NO Tailwind — plain CSS.
 fly-proxy/           → Go HTTP proxy on Fly.io (SSL probing, GeoIP, SSRF-safe fetch)
 extension/           → Chrome extension (Manifest V3, side panel iframe to yoke.lol)
+cli/                 → Go CLI (goreleaser, Homebrew tap at yokedotlol/homebrew-tap)
+prompts/             → AI analysis prompt (extracted .txt file, imported by worker)
 tests/               → Vitest (pure function tests only — no D1 mocks, no integration tests)
 ```
 
-### Two D1 Databases (important — don't confuse them)
+### Storage: KV Cache + D1 Stats
 
-- **`DB`** (`yoke-cache`) — ephemeral. Domain analysis cache, recent lookups. Can be wiped.
-- **`STATS_DB`** (`yoke-stats`) — durable. Rate limits, endpoint usage, domain scores, tab analytics. Do NOT wipe.
+- **`REFERENCE_DATA`** (KV namespace) — all caching. Domain analysis results, recent lookups, subdomain scans, AI analysis. TTL-based expiry, no manual cleanup needed.
+- **`STATS_DB`** (`yoke-stats`, D1) — durable stats. Rate limits (`endpoint_rate_limits`, `ai_rate_limits`), endpoint usage, domain scores, tab analytics, daily snapshots. Do NOT wipe.
+
+There is no second D1 database. The old `yoke-cache` D1 was migrated to KV.
 
 ### Module Scope in CF Workers
 
@@ -30,6 +34,15 @@ CF Worker module scope persists across requests within the same isolate. **Do NO
 CF Workers cannot `fetch()` their own domain (creates a loop). Yoke detects self-analysis via `instanceHost` and uses `env.ASSETS.fetch()` to serve its own HTML locally. Do NOT use build-time globals (`__HTML__`, `__ROBOTS_TXT__`) — those are dead codepaths from a removed Python combiner.
 
 ## Key Patterns — Follow These
+
+### Signal Registry (`worker/src/config/signal-registry.ts`)
+
+Single source of truth for all ~135 scoring signals. Every signal declares its axis, actionability, effort, fix description, and severity. Derived constants (`NON_ACTIONABLE`, `EFFORT_MAP`, `FIX_DESC_MAP`, etc.) are exported for use across server and client.
+
+When adding a signal:
+1. Add it to `signal-registry.ts`
+2. Add the scoring logic in `contextual-scoring.ts` (`findings.push(...)`)
+3. Run `npx vitest run` — the registry enforcement tests will catch gaps
 
 ### Check Registry (`worker/src/checks/`)
 
@@ -44,7 +57,11 @@ interface Check {
 }
 ```
 
-**To add a check:** create a file in `checks/`, export a `Check` object, register in `checks/registry.ts`. Append to the end — order matters.
+**To add a check:** create a file in `checks/`, export a `Check` object, register in `checks/registry.ts`. Append to the end — order matters for streaming.
+
+### Client Build
+
+The client SPA is built by `client/build.ts`, which generates `client/dist/index.html` from a **hardcoded template literal** — NOT from `client/index.html`. If you need to change the HTML shell (meta tags, footer links, inline scripts), edit the template in `build.ts`, not `client/index.html`.
 
 ### External Fetches
 
@@ -56,6 +73,10 @@ Always use helpers from `worker/src/helpers.ts`:
 - **`isBlockedUrl(url)`** — SSRF check. Always validate URLs from user input or redirects
 
 Never use bare `fetch()` for external calls. Never use `.text()` without `boundedText()`.
+
+### Caching
+
+Use `getFromCache()` and `setCache()` from `helpers.ts`. Both operate on the KV namespace (`env.REFERENCE_DATA`). Cache keys follow the pattern `cache:{type}:{domain}`. TTL is handled by KV expiry — no manual pruning needed.
 
 ### Error Handling
 
@@ -72,7 +93,7 @@ Use the structured logger (`worker/src/logger.ts`), not `console.log`:
 import { log } from '../logger';
 log('info', 'analysis started', { domain: 'stripe.com' });
 log('warn', 'RDAP timeout', { domain, elapsed: 5000 });
-log('error', 'D1 write failed', { domain, error: String(e) });
+log('error', 'KV write failed', { domain, error: String(e) });
 ```
 
 ### CORS
@@ -81,8 +102,8 @@ CORS headers are applied by the `json()` helper in `helpers.ts` for public endpo
 
 ### Rate Limiting
 
-- Endpoint rate limits: D1-backed, per-IP, checked via `checkRateLimit()`.
-- AI analysis: separate rate limit table, slot reserved before API call, refunded on failure using the specific row ID (not `ORDER BY id DESC LIMIT 1` — that's racy).
+- Endpoint rate limits: D1-backed (`STATS_DB`), per-IP, checked via `checkRateLimit()`.
+- AI analysis: separate rate limit table in `STATS_DB`, slot reserved before API call, refunded on failure using the specific row ID (not `ORDER BY id DESC LIMIT 1` — that's racy).
 
 ## Anti-Patterns — Don't Do These
 
@@ -94,16 +115,16 @@ CORS headers are applied by the `json()` helper in `helpers.ts` for public endpo
 - **No raw error messages to clients** in the Go proxy — log details server-side, return generic errors
 - **No `__HTML__` / `__ROBOTS_TXT__` build-time globals** — use `env.ASSETS.fetch()`
 - **No CORS on admin endpoints** — use `adminJson()` not `json()`
-- **No storing full analysis JSON in `domain_lookups`** — summary fields only, full result is in `domain_cache`
+- **No editing `client/index.html` for the HTML shell** — edit the template in `client/build.ts`
 
 ## Testing
 
 ```bash
-bun test              # 131 tests, all should pass
+npx vitest run        # 192 tests, all should pass
 cd fly-proxy && go test -v   # Go proxy unit tests
 ```
 
-Tests cover: scoring thresholds, detection fingerprints, WHOIS parsing, helpers, registry order. No D1 mocking or integration tests yet — tests are pure functions only.
+Tests cover: scoring thresholds, signal registry enforcement, detection fingerprints, WHOIS parsing, helpers, registry order, content negotiation, structured data, scoring integration. No D1 mocking or integration tests — tests are pure functions only.
 
 When adding a check, add a test for its expected output shape and a test for graceful failure.
 
@@ -111,25 +132,30 @@ When adding a check, add a test for its expected output shape and a test for gra
 
 ```bash
 bun install && cd client && bun install && cd ../worker && bun install && cd ..
-bun run build                    # builds client + worker
+bash deploy.sh --cf              # builds client + worker, deploys to CF
 cd worker && bun run dev         # local Worker dev (needs wrangler.toml)
-bun run dev:client               # local Vite dev server
-./deploy.sh                      # deploy to CF (requires CF API token)
+cd client && bun run dev         # local Vite dev server
 ```
 
-Secrets (OpenRouter, WhoisFreaks, PageSpeed API keys, ADMIN_KEY) are CF Worker secrets — never in code or wrangler.toml.
+Type checking: `cd worker && bun run typecheck` (must pass with zero errors — CI enforces this).
+
+Secrets (OpenRouter, WhoisFreaks, PageSpeed API keys, ADMIN_KEY, SHARE_SECRET) are CF Worker secrets — never in code or wrangler.toml. `SHARE_SECRET` hard-fails if missing (no dev fallback).
 
 ## File Quick Reference
 
 | Task | File |
 |------|------|
 | Add an analysis check | `worker/src/checks/` + `registry.ts` |
+| Add/modify a scoring signal | `worker/src/config/signal-registry.ts` + `contextual-scoring.ts` |
+| Change scoring logic/axes | `worker/src/actions/analyze/contextual-scoring.ts` + `config/` |
 | Change routing / add endpoint | `worker/src/index.ts` |
 | Modify analysis orchestration | `worker/src/actions/analyze/core.ts` |
-| Change scoring | `worker/src/actions/analyze/contextual-scoring.ts` + `config/` |
-| Edit AI analysis prompts | `worker/src/actions/ai-analysis.ts` |
-| SSRF / CORS / fetch helpers | `worker/src/helpers.ts` |
+| Edit AI analysis prompt | `prompts/ai-analysis.txt` |
+| Edit the HTML shell / footer | `client/build.ts` (NOT `client/index.html`) |
+| SSRF / CORS / fetch / cache helpers | `worker/src/helpers.ts` |
 | OG tags / CSP / SPA serving | `worker/src/spa.ts` |
+| Share cards / signed URLs | `worker/src/share.ts` |
 | Fly proxy (SSL, GeoIP) | `fly-proxy/main.go` |
 | Chrome extension | `extension/` |
+| CLI | `cli/` |
 | Tests | `tests/*.test.ts` |
