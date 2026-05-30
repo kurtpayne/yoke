@@ -17,7 +17,7 @@
 
 ## What is Yoke?
 
-Yoke pulls 106 scoring signals for any domain and presents them in a clean tabbed interface with a contextual scoring system. Think `dig` + `whois` + `nmap` + `curl` + BuiltWith + SecurityTrails — in one tool, no account required.
+Yoke pulls 127 scoring signals for any domain and presents them in a clean tabbed interface with a contextual scoring system. Think `dig` + `whois` + `nmap` + `curl` + BuiltWith + SecurityTrails — in one tool, no account required.
 
 ```bash
 curl yoke.lol/stripe.com | jq
@@ -36,7 +36,7 @@ curl yoke.lol/stripe.com | jq
 - **Network Health** — Global availability (check-host.net), DNS propagation (4 resolvers), TCP timing breakdown, BGP routing (RIPE RIS)
 
 ### 🛡️ Security
-- **Headers Audit** — CSP, HSTS, X-Frame-Options, and more with pass/fail grading
+- **Headers Audit** — CSP, HSTS, X-Frame-Options, Permissions-Policy, Referrer-Policy, and more with pass/fail grading
 - **Email Auth** — SPF, DKIM, DMARC, BIMI, MTA-STS, TLS-RPT
 - **DNSSEC** — DNSKEY and DS record verification
 - **Breach Detection** — HIBP database lookup with time-decay weighting
@@ -44,7 +44,7 @@ curl yoke.lol/stripe.com | jq
 - **Cookie Security** — Secure, HttpOnly, SameSite audit
 - **WAF Detection** — 11+ providers (Cloudflare, Sucuri, Imperva, Akamai, etc.)
 - **GreyNoise Intel** — Noise/RIOT IP classification
-- **Trust Signals** — HSTS preload, CAA, security.txt, bug bounty, status pages, and more
+- **Trust Signals** — HSTS preload, CAA with CT cross-reference, security.txt, bug bounty, status pages, and more
 
 ### ⚙️ Tech Stack
 - **Technology Detection** — 100+ fingerprints: CMS, frameworks, CDNs, analytics
@@ -61,7 +61,9 @@ curl yoke.lol/stripe.com | jq
 - **News & Social** — Bing News, Hacker News, social account discovery with rel="me" verification badges across 12+ platforms
 
 ### 🤖 AI Analysis
-6 AI personas (Security Analyst, SEO Expert, Developer, Business Analyst, Privacy Auditor, Performance Engineer). Powered by Claude via OpenRouter with 24h caching. BYO API key to bypass rate limits — your key is passed through to OpenRouter and never logged or stored. Includes model picker and prompt editor.
+**Grade-Up Simulator** (deterministic, no LLM) — calculates the exact score impact of fixing each finding, prioritized by effort vs. gain. Shows projected grade and score after fixes.
+
+**Cross-Signal Insights** (LLM) — AI-powered analysis that finds correlations across findings, explains their combined impact, and provides strategic recommendations. Powered by DeepSeek V3 via OpenRouter. BYO API key to bypass rate limits — your key is passed through to OpenRouter and never logged or stored. Includes model picker and prompt editor.
 
 ### 🔗 API & Sharing
 - **JSON API** — `curl yoke.lol/stripe.com | jq` — content-negotiated, no auth required
@@ -109,11 +111,12 @@ curl yoke.lol/api/scoring | jq
 | Analyze | 50/hr per IP |
 | Compare | 50/hr per IP |
 | Subdomain Scan | 30/hr per IP |
+| Recursive DNS | 30/hr per IP |
 | Availability | 60/hr per IP |
 | AI Analysis (platform key) | 10/hr per IP |
 | AI Analysis (BYO key) | Unlimited |
 
-All limits use a rolling 1-hour window. Self-hosted instances can override or disable limits via environment variables.
+All limits use a rolling 1-hour window. Self-hosted instances can override or disable limits via environment variables (set any to `0` to disable).
 
 ### API Routes
 
@@ -124,17 +127,18 @@ All limits use a rolling 1-hour window. Self-hosted instances can override or di
 | `POST` | `/api/compare` | Side-by-side domain comparison |
 | `POST` | `/api/subdomains` | CT log subdomain discovery |
 | `POST` | `/api/subdomain-scan` | Active subdomain enumeration |
+| `POST` | `/api/recursive-dns` | Recursive DNS record enumeration |
 | `POST` | `/api/availability` | Global HTTP availability check |
 | `POST` | `/api/company` | Company enrichment + stock data |
 | `POST` | `/api/news` | News aggregation |
 | `POST` | `/api/social` | Social account discovery |
 | `POST` | `/api/suggestions` | Related domain suggestions |
 | `POST` | `/api/reverse-ip` | Reverse IP lookup |
-| `POST` | `/api/ai-analysis` | AI deep analysis |
+| `POST` | `/api/ai-analysis` | AI deep analysis (Cross-Signal Insights) |
 | `GET` | `/api/recent` | Recent lookups |
 | `GET` | `/api/health` | Service health |
-| `GET` | `/api/scoring` | Scoring methodology |
-| `GET` | `/api/docs` | API documentation |
+| `GET` | `/api/scoring` | Scoring methodology + signal registry |
+| `GET` | `/api/docs` | API documentation (JSON) |
 
 ---
 
@@ -189,6 +193,8 @@ yoke --version                   # Print version info
 
 The CLI uses the same API as the web app and supports custom endpoints via config file (`~/.yoke.toml`) or `YOKE_BASE_URL` env var.
 
+The CLI auto-checks for required updates — if the server's `X-Yoke-Min-Client` header indicates your CLI version is too old, you'll see a warning with the upgrade command.
+
 ---
 
 ## Architecture
@@ -237,100 +243,308 @@ Analysis checks use a registry pattern — each check is a self-contained file u
 
 ## Self-Hosting
 
+Yoke is designed to be self-hosted on Cloudflare's free/paid tiers. You'll need a **Workers Paid plan** ($5/mo) for D1 and KV access.
+
 ### Prerequisites
 
-- [Bun](https://bun.sh/)
-- [Node.js 22+](https://nodejs.org/) (for Wrangler CLI)
-- [Cloudflare account](https://dash.cloudflare.com/) with Workers + D1
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)
+- [Bun](https://bun.sh/) — client + worker builds
+- [Node.js 22+](https://nodejs.org/) — Wrangler CLI requires it
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) — `npm install -g wrangler`
+- [Cloudflare account](https://dash.cloudflare.com/) — Workers Paid plan ($5/mo) for D1 + KV
+- A domain on Cloudflare (for custom domain routing)
 
-### Setup
+Optional (only for Fly proxy):
+- [Go 1.22+](https://go.dev/) — building from source
+- [Fly CLI](https://fly.io/docs/flyctl/install/) — `curl -L https://fly.io/install.sh | sh`
+
+### Step 1: Clone and install dependencies
 
 ```bash
-# 1. Clone and install
 git clone https://github.com/yokedotlol/yoke.git
 cd yoke
+
+# Client (React SPA)
 cd client && bun install && cd ..
+
+# Worker (Cloudflare Worker)
 cd worker && bun install && cd ..
 
-# 2. Configure
-cp worker/wrangler.toml.example worker/wrangler.toml
-# Edit wrangler.toml — fill in account_id, D1 database IDs, route
-
-# 3. Create D1 database (stats only — cache uses KV)
-wrangler d1 create yoke-stats
-# Update wrangler.toml with the database IDs
-
-# 4. Run migrations (stats tables only — cache is KV-based)
-wrangler d1 execute yoke-stats --file=worker/migrations/0002_domain_scores.sql
-
-# 5. Set secrets (all optional — each prompt asks for the value interactively)
-wrangler secret put BASE_URL              # Your instance URL (enables self-analysis)
-wrangler secret put OPENROUTER_API_KEY    # Enables AI Analysis tab
-wrangler secret put WHOISFREAKS_API_KEY   # WHOIS fallback for ccTLDs without RDAP
-wrangler secret put GOOGLE_PAGESPEED_API_KEY  # Lighthouse scores
-wrangler secret put ADMIN_KEY             # Protects /usage, /api/cleanup, /api/cache
-wrangler secret put FLY_AUTH_SECRET       # Shared auth between Worker and Fly probe
-wrangler secret put SHARE_SECRET          # HMAC-SHA256 key for signed share card URLs
-
-# 6. Build and deploy
-bash deploy.sh --cf
+# OG Worker (share card image renderer) — uses npm, not bun
+cd og-worker && npm install && cd ..
 ```
 
-Both `worker/wrangler.toml` and `fly-proxy/fly.toml` are gitignored — `git pull` will never overwrite your config.
+### Step 2: Create Cloudflare resources
 
-### Environment Variables
+```bash
+# Authenticate with Cloudflare
+npx wrangler login
 
-| Variable | Description |
-|----------|-------------|
-| `OPENROUTER_API_KEY` | Enables AI Analysis (Claude via OpenRouter) |
-| `WHOISFREAKS_API_KEY` | WHOIS fallback for ccTLDs without RDAP. [Free: 100 req/mo](https://whoisfreaks.com/) |
-| `GOOGLE_PAGESPEED_API_KEY` | Lighthouse scores + Core Web Vitals. [Free: 25K req/day](https://console.cloud.google.com/apis/credentials) |
-| `BASE_URL` | Instance base URL for self-analysis support |
-| `FLY_PROBE_URL` | Custom Fly probe URL (default: direct probes from CF edge) |
-| `FLY_AUTH_SECRET` | Shared secret between Worker and Fly probe |
-| `SHARE_SECRET` | HMAC-SHA256 key for signing share card URLs. If unset, falls back to a dev key — set your own for production |
-| `ADMIN_KEY` | Admin key for `/api/cleanup` |
-| `RATE_LIMIT_ANALYZE` | Max analyze/hr per IP (default: 50, 0 = disable) |
-| `RATE_LIMIT_COMPARE` | Max compare/hr per IP (default: 50, 0 = disable) |
-| `RATE_LIMIT_SUBDOMAIN` | Max subdomain-scan/hr per IP (default: 30, 0 = disable) |
-| `RATE_LIMIT_AVAILABILITY` | Max availability/hr per IP (default: 60, 0 = disable) |
-| `CACHE_TTL_HOURS` | Cache TTL in hours (default: 1, 0 = disable) |
+# Create D1 database (stores historical scores + analytics)
+npx wrangler d1 create yoke-stats
+# → Save the database_id from the output
 
-### Fly Proxy (optional)
+# Create KV namespace (analysis cache + rate limiting + reference data)
+npx wrangler kv namespace create REFERENCE_DATA
+# → Save the id from the output
+```
 
-The Go proxy routes HTTP probes from non-Cloudflare IPs (some sites block CF ranges). Also provides MaxMind GeoIP and check-host.net relay.
+### Step 3: Configure wrangler.toml files
+
+**OG Worker** (deploy this first — the main worker depends on it via service binding):
+
+```bash
+cp og-worker/wrangler.toml.example og-worker/wrangler.toml
+```
+
+Edit `og-worker/wrangler.toml`:
+```toml
+name = "yoke-og"
+main = "dist/worker.js"
+compatibility_date = "2024-12-01"
+account_id = "your-cloudflare-account-id"   # ← Find at dash.cloudflare.com → any zone → Overview sidebar
+```
+
+**Main Worker:**
+
+```bash
+cp worker/wrangler.toml.example worker/wrangler.toml
+```
+
+Edit `worker/wrangler.toml`:
+```toml
+name = "yoke"
+main = "dist/worker.js"
+compatibility_date = "2024-12-01"
+account_id = "your-cloudflare-account-id"
+
+[vars]
+BASE_URL = "https://yourdomain.com"
+
+[assets]
+directory = "../client/dist"
+binding = "ASSETS"
+
+# D1 — historical scores + analytics
+[[d1_databases]]
+binding = "STATS_DB"
+database_name = "yoke-stats"
+database_id = "paste-database-id-from-step-2"
+
+# KV — analysis cache + rate limiting + reference data
+[[kv_namespaces]]
+binding = "REFERENCE_DATA"
+id = "paste-kv-namespace-id-from-step-2"
+
+# Custom domain routing
+[[routes]]
+pattern = "yourdomain.com/*"
+zone_name = "yourdomain.com"
+
+# OG image rendering (service binding to the OG worker you deployed above)
+[[services]]
+binding = "OG_WORKER"
+service = "yoke-og"
+```
+
+> Both `worker/wrangler.toml` and `og-worker/wrangler.toml` are gitignored — `git pull` will never overwrite your config.
+
+### Step 4: Run migrations
+
+```bash
+# Only yoke-stats needs migrations (cache is KV-based, no schema needed)
+npx wrangler d1 execute yoke-stats --file=worker/migrations/0002_domain_scores.sql
+```
+
+> **Note:** `0001_init.sql` is deprecated — it created tables for the old D1 cache layer that was replaced by KV. Skip it.
+
+### Step 5: Set secrets
+
+Wrangler secrets are encrypted and injected at runtime. Each command prompts for the value interactively.
+
+**Required:**
+
+```bash
+# HMAC key for signed share card URLs. Generate one:
+#   openssl rand -hex 32
+# Share cards will error without this.
+npx wrangler secret put SHARE_SECRET
+
+# Admin key — protects /usage dashboard, /api/cleanup, /api/cache endpoints.
+# Generate one: openssl rand -hex 32
+npx wrangler secret put ADMIN_KEY
+```
+
+**Recommended:**
+
+```bash
+# Your instance URL — required for self-analysis and share card URLs.
+# Example: https://yoke-test.lol
+# Can also be set as [vars] BASE_URL in wrangler.toml instead.
+npx wrangler secret put BASE_URL
+
+# Enables AI Analysis (Cross-Signal Insights).
+# Get a key at: https://openrouter.ai/keys
+# Uses DeepSeek V3 by default (~$0.27/$1.10 per 1M tokens).
+npx wrangler secret put OPENROUTER_API_KEY
+
+# Lighthouse scores + Core Web Vitals.
+# Free: 25,000 requests/day.
+# 1. Go to: https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com
+# 2. Enable the "PageSpeed Insights API"
+# 3. Go to: https://console.cloud.google.com/apis/credentials
+# 4. Create Credentials → API Key
+npx wrangler secret put GOOGLE_PAGESPEED_API_KEY
+
+# WHOIS fallback for ccTLDs that don't support RDAP.
+# Free: 100 requests/month.
+# Sign up at: https://whoisfreaks.com/
+npx wrangler secret put WHOISFREAKS_API_KEY
+```
+
+**Optional (only if using Fly proxy):**
+
+```bash
+# Shared secret between Worker and Fly proxy for authenticated relay requests.
+# Must match on both sides. Generate: openssl rand -hex 32
+npx wrangler secret put FLY_AUTH_SECRET
+```
+
+### Step 6: Build and deploy
+
+Deploy order matters — OG worker first, then main worker (the main worker has a service binding to the OG worker).
+
+```bash
+# Option A: Deploy everything with the deploy script
+bash deploy.sh --cf
+
+# Option B: Manual deployment
+cd og-worker && bun run build && npx wrangler deploy && cd ..
+cd worker && bun run build && npx wrangler deploy && cd ..
+```
+
+Visit `https://yourdomain.com` — you should see the Yoke UI. Try analyzing a domain.
+
+### Step 7 (Optional): Fly.io Proxy
+
+The Go proxy provides:
+- **HTTP probes from non-Cloudflare IPs** — some sites block Cloudflare's IP ranges, making direct availability checks fail
+- **MaxMind GeoIP enrichment** — city/country/ISP/ASN data for target IPs
+- **check-host.net relay** — global availability checks from 10+ locations
+
+**Without the proxy**, everything still works — sites that block CF IPs show as `RESTRICTED` instead of `UP`, and GeoIP falls back to [ipwho.is](https://ipwho.is) (HTTPS). DNS, SSL, scoring, and all other checks are unaffected.
+
+**Setup:**
 
 ```bash
 cd fly-proxy
-cp fly.toml.example fly.toml  # Edit app name and region
-fly launch                      # First time
-fly deploy                      # Subsequent deploys
 
-# For MaxMind GeoIP (recommended):
-MAXMIND_LICENSE_KEY=your_key fly deploy -a your-app -c fly-proxy/fly.toml fly-proxy/
+# Authenticate with Fly
+fly auth login
+
+# Launch a new Fly app (first time only)
+fly launch --no-deploy
+# → This creates fly.toml. Edit the app name if desired.
+
+# Set the shared auth secret (must match WORKER's FLY_AUTH_SECRET)
+fly secrets set FLY_AUTH_SECRET=your-shared-secret
+
+# Deploy
+fly deploy
+
+# (Optional) MaxMind GeoIP — free license at https://www.maxmind.com/en/geolite2/signup
+# 1. Create an account → Generate a License Key
+# 2. Deploy with the key as a build arg:
+MAXMIND_LICENSE_KEY=your_key fly deploy
+
+cd ..
 ```
 
-Without a proxy, everything still works — sites that block CF IPs show as RESTRICTED instead of UP, but DNS, SSL, and all other checks are unaffected.
+Then set `FLY_PROBE_URL` in your main worker so it knows where to reach the proxy:
+
+```bash
+# In worker/wrangler.toml under [vars]:
+# FLY_PROBE_URL = "https://your-fly-app.fly.dev"
+```
+
+### Environment Variables
+
+All set via `npx wrangler secret put <NAME>` or as `[vars]` in `wrangler.toml` (non-sensitive values only).
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SHARE_SECRET` | **Yes** | HMAC-SHA256 key for signed share card URLs. Generate: `openssl rand -hex 32` |
+| `ADMIN_KEY` | **Yes** | Protects `/usage`, `/api/cleanup`, `/api/cache`. Generate: `openssl rand -hex 32` |
+| `BASE_URL` | Recommended | Instance URL (e.g., `https://yoke-test.lol`). Enables self-analysis + share cards |
+| `OPENROUTER_API_KEY` | Recommended | Enables AI Analysis. [Get key →](https://openrouter.ai/keys) |
+| `GOOGLE_PAGESPEED_API_KEY` | Recommended | Lighthouse scores. [Enable API →](https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com) |
+| `WHOISFREAKS_API_KEY` | Optional | WHOIS fallback for ccTLDs. [100 free/mo →](https://whoisfreaks.com/) |
+| `FLY_PROBE_URL` | Optional | Fly proxy URL (e.g., `https://yoke-probe.fly.dev`) |
+| `FLY_AUTH_SECRET` | Optional | Shared secret for Worker↔Fly proxy auth |
+| `RATE_LIMIT_ANALYZE` | Optional | Max analyze requests/hr per IP (default: 50, 0 = disable) |
+| `RATE_LIMIT_COMPARE` | Optional | Max compare requests/hr per IP (default: 50, 0 = disable) |
+| `RATE_LIMIT_SUBDOMAIN` | Optional | Max subdomain-scan requests/hr per IP (default: 30, 0 = disable) |
+| `RATE_LIMIT_AVAILABILITY` | Optional | Max availability requests/hr per IP (default: 60, 0 = disable) |
+| `RATE_LIMIT_RECURSIVE_DNS` | Optional | Max recursive-dns requests/hr per IP (default: 30, 0 = disable) |
+| `CACHE_TTL_HOURS` | Optional | Analysis cache TTL in hours (default: 1, 0 = disable) |
 
 ### Updating
 
 ```bash
 git pull
-bash deploy.sh --all
+bash deploy.sh --cf    # or --all to include Fly proxy
+```
+
+---
+
+## Maintenance
+
+### Admin Endpoints
+
+Three endpoints are protected by `ADMIN_KEY`. Auth uses HTTP Basic — any username, password is your key:
+
+```bash
+# Usage dashboard (also available at /usage in the browser)
+curl -u admin:YOUR_KEY https://your-instance.com/usage
+
+# D1 cleanup — old stats, expired rate limits (cache cleanup is automatic via KV TTL)
+curl -u admin:YOUR_KEY https://your-instance.com/api/cleanup
+
+# Purge cached analysis for a specific domain
+curl -u admin:YOUR_KEY -X DELETE https://your-instance.com/api/cache/example.com
+
+# Purge all AI analysis cache
+curl -u admin:YOUR_KEY -X DELETE "https://your-instance.com/api/cache?type=ai_analysis"
+```
+
+Run `/api/cleanup` periodically (daily or weekly) to keep D1 stats lean. Cache cleanup is automatic via KV TTL expiry.
+
+### Rate Limit Bypass
+
+For batch analysis, internal tooling, or CI pipelines, pass `X-Admin-Key` to skip per-IP rate limits on `/api/analyze`:
+
+```bash
+curl -X POST https://your-instance.com/api/analyze \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Key: YOUR_KEY" \
+  -d '{"domain": "example.com"}'
+```
+
+Uses the same `ADMIN_KEY` secret. All other endpoints (compare, subdomain-scan, AI, etc.) remain rate-limited as normal.
+
+### Worker-to-Fly Proxy Auth
+
+```bash
+# Generate a shared secret
+openssl rand -hex 32
+
+# Set on both sides — must match
+npx wrangler secret put FLY_AUTH_SECRET
+fly secrets set FLY_AUTH_SECRET=your-shared-secret -a your-fly-app
 ```
 
 ### Share Card URLs
 
-Share cards generate signed URLs for social sharing with OG image previews. The payload (domain, score, grade, axis scores) is base64url-encoded and signed with HMAC-SHA256.
-
-```bash
-# Generate a secret and set it on the worker
-openssl rand -hex 32
-wrangler secret put SHARE_SECRET
-```
-
-If `SHARE_SECRET` is not set, a built-in dev fallback key is used. Set your own for production deployments to prevent URL forgery.
+Share cards generate signed URLs for social sharing with OG image previews. The payload (domain, score, grade, axis scores) is base64url-encoded and signed with HMAC-SHA256 using `SHARE_SECRET`.
 
 URL patterns:
 - `/r/{payload}.{sig}` — Report card HTML page (human-viewable)
@@ -362,52 +576,17 @@ bun test
 
 ---
 
-## Maintenance
+## Versioning
 
-### Admin Endpoints
+Yoke uses **independent versioning** across its three components:
 
-Three endpoints are protected by `ADMIN_KEY` (set via `wrangler secret put ADMIN_KEY`). Auth uses HTTP Basic — any username, password is your key:
+| Component | Version | Release mechanism |
+|-----------|---------|-------------------|
+| **Service** (Worker) | `YOKE_VERSION` in `helpers.ts` | Bumps with each deploy batch |
+| **CLI** | Set by GoReleaser at build time | Bumps only on CLI code changes |
+| **Extension** | `manifest.json` version | Bumps only on extension changes |
 
-```bash
-# Generate a strong key
-openssl rand -hex 32
-
-# Usage dashboard (also available at /usage in the browser)
-curl -u admin:YOUR_KEY https://your-instance.com/usage
-
-# D1 cleanup — old stats, expired rate limits (cache is auto-cleaned via KV TTL)
-curl -u admin:YOUR_KEY https://your-instance.com/api/cleanup
-
-# Purge cached analysis for a specific domain (KV-backed)
-curl -u admin:YOUR_KEY -X DELETE https://your-instance.com/api/cache/example.com
-
-# Purge all AI analysis cache (KV-backed)
-curl -u admin:YOUR_KEY -X DELETE "https://your-instance.com/api/cache?type=ai_analysis"
-```
-
-Run `/api/cleanup` daily via cron to keep D1 stats lean. Cache cleanup is automatic via KV TTL expiry.
-
-### Rate Limit Bypass
-
-For batch analysis, internal tooling, or CI pipelines, pass `X-Admin-Key` to skip per-IP rate limits on `/api/analyze`:
-
-```bash
-curl -X POST https://your-instance.com/api/analyze \
-  -H "Content-Type: application/json" \
-  -H "X-Admin-Key: YOUR_KEY" \
-  -d '{"domain": "example.com"}'
-```
-
-Uses the same `ADMIN_KEY` secret. All other endpoints (compare, subdomain-scan, AI, etc.) remain rate-limited as normal.
-
-### Worker-to-Fly Proxy Auth
-
-```bash
-# Generate a shared secret and set it on both sides
-openssl rand -hex 32
-wrangler secret put FLY_AUTH_SECRET
-fly secrets set FLY_AUTH_SECRET=your-shared-secret
-```
+All components share the same major version (`1.x`) for API generation compatibility. The service returns `X-Yoke-Version` and `X-Yoke-Min-Client` headers on every API response — the CLI checks these to warn when an update is needed.
 
 ---
 

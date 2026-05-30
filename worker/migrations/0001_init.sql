@@ -1,5 +1,9 @@
--- D1 Schema for Yoke Domain Intelligence Cache
--- Run once via: npx wrangler d1 execute yoke-cache --file=migrations/0001_init.sql
+-- DEPRECATED: This migration was for the old D1-based cache layer.
+-- Cache has been migrated to Cloudflare KV (REFERENCE_DATA binding).
+-- These tables are no longer used. New installations should skip this file
+-- and only run 0002_domain_scores.sql against the yoke-stats database.
+--
+-- Original: D1 Schema for Yoke Domain Intelligence Cache
 
 CREATE TABLE IF NOT EXISTS domain_lookups (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

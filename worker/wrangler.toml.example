@@ -4,24 +4,26 @@ compatibility_date = "2024-12-01"
 # account_id = "your-cloudflare-account-id"
 
 [vars]
-# Set to your production URL so the worker can analyze itself (CF Workers can't fetch their own domain)
+# Set to your production URL so the worker can analyze itself
 # BASE_URL = "https://yourdomain.com"
 
 [assets]
 directory = "../client/dist"
 binding = "ASSETS"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "yoke-cache"
-# database_id = "your-yoke-cache-database-id"
-
+# D1 — historical scores + analytics (the only database you need)
 [[d1_databases]]
 binding = "STATS_DB"
 database_name = "yoke-stats"
 # database_id = "your-yoke-stats-database-id"
 
-# Uncomment and set for custom domain routing:
+# KV — analysis cache + rate limiting + reference data
+# Create with: npx wrangler kv namespace create REFERENCE_DATA
+[[kv_namespaces]]
+binding = "REFERENCE_DATA"
+# id = "your-kv-namespace-id"
+
+# Custom domain routing
 # [[routes]]
 # pattern = "yourdomain.com/*"
 # zone_name = "yourdomain.com"
@@ -31,9 +33,3 @@ database_name = "yoke-stats"
 # [[services]]
 # binding = "OG_WORKER"
 # service = "yoke-og"
-
-# KV namespace for reference data (retire.js DB, third-party patterns)
-# Create with: npx wrangler kv namespace create REFERENCE_DATA
-# [[kv_namespaces]]
-# binding = "REFERENCE_DATA"
-# id = "your-kv-namespace-id"
