@@ -319,4 +319,80 @@ describe('Resource hints scoring', () => {
     const rh = allFindings.find(f => f.signal === "resource_hints");
     expect(rh).toBeUndefined();
   });
+
+  // ─── Grade-Up / Non-Actionable Signal Tests ──────────────────────
+
+  it('gives "good" severity to clean blocklist record', () => {
+    const opts = baseOpts();
+    opts.blocklists = [
+      { source: "SpamhausDBL", listed: false },
+      { source: "URIBL", listed: false },
+    ] as any;
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const blocklist = allFindings.find(f => f.signal === "blocklist_trust");
+    expect(blocklist).toBeDefined();
+    expect(blocklist!.severity).toBe("good");
+    expect(blocklist!.label).toBe("Clean blocklist record");
+  });
+
+  it('gives critical severity when on multiple blocklists', () => {
+    const opts = baseOpts();
+    opts.blocklists = [
+      { source: "SpamhausDBL", listed: true },
+      { source: "URIBL", listed: true },
+    ] as any;
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const blocklist = allFindings.find(f => f.signal === "blocklist_trust");
+    expect(blocklist).toBeDefined();
+    expect(blocklist!.severity).toBe("critical");
+  });
+
+  it('shows which organizational pages are missing when partial', () => {
+    const opts = baseOpts();
+    opts.legal = {
+      pages_found: [{ name: "Privacy Policy", url: "/privacy" }],
+      cookie_consent_detected: false,
+      consent_provider: null,
+    };
+    opts.html = '<a href="/privacy">Privacy</a>';
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const org = allFindings.find(f => f.signal === "organizational_identity");
+    expect(org).toBeDefined();
+    expect(org!.severity).toBe("info");
+    // Should list what's missing
+    expect(org!.label).toContain("missing:");
+    expect(org!.label).toContain("terms of service");
+    expect(org!.label).toContain("about page");
+    expect(org!.label).not.toContain("privacy");
+  });
+
+  it('gives good severity when all 3 organizational pages found', () => {
+    const opts = baseOpts();
+    opts.legal = {
+      pages_found: [
+        { name: "Privacy Policy", url: "/privacy" },
+        { name: "Terms of Service", url: "/terms" },
+        { name: "About", url: "/about" },
+      ],
+      cookie_consent_detected: false,
+      consent_provider: null,
+    };
+    opts.html = '<a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/about">About</a>';
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const org = allFindings.find(f => f.signal === "organizational_identity");
+    expect(org).toBeDefined();
+    expect(org!.severity).toBe("good");
+  });
 });

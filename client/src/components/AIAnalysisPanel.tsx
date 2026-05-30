@@ -402,6 +402,19 @@ function generateGradeUpPlan(data: AnalysisResult): { items: GradeUpItem[]; curr
     for (const finding of axisData.findings) {
       if (finding.severity === "good") continue;
 
+      // Skip non-actionable signals — things the site operator cannot change
+      const NON_ACTIONABLE_SIGNALS = [
+        "breaches",           // historical data breaches can't be undone
+        "domain_age_trust",   // domain age increases only with time
+        "blocklist_trust",    // clean record = nothing to do; listed = complex remediation
+        "blocklist_listed",   // same — shown in Quick Wins separately if listed
+        "tranco_rank",        // site popularity is not directly actionable
+        "greynoise_noise",    // IP reputation from shared infrastructure
+        "greynoise_riot",     // IP recognition — not controllable
+        "ct_caa_mismatch",    // informational CT log observation
+      ];
+      if (NON_ACTIONABLE_SIGNALS.includes(finding.signal)) continue;
+
       // Simulate fixing this finding: change its severity to "good" and recalculate
       const currentAxisScore = computeAxisScore(axisData.findings);
       const fixedFindings = axisData.findings.map(f =>

@@ -1579,13 +1579,22 @@ export function calculateDomainScore(opts: {
     });
   }
 
-  // Blocklist clean (also trust) — "not blocklisted" is neutral, not positive
-  findings.push({
-    signal: "blocklist_trust", axis: "trust",
-    severity: listedCount === 0 ? "info" : listedCount >= 2 ? "critical" : "high",
-    label: listedCount === 0 ? "Clean blocklist record" : `On ${listedCount} blocklist(s)`,
-    tradeoff: null, weight: listedCount === 0 ? 2 : 3,
-  });
+  // Blocklist clean (also trust) — clean record is a positive; listed is critical
+  if (listedCount === 0) {
+    findings.push({
+      signal: "blocklist_trust", axis: "trust",
+      severity: "good",
+      label: "Clean blocklist record",
+      tradeoff: null, weight: 2,
+    });
+  } else {
+    findings.push({
+      signal: "blocklist_trust", axis: "trust",
+      severity: listedCount >= 2 ? "critical" : "high",
+      label: `On ${listedCount} blocklist(s)`,
+      tradeoff: null, weight: 3,
+    });
+  }
 
   // GreyNoise — skip when behind known CDN (shared IP doesn't reflect domain trust)
   if (opts.greynoise) {
@@ -1772,7 +1781,11 @@ export function calculateDomainScore(opts: {
     if (orgCount >= 3) {
       findings.push({ signal: "organizational_identity", axis: "trust", severity: "good", label: "Privacy policy, terms, and about page found", tradeoff: null, weight: 2 });
     } else if (orgCount >= 1) {
-      findings.push({ signal: "organizational_identity", axis: "trust", severity: "info", label: `${orgCount}/3 organizational pages found`, tradeoff: null, weight: 2 });
+      const missing: string[] = [];
+      if (!hasPrivacy) missing.push("privacy policy");
+      if (!hasTerms) missing.push("terms of service");
+      if (!hasAbout) missing.push("about page");
+      findings.push({ signal: "organizational_identity", axis: "trust", severity: "info", label: `${orgCount}/3 organizational pages found (missing: ${missing.join(", ")})`, tradeoff: null, weight: 2 });
     } else {
       findings.push({ signal: "organizational_identity", axis: "trust", severity: "low", label: "No organizational identity pages (privacy, terms, about)", tradeoff: null, weight: 2 });
     }
