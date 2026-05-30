@@ -565,7 +565,7 @@ export async function runAnalysis(
   }
 
   const socialMeta = extractSocialMeta(html);
-  const legal = detectLegalPages(html, domain);
+  const legal = await detectLegalPages(html, domain);
   const resourceHints = detectResourceHints(html);
   const cookieSecurity = auditCookies(effectiveHeaders);
   const compression = detectCompression(effectiveHeaders);

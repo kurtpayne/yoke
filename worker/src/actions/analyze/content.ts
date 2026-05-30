@@ -526,7 +526,16 @@ const CONSENT_PROVIDERS: Array<{ name: string; pattern: RegExp }> = [
   { name: "Usercentrics", pattern: /usercentrics/i },
 ];
 
-export function detectLegalPages(html: string, domain: string): LegalResult {
+// Well-known paths to probe via HEAD when HTML link scanning misses a page type.
+// Only probed for page types NOT already found in the HTML scan.
+const PROBE_PATHS: Record<string, string[]> = {
+  "About": ["/about", "/about-us", "/company"],
+  "Team": ["/team", "/our-team"],
+  "Privacy Policy": ["/privacy", "/privacy-policy"],
+  "Terms of Service": ["/terms", "/tos", "/terms-of-service"],
+};
+
+export async function detectLegalPages(html: string, domain: string): Promise<LegalResult> {
   const pagesFound: Array<{ name: string; url: string }> = [];
   const seen = new Set<string>();
 
@@ -551,6 +560,31 @@ export function detectLegalPages(html: string, domain: string): LegalResult {
       }
     }
   }
+
+  // Probe fallback: for page types not found in HTML, HEAD-request well-known paths
+  const probePromises: Promise<void>[] = [];
+  for (const [name, paths] of Object.entries(PROBE_PATHS)) {
+    if (seen.has(name)) continue; // Already found in HTML scan
+
+    probePromises.push((async () => {
+      for (const path of paths) {
+        if (seen.has(name)) break; // Another probe already found it
+        try {
+          const url = `https://${domain}${path}`;
+          const resp = await fetchWithTimeout(url, { method: "HEAD", redirect: "follow", timeout: 10_000 });
+          if (resp.ok && resp.status === 200) {
+            const ct = resp.headers.get("content-type") ?? "";
+            if (ct.includes("text/html")) {
+              pagesFound.push({ name, url });
+              seen.add(name);
+              break;
+            }
+          }
+        } catch { /* timeout or network error — skip this path */ }
+      }
+    })());
+  }
+  await Promise.all(probePromises);
 
   let cookieConsentDetected = false;
   let consentProvider: string | null = null;
