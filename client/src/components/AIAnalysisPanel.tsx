@@ -2297,12 +2297,12 @@ export function AIAnalysisPanel({
 
   const _actionItems = analysisData ? generateActionItems(analysisData) : [];
 
-  // Auto-scroll streaming container to bottom
+  // Auto-scroll streaming container to bottom as new text arrives
   useEffect(() => {
     if (streamContainerRef.current && isStreaming) {
       streamContainerRef.current.scrollTop = streamContainerRef.current.scrollHeight;
     }
-  }, [isStreaming]);
+  }, [isStreaming, streamingText]);
 
   const generateInsights = useCallback(async () => {
     if (insightsResult) return;
