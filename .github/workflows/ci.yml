@@ -7,6 +7,7 @@ on:
       - 'worker/**'
       - 'client/**'
       - 'tests/**'
+      - 'prompts/**'
       - 'package.json'
       - 'vitest.config.ts'
       - '.github/workflows/ci.yml'
@@ -16,6 +17,7 @@ on:
       - 'worker/**'
       - 'client/**'
       - 'tests/**'
+      - 'prompts/**'
 
 permissions:
   contents: read
@@ -58,13 +60,66 @@ jobs:
         working-directory: worker
         run: bun run typecheck
 
-      - name: Type check (client — non-blocking)
+      - name: Type check (client)
         working-directory: client
-        run: bun run typecheck || echo "::warning::Client type check has known issues (see tech debt)"
-        continue-on-error: true
+        run: bun run typecheck
 
       - name: Run tests
         run: npx vitest run
+
+      - name: Build client
+        working-directory: client
+        run: bun run build.ts
+
+      - name: Build worker
+        working-directory: worker
+        run: bun run build
+
+      - name: Check worker bundle size
+        run: |
+          SIZE=$(wc -c < worker/dist/worker.js)
+          SIZE_KB=$((SIZE / 1024))
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "Worker bundle: ${SIZE_KB} KB (${SIZE} bytes)"
+          if [ "$SIZE" -gt 10485760 ]; then
+            echo "::error::Worker bundle exceeds 10 MB CF limit (${SIZE_MB} MB)"
+            exit 1
+          elif [ "$SIZE" -gt 5242880 ]; then
+            echo "::warning::Worker bundle exceeds 5 MB (${SIZE_MB} MB) — approaching CF limit"
+          else
+            echo "✓ Bundle size OK"
+          fi
+
+      - name: Lint (TypeScript)
+        run: |
+          # Catch common issues without a full eslint setup
+          echo "Checking for 'as any' casts..."
+          ANY_COUNT=$(grep -rn 'as any' worker/src/ client/src/ --include='*.ts' --include='*.tsx' | grep -v node_modules | grep -v '// eslint-disable' | wc -l || true)
+          if [ "$ANY_COUNT" -gt 0 ]; then
+            echo "::warning::Found $ANY_COUNT 'as any' casts:"
+            grep -rn 'as any' worker/src/ client/src/ --include='*.ts' --include='*.tsx' | grep -v node_modules | grep -v '// eslint-disable' | head -20
+          else
+            echo "✓ No 'as any' casts"
+          fi
+
+          echo "Checking for bare console.log..."
+          LOG_COUNT=$(grep -rn 'console\.log(' worker/src/ --include='*.ts' | grep -v node_modules | grep -v logger.ts | grep -v '// ok' | wc -l || true)
+          if [ "$LOG_COUNT" -gt 0 ]; then
+            echo "::warning::Found $LOG_COUNT bare console.log() calls in worker (use structured logger):"
+            grep -rn 'console\.log(' worker/src/ --include='*.ts' | grep -v node_modules | grep -v logger.ts | grep -v '// ok' | head -20
+          else
+            echo "✓ No bare console.log in worker"
+          fi
+
+          echo "Checking for empty catch blocks..."
+          CATCH_COUNT=$(grep -Prn 'catch\s*\([^)]*\)\s*\{\s*\}' worker/src/ --include='*.ts' | grep -v node_modules | wc -l || true)
+          if [ "$CATCH_COUNT" -gt 0 ]; then
+            echo "::warning::Found $CATCH_COUNT empty catch {} blocks:"
+            grep -Prn 'catch\s*\([^)]*\)\s*\{\s*\}' worker/src/ --include='*.ts' | grep -v node_modules | head -20
+          else
+            echo "✓ No empty catch blocks"
+          fi
+        continue-on-error: true
 
   deploy:
     needs: test
@@ -94,6 +149,9 @@ jobs:
 
       - name: Generate wrangler.toml
         working-directory: worker
+        env:
+          D1_STATS_DB_ID: ${{ secrets.D1_STATS_DB_ID }}
+          KV_REFERENCE_DATA_ID: ${{ secrets.KV_REFERENCE_DATA_ID }}
         run: |
           cat > wrangler.toml << EOF
           name = "yoke"
@@ -108,14 +166,21 @@ jobs:
           binding = "ASSETS"
 
           [[d1_databases]]
-          binding = "DB"
-          database_name = "yoke-cache"
-          database_id = "${{ secrets.D1_CACHE_DB_ID }}"
-
-          [[d1_databases]]
           binding = "STATS_DB"
           database_name = "yoke-stats"
-          database_id = "${{ secrets.D1_STATS_DB_ID }}"
+          database_id = "${D1_STATS_DB_ID}"
+
+          [[kv_namespaces]]
+          binding = "REFERENCE_DATA"
+          id = "${KV_REFERENCE_DATA_ID}"
+
+          [[routes]]
+          pattern = "yoke.lol/*"
+          zone_name = "yoke.lol"
+
+          [[services]]
+          binding = "OG_WORKER"
+          service = "yoke-og"
           EOF
           # Remove leading whitespace from heredoc
           sed -i 's/^          //' wrangler.toml
@@ -174,6 +239,9 @@ jobs:
       - name: Generate wrangler.toml (for rollback)
         if: failure()
         working-directory: worker
+        env:
+          D1_STATS_DB_ID: ${{ secrets.D1_STATS_DB_ID }}
+          KV_REFERENCE_DATA_ID: ${{ secrets.KV_REFERENCE_DATA_ID }}
         run: |
           cat > wrangler.toml << EOF
           name = "yoke"
@@ -188,14 +256,21 @@ jobs:
           binding = "ASSETS"
 
           [[d1_databases]]
-          binding = "DB"
-          database_name = "yoke-cache"
-          database_id = "${{ secrets.D1_CACHE_DB_ID }}"
-
-          [[d1_databases]]
           binding = "STATS_DB"
           database_name = "yoke-stats"
-          database_id = "${{ secrets.D1_STATS_DB_ID }}"
+          database_id = "${D1_STATS_DB_ID}"
+
+          [[kv_namespaces]]
+          binding = "REFERENCE_DATA"
+          id = "${KV_REFERENCE_DATA_ID}"
+
+          [[routes]]
+          pattern = "yoke.lol/*"
+          zone_name = "yoke.lol"
+
+          [[services]]
+          binding = "OG_WORKER"
+          service = "yoke-og"
           EOF
           sed -i 's/^          //' wrangler.toml
 
