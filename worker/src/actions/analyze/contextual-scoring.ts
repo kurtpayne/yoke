@@ -1348,13 +1348,13 @@ export function calculateDomainScore(opts: {
 
   const dns = opts.dnsRecords;
 
-  // NS redundancy
+  // NS count (informational only — 2 is the registrar-enforced minimum per RFC 1035)
   const nsCount = dns.filter(r => r.type === "NS").length;
   findings.push({
     signal: "ns_redundancy", axis: "reliability",
-    severity: nsCount >= 2 ? "good" : "medium",
+    severity: "good",
     label: `${nsCount} nameserver${nsCount !== 1 ? "s" : ""}`,
-    tradeoff: null, weight: 2,
+    tradeoff: null, weight: 0,
   });
 
   // MX records

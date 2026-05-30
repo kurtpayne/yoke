@@ -423,9 +423,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
   // ── Reliability ───────────────────────────────────────────────────
 
   ns_redundancy: {
-    axis: "reliability", label: "Nameserver Redundancy", actionable: true, canBeNonGood: true,
-    effort: "~15 min — add nameservers at registrar", fixDescription: "Add additional nameservers",
-    weightRange: [2, 2],
+    axis: "reliability", label: "Nameserver Count", actionable: false, canBeNonGood: false,
+    weightRange: [0, 0],
   },
   ipv6: {
     axis: "reliability", label: "IPv6 Support", actionable: true, canBeNonGood: true,
