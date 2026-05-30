@@ -24,12 +24,10 @@ const SSE_HEADERS: Record<string, string> = {
 
 // ─── System Prompt ──────────────────────────────────────────────────
 
-// AI analysis prompt — extracted to prompts/ai-analysis.txt for easy editing.
-// At build time this is inlined as a string constant.
-// See: https://github.com/yokedotlol/yoke/blob/main/prompts/ai-analysis.txt
-import SYSTEM_PROMPT_RAW from "../../../prompts/ai-analysis.txt";
-
-const SYSTEM_PROMPT = SYSTEM_PROMPT_RAW;
+import { SIGNAL_REGISTRY } from "../config/signal-registry";
+// AI analysis prompt — dynamically built from prompt fragments + signal calibration.
+// Legacy static prompt (prompts/ai-analysis.txt) is replaced by the prompt builder.
+import { buildSystemPrompt } from "../prompts/prompt-builder";
 
 // ─── Data Sanitizer ─────────────────────────────────────────────────
 // Strip verbose fields to keep token count low, and sanitize against prompt injection
@@ -181,10 +179,69 @@ function sanitizeForLLM(data: Record<string, unknown>): Record<string, unknown> 
 
 // ─── Prompt Builder (shared by AI call and DIY copy) ────────────────
 
+/** Extract archetype and signal IDs from analysis data for dynamic prompt building */
+function extractPromptContext(data: Record<string, unknown>): {
+  archetype: import("../actions/analyze/contextual-scoring").ArchetypeResult | null;
+  signalIds: string[];
+} {
+  const domainScore = data.domain_score as Record<string, unknown> | null;
+  let archetype = null;
+  const signalIds: string[] = [];
+
+  if (domainScore) {
+    // Extract archetype
+    if (domainScore.archetype && typeof domainScore.archetype === "object") {
+      archetype = domainScore.archetype as import("../actions/analyze/contextual-scoring").ArchetypeResult;
+    }
+
+    // Extract signal IDs from findings across all axes
+    if (domainScore.axes && typeof domainScore.axes === "object") {
+      for (const axisData of Object.values(domainScore.axes as Record<string, unknown>)) {
+        if (axisData && typeof axisData === "object" && "findings" in (axisData as Record<string, unknown>)) {
+          const findings = (axisData as Record<string, unknown>).findings;
+          if (Array.isArray(findings)) {
+            for (const f of findings) {
+              if (f && typeof f === "object" && "signal" in f) {
+                signalIds.push(String(f.signal));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // If no signal IDs from findings, use all registered signals as fallback
+  if (signalIds.length === 0) {
+    signalIds.push(...Object.keys(SIGNAL_REGISTRY));
+  }
+
+  return { archetype, signalIds };
+}
+
 export function buildAIPrompt(analysisData: Record<string, unknown>): { system: string; user: string } {
   const sanitized = sanitizeForLLM(analysisData);
+
+  const { archetype, signalIds } = extractPromptContext(analysisData);
+
+  let system: string;
+  if (archetype) {
+    system = buildSystemPrompt(archetype, signalIds);
+  } else {
+    // Fallback: use all signals with a default general archetype
+    const defaultArchetype: import("../actions/analyze/contextual-scoring").ArchetypeResult = {
+      detected: "general",
+      confidence: 0.5,
+      secondary: null,
+      signals: [],
+      platform: null,
+      weights: { security: 0.28, infrastructure: 0.25, performance: 0.2, visibility: 0.15, trust: 0.12 },
+    };
+    system = buildSystemPrompt(defaultArchetype, Object.keys(SIGNAL_REGISTRY));
+  }
+
   const userMessage = `<domain_data>\n${JSON.stringify(sanitized, null, 0)}\n</domain_data>\n\nAnalyze this domain and provide your structured assessment.`;
-  return { system: SYSTEM_PROMPT, user: userMessage };
+  return { system, user: userMessage };
 }
 
 // ─── OpenRouter API Call ────────────────────────────────────────────

@@ -1,0 +1,33 @@
+Output ONLY valid JSON matching this exact schema (no markdown wrapping, no text outside the JSON):
+{
+  "summary": "3-4 sentence executive briefing. Lead with the single most important thing about this domain. Include the overall maturity level and the #1 thing that needs attention.",
+  "posture": "strong|fair|poor|critical",
+  "key_findings": [
+    {
+      "category": "security|infrastructure|performance|trust|visibility|accessibility",
+      "finding": "Specific finding citing exact data points from the analysis",
+      "severity": "info|low|medium|high",
+      "action": "Concrete next step — not 'consider improving X' but 'Add X header with value Y'"
+    }
+  ],
+  "cross_signal_insights": [
+    {
+      "insight": "A specific correlation between 2+ data fields that reveals something the individual fields don't show on their own. Must cite specific values.",
+      "signals_cited": ["field_name_1", "field_name_2"],
+      "severity": "info|low|medium|high",
+      "actionable": true
+    }
+  ],
+  "attack_surface": ["Each item: a specific exposed vector with enough detail to act on"],
+  "recommendations": [
+    {
+      "priority": 1,
+      "action": "Specific implementable step — exact setting, header, DNS record, or config change",
+      "impact": "What changes when this is done — quantify if possible",
+      "effort": "low|medium|high",
+      "tool": "Optional: specific product/service that solves this"
+    }
+  ]
+}
+
+Provide 5-8 key_findings, 5-8 cross_signal_insights (this is your primary value-add — spend your reasoning here), 3-6 attack_surface items, and 4-6 recommendations. Every cross_signal_insight must cite at least 2 different data fields with their actual values from the analysis data.

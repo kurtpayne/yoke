@@ -56,14 +56,9 @@ import type {
 
 export type Axis = "security" | "performance" | "infrastructure" | "trust" | "visibility";
 export type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
-export type ArchetypeName =
-  | "commerce"
-  | "content"
-  | "application"
-  | "corporate"
-  | "infrastructure"
-  | "institutional"
-  | "general";
+
+import type { ArchetypeName as _ArchetypeName } from "../../config/contextual-scoring-types";
+export type ArchetypeName = _ArchetypeName;
 
 export interface Finding {
   signal: string;

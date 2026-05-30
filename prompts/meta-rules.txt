@@ -1,0 +1,18 @@
+META-RULES — apply these to ALL recommendations:
+
+1. DON'T BREAK THE SITE: Before recommending any header, setting, or configuration change, consider whether the site's current architecture (third-party resources, embedded iframes, SPA framework, managed platform) would be broken by the recommendation. If the recommendation could break functionality, either don't make it or explicitly flag the tradeoff. Examples:
+   - Strict CSP script-src without nonces breaks inline scripts
+   - COEP require-corp breaks all cross-origin resources that don't opt in
+   - X-Frame-Options DENY breaks legitimate iframe embedding (widgets, payment forms)
+   - Removing third-party scripts may break business-critical functionality (analytics, payments, support)
+   - Increasing DNS TTL on CDN-managed domains breaks failover
+
+2. MANAGED PLATFORMS: Sites on Shopify, Wix, Squarespace, WordPress.com, Vercel, Netlify, and similar platforms have limited or zero control over security headers, DNS configuration, robots.txt, and performance optimization. For managed platform sites, say "contact your platform provider" rather than "add this header." Don't recommend DNS-level or server-level changes to managed platform users.
+
+3. PROBE LOCATION CAVEAT: TCP connection time, DNS resolution time, and TTFB measurements are from a SINGLE probe location. Slow times may reflect geographic distance, not infrastructure quality. Don't overstate latency issues from single-probe measurements.
+
+4. WHOIS PRIVACY IS NORMAL: Post-GDPR, WHOIS privacy/redaction is completely standard and expected. Do not treat WHOIS privacy as suspicious or as a negative trust signal, especially for personal blogs and small businesses.
+
+5. REWARD-ONLY SIGNALS: Some signals (security.txt, BIMI, HSTS preload, resource hints, PWA readiness) are reward-only — their ABSENCE should NEVER be treated as a finding or recommendation. Only mention them positively when present. Do not recommend adding security.txt, BIMI, or similar nice-to-haves as priority actions.
+
+6. llms.txt: This standard has <1% adoption and was proposed in 2024. Absence is completely normal and should never be flagged or recommended.

@@ -9,7 +9,7 @@
 //   2. Add it to contextual-scoring.ts findings.push()
 //   3. Run `npx vitest run` — the registry enforcement test will catch gaps
 
-import type { Axis, Severity } from "./contextual-scoring-types";
+import type { ArchetypeName, Axis, Severity } from "./contextual-scoring-types";
 
 // ─── Grade Thresholds (single source of truth) ──────────────────────
 
@@ -63,6 +63,10 @@ export interface SignalDef {
   fixDescription?: string;
   /** Weight range [min, max] used in scoring */
   weightRange: [number, number];
+  /** AI prompt calibration guidance for this signal */
+  promptGuidance?: string;
+  /** Archetype-specific notes that override or supplement promptGuidance */
+  archetypeNotes?: Partial<Record<ArchetypeName, string>>;
 }
 
 // ─── Signal Registry ────────────────────────────────────────────────
@@ -78,6 +82,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — server/CDN config",
     fixDescription: "Upgrade TLS configuration",
     weightRange: [3, 3],
+    promptGuidance:
+      "A+ = properly configured; A = standard modern; B = legacy/misconfigured TLS; C or below = actively concerning. Most CDN-fronted sites get A or A+.",
+    archetypeNotes: {
+      commerce: "For e-commerce, anything below A is a trust concern — customers see the padlock.",
+      institutional: "Government/education sites should target A+ as a compliance signal.",
+    },
   },
   ssl_missing: {
     axis: "security",
@@ -87,6 +97,11 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — certificate setup",
     fixDescription: "Install SSL/TLS certificate",
     weightRange: [3, 3],
+    promptGuidance:
+      "No SSL is critical. Browsers show 'Not Secure' warnings. Let's Encrypt provides free certificates.",
+    archetypeNotes: {
+      commerce: "No SSL on e-commerce means payment data transmitted in plaintext — PCI-DSS violation.",
+    },
   },
   hsts: {
     axis: "security",
@@ -94,6 +109,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [4, 4],
+    promptGuidance:
+      "HSTS prevents protocol downgrade attacks. Presence is a positive signal — weight 4, the highest security weight.",
   },
   hsts_missing: {
     axis: "security",
@@ -103,6 +120,13 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — add one response header",
     fixDescription: "Add Strict-Transport-Security header",
     weightRange: [4, 4],
+    promptGuidance:
+      "Missing HSTS allows protocol downgrade attacks (SSL stripping). High-impact single header to add. Weight 4.",
+    archetypeNotes: {
+      commerce: "Critical for payment flows — downgrade attacks can intercept credentials.",
+      content: "Low-effort to add but verify no mixed content first.",
+      application: "Interactive apps should prioritize HSTS to protect auth flows.",
+    },
   },
   hsts_max_age: {
     axis: "security",
@@ -112,6 +136,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — update header value",
     fixDescription: "Increase HSTS max-age to at least 1 year",
     weightRange: [1, 2],
+    promptGuidance:
+      "Recommended max-age ≥31536000 (1 year). Short max-age (<86400) undermines protection. Let's Encrypt 90-day rotation means long max-age requires reliable auto-renewal.",
   },
   hsts_preload: {
     axis: "security",
@@ -119,6 +145,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance:
+      "HSTS preload means domain is in browsers' built-in HSTS list. Requires max-age ≥1 year + includeSubDomains. Bonus-only signal.",
   },
   csp: {
     axis: "security",
@@ -126,6 +154,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [3, 3],
+    promptGuidance:
+      "CSP presence is a positive security signal. Quality matters more than presence — check csp_quality for details.",
   },
   csp_missing: {
     axis: "security",
@@ -135,6 +165,14 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — requires auditing scripts/styles",
     fixDescription: "Add Content-Security-Policy header",
     weightRange: [3, 3],
+    promptGuidance:
+      "Many sites lack CSP, but absence is a real XSS risk for sites handling user input. Hard to retrofit — recommend starting with report-only mode. Don't cite specific adoption percentages.",
+    archetypeNotes: {
+      application:
+        "SPAs are highest-risk for XSS — CSP most important here. May need 'unsafe-inline' for style-src (styled-components).",
+      content: "Content sites with user comments need CSP. Static blogs have lower risk.",
+      corporate: "Corporate marketing sites have low XSS risk if no user input.",
+    },
   },
   csp_quality: {
     axis: "security",
@@ -144,6 +182,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1 hour — tighten CSP directives",
     fixDescription: "Improve Content-Security-Policy directives",
     weightRange: [2, 3],
+    promptGuidance:
+      "Grade practical protection, not just presence. 'unsafe-inline' in script-src undermines XSS protection; 'unsafe-eval' enables code injection; wildcard (*) negates the policy. 'unsafe-inline' in style-src is common and acceptable.",
+    archetypeNotes: {
+      application:
+        "SPAs using React/Vue styled-components may need 'unsafe-inline' in style-src — don't flag this. Focus on script-src.",
+    },
   },
   csp_missing_base_uri: {
     axis: "security",
@@ -153,6 +197,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add CSP directive",
     fixDescription: "Add base-uri directive to CSP",
     weightRange: [1, 1],
+    promptGuidance: "Missing base-uri allows <base> tag injection for relative URL hijacking. Low weight, easy to add.",
   },
   csp_missing_object_src: {
     axis: "security",
@@ -162,6 +207,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add CSP directive",
     fixDescription: "Add object-src directive to CSP",
     weightRange: [1, 1],
+    promptGuidance:
+      "Missing object-src allows plugin exploits unless default-src is restrictive. Add object-src 'none'.",
   },
   csp_report_only: {
     axis: "security",
@@ -169,6 +216,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "CSP report-only is a good first step. Acknowledge progress, recommend transitioning to enforcing.",
   },
   xfo: {
     axis: "security",
@@ -178,6 +226,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add one response header",
     fixDescription: "Add X-Frame-Options header",
     weightRange: [2, 2],
+    promptGuidance:
+      "X-Frame-Options or CSP frame-ancestors prevents clickjacking. CSP frame-ancestors supersedes XFO — don't recommend both.",
+    archetypeNotes: {
+      commerce: "Payment pages must have clickjacking protection.",
+      application: "Some apps need iframe embedding (widgets, payments) — DENY would break this.",
+    },
   },
   xcto: {
     axis: "security",
@@ -187,6 +241,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — one-line header",
     fixDescription: "Add X-Content-Type-Options: nosniff",
     weightRange: [1, 1],
+    promptGuidance: "X-Content-Type-Options: nosniff prevents MIME type sniffing. Low weight (1), easy one-line fix.",
   },
   dnssec: {
     axis: "security",
@@ -196,6 +251,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — registrar setting",
     fixDescription: "Enable DNSSEC at your registrar",
     weightRange: [1, 1],
+    promptGuidance:
+      "~30% global adoption. Absence isn't alarming for most sites. Asymmetric: presence rewarded (weight 2), absence barely penalized (weight 1).",
+    archetypeNotes: {
+      institutional: "Financial/government/healthcare sites should have DNSSEC.",
+      infrastructure: "API/infrastructure domains benefit from DNS-level authenticity.",
+    },
   },
   blocklist_listed: {
     axis: "security",
@@ -203,6 +264,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [3, 3],
+    promptGuidance:
+      "CDN IPs are shared — blocklist hits reflect neighbors, not this domain. Non-CDN hits are more serious. Severity: 1=medium, 2=high, 3+=critical.",
   },
   email_auth: {
     axis: "security",
@@ -210,6 +273,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [3, 3],
+    promptGuidance:
+      "SPF+DKIM+DMARC with p=reject = gold standard. p=none = monitoring only. DKIM detection probes common selectors — absence doesn't necessarily mean unconfigured.",
   },
   email_auth_incomplete: {
     axis: "security",
@@ -219,6 +284,9 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — DNS records + email provider config",
     fixDescription: "Complete email authentication setup (SPF+DKIM+DMARC)",
     weightRange: [3, 3],
+    promptGuidance:
+      "Incomplete email auth leaves domain vulnerable to spoofing. SPF/DMARC are deterministic; DKIM uses arbitrary selectors.",
+    archetypeNotes: { infrastructure: "API domains that don't send email may not need full email auth." },
   },
   spf_without_dmarc: {
     axis: "security",
@@ -228,6 +296,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — one DNS TXT record",
     fixDescription: "Add DMARC DNS record",
     weightRange: [2, 2],
+    promptGuidance:
+      "SPF without DMARC = no enforcement policy. Recommend adding DMARC starting with p=none to monitor.",
   },
   waf_detected: {
     axis: "security",
@@ -235,6 +305,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 2],
+    promptGuidance: "WAF presence is defense-in-depth. High-confidence detection is more meaningful.",
   },
   caa_records: {
     axis: "security",
@@ -242,6 +313,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "CAA restricts which CAs can issue certs. Presence is positive.",
   },
   caa_wildcard_unrestricted: {
     axis: "security",
@@ -251,6 +323,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — add wildcard CAA record",
     fixDescription: "Add wildcard CAA DNS record",
     weightRange: [0, 0], // weight 0 = informational, no score impact
+    promptGuidance:
+      "If CAA issue is set but issuewild is not, any CA can issue wildcard certs. Informational only (weight 0).",
   },
   caa_iodef: {
     axis: "security",
@@ -258,6 +332,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "CAA iodef enables violation reporting — proactive certificate management.",
   },
   cert_wildcard: {
     axis: "security",
@@ -267,6 +342,9 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — replace with per-domain certs",
     fixDescription: "Replace wildcard certificate with per-domain certificates",
     weightRange: [1, 1],
+    promptGuidance:
+      "Wildcards simplify management but increase blast radius if key is compromised. Informational for most sites.",
+    archetypeNotes: { institutional: "Government/financial sites should prefer per-domain certificates." },
   },
   open_ports: {
     axis: "security",
@@ -276,6 +354,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — firewall rules",
     fixDescription: "Close unnecessary open ports",
     weightRange: [3, 3],
+    promptGuidance:
+      "80/443 expected. 22 (SSH) common but ideally firewalled. Database ports (3306, 5432, 6379, 27017) exposed = high severity. 8080/8443 suggest dev/proxy.",
   },
   known_vulnerabilities: {
     axis: "security",
@@ -285,6 +365,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — patch/update affected software",
     fixDescription: "Patch known vulnerabilities",
     weightRange: [5, 5],
+    promptGuidance:
+      "CVE detection is version-based, doesn't confirm exploitability. The site may not use the vulnerable function. Note this caveat.",
   },
   cookie_security: {
     axis: "security",
@@ -294,6 +376,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — update cookie settings",
     fixDescription: "Set Secure/HttpOnly/SameSite on cookies",
     weightRange: [3, 3],
+    promptGuidance:
+      "Secure flag required for HTTPS. HttpOnly prevents XSS cookie theft. SameSite prevents CSRF. All three on session cookies.",
   },
   server_version_disclosure: {
     axis: "security",
@@ -303,6 +387,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — strip version from headers",
     fixDescription: "Remove server version from response headers",
     weightRange: [1, 1],
+    promptGuidance:
+      "Version info helps attackers target known vulns. Behind CDN/reverse proxy, the header may be from CDN, not origin — lower concern.",
   },
   referrer_policy: {
     axis: "security",
@@ -310,6 +396,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [1, 2],
+    promptGuidance:
+      "Best: strict-origin-when-cross-origin or no-referrer. Missing = browsers default to strict-origin-when-cross-origin (safe).",
   },
   referrer_policy_missing: {
     axis: "security",
@@ -319,6 +407,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add response header",
     fixDescription: "Add Referrer-Policy header",
     weightRange: [2, 2],
+    promptGuidance:
+      "Modern browsers default to strict-origin-when-cross-origin. Missing is safe but explicit is better. Low severity.",
   },
   referrer_policy_unsafe: {
     axis: "security",
@@ -328,6 +418,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — update response header",
     fixDescription: "Change Referrer-Policy to strict-origin-when-cross-origin or no-referrer",
     weightRange: [2, 2],
+    promptGuidance:
+      "unsafe-url leaks full URLs to all origins. no-referrer-when-downgrade leaks on HTTP downgrades. Replace with strict-origin-when-cross-origin.",
   },
   permissions_policy: {
     axis: "security",
@@ -335,6 +427,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 2],
+    promptGuidance:
+      "Restrictive policies (camera=(), microphone=()) show defense-in-depth. Overly permissive (feature=*) is medium concern.",
   },
   permissions_policy_missing: {
     axis: "security",
@@ -344,6 +438,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — add response header",
     fixDescription: "Add Permissions-Policy header",
     weightRange: [2, 2],
+    promptGuidance: "Absence is a minor gap. Permissions-Policy is defense-in-depth, not critical.",
   },
   permissions_policy_unrestricted: {
     axis: "security",
@@ -353,6 +448,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — restrict policy directives",
     fixDescription: "Restrict Permissions-Policy directives",
     weightRange: [2, 2],
+    promptGuidance: "Wildcard grants (feature=*) for sensitive features like camera/microphone are a medium concern.",
   },
   http_to_https_redirect: {
     axis: "security",
@@ -360,6 +456,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [3, 3],
+    promptGuidance: "HTTP→HTTPS redirect is a positive signal. Weight 3.",
   },
   no_http_to_https_redirect: {
     axis: "security",
@@ -369,6 +466,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — server/CDN config",
     fixDescription: "Configure HTTP→HTTPS redirect",
     weightRange: [2, 2],
+    promptGuidance: "No redirect means users typing domain without https:// get insecure version.",
+    archetypeNotes: { commerce: "Payment sites must redirect to HTTPS." },
   },
   mixed_content: {
     axis: "security",
@@ -378,6 +477,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1 hour — update resource URLs",
     fixDescription: "Fix mixed HTTP/HTTPS content",
     weightRange: [2, 3],
+    promptGuidance:
+      "Active mixed content (scripts/iframes over HTTP) > passive (images). Active can be exploited for code injection.",
   },
   subresource_integrity: {
     axis: "security",
@@ -385,6 +486,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance: "SRI ensures CDN-hosted scripts haven't been tampered with. Positive signal.",
   },
   subresource_integrity_missing: {
     axis: "security",
@@ -394,6 +496,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — add SRI hashes to external scripts",
     fixDescription: "Add SRI integrity attributes to external scripts",
     weightRange: [1, 1],
+    promptGuidance: "SRI ideal for third-party CDN scripts. Not feasible for dynamic scripts.",
   },
   subresource_integrity_partial: {
     axis: "security",
@@ -403,6 +506,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — add SRI to remaining scripts",
     fixDescription: "Add SRI to remaining external scripts",
     weightRange: [1, 1],
+    promptGuidance: "Partial SRI = incremental adoption. Acknowledge progress.",
   },
   form_action_security: {
     axis: "security",
@@ -412,6 +516,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — update form URLs",
     fixDescription: "Secure form action URLs (use HTTPS)",
     weightRange: [3, 3],
+    promptGuidance: "Forms posting to HTTP transmit data in plaintext. High severity for credential/personal data.",
+    archetypeNotes: { commerce: "Payment/checkout forms over HTTP are critical vulnerabilities." },
   },
   mta_sts: {
     axis: "security",
@@ -421,6 +527,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — DNS + well-known file",
     fixDescription: "Configure MTA-STS policy",
     weightRange: [1, 1],
+    promptGuidance:
+      "MTA-STS enforces TLS for email transport. mode=enforce is strong. mode=testing is a good step. Bonus-only.",
   },
   security_headers_completeness: {
     axis: "security",
@@ -430,6 +538,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — add missing security headers",
     fixDescription: "Add missing security response headers",
     weightRange: [2, 2],
+    promptGuidance:
+      "Meta-signal: how many of 6 key headers deployed (HSTS, CSP, XFO, XCTO, Referrer-Policy, Permissions-Policy). 6/6=good, 4+=info, 2+=low, <2=medium.",
   },
   hpkp_deprecated: {
     axis: "security",
@@ -439,6 +549,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — remove header",
     fixDescription: "Remove deprecated Public-Key-Pins header",
     weightRange: [1, 2],
+    promptGuidance:
+      "HPKP is deprecated and dangerous — can permanently DoS domain. Chrome removed support 2018. Flag for immediate removal.",
   },
   cors_wildcard: {
     axis: "security",
@@ -448,6 +560,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — restrict CORS config",
     fixDescription: "Restrict CORS Access-Control-Allow-Origin",
     weightRange: [1, 1],
+    promptGuidance:
+      "Wildcard (*) without credentials is common for public APIs — usually intentional. Ensure no sensitive data exposed without auth.",
   },
   cors_null_origin: {
     axis: "security",
@@ -457,6 +571,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — restrict CORS config",
     fixDescription: "Remove null from CORS allowed origins",
     weightRange: [2, 2],
+    promptGuidance: "null origin exploitable via sandboxed iframes and data: URIs. Use specific origins.",
   },
   cors_wildcard_credentials: {
     axis: "security",
@@ -466,6 +581,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — fix CORS config",
     fixDescription: "Remove credentials with wildcard CORS origin",
     weightRange: [4, 4],
+    promptGuidance:
+      "Wildcard + credentials = critical misconfiguration. Any site can make authenticated requests. Fix immediately.",
   },
   cross_origin_isolation: {
     axis: "security",
@@ -475,6 +592,13 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — add COOP/COEP headers",
     fixDescription: "Enable cross-origin isolation (COOP/COEP)",
     weightRange: [1, 1],
+    promptGuidance:
+      "COOP+COEP+CORP is bonus-only. NEVER recommend COEP require-corp for sites with third-party resources — it breaks all cross-origin resources that don't opt in. Absence is NOT a security gap. Weight 1 (lowest).",
+    archetypeNotes: {
+      application: "SPAs with third-party scripts: COEP will break the site. Only for isolated apps.",
+      commerce: "E-commerce universally has third-party scripts — COEP is impractical and dangerous.",
+      content: "Content sites with ads/social embeds cannot safely use COEP.",
+    },
   },
   tls_version: {
     axis: "security",
@@ -484,6 +608,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — server config",
     fixDescription: "Upgrade minimum TLS version",
     weightRange: [1, 3],
+    promptGuidance: "TLS 1.3 ideal. 1.2 standard. 1.0/1.1 legacy, vulnerable to downgrade — high severity.",
   },
   cert_expiry_proximity: {
     axis: "security",
@@ -493,6 +618,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — renew certificate",
     fixDescription: "Renew SSL/TLS certificate",
     weightRange: [1, 4],
+    promptGuidance:
+      "Severity: expired=critical, <7d=high, <14d=medium, <30d=low, 30d+=good. Let's Encrypt auto-renews — short remaining time may mean failed auto-renewal.",
   },
   pre_consent_cookies: {
     axis: "security",
@@ -502,6 +629,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1 hour — fix cookie consent flow",
     fixDescription: "Fix pre-consent cookie behavior",
     weightRange: [3, 3],
+    promptGuidance: "Tracking cookies before consent is GDPR issue. Severity depends on jurisdiction and purpose.",
+    archetypeNotes: { institutional: "Government/education face higher compliance scrutiny." },
   },
   script_privacy: {
     axis: "security",
@@ -511,6 +640,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1 hour — review and replace trackers",
     fixDescription: "Review third-party tracking scripts",
     weightRange: [3, 3],
+    promptGuidance: "Privacy concerns from third-party tracking. Consider whether disclosed in privacy policy.",
   },
   http_blocked_security: {
     axis: "security",
@@ -518,6 +648,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [3, 3],
+    promptGuidance: "Cannot audit security headers when HTTP blocked. Don't make claims about header security.",
   },
   vulnerable_js_libraries: {
     axis: "security",
@@ -527,6 +658,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — update dependencies",
     fixDescription: "Update vulnerable JavaScript libraries",
     weightRange: [1, 3],
+    promptGuidance:
+      "CVE detection is version-based, doesn't confirm exploitability. Site may not use vulnerable function. Note this caveat. EOL libraries are additional concern.",
   },
 
   // ── Performance ───────────────────────────────────────────────────
@@ -539,6 +672,13 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "Varies — run Lighthouse for details",
     fixDescription: "Optimize page performance (see PageSpeed report)",
     weightRange: [5, 5],
+    promptGuidance:
+      "PageSpeed 0-100. Median mobile ~50-60. ≥90=good, 50-89=needs improvement, <50=poor. CrUX field data is more authoritative than lab scores.",
+    archetypeNotes: {
+      content: "Content sites depend on performance for SEO — Google uses CWV for ranking.",
+      application: "SPAs have structural TBT/INP issues that 'reduce JavaScript' doesn't address.",
+      infrastructure: "API/infrastructure: PageSpeed scores less meaningful.",
+    },
   },
   lcp: {
     axis: "performance",
@@ -548,6 +688,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — optimize images and loading",
     fixDescription: "Reduce Largest Contentful Paint time",
     weightRange: [4, 4],
+    promptGuidance:
+      "Largest Contentful Paint: ≤2.5s good, ≤4.0s needs-improvement, >4.0s poor. Core Web Vital for Google ranking.",
   },
   cls: {
     axis: "performance",
@@ -557,6 +699,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1 hour — fix layout shifts",
     fixDescription: "Fix Cumulative Layout Shift issues",
     weightRange: [3, 3],
+    promptGuidance:
+      "Cumulative Layout Shift: ≤0.1 good, ≤0.25 needs-improvement, >0.25 poor. Caused by images without dimensions, dynamic content, web fonts.",
   },
   ttfb: {
     axis: "performance",
@@ -566,6 +710,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — server/CDN optimization",
     fixDescription: "Reduce Time to First Byte",
     weightRange: [3, 3],
+    promptGuidance:
+      "Time to First Byte: ≤800ms good. Affected by server processing, CDN effectiveness, geographic distance.",
   },
   fcp: {
     axis: "performance",
@@ -575,6 +721,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1 hour — optimize render path",
     fixDescription: "Reduce First Contentful Paint time",
     weightRange: [2, 2],
+    promptGuidance: "First Contentful Paint: ≤1.8s good, ≤3.0s needs-improvement, >3.0s poor.",
   },
   inp: {
     axis: "performance",
@@ -584,6 +731,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — optimize JS execution",
     fixDescription: "Reduce Interaction to Next Paint time",
     weightRange: [3, 3],
+    promptGuidance:
+      "Interaction to Next Paint: ≤200ms good, ≤500ms needs-improvement, >500ms poor. Core Web Vital (replaced FID March 2024). CrUX only. High INP = JS execution problems.",
   },
   tbt: {
     axis: "performance",
@@ -593,6 +742,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — reduce JS blocking",
     fixDescription: "Reduce Total Blocking Time",
     weightRange: [2, 2],
+    promptGuidance:
+      "Total Blocking Time: ≤200ms good, ≤600ms needs-improvement, >600ms poor. Lab-only (INP is field equivalent).",
   },
   crux_field_data: {
     axis: "performance",
@@ -600,6 +751,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance:
+      "CrUX provides real-user data — more authoritative than lab. CrUX good + lab poor = CDN/caching helps real users. CrUX poor + lab good = real users face worse conditions.",
   },
   cdn: {
     axis: "performance",
@@ -607,6 +760,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance:
+      "CDN detected is positive — reduces latency, improves caching. CDN-fronted sites handle compression/caching at edge.",
   },
   http2: {
     axis: "performance",
@@ -614,6 +769,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance: "HTTP/2 is standard since 2015. Expected, not exceptional.",
   },
   http3: {
     axis: "performance",
@@ -621,6 +777,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance: "HTTP/3 (QUIC) is forward-looking — reduces connection latency. Bonus signal.",
   },
   http1_only: {
     axis: "performance",
@@ -630,6 +787,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — server/CDN config",
     fixDescription: "Enable HTTP/2 on server",
     weightRange: [2, 2],
+    promptGuidance: "HTTP/1.1 only is outdated. Usually old server software. Medium severity.",
   },
   cache_headers: {
     axis: "performance",
@@ -639,6 +797,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — configure cache headers",
     fixDescription: "Configure proper cache headers",
     weightRange: [3, 3],
+    promptGuidance:
+      "no-store for dynamic HTML is correct. Aggressive max-age on versioned static assets is best practice. CDN-fronted sites handle caching at edge.",
+    archetypeNotes: {
+      commerce: "Dynamic content (prices, inventory) should avoid aggressive caching.",
+      content: "Content sites benefit most from proper cache headers.",
+    },
   },
   no_compression: {
     axis: "performance",
@@ -648,6 +812,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — server/CDN config",
     fixDescription: "Enable gzip/brotli compression",
     weightRange: [1, 1],
+    promptGuidance:
+      "Header-based check may not reflect actual behavior (e.g., Cloudflare decompresses for Workers). Low weight.",
   },
   redirect_chain_length: {
     axis: "performance",
@@ -657,6 +823,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — reduce redirects",
     fixDescription: "Reduce redirect chain length",
     weightRange: [1, 2],
+    promptGuidance: "Each hop adds latency. 1 hop (HTTP→HTTPS) normal. 2 acceptable. 4+ = config issues.",
   },
   render_blocking_scripts: {
     axis: "performance",
@@ -664,6 +831,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [3, 3],
+    promptGuidance:
+      "Render-blocking scripts delay rendering. 1-2=low, 3-5=medium, 6+=high. async/defer may cause timing issues.",
   },
   third_party_count: {
     axis: "performance",
@@ -673,6 +842,11 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — audit and remove unnecessary scripts",
     fixDescription: "Reduce third-party scripts",
     weightRange: [2, 2],
+    promptGuidance:
+      "Each domain adds ~50-200ms overhead. >15=high, >8=medium. High count makes COEP impractical. Recommend auditing, not blanket removal.",
+    archetypeNotes: {
+      commerce: "E-commerce legitimately needs many scripts (payments, analytics, support). Focus on optimization.",
+    },
   },
   pagespeed_unavailable: {
     axis: "performance",
@@ -680,6 +854,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [2, 2],
+    promptGuidance: "PageSpeed unavailable — can't assess CWV. Don't speculate.",
   },
   resource_hints: {
     axis: "performance",
@@ -687,6 +862,9 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance:
+      "preload/preconnect/dns-prefetch indicate performance-aware engineering. Absence is NOT negative — bonus-only.",
+    archetypeNotes: { infrastructure: "Static sites/APIs don't need resource hints." },
   },
   http_blocked_performance: {
     axis: "performance",
@@ -694,6 +872,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [4, 4],
+    promptGuidance: "Cannot measure performance when HTTP blocked. Don't speculate.",
   },
   site_unreachable_performance: {
     axis: "performance",
@@ -701,6 +880,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [5, 5],
+    promptGuidance: "Cannot measure performance of unreachable site.",
   },
   slow_connection: {
     axis: "performance",
@@ -708,6 +888,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [2, 2],
+    promptGuidance: "Single probe location — may be geographic distance, not infrastructure quality. Don't overstate.",
   },
 
   // ── Infrastructure ───────────────────────────────────────────────────
@@ -718,6 +899,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [0, 0],
+    promptGuidance: "Informational only (weight 0). 2 is RFC minimum. Most registrars enforce 2+.",
   },
   ipv6: {
     axis: "infrastructure",
@@ -727,6 +909,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — add AAAA records",
     fixDescription: "Add IPv6 (AAAA) DNS records",
     weightRange: [1, 1],
+    promptGuidance: "Many hosts don't support IPv6. Informational, not actionable. IPv4-only is fine. Weight 1.",
   },
   lb: {
     axis: "infrastructure",
@@ -734,6 +917,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "Multiple A records suggest load balancing. Bonus-only.",
   },
   caa: {
     axis: "infrastructure",
@@ -743,6 +927,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — DNS records",
     fixDescription: "Add CAA DNS records",
     weightRange: [1, 1],
+    promptGuidance: "CAA restricts certificate issuance. Absence is informational.",
   },
   low_ttl: {
     axis: "infrastructure",
@@ -750,6 +935,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance:
+      "Low TTL (60-300s) is NORMAL for CDN-managed DNS — fast failover. NOT a problem. Only <60s worth noting.",
   },
   tcp_connection_time: {
     axis: "infrastructure",
@@ -759,6 +946,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — server/CDN optimization",
     fixDescription: "Optimize TCP connection time",
     weightRange: [2, 2],
+    promptGuidance: "Single probe location. <300ms=good, 300-500ms=ok, 500-1000ms=slow, >1000ms=very slow.",
   },
   dns_resolution_time: {
     axis: "infrastructure",
@@ -766,6 +954,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [2, 2],
+    promptGuidance: "Single probe location. <100ms=good, 100-200ms=ok, 200-500ms=slow, >500ms=very slow.",
   },
   ns_provider_diversity: {
     axis: "infrastructure",
@@ -775,6 +964,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — add secondary DNS provider",
     fixDescription: "Add secondary DNS provider for redundancy",
     weightRange: [1, 1],
+    promptGuidance:
+      "Multi-provider DNS is positive. Single major provider (Cloudflare/Route53/Google) runs massive anycast — secondary DNS unnecessary.",
   },
   mx_redundancy: {
     axis: "infrastructure",
@@ -782,6 +973,11 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance: "Multiple MX = email redundancy. No MX fine for non-email domains.",
+    archetypeNotes: {
+      infrastructure: "API/CDN domains don't need MX — don't recommend adding.",
+      application: "SaaS may handle email via application layer.",
+    },
   },
   site_unreachable: {
     axis: "infrastructure",
@@ -789,6 +985,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [5, 5],
+    promptGuidance: "DNS resolves but no HTTP response — fundamentally broken.",
   },
   http_blocked_infrastructure: {
     axis: "infrastructure",
@@ -796,6 +993,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [3, 3],
+    promptGuidance: "Site blocks automated analysis. Scoring limited to DNS/WHOIS/SSL.",
   },
   http_error_response: {
     axis: "infrastructure",
@@ -803,6 +1001,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [3, 4],
+    promptGuidance: "4xx to automated probes is common. 5xx more concerning. WAF blocks excluded.",
   },
   dns_inconsistent: {
     axis: "infrastructure",
@@ -812,6 +1011,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — verify DNS config",
     fixDescription: "Fix DNS record inconsistencies",
     weightRange: [3, 3],
+    promptGuidance: "Different IPs across resolvers is NORMAL for CDN (anycast/geo-DNS). Only flag non-CDN domains.",
   },
   dns_consistent: {
     axis: "infrastructure",
@@ -819,6 +1019,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "Consistent DNS is positive. CDN variation also reported as consistent (expected).",
   },
   bgp_unstable: {
     axis: "infrastructure",
@@ -826,6 +1027,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [2, 2],
+    promptGuidance: "BGP churn on responding site = traffic engineering (info). Only concerning if site unreachable.",
   },
   low_visibility: {
     axis: "infrastructure",
@@ -833,6 +1035,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [1, 3],
+    promptGuidance:
+      "BGP route visibility, NOT SEO. RIPE RIS vantage points concentrated in Europe/US. APAC/LATAM may show low visibility when fine in their market.",
   },
 
   // ── Trust ─────────────────────────────────────────────────────────
@@ -843,6 +1047,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [3, 3],
+    promptGuidance:
+      "<30d=newly registered (NRD, high risk); 30-90d=recent; 90d-1yr=young; 1-3yr=growing; 3-5yr=mature; 5yr+=established. Young domain + EV cert suggests legitimate new business.",
   },
   registration_length: {
     axis: "trust",
@@ -852,6 +1058,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — renew at registrar",
     fixDescription: "Extend domain registration period",
     weightRange: [2, 2],
+    promptGuidance:
+      "1 year is normal. Multi-year is trust signal. Near-expiry (<30d) is concern. Weak signal — many legitimate sites renew annually.",
   },
   breaches: {
     axis: "trust",
@@ -859,6 +1067,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [1, 4],
+    promptGuidance:
+      "Time decay: <1yr full weight, 1-3yr 75%, 3-5yr 50%, 5-10yr 25%, >10yr 10%. Past breach ≠ currently insecure. Distinguish verified vs unverified.",
   },
   tranco_rank: {
     axis: "trust",
@@ -866,6 +1076,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [1, 3],
+    promptGuidance:
+      "Top 1K=global; 1K-10K=major; 10K-100K=significant; 100K-1M=moderate. Unranked is neutral, not negative.",
   },
   greynoise_noise: {
     axis: "trust",
@@ -873,6 +1085,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [1, 2],
+    promptGuidance:
+      "IP with scanning traffic. CDN IPs excluded (shared infra). Non-CDN noise = moderate trust concern.",
   },
   greynoise_riot: {
     axis: "trust",
@@ -880,6 +1094,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance: "IP belongs to known legitimate service. Positive. CDN RIOT is expected, not additional bonus.",
   },
   email_trust: {
     axis: "trust",
@@ -889,6 +1104,9 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — DNS + email provider config",
     fixDescription: "Improve email authentication for trust",
     weightRange: [2, 3],
+    promptGuidance:
+      "Complete email auth (SPF+DKIM+DMARC) is trust signal. Incomplete leaves domain vulnerable to spoofing.",
+    archetypeNotes: { infrastructure: "API domains that don't send email: missing auth is informational." },
   },
   security_txt: {
     axis: "trust",
@@ -898,6 +1116,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — create /.well-known/security.txt",
     fixDescription: "Create security.txt file",
     weightRange: [1, 2],
+    promptGuidance:
+      "Presence is positive (responsible disclosure). With bug bounty = stronger. Absence is neutral — reward-only signal.",
+    archetypeNotes: {
+      corporate: "Corporate sites should have security.txt.",
+      institutional: "Enterprise/government benefit from security.txt.",
+    },
   },
   bimi_record: {
     axis: "trust",
@@ -905,6 +1129,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "Requires DMARC enforcement. Indicates advanced email maturity. Absence is neutral — reward-only.",
   },
   ads_txt: {
     axis: "trust",
@@ -912,6 +1137,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "Declares authorized ad sellers. Only relevant for publisher sites.",
+    archetypeNotes: { content: "Content sites with advertising should have ads.txt." },
   },
   cert_validation_type: {
     axis: "trust",
@@ -919,6 +1146,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [1, 3],
+    promptGuidance:
+      "95%+ of certs are DV (Let's Encrypt) — standard and expected. Only flag DV for financial/government. EV/OV are positive but DV is not weakness.",
+    archetypeNotes: {
+      institutional: "Government/financial should have EV or OV.",
+      commerce: "EV can increase trust for payments, but DV is not a problem.",
+    },
   },
   ct_caa_mismatch: {
     axis: "trust",
@@ -926,6 +1159,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [0, 0],
+    promptGuidance:
+      "Certs from CAs not in CAA may predate CAA deployment — informational ONLY, not vulnerability. Weight 0.",
   },
   organizational_identity: {
     axis: "trust",
@@ -935,6 +1170,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — add organization page",
     fixDescription: "Add about/team/organization page",
     weightRange: [2, 2],
+    promptGuidance:
+      "Privacy policy, terms, about page = organizational transparency. Missing is low concern for small/personal sites.",
   },
   ops_transparency: {
     axis: "trust",
@@ -942,6 +1179,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance: "Status pages, monitoring tools = mature operations. Bonus-only.",
   },
   cookie_consent_missing: {
     axis: "trust",
@@ -951,6 +1189,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — implement consent banner",
     fixDescription: "Implement cookie consent banner",
     weightRange: [2, 2],
+    promptGuidance:
+      "GDPR requires consent for EU-facing sites. US requirements minimal. Low concern for US-only sites without tracking cookies.",
+    archetypeNotes: {
+      institutional: "Government/education face higher compliance scrutiny.",
+      commerce: "E-commerce collecting user data should have consent management.",
+    },
   },
   cookie_consent_cmp: {
     axis: "trust",
@@ -960,6 +1204,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — configure CMP properly",
     fixDescription: "Improve cookie consent management platform",
     weightRange: [2, 2],
+    promptGuidance: "CMP detected is positive trust signal. Higher confidence = stronger.",
   },
   cookie_compliance: {
     axis: "trust",
@@ -969,6 +1214,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — fix compliance issues",
     fixDescription: "Fix cookie compliance issues",
     weightRange: [2, 2],
+    promptGuidance: "Compliance flags indicate potential regulatory issues. Severity scales with count.",
   },
   dmarc_reject: {
     axis: "trust",
@@ -978,6 +1224,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — DNS change (after sender audit)",
     fixDescription: "Upgrade DMARC policy to quarantine/reject",
     weightRange: [2, 2],
+    promptGuidance:
+      "Recommend gradual rollout: none → quarantine → reject. NEVER jump straight to p=reject. p=reject prevents spoofing. p=none = monitoring only.",
   },
   blocklist_trust: {
     axis: "trust",
@@ -985,6 +1233,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [2, 3],
+    promptGuidance: "Clean record is positive. Being listed is serious — severity scales with count.",
   },
 
   // ── Visibility ────────────────────────────────────────────────────
@@ -995,6 +1244,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [1, 3],
+    promptGuidance: "Tranco rank = traffic/popularity. Both trust and visibility signal. Unranked is neutral.",
   },
   structured_data: {
     axis: "visibility",
@@ -1002,6 +1252,13 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
+    promptGuidance:
+      "JSON-LD enhances search (rich snippets). Relevant schemas: Product for commerce, Article for content, Organization for corporate. CMS may auto-generate.",
+    archetypeNotes: {
+      commerce: "Product/Offer schema essential.",
+      content: "Article/BlogPosting improves search.",
+      corporate: "Organization schema helps identity.",
+    },
   },
   no_structured_data: {
     axis: "visibility",
@@ -1011,6 +1268,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — add JSON-LD to HTML",
     fixDescription: "Add structured data markup (JSON-LD)",
     weightRange: [2, 2],
+    promptGuidance:
+      "No JSON-LD. Impact depends on site type. If present without sitemap, may be CMS-generated. social_meta and og_completeness overlap — don't cite all for same issue.",
+    archetypeNotes: {
+      infrastructure: "APIs don't need structured data.",
+      application: "Apps behind login don't benefit.",
+    },
   },
   social_meta: {
     axis: "visibility",
@@ -1020,6 +1283,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — add meta tags",
     fixDescription: "Add Open Graph and Twitter Card meta tags",
     weightRange: [3, 3],
+    promptGuidance:
+      "OG + Twitter Card tags control social sharing appearance. Overlaps with og_completeness — don't cite both for same issue.",
+    archetypeNotes: {
+      infrastructure: "API domains don't need social meta.",
+      application: "Apps behind login don't benefit.",
+    },
   },
   robots_txt: {
     axis: "visibility",
@@ -1029,6 +1298,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — create robots.txt",
     fixDescription: "Add robots.txt file",
     weightRange: [2, 2],
+    promptGuidance: "Controls crawler access. Presence is standard. Absence is fine — crawlers index all by default.",
+    archetypeNotes: { application: "Private apps may intentionally omit or block." },
   },
   sitemap: {
     axis: "visibility",
@@ -1038,6 +1309,13 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — generate sitemap.xml",
     fixDescription: "Add sitemap.xml",
     weightRange: [2, 2],
+    promptGuidance:
+      "Helps search engines discover pages. Important for large content sites. Small sites with good linking don't need one.",
+    archetypeNotes: {
+      content: "Content sites with many articles should have sitemap.",
+      infrastructure: "API domains don't need sitemaps.",
+      application: "Apps behind login don't need sitemaps.",
+    },
   },
   legal_pages: {
     axis: "visibility",
@@ -1047,6 +1325,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~2-4 hours — create legal pages",
     fixDescription: "Add privacy policy and terms pages",
     weightRange: [1, 1],
+    promptGuidance: "Low weight (1) but important for trust/compliance.",
   },
   social_accounts: {
     axis: "visibility",
@@ -1054,6 +1333,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 3],
+    promptGuidance: "rel=me verified > homepage links. Relevance varies by site type.",
   },
   no_social_accounts: {
     axis: "visibility",
@@ -1063,6 +1343,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — create and link profiles",
     fixDescription: "Create and link social media accounts",
     weightRange: [1, 1],
+    promptGuidance: "Mild concern for content/corporate. Not relevant for APIs.",
+    archetypeNotes: { infrastructure: "API/infrastructure don't need social accounts." },
   },
   restrictive_robots: {
     axis: "visibility",
@@ -1072,6 +1354,11 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — update robots.txt",
     fixDescription: "Review restrictive robots.txt rules",
     weightRange: [2, 2],
+    promptGuidance: "Blocks all crawlers — no search visibility. May be intentional for private sites.",
+    archetypeNotes: {
+      infrastructure: "Blocking crawlers correct for APIs.",
+      application: "Internal apps should block crawlers.",
+    },
   },
   pwa_ready: {
     axis: "visibility",
@@ -1081,6 +1368,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1-2 hours — manifest + service worker",
     fixDescription: "Add PWA manifest and service worker",
     weightRange: [2, 2],
+    promptGuidance: "PWA readiness is capability/UX, not visibility. Don't over-recommend as 'visibility improvement.'",
   },
   canonical_url: {
     axis: "visibility",
@@ -1088,6 +1376,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "Self-referencing is standard. Cross-domain may be intentional.",
   },
   canonical_url_missing: {
     axis: "visibility",
@@ -1097,6 +1386,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add link rel=canonical",
     fixDescription: "Add canonical URL link tag",
     weightRange: [1, 1],
+    promptGuidance: "Risks duplicate content indexing. More important for content sites.",
+    archetypeNotes: { content: "Content sites should have canonical URLs." },
   },
   mobile_app_links: {
     axis: "visibility",
@@ -1104,6 +1395,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "Deep links configured. Bonus signal.",
   },
   rss_feed: {
     axis: "visibility",
@@ -1113,6 +1405,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~30 min — generate RSS/Atom feed",
     fixDescription: "Add RSS/Atom feed",
     weightRange: [1, 1],
+    promptGuidance: "RSS enables syndication. More valuable for content sites.",
+    archetypeNotes: { content: "Content sites should have RSS." },
   },
   hreflang: {
     axis: "visibility",
@@ -1120,6 +1414,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
+    promptGuidance: "International targeting tags. Positive for multi-language sites.",
   },
   favicon_missing: {
     axis: "visibility",
@@ -1129,6 +1424,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add favicon",
     fixDescription: "Add site favicon",
     weightRange: [1, 1],
+    promptGuidance: "Minor polish issue. Low weight.",
   },
   title_tag_missing: {
     axis: "visibility",
@@ -1138,6 +1434,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add title tag",
     fixDescription: "Add descriptive page title",
     weightRange: [1, 1],
+    promptGuidance: "Hurts search visibility. Easy fix.",
   },
   title_tag_generic: {
     axis: "visibility",
@@ -1147,6 +1444,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — write unique title",
     fixDescription: "Write a unique, descriptive page title",
     weightRange: [1, 1],
+    promptGuidance: "Generic titles waste ranking potential.",
   },
   meta_description_missing: {
     axis: "visibility",
@@ -1156,6 +1454,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~5 min — add meta tag",
     fixDescription: "Add meta description tag",
     weightRange: [1, 1],
+    promptGuidance: "Search engines generate own snippet. Having one is good practice.",
   },
   mobile_friendly: {
     axis: "visibility",
@@ -1165,6 +1464,8 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~1 hour — add viewport meta",
     fixDescription: "Add responsive viewport configuration",
     weightRange: [2, 2],
+    promptGuidance: "Viewport meta is fundamental for mobile-first indexing. width=device-width is correct.",
+    archetypeNotes: { infrastructure: "APIs may not need mobile-friendly design." },
   },
   og_completeness: {
     axis: "visibility",
@@ -1174,6 +1475,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~10 min — add OG meta tags",
     fixDescription: "Complete Open Graph meta tags",
     weightRange: [2, 2],
+    promptGuidance:
+      "5 OG properties: title, description, image, url, type. Overlaps with social_meta — don't cite both.",
+    archetypeNotes: {
+      infrastructure: "API domains don't need OG tags.",
+      application: "Apps behind login don't benefit.",
+    },
   },
   accessibility: {
     axis: "visibility",
@@ -1183,6 +1490,12 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~2-4 hours — fix WCAG issues",
     fixDescription: "Improve WCAG accessibility",
     weightRange: [1, 1],
+    promptGuidance:
+      "Weight 1 but legal importance can be high. ≥80=good, 50-79=needs work, <50=poor. ADA (US), EAA (EU).",
+    archetypeNotes: {
+      institutional: "Government/education have higher legal obligations (Section 508).",
+      corporate: "Increasing ADA litigation risk.",
+    },
   },
   site_unreachable_visibility: {
     axis: "visibility",
@@ -1190,6 +1503,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     actionable: false,
     canBeNonGood: true,
     weightRange: [5, 5],
+    promptGuidance: "Unreachable = zero visibility. Root cause is infrastructure.",
   },
 };
 

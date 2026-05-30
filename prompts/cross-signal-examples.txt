@@ -1,0 +1,28 @@
+CROSS-SIGNAL INSIGHT EXAMPLES (the quality bar you must meet):
+
+SECURITY EXAMPLES:
+- GOOD: "Your DMARC policy is set to 'none' while you have 3 DKIM selectors configured — this means you've done the hard work of setting up DKIM but aren't enforcing it, leaving the door open for spoofing despite having the infrastructure to prevent it."
+- GOOD: "Your SSL cert is from Let's Encrypt (90-day rotation) but your HSTS max-age is 31536000 (1 year) — if auto-renewal fails, HSTS-pinned browsers will refuse to connect for up to a year. Consider reducing max-age to 6 months or ensuring renewal monitoring."
+- GOOD: "CSP is present but allows 'unsafe-inline' in script-src — this largely negates the XSS protection CSP is designed to provide. Combined with no Permissions-Policy header, the browser-side security surface is under-utilized."
+- GOOD: "Referrer-Policy is set to 'unsafe-url' while the site uses authentication (indicated by Set-Cookie headers) — this means full URLs including session-related paths may leak to third-party resources."
+
+INFRASTRUCTURE EXAMPLES:
+- GOOD: "DNS returns 4 different A records across resolvers while Cloudflare is detected as CDN — this is expected anycast behavior, not DNS inconsistency. The 'inconsistent' label is misleading here."
+- GOOD: "Single NS provider (Cloudflare) with DNS resolution at 12ms — despite lacking NS provider diversity, Cloudflare's anycast network provides effectively the same geographic redundancy as a multi-provider setup."
+
+PERFORMANCE EXAMPLES:
+- GOOD: "CrUX shows LCP at 1.8s (good) but lab LCP is 4.2s (poor) — real users benefit from CDN caching and edge delivery that lab tests don't simulate. Trust the CrUX data here."
+- GOOD: "Your site loads scripts from 4 different analytics providers while also having a cookie consent banner — this combination suggests either A/B testing analytics tools or legacy scripts never cleaned up. Each additional third-party domain adds ~50-200ms of DNS+TLS overhead."
+
+TRUST EXAMPLES:
+- GOOD: "Domain is only 45 days old but has an EV certificate from DigiCert — this combination suggests a legitimate new business that invested in organizational validation, not a fly-by-night operation."
+- GOOD: "3 data breaches detected but all are >5 years old (2017, 2016, 2015) — with time decay weighting, these have minimal relevance to current security posture."
+
+VISIBILITY EXAMPLES:
+- GOOD: "Structured data (Organization schema) is present without a sitemap — this pattern suggests CMS-generated markup rather than intentional SEO work. The schema helps search but a sitemap would help discovery."
+- GOOD: "OG tags score 20/100 but the site's restrictive robots.txt blocks all crawlers — the missing OG tags are irrelevant since the site is intentionally hidden from search engines and social sharing."
+
+BAD EXAMPLES (never do this):
+- BAD: "Consider implementing a Content Security Policy to improve security." (generic, no data citation)
+- BAD: "Your security posture could be strengthened." (empty statement)
+- BAD: "The site restricts 8 features via Permissions-Policy but has no CSP — this inconsistent security posture suggests the headers were added piecemeal rather than as part of a comprehensive security review." — This is acceptable but make sure to cite SPECIFIC feature names and values.
