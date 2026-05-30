@@ -197,12 +197,17 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [1, 1],
   },
   referrer_policy: {
-    axis: "security", label: "Referrer-Policy Configured", actionable: false, canBeNonGood: false,
+    axis: "security", label: "Referrer-Policy Configured", actionable: false, canBeNonGood: true,
     weightRange: [1, 2],
   },
   referrer_policy_missing: {
     axis: "security", label: "No Referrer-Policy Header", actionable: true, canBeNonGood: true,
     effort: "~5 min — add response header", fixDescription: "Add Referrer-Policy header",
+    weightRange: [2, 2],
+  },
+  referrer_policy_unsafe: {
+    axis: "security", label: "Unsafe Referrer-Policy", actionable: true, canBeNonGood: true,
+    effort: "~5 min — update response header", fixDescription: "Change Referrer-Policy to strict-origin-when-cross-origin or no-referrer",
     weightRange: [2, 2],
   },
   permissions_policy: {
@@ -276,6 +281,11 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     axis: "security", label: "CORS Null Origin Allowed", actionable: true, canBeNonGood: true,
     effort: "~15 min — restrict CORS config", fixDescription: "Remove null from CORS allowed origins",
     weightRange: [2, 2],
+  },
+  open_resolver: {
+    axis: "security", label: "Open DNS Resolver", actionable: true, canBeNonGood: true,
+    effort: "~30 min — restrict recursion on nameserver", fixDescription: "Disable recursive queries on authoritative nameservers",
+    weightRange: [3, 3],
   },
   cors_wildcard_credentials: {
     axis: "security", label: "CORS Wildcard with Credentials", actionable: true, canBeNonGood: true,

@@ -313,6 +313,7 @@ export function calculateDomainScore(opts: {
   redirects: RedirectHop[];
   statusResult: { is_up: boolean; status_code: number | null; http_blocked?: boolean; status_label?: string } | null;
   robotsParsed: RobotsParsed | null;
+  openResolver?: { checked: boolean; open_resolvers: Array<{ ns: string; ip: string; method: string }> } | null;
 }): DomainScoreResult {
   // Step 1: Detect archetype
   const archetype = detectArchetype({
@@ -697,15 +698,15 @@ export function calculateDomainScore(opts: {
   // ─── Referrer-Policy Value Parsing ───────────────────────────────
   if (opts.headers && !opts.httpBlocked) {
     const referrerPolicy = (opts.headers["referrer-policy"] ?? "").toLowerCase().trim();
-    const goodPolicies = ["no-referrer", "strict-origin-when-cross-origin", "same-origin", "strict-origin"];
-    const weakPolicies = ["origin", "origin-when-cross-origin"];
-    const unsafePolicies = ["unsafe-url", "no-referrer-when-downgrade"];
-    if (goodPolicies.includes(referrerPolicy)) {
+    const goodPolicies = ["no-referrer", "strict-origin-when-cross-origin", "same-origin", "strict-origin", "origin-when-cross-origin"];
+    if (referrerPolicy === "unsafe-url") {
+      findings.push({ signal: "referrer_policy_unsafe", axis: "security", severity: "high", label: "Referrer-Policy: unsafe-url leaks full URL including path and query to all origins", tradeoff: "This is the least secure policy. Switch to strict-origin-when-cross-origin or no-referrer.", weight: 2 });
+    } else if (referrerPolicy === "no-referrer-when-downgrade") {
+      findings.push({ signal: "referrer_policy_unsafe", axis: "security", severity: "medium", label: "Referrer-Policy: no-referrer-when-downgrade leaks full URL to HTTP targets", tradeoff: "Leaks full URL (path + query) on HTTPS→HTTP navigations. Use strict-origin-when-cross-origin instead.", weight: 2 });
+    } else if (referrerPolicy === "origin") {
+      findings.push({ signal: "referrer_policy", axis: "security", severity: "info", label: "Referrer-Policy: origin (safe but limited)", tradeoff: "Sends only the origin, never the path. Safe but prevents analytics from seeing referrer paths. Consider strict-origin-when-cross-origin for a balance.", weight: 1 });
+    } else if (goodPolicies.includes(referrerPolicy)) {
       findings.push({ signal: "referrer_policy", axis: "security", severity: "good", label: `Referrer-Policy: ${referrerPolicy}`, tradeoff: null, weight: 1 });
-    } else if (unsafePolicies.includes(referrerPolicy)) {
-      findings.push({ signal: "referrer_policy", axis: "security", severity: "medium", label: `Referrer-Policy: ${referrerPolicy} leaks full URLs cross-origin`, tradeoff: null, weight: 2 });
-    } else if (weakPolicies.includes(referrerPolicy)) {
-      findings.push({ signal: "referrer_policy", axis: "security", severity: "info", label: `Referrer-Policy: ${referrerPolicy} (acceptable but not ideal)`, tradeoff: "Leaks the origin on cross-origin requests. Consider strict-origin-when-cross-origin for better privacy.", weight: 1 });
     } else if (!referrerPolicy) {
       findings.push({ signal: "referrer_policy_missing", axis: "security", severity: "low", label: "No Referrer-Policy header", tradeoff: null, weight: 2 });
     }
@@ -1457,6 +1458,18 @@ export function calculateDomainScore(opts: {
       // run massive anycast networks — single provider doesn't imply single point of failure.
       // Unrecognized providers = skip
     }
+  }
+
+  // ─── Open Resolver Detection ───────────────────────────────────
+  if (opts.openResolver?.checked && opts.openResolver.open_resolvers.length > 0) {
+    const nsNames = opts.openResolver.open_resolvers.map(r => r.ns).join(", ");
+    findings.push({
+      signal: "open_resolver", axis: "security",
+      severity: "high",
+      label: `Open DNS resolver detected: ${nsNames}`,
+      tradeoff: "Open resolvers can be abused for DNS amplification attacks. Disable recursive queries on authoritative nameservers.",
+      weight: 3,
+    });
   }
 
   // ─── NEW: Site Unreachable ───────────────────────────────────────

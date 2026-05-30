@@ -42,6 +42,7 @@ import { ripeRoutingCheck } from "./ripe-routing";
 import { outageLinksCheck } from "./outage-links";
 import { connectionTimingCheck } from "./connection-timing";
 import { socialAccountsCheck } from "./social-accounts";
+import { openResolverCheck } from "./open-resolver";
 
 /**
  * The canonical ordered list of Phase 2 parallel checks.
@@ -77,4 +78,5 @@ export const registry: readonly Check[] = [
   outageLinksCheck,
   connectionTimingCheck,
   socialAccountsCheck,
+  openResolverCheck,
 ] as const;

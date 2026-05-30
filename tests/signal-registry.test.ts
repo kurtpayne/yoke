@@ -239,7 +239,7 @@ describe("Signal Registry", () => {
     expect(AXIS_WEIGHTS).toHaveProperty("visibility");
   });
 
-  it("registry contains exactly 134 signals", () => {
-    expect(SIGNAL_IDS.length).toBe(134);
+  it("registry contains exactly 136 signals", () => {
+    expect(SIGNAL_IDS.length).toBe(136);
   });
 });
