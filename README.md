@@ -243,14 +243,16 @@ Analysis checks use a registry pattern — each check is a self-contained file u
 
 ## Self-Hosting
 
-Yoke is designed to be self-hosted on Cloudflare's free/paid tiers. You'll need a **Workers Paid plan** ($5/mo) for D1 and KV access.
+Yoke is designed to be self-hosted on Cloudflare's free/paid tiers. You'll need a **Workers Paid plan** ($5/mo).
+
+> **Why not the free tier?** The free plan caps CPU time at 10ms per request. A single domain analysis runs ~30 external API calls, parses HTML, scores 135 signals, and writes results to KV/D1 — that needs hundreds of milliseconds of CPU time minimum. The free tier also limits subrequests to 50/request (compare mode alone exceeds that) and KV writes to 1,000/day (a few hundred analyses would exhaust it). The $5/mo paid plan removes all three constraints.
 
 ### Prerequisites
 
 - [Bun](https://bun.sh/) — client + worker builds
 - [Node.js 22+](https://nodejs.org/) — Wrangler CLI requires it
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) — `npm install -g wrangler`
-- [Cloudflare account](https://dash.cloudflare.com/) — Workers Paid plan ($5/mo) for D1 + KV
+- [Cloudflare account](https://dash.cloudflare.com/) — Workers Paid plan ($5/mo)
 - A domain on Cloudflare (for custom domain routing)
 
 Optional (only for Fly proxy):
