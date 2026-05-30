@@ -3,6 +3,15 @@ import { Sparkles, CheckCircle2, XCircle, Loader2, Zap, Target, Copy, Check, Che
 import type { AnalysisResult } from "../utils/types";
 import type { ScoreFinding, Axis, Severity } from "../api";
 import { findReferenceLink } from "./DomainSignals";
+import { severityColor, severityIcon } from "../utils/severity";
+import {
+  GRADE_THRESHOLDS,
+  SEVERITY_SCORES,
+  AXIS_WEIGHTS,
+  NON_ACTIONABLE_SIGNALS,
+  EFFORT_MAP,
+  FIX_DESC_MAP,
+} from "../../../worker/src/config/signal-registry";
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -329,27 +338,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
 }
 
 // ─── Grade-Up Simulator Engine ──────────────────────────────────────
-
-const GRADE_THRESHOLDS = [
-  { grade: "A+", min: 95 },
-  { grade: "A", min: 90 },
-  { grade: "B+", min: 85 },
-  { grade: "B", min: 80 },
-  { grade: "C+", min: 75 },
-  { grade: "C", min: 65 },
-  { grade: "D", min: 50 },
-  { grade: "F", min: 0 },
-];
-
-const SEVERITY_SCORES: Record<string, number> = {
-  critical: 0, high: 15, medium: 40, low: 65, info: 82, good: 100,
-};
-
-// SYNC: must match server AXIS_WEIGHTS in contextual-scoring.ts
-// TODO: fetch from /api/scoring endpoint for single source of truth
-const AXIS_WEIGHTS: Record<string, number> = {
-  security: 0.28, reliability: 0.25, trust: 0.12, performance: 0.20, visibility: 0.15,
-};
+// GRADE_THRESHOLDS, SEVERITY_SCORES, AXIS_WEIGHTS imported from signal-registry (single source of truth)
 
 interface GradeUpItem {
   signal: string;
@@ -402,17 +391,7 @@ function generateGradeUpPlan(data: AnalysisResult): { items: GradeUpItem[]; curr
     for (const finding of axisData.findings) {
       if (finding.severity === "good") continue;
 
-      // Skip non-actionable signals — things the site operator cannot change
-      const NON_ACTIONABLE_SIGNALS = [
-        "breaches",           // historical data breaches can't be undone
-        "domain_age_trust",   // domain age increases only with time
-        "blocklist_trust",    // clean record = nothing to do; listed = complex remediation
-        "blocklist_listed",   // same — shown in Quick Wins separately if listed
-        "tranco_rank",        // site popularity is not directly actionable
-        "greynoise_noise",    // IP reputation from shared infrastructure
-        "greynoise_riot",     // IP recognition — not controllable
-        "ct_caa_mismatch",    // informational CT log observation
-      ];
+      // Skip non-actionable signals — derived from signal-registry (single source of truth)
       if (NON_ACTIONABLE_SIGNALS.includes(finding.signal)) continue;
 
       // Simulate fixing this finding: change its severity to "good" and recalculate
@@ -426,91 +405,10 @@ function generateGradeUpPlan(data: AnalysisResult): { items: GradeUpItem[]; curr
 
       if (compositeDelta < 0.1) continue; // negligible impact
 
-      const effortMap: Record<string, string> = {
-        // Security
-        hsts: "~10 min — add one response header",
-        csp: "~1-2 hours — requires auditing scripts/styles",
-        x_content_type: "~5 min — one-line header",
-        permissions_policy: "~10 min — add response header",
-        referrer_policy: "~5 min — add response header",
-        ssl_grade: "~30 min — server config",
-        dnssec: "~30 min — registrar setting",
-        caa: "~10 min — DNS records",
-        email_spf: "~10 min — one DNS TXT record",
-        email_dkim: "~30 min — email provider config",
-        email_dmarc: "~15 min — one DNS TXT record",
-        dmarc_policy: "~5 min — DNS change (after sender audit)",
-        blocklist: "Varies — investigate and request delisting",
-        cookie_secure: "~30 min — update cookie settings",
-        security_txt: "~10 min — create /.well-known/security.txt",
-        server_version: "~10 min — strip version from headers",
-        // Performance
-        perf_score: "Varies — run Lighthouse for details",
-        lcp: "~1-2 hours — optimize images and loading",
-        cls: "~1 hour — fix layout shifts",
-        ttfb: "~30 min — server/CDN optimization",
-        compression: "~15 min — server/CDN config",
-        http2: "~30 min — server/CDN config",
-        caching: "~30 min — configure cache headers",
-        // Trust
-        domain_age_trust: "Cannot be changed — age increases naturally",
-        domain_expiry: "~5 min — renew at registrar",
-        // Reliability
-        ns_count: "~15 min — add nameservers at registrar",
-        ipv6: "~15 min — add AAAA records",
-        dns_consistency: "~30 min — verify DNS configuration",
-        // Visibility
-        structured_data: "~15 min — add JSON-LD to HTML",
-        social_meta: "~10 min — add meta tags",
-        social_verified: "~5 min — add rel=\"me\" links",
-        social_not_verified: "~5 min — add rel=\"me\" links",
-        accessibility: "~2-4 hours — fix WCAG issues",
-        sitemap: "~15 min — generate sitemap.xml",
-        robots_restrictive: "~10 min — update robots.txt",
-      };
-
-      const fixDescMap: Record<string, string> = {
-        hsts: "Add Strict-Transport-Security header",
-        csp: "Add Content-Security-Policy header",
-        x_content_type: "Add X-Content-Type-Options: nosniff",
-        permissions_policy: "Add Permissions-Policy header",
-        referrer_policy: "Add Referrer-Policy header",
-        ssl_grade: "Upgrade TLS configuration",
-        dnssec: "Enable DNSSEC at your registrar",
-        caa: "Add CAA DNS records",
-        email_spf: "Add SPF DNS record",
-        email_dkim: "Configure DKIM with email provider",
-        email_dmarc: "Add DMARC DNS record",
-        dmarc_policy: "Upgrade DMARC policy to quarantine/reject",
-        blocklist: "Investigate and request blocklist delisting",
-        cookie_secure: "Set Secure/HttpOnly/SameSite on cookies",
-        security_txt: "Create security.txt file",
-        server_version: "Remove server version from headers",
-        perf_score: "Optimize page performance",
-        lcp: "Reduce Largest Contentful Paint time",
-        cls: "Fix Cumulative Layout Shift issues",
-        ttfb: "Reduce Time to First Byte",
-        compression: "Enable gzip/brotli compression",
-        http2: "Upgrade to HTTP/2 or HTTP/3",
-        caching: "Configure proper cache headers",
-        domain_age_trust: "Domain age (increases naturally over time)",
-        domain_expiry: "Extend domain registration",
-        ns_count: "Add additional nameservers",
-        ipv6: "Add IPv6 (AAAA) DNS records",
-        dns_consistency: "Fix DNS propagation inconsistencies",
-        structured_data: "Add JSON-LD structured data",
-        social_meta: "Add Open Graph and Twitter Card meta tags",
-        social_verified: "Add rel=\"me\" verification links",
-        social_not_verified: "Verify social accounts with rel=\"me\"",
-        accessibility: "Improve WCAG accessibility",
-        sitemap: "Add sitemap.xml",
-        robots_restrictive: "Review restrictive robots.txt rules",
-      };
-
-      // Try to match signal to known effort/fix
+      // Effort and fix description from signal-registry (single source of truth)
       const signalKey = finding.signal.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-      const effort = effortMap[signalKey] || "Varies";
-      const fixDescription = fixDescMap[signalKey] || finding.label;
+      const effort = EFFORT_MAP[signalKey] || "Varies";
+      const fixDescription = FIX_DESC_MAP[signalKey] || finding.label;
 
       items.push({
         signal: finding.signal,
@@ -1173,9 +1071,8 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
 
   const totalGain = plan.items.reduce((sum, i) => sum + i.pointGain, 0);
   const projectedScore = Math.min(100, Math.round(plan.currentScore + totalGain));
-  // TODO: These grade thresholds are duplicated from server-side gradeFromComposite()
-  // in contextual-scoring.ts. Consider exposing via /api/scoring or a shared constants file.
-  const projectedGrade = projectedScore >= 95 ? "A+" : projectedScore >= 90 ? "A" : projectedScore >= 85 ? "B+" : projectedScore >= 80 ? "B" : projectedScore >= 75 ? "C+" : projectedScore >= 70 ? "C" : projectedScore >= 65 ? "D+" : projectedScore >= 50 ? "D" : "F";
+  // Grade thresholds from signal-registry (single source of truth)
+  const projectedGrade = (GRADE_THRESHOLDS.find(g => projectedScore >= g.min) ?? GRADE_THRESHOLDS[GRADE_THRESHOLDS.length - 1]).grade;
 
   const progressPct = Math.min(((plan.currentScore - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0)) / (plan.targetThreshold - (GRADE_THRESHOLDS.find(g => g.grade === plan.currentGrade)?.min ?? 0))) * 100, 100);
 
@@ -1391,10 +1288,7 @@ function QuickWinsPanel({ actionItems, data }: { actionItems: ActionItem[]; data
 function CrossSignalInsightsCard({ insights }: { insights: CrossSignalInsight[] }) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
-  const severityColor = (s: string) =>
-    s === "high" ? "var(--danger)" : s === "medium" ? "var(--warning)" : s === "low" ? "#58a6ff" : "var(--muted)";
-  const severityIcon = (s: string) =>
-    s === "high" ? "🔴" : s === "medium" ? "🟡" : s === "low" ? "🔵" : "ℹ️";
+  // severityColor and severityIcon imported from ../utils/severity (single source of truth)
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

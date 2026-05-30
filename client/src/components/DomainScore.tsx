@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Tooltip } from "./Tooltip";
 import type { AnalysisResult, Axis, AxisScoreData, ArchetypeName } from "../utils/types";
+import { severityColor, severityIcon, gradeColor } from "../utils/severity";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -394,17 +395,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
 }
 
 // ─── Composite Score Display ─────────────────────────────────────────
-
-function gradeColor(grade: string): string {
-  if (grade === "A+") return "var(--success)";
-  if (grade === "A") return "var(--success)";
-  if (grade === "B+") return "#56d364";
-  if (grade === "B") return "#7ee787";
-  if (grade === "C+") return "var(--warning)";
-  if (grade === "C") return "var(--warning)";
-  if (grade === "D") return "#ffa198";
-  return "var(--danger)";
-}
+// gradeColor, severityColor, severityIcon imported from ../utils/severity
 
 function scoreColor(score: number): string {
   if (score >= 90) return "var(--success)";
@@ -562,30 +553,7 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
 }
 
 // ─── Top Findings Summary ────────────────────────────────────────────
-
-function severityColor(severity: string): string {
-  switch (severity) {
-    case "critical": return "var(--danger)";
-    case "high": return "#ffa198";
-    case "medium": return "var(--warning)";
-    case "low": return "var(--dim)";
-    case "info": return "var(--accent)";
-    case "good": return "var(--success)";
-    default: return "var(--dim)";
-  }
-}
-
-function severityIcon(severity: string): string {
-  switch (severity) {
-    case "critical": return "🔴";
-    case "high": return "🟠";
-    case "medium": return "🟡";
-    case "low": return "🔵";
-    case "info": return "ℹ️";
-    case "good": return "✅";
-    default: return "·";
-  }
-}
+// severityColor and severityIcon imported from ../utils/severity
 
 function TopFindings({ axes }: { axes: Record<Axis, AxisScoreData> }) {
   // Collect non-good findings across all axes, sorted by severity

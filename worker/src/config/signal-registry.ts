@@ -1,0 +1,731 @@
+// ─── Signal Registry ─────────────────────────────────────────────────
+// Single source of truth for all 127 scoring signals.
+// Every signal declares its axis, actionability, effort, fix description,
+// and weight range. Derived constants (NON_ACTIONABLE, EFFORT_MAP, etc.)
+// are exported for use across server and client layers.
+//
+// When adding a new signal:
+//   1. Add it here
+//   2. Add it to contextual-scoring.ts findings.push()
+//   3. Run `npx vitest run` — the registry enforcement test will catch gaps
+
+import type { Axis, Severity } from "./contextual-scoring-types";
+
+// ─── Grade Thresholds (single source of truth) ──────────────────────
+
+export const GRADE_THRESHOLDS = [
+  { grade: "A+", min: 95 },
+  { grade: "A", min: 90 },
+  { grade: "B+", min: 85 },
+  { grade: "B", min: 80 },
+  { grade: "C+", min: 75 },
+  { grade: "C", min: 70 },
+  { grade: "D+", min: 65 },
+  { grade: "D", min: 50 },
+  { grade: "F", min: 0 },
+] as const;
+
+// ─── Severity → Score mapping ───────────────────────────────────────
+
+export const SEVERITY_SCORES: Record<Severity, number> = {
+  critical: 0, high: 15, medium: 40, low: 65, info: 82, good: 100,
+};
+
+// ─── Axis Weights ───────────────────────────────────────────────────
+
+export const AXIS_WEIGHTS: Record<Axis, number> = {
+  security: 0.28,
+  reliability: 0.25,
+  trust: 0.12,
+  performance: 0.20,
+  visibility: 0.15,
+};
+
+// ─── Signal Definition ──────────────────────────────────────────────
+
+export interface SignalDef {
+  /** Which of the 5 axes this signal belongs to */
+  axis: Axis;
+  /** Human-readable label for the signal */
+  label: string;
+  /** Is this signal actionable by a site operator? */
+  actionable: boolean;
+  /** Can this signal ever be non-good? If false, it's always "good" or absent */
+  canBeNonGood: boolean;
+  /** Grade-Up effort estimate (when actionable and canBeNonGood) */
+  effort?: string;
+  /** Grade-Up fix description (when actionable and canBeNonGood) */
+  fixDescription?: string;
+  /** Weight range [min, max] used in scoring */
+  weightRange: [number, number];
+}
+
+// ─── Signal Registry ────────────────────────────────────────────────
+
+export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
+  // ── Security ──────────────────────────────────────────────────────
+
+  ssl_grade: {
+    axis: "security", label: "SSL/TLS Grade", actionable: true, canBeNonGood: true,
+    effort: "~30 min — server/CDN config", fixDescription: "Upgrade TLS configuration",
+    weightRange: [3, 3],
+  },
+  ssl_missing: {
+    axis: "security", label: "No SSL Certificate", actionable: true, canBeNonGood: true,
+    effort: "~30 min — certificate setup", fixDescription: "Install SSL/TLS certificate",
+    weightRange: [3, 3],
+  },
+  hsts: {
+    axis: "security", label: "HSTS Enabled", actionable: false, canBeNonGood: false,
+    weightRange: [4, 4],
+  },
+  hsts_missing: {
+    axis: "security", label: "HSTS Not Configured", actionable: true, canBeNonGood: true,
+    effort: "~10 min — add one response header", fixDescription: "Add Strict-Transport-Security header",
+    weightRange: [4, 4],
+  },
+  hsts_max_age: {
+    axis: "security", label: "HSTS Max-Age Too Short", actionable: true, canBeNonGood: true,
+    effort: "~5 min — update header value", fixDescription: "Increase HSTS max-age to at least 1 year",
+    weightRange: [1, 2],
+  },
+  hsts_preload: {
+    axis: "security", label: "HSTS Preload", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  csp: {
+    axis: "security", label: "Content Security Policy Present", actionable: false, canBeNonGood: false,
+    weightRange: [3, 3],
+  },
+  csp_missing: {
+    axis: "security", label: "No Content Security Policy", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — requires auditing scripts/styles", fixDescription: "Add Content-Security-Policy header",
+    weightRange: [3, 3],
+  },
+  csp_quality: {
+    axis: "security", label: "CSP Quality", actionable: true, canBeNonGood: true,
+    effort: "~1 hour — tighten CSP directives", fixDescription: "Improve Content-Security-Policy directives",
+    weightRange: [2, 3],
+  },
+  csp_missing_base_uri: {
+    axis: "security", label: "CSP Missing base-uri", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add CSP directive", fixDescription: "Add base-uri directive to CSP",
+    weightRange: [1, 1],
+  },
+  csp_missing_object_src: {
+    axis: "security", label: "CSP Missing object-src", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add CSP directive", fixDescription: "Add object-src directive to CSP",
+    weightRange: [1, 1],
+  },
+  csp_report_only: {
+    axis: "security", label: "CSP Report-Only", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  xfo: {
+    axis: "security", label: "X-Frame-Options", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add one response header", fixDescription: "Add X-Frame-Options header",
+    weightRange: [2, 2],
+  },
+  xcto: {
+    axis: "security", label: "X-Content-Type-Options", actionable: true, canBeNonGood: true,
+    effort: "~5 min — one-line header", fixDescription: "Add X-Content-Type-Options: nosniff",
+    weightRange: [1, 1],
+  },
+  dnssec: {
+    axis: "security", label: "DNSSEC", actionable: true, canBeNonGood: true,
+    effort: "~30 min — registrar setting", fixDescription: "Enable DNSSEC at your registrar",
+    weightRange: [1, 1],
+  },
+  blocklist_listed: {
+    axis: "security", label: "Blocklist Listed", actionable: false, canBeNonGood: true,
+    weightRange: [3, 3],
+  },
+  email_auth: {
+    axis: "security", label: "Email Authentication", actionable: false, canBeNonGood: false,
+    weightRange: [3, 3],
+  },
+  email_auth_incomplete: {
+    axis: "security", label: "Incomplete Email Authentication", actionable: true, canBeNonGood: true,
+    effort: "~30 min — DNS records + email provider config", fixDescription: "Complete email authentication setup (SPF+DKIM+DMARC)",
+    weightRange: [3, 3],
+  },
+  spf_without_dmarc: {
+    axis: "security", label: "SPF Without DMARC", actionable: true, canBeNonGood: true,
+    effort: "~15 min — one DNS TXT record", fixDescription: "Add DMARC DNS record",
+    weightRange: [2, 2],
+  },
+  waf_detected: {
+    axis: "security", label: "WAF Detected", actionable: false, canBeNonGood: false,
+    weightRange: [1, 2],
+  },
+  caa_records: {
+    axis: "security", label: "CAA Records Present", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  caa_wildcard_unrestricted: {
+    axis: "security", label: "CAA Wildcard Unrestricted", actionable: true, canBeNonGood: true,
+    effort: "~10 min — add wildcard CAA record", fixDescription: "Add wildcard CAA DNS record",
+    weightRange: [0, 0], // weight 0 = informational, no score impact
+  },
+  caa_iodef: {
+    axis: "security", label: "CAA iodef Reporting", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  cert_wildcard: {
+    axis: "security", label: "Wildcard Certificate", actionable: true, canBeNonGood: true,
+    effort: "~30 min — replace with per-domain certs", fixDescription: "Replace wildcard certificate with per-domain certificates",
+    weightRange: [1, 1],
+  },
+  open_ports: {
+    axis: "security", label: "Open Ports", actionable: true, canBeNonGood: true,
+    effort: "~30 min — firewall rules", fixDescription: "Close unnecessary open ports",
+    weightRange: [3, 3],
+  },
+  known_vulnerabilities: {
+    axis: "security", label: "Known Vulnerabilities", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — patch/update affected software", fixDescription: "Patch known vulnerabilities",
+    weightRange: [5, 5],
+  },
+  cookie_security: {
+    axis: "security", label: "Cookie Security", actionable: true, canBeNonGood: true,
+    effort: "~30 min — update cookie settings", fixDescription: "Set Secure/HttpOnly/SameSite on cookies",
+    weightRange: [3, 3],
+  },
+  server_version_disclosure: {
+    axis: "security", label: "Server Version Disclosure", actionable: true, canBeNonGood: true,
+    effort: "~10 min — strip version from headers", fixDescription: "Remove server version from response headers",
+    weightRange: [1, 1],
+  },
+  referrer_policy: {
+    axis: "security", label: "Referrer-Policy Configured", actionable: false, canBeNonGood: false,
+    weightRange: [1, 2],
+  },
+  referrer_policy_missing: {
+    axis: "security", label: "No Referrer-Policy Header", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add response header", fixDescription: "Add Referrer-Policy header",
+    weightRange: [2, 2],
+  },
+  permissions_policy: {
+    axis: "security", label: "Permissions-Policy Configured", actionable: false, canBeNonGood: false,
+    weightRange: [1, 2],
+  },
+  permissions_policy_missing: {
+    axis: "security", label: "No Permissions-Policy Header", actionable: true, canBeNonGood: true,
+    effort: "~10 min — add response header", fixDescription: "Add Permissions-Policy header",
+    weightRange: [2, 2],
+  },
+  permissions_policy_unrestricted: {
+    axis: "security", label: "Permissions-Policy Too Permissive", actionable: true, canBeNonGood: true,
+    effort: "~15 min — restrict policy directives", fixDescription: "Restrict Permissions-Policy directives",
+    weightRange: [2, 2],
+  },
+  http_to_https_redirect: {
+    axis: "security", label: "HTTP→HTTPS Redirect", actionable: false, canBeNonGood: false,
+    weightRange: [3, 3],
+  },
+  no_http_to_https_redirect: {
+    axis: "security", label: "No HTTP→HTTPS Redirect", actionable: true, canBeNonGood: true,
+    effort: "~10 min — server/CDN config", fixDescription: "Configure HTTP→HTTPS redirect",
+    weightRange: [2, 2],
+  },
+  mixed_content: {
+    axis: "security", label: "Mixed Content", actionable: true, canBeNonGood: true,
+    effort: "~1 hour — update resource URLs", fixDescription: "Fix mixed HTTP/HTTPS content",
+    weightRange: [2, 3],
+  },
+  subresource_integrity: {
+    axis: "security", label: "Subresource Integrity", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  subresource_integrity_missing: {
+    axis: "security", label: "SRI Missing on External Scripts", actionable: true, canBeNonGood: true,
+    effort: "~30 min — add SRI hashes to external scripts", fixDescription: "Add SRI integrity attributes to external scripts",
+    weightRange: [1, 1],
+  },
+  subresource_integrity_partial: {
+    axis: "security", label: "Partial SRI Coverage", actionable: true, canBeNonGood: true,
+    effort: "~15 min — add SRI to remaining scripts", fixDescription: "Add SRI to remaining external scripts",
+    weightRange: [1, 1],
+  },
+  form_action_security: {
+    axis: "security", label: "Insecure Form Action", actionable: true, canBeNonGood: true,
+    effort: "~15 min — update form URLs", fixDescription: "Secure form action URLs (use HTTPS)",
+    weightRange: [3, 3],
+  },
+  mta_sts: {
+    axis: "security", label: "MTA-STS", actionable: true, canBeNonGood: true,
+    effort: "~30 min — DNS + well-known file", fixDescription: "Configure MTA-STS policy",
+    weightRange: [1, 1],
+  },
+  security_headers_completeness: {
+    axis: "security", label: "Security Headers Completeness", actionable: true, canBeNonGood: true,
+    effort: "~30 min — add missing security headers", fixDescription: "Add missing security response headers",
+    weightRange: [2, 2],
+  },
+  hpkp_deprecated: {
+    axis: "security", label: "Deprecated HPKP Header", actionable: true, canBeNonGood: true,
+    effort: "~5 min — remove header", fixDescription: "Remove deprecated Public-Key-Pins header",
+    weightRange: [1, 2],
+  },
+  cors_wildcard: {
+    axis: "security", label: "CORS Wildcard Origin", actionable: true, canBeNonGood: true,
+    effort: "~15 min — restrict CORS config", fixDescription: "Restrict CORS Access-Control-Allow-Origin",
+    weightRange: [1, 1],
+  },
+  cors_null_origin: {
+    axis: "security", label: "CORS Null Origin Allowed", actionable: true, canBeNonGood: true,
+    effort: "~15 min — restrict CORS config", fixDescription: "Remove null from CORS allowed origins",
+    weightRange: [2, 2],
+  },
+  cors_wildcard_credentials: {
+    axis: "security", label: "CORS Wildcard with Credentials", actionable: true, canBeNonGood: true,
+    effort: "~15 min — fix CORS config", fixDescription: "Remove credentials with wildcard CORS origin",
+    weightRange: [4, 4],
+  },
+  cross_origin_isolation: {
+    axis: "security", label: "Cross-Origin Isolation", actionable: true, canBeNonGood: true,
+    effort: "~30 min — add COOP/COEP headers", fixDescription: "Enable cross-origin isolation (COOP/COEP)",
+    weightRange: [1, 1],
+  },
+  tls_version: {
+    axis: "security", label: "TLS Version", actionable: true, canBeNonGood: true,
+    effort: "~30 min — server config", fixDescription: "Upgrade minimum TLS version",
+    weightRange: [1, 3],
+  },
+  cert_expiry_proximity: {
+    axis: "security", label: "Certificate Expiry", actionable: true, canBeNonGood: true,
+    effort: "~15 min — renew certificate", fixDescription: "Renew SSL/TLS certificate",
+    weightRange: [1, 4],
+  },
+  pre_consent_cookies: {
+    axis: "security", label: "Pre-Consent Cookies", actionable: true, canBeNonGood: true,
+    effort: "~1 hour — fix cookie consent flow", fixDescription: "Fix pre-consent cookie behavior",
+    weightRange: [3, 3],
+  },
+  script_privacy: {
+    axis: "security", label: "Script Privacy Concerns", actionable: true, canBeNonGood: true,
+    effort: "~1 hour — review and replace trackers", fixDescription: "Review third-party tracking scripts",
+    weightRange: [3, 3],
+  },
+  http_blocked_security: {
+    axis: "security", label: "HTTP Blocked (Security)", actionable: false, canBeNonGood: true,
+    weightRange: [3, 3],
+  },
+  vulnerable_js_libraries: {
+    axis: "security", label: "Vulnerable JS Libraries", actionable: true, canBeNonGood: true,
+    effort: "~30 min — update dependencies", fixDescription: "Update vulnerable JavaScript libraries",
+    weightRange: [1, 3],
+  },
+
+  // ── Performance ───────────────────────────────────────────────────
+
+  perf_score: {
+    axis: "performance", label: "PageSpeed Score", actionable: true, canBeNonGood: true,
+    effort: "Varies — run Lighthouse for details", fixDescription: "Optimize page performance (see PageSpeed report)",
+    weightRange: [5, 5],
+  },
+  lcp: {
+    axis: "performance", label: "Largest Contentful Paint", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — optimize images and loading", fixDescription: "Reduce Largest Contentful Paint time",
+    weightRange: [4, 4],
+  },
+  cls: {
+    axis: "performance", label: "Cumulative Layout Shift", actionable: true, canBeNonGood: true,
+    effort: "~1 hour — fix layout shifts", fixDescription: "Fix Cumulative Layout Shift issues",
+    weightRange: [3, 3],
+  },
+  ttfb: {
+    axis: "performance", label: "Time to First Byte", actionable: true, canBeNonGood: true,
+    effort: "~30 min — server/CDN optimization", fixDescription: "Reduce Time to First Byte",
+    weightRange: [3, 3],
+  },
+  fcp: {
+    axis: "performance", label: "First Contentful Paint", actionable: true, canBeNonGood: true,
+    effort: "~1 hour — optimize render path", fixDescription: "Reduce First Contentful Paint time",
+    weightRange: [2, 2],
+  },
+  inp: {
+    axis: "performance", label: "Interaction to Next Paint", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — optimize JS execution", fixDescription: "Reduce Interaction to Next Paint time",
+    weightRange: [3, 3],
+  },
+  tbt: {
+    axis: "performance", label: "Total Blocking Time", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — reduce JS blocking", fixDescription: "Reduce Total Blocking Time",
+    weightRange: [2, 2],
+  },
+  crux_field_data: {
+    axis: "performance", label: "CrUX Field Data", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  cdn: {
+    axis: "performance", label: "CDN Detected", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  http2: {
+    axis: "performance", label: "HTTP/2 Enabled", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  http3: {
+    axis: "performance", label: "HTTP/3 Enabled", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  http1_only: {
+    axis: "performance", label: "HTTP/1.1 Only", actionable: true, canBeNonGood: true,
+    effort: "~30 min — server/CDN config", fixDescription: "Enable HTTP/2 on server",
+    weightRange: [2, 2],
+  },
+  cache_headers: {
+    axis: "performance", label: "Cache Headers", actionable: true, canBeNonGood: true,
+    effort: "~30 min — configure cache headers", fixDescription: "Configure proper cache headers",
+    weightRange: [3, 3],
+  },
+  no_compression: {
+    axis: "performance", label: "No Compression", actionable: true, canBeNonGood: true,
+    effort: "~10 min — server/CDN config", fixDescription: "Enable gzip/brotli compression",
+    weightRange: [1, 1],
+  },
+  redirect_chain_length: {
+    axis: "performance", label: "Redirect Chain", actionable: true, canBeNonGood: true,
+    effort: "~15 min — reduce redirects", fixDescription: "Reduce redirect chain length",
+    weightRange: [1, 2],
+  },
+  render_blocking_scripts: {
+    axis: "performance", label: "Render-Blocking Scripts", actionable: false, canBeNonGood: false,
+    weightRange: [3, 3],
+  },
+  third_party_count: {
+    axis: "performance", label: "Third-Party Script Count", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — audit and remove unnecessary scripts", fixDescription: "Reduce third-party scripts",
+    weightRange: [2, 2],
+  },
+  pagespeed_unavailable: {
+    axis: "performance", label: "PageSpeed Unavailable", actionable: false, canBeNonGood: true,
+    weightRange: [2, 2],
+  },
+  resource_hints: {
+    axis: "performance", label: "Resource Hints", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  http_blocked_performance: {
+    axis: "performance", label: "HTTP Blocked (Performance)", actionable: false, canBeNonGood: true,
+    weightRange: [4, 4],
+  },
+  site_unreachable_performance: {
+    axis: "performance", label: "Site Unreachable (Performance)", actionable: false, canBeNonGood: true,
+    weightRange: [5, 5],
+  },
+  slow_connection: {
+    axis: "performance", label: "Slow Connection", actionable: false, canBeNonGood: true,
+    weightRange: [2, 2],
+  },
+
+  // ── Reliability ───────────────────────────────────────────────────
+
+  ns_redundancy: {
+    axis: "reliability", label: "Nameserver Redundancy", actionable: true, canBeNonGood: true,
+    effort: "~15 min — add nameservers at registrar", fixDescription: "Add additional nameservers",
+    weightRange: [2, 2],
+  },
+  ipv6: {
+    axis: "reliability", label: "IPv6 Support", actionable: true, canBeNonGood: true,
+    effort: "~15 min — add AAAA records", fixDescription: "Add IPv6 (AAAA) DNS records",
+    weightRange: [1, 1],
+  },
+  lb: {
+    axis: "reliability", label: "Load Balancing", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  caa: {
+    axis: "reliability", label: "CAA Records", actionable: true, canBeNonGood: true,
+    effort: "~10 min — DNS records", fixDescription: "Add CAA DNS records",
+    weightRange: [1, 1],
+  },
+  low_ttl: {
+    axis: "reliability", label: "Low DNS TTL", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  tcp_connection_time: {
+    axis: "reliability", label: "TCP Connection Time", actionable: true, canBeNonGood: true,
+    effort: "~30 min — server/CDN optimization", fixDescription: "Optimize TCP connection time",
+    weightRange: [2, 2],
+  },
+  dns_resolution_time: {
+    axis: "reliability", label: "DNS Resolution Time", actionable: true, canBeNonGood: true,
+    effort: "~15 min — optimize DNS provider/TTL", fixDescription: "Optimize DNS resolution time",
+    weightRange: [2, 2],
+  },
+  ns_provider_diversity: {
+    axis: "reliability", label: "NS Provider Diversity", actionable: true, canBeNonGood: true,
+    effort: "~30 min — add secondary DNS provider", fixDescription: "Add secondary DNS provider for redundancy",
+    weightRange: [1, 1],
+  },
+  mx_redundancy: {
+    axis: "reliability", label: "MX Redundancy", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  site_unreachable: {
+    axis: "reliability", label: "Site Unreachable", actionable: false, canBeNonGood: true,
+    weightRange: [5, 5],
+  },
+  http_blocked_reliability: {
+    axis: "reliability", label: "HTTP Blocked (Reliability)", actionable: false, canBeNonGood: true,
+    weightRange: [3, 3],
+  },
+  http_error_response: {
+    axis: "reliability", label: "HTTP Error Response", actionable: false, canBeNonGood: true,
+    weightRange: [3, 4],
+  },
+  dns_inconsistent: {
+    axis: "reliability", label: "DNS Inconsistency", actionable: true, canBeNonGood: true,
+    effort: "~15 min — verify DNS config", fixDescription: "Fix DNS record inconsistencies",
+    weightRange: [3, 3],
+  },
+  dns_consistent: {
+    axis: "reliability", label: "DNS Consistent", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  bgp_unstable: {
+    axis: "reliability", label: "BGP Instability", actionable: false, canBeNonGood: true,
+    weightRange: [2, 2],
+  },
+  low_visibility: {
+    axis: "reliability", label: "Low Visibility", actionable: false, canBeNonGood: true,
+    weightRange: [1, 3],
+  },
+
+  // ── Trust ─────────────────────────────────────────────────────────
+
+  domain_age_trust: {
+    axis: "trust", label: "Domain Age", actionable: false, canBeNonGood: true,
+    weightRange: [3, 3],
+  },
+  registration_length: {
+    axis: "trust", label: "Registration Length", actionable: true, canBeNonGood: true,
+    effort: "~5 min — renew at registrar", fixDescription: "Extend domain registration period",
+    weightRange: [2, 2],
+  },
+  breaches: {
+    axis: "trust", label: "Data Breaches", actionable: false, canBeNonGood: true,
+    weightRange: [1, 4],
+  },
+  tranco_rank: {
+    axis: "trust", label: "Tranco Rank", actionable: false, canBeNonGood: true,
+    weightRange: [1, 3],
+  },
+  greynoise_noise: {
+    axis: "trust", label: "GreyNoise Noise", actionable: false, canBeNonGood: true,
+    weightRange: [1, 2],
+  },
+  greynoise_riot: {
+    axis: "trust", label: "GreyNoise RIOT", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  email_trust: {
+    axis: "trust", label: "Email Trust", actionable: true, canBeNonGood: true,
+    effort: "~30 min — DNS + email provider config", fixDescription: "Improve email authentication for trust",
+    weightRange: [2, 3],
+  },
+  security_txt: {
+    axis: "trust", label: "security.txt", actionable: true, canBeNonGood: true,
+    effort: "~10 min — create /.well-known/security.txt", fixDescription: "Create security.txt file",
+    weightRange: [1, 2],
+  },
+  bimi_record: {
+    axis: "trust", label: "BIMI Record", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  ads_txt: {
+    axis: "trust", label: "ads.txt", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  cert_validation_type: {
+    axis: "trust", label: "Certificate Validation Type", actionable: false, canBeNonGood: true,
+    weightRange: [1, 3],
+  },
+  ct_caa_mismatch: {
+    axis: "trust", label: "CT/CAA Mismatch", actionable: false, canBeNonGood: true,
+    weightRange: [0, 0],
+  },
+  organizational_identity: {
+    axis: "trust", label: "Organizational Identity", actionable: true, canBeNonGood: true,
+    effort: "~15 min — add organization page", fixDescription: "Add about/team/organization page",
+    weightRange: [2, 2],
+  },
+  ops_transparency: {
+    axis: "trust", label: "Operational Transparency", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  cookie_consent_missing: {
+    axis: "trust", label: "No Cookie Consent", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — implement consent banner", fixDescription: "Implement cookie consent banner",
+    weightRange: [2, 2],
+  },
+  cookie_consent_cmp: {
+    axis: "trust", label: "Cookie Consent CMP", actionable: true, canBeNonGood: true,
+    effort: "~30 min — configure CMP properly", fixDescription: "Improve cookie consent management platform",
+    weightRange: [2, 2],
+  },
+  cookie_compliance: {
+    axis: "trust", label: "Cookie Compliance", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — fix compliance issues", fixDescription: "Fix cookie compliance issues",
+    weightRange: [2, 2],
+  },
+  dmarc_reject: {
+    axis: "trust", label: "DMARC Policy", actionable: true, canBeNonGood: true,
+    effort: "~15 min — DNS change (after sender audit)", fixDescription: "Upgrade DMARC policy to quarantine/reject",
+    weightRange: [2, 2],
+  },
+  blocklist_trust: {
+    axis: "trust", label: "Blocklist Trust Impact", actionable: false, canBeNonGood: true,
+    weightRange: [2, 3],
+  },
+
+  // ── Visibility ────────────────────────────────────────────────────
+
+  domain_popularity: {
+    axis: "visibility", label: "Domain Popularity", actionable: false, canBeNonGood: true,
+    weightRange: [1, 3],
+  },
+  structured_data: {
+    axis: "visibility", label: "Structured Data Present", actionable: false, canBeNonGood: false,
+    weightRange: [2, 2],
+  },
+  no_structured_data: {
+    axis: "visibility", label: "No Structured Data", actionable: true, canBeNonGood: true,
+    effort: "~15 min — add JSON-LD to HTML", fixDescription: "Add structured data markup (JSON-LD)",
+    weightRange: [2, 2],
+  },
+  social_meta: {
+    axis: "visibility", label: "Social Meta Tags", actionable: true, canBeNonGood: true,
+    effort: "~10 min — add meta tags", fixDescription: "Add Open Graph and Twitter Card meta tags",
+    weightRange: [3, 3],
+  },
+  robots_txt: {
+    axis: "visibility", label: "robots.txt", actionable: true, canBeNonGood: true,
+    effort: "~10 min — create robots.txt", fixDescription: "Add robots.txt file",
+    weightRange: [2, 2],
+  },
+  sitemap: {
+    axis: "visibility", label: "Sitemap", actionable: true, canBeNonGood: true,
+    effort: "~15 min — generate sitemap.xml", fixDescription: "Add sitemap.xml",
+    weightRange: [2, 2],
+  },
+  legal_pages: {
+    axis: "visibility", label: "Legal Pages", actionable: true, canBeNonGood: true,
+    effort: "~2-4 hours — create legal pages", fixDescription: "Add privacy policy and terms pages",
+    weightRange: [1, 1],
+  },
+  social_accounts: {
+    axis: "visibility", label: "Social Accounts", actionable: false, canBeNonGood: false,
+    weightRange: [1, 3],
+  },
+  no_social_accounts: {
+    axis: "visibility", label: "No Social Accounts", actionable: true, canBeNonGood: true,
+    effort: "~30 min — create and link profiles", fixDescription: "Create and link social media accounts",
+    weightRange: [1, 1],
+  },
+  restrictive_robots: {
+    axis: "visibility", label: "Restrictive robots.txt", actionable: true, canBeNonGood: true,
+    effort: "~10 min — update robots.txt", fixDescription: "Review restrictive robots.txt rules",
+    weightRange: [2, 2],
+  },
+  pwa_ready: {
+    axis: "visibility", label: "PWA Readiness", actionable: true, canBeNonGood: true,
+    effort: "~1-2 hours — manifest + service worker", fixDescription: "Add PWA manifest and service worker",
+    weightRange: [2, 2],
+  },
+  canonical_url: {
+    axis: "visibility", label: "Canonical URL", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  canonical_url_missing: {
+    axis: "visibility", label: "No Canonical URL", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add link rel=canonical", fixDescription: "Add canonical URL link tag",
+    weightRange: [1, 1],
+  },
+  mobile_app_links: {
+    axis: "visibility", label: "Mobile App Links", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  rss_feed: {
+    axis: "visibility", label: "RSS Feed", actionable: true, canBeNonGood: true,
+    effort: "~30 min — generate RSS/Atom feed", fixDescription: "Add RSS/Atom feed",
+    weightRange: [1, 1],
+  },
+  hreflang: {
+    axis: "visibility", label: "Hreflang Tags", actionable: false, canBeNonGood: false,
+    weightRange: [1, 1],
+  },
+  favicon_missing: {
+    axis: "visibility", label: "No Favicon", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add favicon", fixDescription: "Add site favicon",
+    weightRange: [1, 1],
+  },
+  title_tag_missing: {
+    axis: "visibility", label: "No Title Tag", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add title tag", fixDescription: "Add descriptive page title",
+    weightRange: [1, 1],
+  },
+  title_tag_generic: {
+    axis: "visibility", label: "Generic Title Tag", actionable: true, canBeNonGood: true,
+    effort: "~10 min — write unique title", fixDescription: "Write a unique, descriptive page title",
+    weightRange: [1, 1],
+  },
+  meta_description_missing: {
+    axis: "visibility", label: "No Meta Description", actionable: true, canBeNonGood: true,
+    effort: "~5 min — add meta tag", fixDescription: "Add meta description tag",
+    weightRange: [1, 1],
+  },
+  mobile_friendly: {
+    axis: "visibility", label: "Mobile Friendly", actionable: true, canBeNonGood: true,
+    effort: "~1 hour — add viewport meta", fixDescription: "Add responsive viewport configuration",
+    weightRange: [2, 2],
+  },
+  og_completeness: {
+    axis: "visibility", label: "Open Graph Completeness", actionable: true, canBeNonGood: true,
+    effort: "~10 min — add OG meta tags", fixDescription: "Complete Open Graph meta tags",
+    weightRange: [2, 2],
+  },
+  accessibility: {
+    axis: "visibility", label: "Accessibility", actionable: true, canBeNonGood: true,
+    effort: "~2-4 hours — fix WCAG issues", fixDescription: "Improve WCAG accessibility",
+    weightRange: [1, 1],
+  },
+  site_unreachable_visibility: {
+    axis: "visibility", label: "Site Unreachable (Visibility)", actionable: false, canBeNonGood: true,
+    weightRange: [5, 5],
+  },
+};
+
+// ─── Derived Constants ──────────────────────────────────────────────
+
+/** Signal IDs for signals that are non-actionable but CAN be non-good (i.e. should be excluded from Grade-Up) */
+export const NON_ACTIONABLE_SIGNALS: string[] = Object.entries(SIGNAL_REGISTRY)
+  .filter(([, def]) => !def.actionable && def.canBeNonGood)
+  .map(([id]) => id);
+
+/** All valid signal IDs */
+export const SIGNAL_IDS = Object.keys(SIGNAL_REGISTRY);
+
+/** Effort map keyed by signal ID */
+export const EFFORT_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(SIGNAL_REGISTRY)
+    .filter(([, def]) => def.effort)
+    .map(([id, def]) => [id, def.effort!])
+);
+
+/** Fix description map keyed by signal ID */
+export const FIX_DESC_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(SIGNAL_REGISTRY)
+    .filter(([, def]) => def.fixDescription)
+    .map(([id, def]) => [id, def.fixDescription!])
+);
+
+/** Compute grade from composite score */
+export function gradeFromComposite(score: number): string {
+  for (const t of GRADE_THRESHOLDS) {
+    if (score >= t.min) return t.grade;
+  }
+  return "F";
+}

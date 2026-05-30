@@ -18,6 +18,10 @@ import {
   PERF_SCORE, LCP, CLS, TTFB, INP, FCP, TBT, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
   SEVERITY_SCORES, resolveSeverity,
 } from "../../config/scoring-thresholds";
+import {
+  AXIS_WEIGHTS as REGISTRY_AXIS_WEIGHTS,
+  gradeFromComposite as registryGradeFromComposite,
+} from "../../config/signal-registry";
 import { scanForVulnerableLibraries } from "../../data/vulnerable-libraries";
 import { analyzeNsDiversity } from "../../data/ns-providers";
 
@@ -87,7 +91,7 @@ export function computeComposite(axisScores: Record<Axis, number>, archetype: Ar
 }
 
 export function gradeFromComposite(score: number): string {
-  return score >= 95 ? "A+" : score >= 90 ? "A" : score >= 85 ? "B+" : score >= 80 ? "B" : score >= 75 ? "C+" : score >= 70 ? "C" : score >= 65 ? "D+" : score >= 50 ? "D" : "F";
+  return registryGradeFromComposite(score);
 }
 
 export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: Partial<Record<ArchetypeName, Severity>>): Severity {
@@ -95,17 +99,11 @@ export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeN
 }
 
 // ─── Fixed Axis Weights ──────────────────────────────────────────────
-// Single weight set for all archetypes. Security weighted highest;
-// Trust de-emphasized until axis has more diverse signals;
+// Re-exported from signal-registry.ts (single source of truth).
+// Security weighted highest; Trust de-emphasized until axis has more diverse signals;
 // visibility and performance boosted for better discrimination.
 
-export const AXIS_WEIGHTS: Record<Axis, number> = {
-  security: 0.28,
-  reliability: 0.25,
-  trust: 0.12,
-  performance: 0.20,
-  visibility: 0.15,
-};
+export const AXIS_WEIGHTS: Record<Axis, number> = REGISTRY_AXIS_WEIGHTS;
 
 // ARCHETYPE_WEIGHTS removed — all archetypes use AXIS_WEIGHTS.
 // Use AXIS_WEIGHTS as the single source of truth.
