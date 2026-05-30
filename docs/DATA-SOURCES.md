@@ -9,7 +9,6 @@ Yoke pulls data from a variety of third-party services to build its domain intel
 | Service | What Yoke Uses It For | Link |
 |---------|----------------------|------|
 | **Google PageSpeed Insights** | Core Web Vitals, performance scores, and Lighthouse audits | [developers.google.com/speed](https://developers.google.com/speed/pagespeed/insights/) |
-| **Mozilla Observatory** | HTTP security header analysis and grading | [developer.mozilla.org/observatory](https://developer.mozilla.org/en-US/observatory) |
 | **SSL Labs (Qualys)** | TLS/SSL certificate grading and configuration analysis | [ssllabs.com](https://www.ssllabs.com) |
 | **Have I Been Pwned** | Data breach exposure lookups for domains | [haveibeenpwned.com](https://haveibeenpwned.com) |
 | **crt.sh** | Certificate Transparency log searches | [crt.sh](https://crt.sh) |

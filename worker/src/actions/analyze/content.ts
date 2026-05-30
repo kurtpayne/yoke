@@ -26,7 +26,7 @@ export async function checkLlmsTxt(domain: string, instanceHost?: string): Promi
     const host = instanceHost;
     return {
       found: true,
-      content: `# Yoke — Free Domain Intelligence & OSINT Tool\n\n> Yoke is a free, open-source domain intelligence tool at ${baseUrl}\n\n## What Yoke Does\n\nYoke provides instant, comprehensive analysis of any internet domain. Enter a domain name and get detailed intelligence across security, infrastructure, technology, performance, and business dimensions.\n\n## Key Capabilities\n\n- DNS Analysis: A, AAAA, MX, NS, TXT, CNAME, SOA records with DNSSEC validation\n- SSL/TLS: Certificate details, chain validation, SSL Labs grading, CAA records\n- WHOIS/RDAP: Registrar, registration and expiry dates, domain age\n- Security Audit: HTTP security headers, Mozilla Observatory scoring, cookie security\n- Data Breaches: HIBP breach detection with time-decay scoring\n- Threat Intelligence: Shodan port/vulnerability data, GreyNoise IP classification\n- Technology Detection: Frameworks, CMS, CDN, WAF, deep WordPress fingerprinting\n- Email Authentication: SPF, DKIM, DMARC validation\n- Performance: Google PageSpeed, Core Web Vitals (mobile-first 60/40 blend), compression\n- Certificate Transparency: CT log monitoring for subdomain discovery\n- Business Intelligence: Company enrichment via Wikidata, Brandfetch, Crunchbase\n- AI Analysis: LLM-powered analysis from 6 expert personas\n\n## Free JSON API\n\nNo authentication required.\n\ncurl ${host}/stripe.com | jq\ncurl "${host}/stripe.com?pretty"\ncurl -s ${host}/stripe.com | jq '.ssl'\n\n## Links\n\n- Web UI: ${baseUrl}\n- API Docs: ${baseUrl}/api/docs\n- Chrome Extension: Chrome Web Store\n- Source: https://github.com/yokedotlol/yoke\n- License: MIT`,
+      content: `# Yoke — Free Domain Intelligence & OSINT Tool\n\n> Yoke is a free, open-source domain intelligence tool at ${baseUrl}\n\n## What Yoke Does\n\nYoke provides instant, comprehensive analysis of any internet domain. Enter a domain name and get detailed intelligence across security, infrastructure, technology, performance, and business dimensions.\n\n## Key Capabilities\n\n- DNS Analysis: A, AAAA, MX, NS, TXT, CNAME, SOA records with DNSSEC validation\n- SSL/TLS: Certificate details, chain validation, SSL Labs grading, CAA records\n- WHOIS/RDAP: Registrar, registration and expiry dates, domain age\n- Security Audit: HTTP security headers, cookie security\n- Data Breaches: HIBP breach detection with time-decay scoring\n- Threat Intelligence: Shodan port/vulnerability data, GreyNoise IP classification\n- Technology Detection: Frameworks, CMS, CDN, WAF, deep WordPress fingerprinting\n- Email Authentication: SPF, DKIM, DMARC validation\n- Performance: Google PageSpeed, Core Web Vitals (mobile-first 60/40 blend), compression\n- Certificate Transparency: CT log monitoring for subdomain discovery\n- Business Intelligence: Company enrichment via Wikidata, Brandfetch, Crunchbase\n- AI Analysis: LLM-powered analysis from 6 expert personas\n\n## Free JSON API\n\nNo authentication required.\n\ncurl ${host}/stripe.com | jq\ncurl "${host}/stripe.com?pretty"\ncurl -s ${host}/stripe.com | jq '.ssl'\n\n## Links\n\n- Web UI: ${baseUrl}\n- API Docs: ${baseUrl}/api/docs\n- Chrome Extension: Chrome Web Store\n- Source: https://github.com/yokedotlol/yoke\n- License: MIT`,
       full_found: false,
       full_content: null,
     };
@@ -253,50 +253,6 @@ export async function checkTranco(domain: string, statsDb?: D1Database): Promise
     return data.ranks?.[0]?.rank ?? null;
   } catch (e) {
     if (statsDb) logApiError(statsDb, { api: "tranco", status: 0, message: String(e).slice(0, 200), domain });
-    return null;
-  }
-}
-
-// ─── Mozilla HTTP Observatory ────────────────────────────────────────
-
-export async function checkObservatory(
-  domain: string,
-  statsDb?: D1Database,
-): Promise<{
-  grade: string | null;
-  score: number | null;
-  tests_passed: number | null;
-  tests_total: number | null;
-} | null> {
-  try {
-    const res = await fetchWithTimeout(
-      `https://observatory.mozilla.org/api/v2/analyze?host=${encodeURIComponent(domain)}`,
-      {
-        timeout: 10000,
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `host=${encodeURIComponent(domain)}`,
-      },
-    );
-    if (!res.ok) {
-      if (statsDb)
-        logApiError(statsDb, { api: "observatory", status: res.status, message: "Mozilla Observatory failed", domain });
-      return null;
-    }
-    const data = (await res.json()) as {
-      grade?: string;
-      score?: number;
-      tests_passed?: number;
-      tests_quantity?: number;
-    };
-    return {
-      grade: data.grade ?? null,
-      score: data.score ?? null,
-      tests_passed: data.tests_passed ?? null,
-      tests_total: data.tests_quantity ?? null,
-    };
-  } catch (e) {
-    if (statsDb) logApiError(statsDb, { api: "observatory", status: 0, message: String(e).slice(0, 200), domain });
     return null;
   }
 }

@@ -127,7 +127,6 @@ export interface AnalysisResult {
   llms_txt: LlmsTxtResult;
   wayback: unknown;
   tranco_rank: number | null;
-  observatory: unknown;
   email_auth: EmailAuthResult;
   carbon: unknown;
   robots_parsed: unknown;
@@ -225,7 +224,6 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     llms_txt: DEFAULT_LLMS_TXT,
     wayback: null,
     tranco_rank: null,
-    observatory: null,
     email_auth: DEFAULT_EMAIL_AUTH,
     carbon: null,
     robots_parsed: null,
@@ -631,7 +629,6 @@ export async function runAnalysis(
     archive_url: string;
   } | null;
   const tranco = (results.tranco_rank ?? null) as number | null;
-  const observatory = results.observatory ?? null;
   const emailAuth = (results.email_auth ?? DEFAULT_EMAIL_AUTH) as EmailAuthResult;
   const carbon = results.carbon ?? null;
   const shodanResult = (results.shodan ?? null) as ShodanResult | null;
@@ -919,7 +916,6 @@ export async function runAnalysis(
     llms_txt: llmsTxt,
     wayback,
     tranco_rank: tranco,
-    observatory,
     email_auth: emailAuth,
     carbon,
     robots_parsed: robotsParsed,

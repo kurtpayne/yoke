@@ -4,6 +4,9 @@ All notable changes to Yoke are documented here.
 
 ## [1.5.0] — 2026-05-29
 
+### Removed
+- **Mozilla Observatory integration** — removed redundant Observatory check; Yoke's native security header analysis (CSP, HSTS, X-Frame-Options, Referrer-Policy, Permissions-Policy, CORS) covers the same ground
+
 ### Features
 - **Permissions-Policy header detection** — parses and evaluates browser feature permissions
 - **Referrer-Policy analysis** — detects and scores referrer policy configuration

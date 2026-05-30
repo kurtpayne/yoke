@@ -132,7 +132,7 @@ const html = `<!DOCTYPE html>
         "DNS record lookup (A, AAAA, MX, NS, TXT, CNAME, SOA)",
         "SSL/TLS certificate analysis with SSL Labs grading",
         "WHOIS and RDAP registration data",
-        "Security header audit and Mozilla Observatory scoring",
+        "Security header audit and scoring",
         "Technology stack detection (frameworks, CMS, CDN, WAF)",
         "WordPress deep fingerprinting (theme, plugins, version)",
         "Performance analysis via Google PageSpeed Insights",

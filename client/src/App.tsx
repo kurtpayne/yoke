@@ -1165,7 +1165,7 @@ export function App() {
                         lineHeight: "16px",
                       }}
                     >
-                      HIBP breach detection, Shodan/GreyNoise intel, Observatory scoring, cookie audit
+                      HIBP breach detection, Shodan/GreyNoise intel, cookie audit
                     </p>
                   </div>
                   <div className="panel" style={{ padding: "0.75rem 1rem" }}>

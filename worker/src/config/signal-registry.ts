@@ -1,5 +1,5 @@
 // ─── Signal Registry ─────────────────────────────────────────────────
-// Single source of truth for all 127 scoring signals.
+// Single source of truth for all 136 scoring signals.
 // Every signal declares its axis, actionability, effort, fix description,
 // and weight range. Derived constants (NON_ACTIONABLE, EFFORT_MAP, etc.)
 // are exported for use across server and client layers.

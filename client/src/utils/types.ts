@@ -41,7 +41,6 @@ export type {
   LlmsTxt,
   NetworkHealthData,
   NewsResult,
-  ObservatoryData,
   OutageLinksData,
   RecentLookupsResult,
   RecursiveDnsResult,

@@ -26,7 +26,6 @@ import { greenHostingCheck } from "./green-hosting";
 import { greynoiseCheck } from "./greynoise";
 import { ipInfoCheck } from "./ip-info";
 import { llmsTxtCheck } from "./llms-txt";
-import { observatoryCheck } from "./observatory";
 import { outageLinksCheck } from "./outage-links";
 import { performanceCheck, performanceDesktopCheck } from "./performance";
 import { rdapCheck } from "./rdap";
@@ -59,7 +58,6 @@ export const registry: readonly Check[] = [
   llmsTxtCheck,
   waybackCheck,
   trancoCheck,
-  observatoryCheck,
   emailAuthCheck,
   carbonCheck,
   shodanCheck,

@@ -275,36 +275,3 @@ export function SecurityHeadersPanel({ data }: { data: AnalysisResult }) {
     </Panel>
   );
 }
-
-export function ObservatoryPanel({ data }: { data: AnalysisResult }) {
-  const obs = data.observatory;
-  if (!obs) return null;
-
-  return (
-    <Panel
-      title="Mozilla Observatory"
-      icon={<Shield size={14} />}
-      badge={obs.grade ? <GradeBadge grade={obs.grade} /> : <StatusBadge status="neutral" label="Pending" />}
-    >
-      {obs.score != null && <DataRow label="Score" value={`${obs.score}/100`} />}
-      {obs.tests_passed != null && obs.tests_total != null && (
-        <DataRow
-          label="Tests Passed"
-          value={
-            <StatusBadge
-              status={
-                obs.tests_passed === obs.tests_total ? "pass" : obs.tests_passed > obs.tests_total / 2 ? "warn" : "fail"
-              }
-              label={`${obs.tests_passed}/${obs.tests_total}`}
-            />
-          }
-        />
-      )}
-      {!obs.grade && !obs.score && (
-        <div className="p-4" style={{ color: "var(--dim)", fontFamily: "var(--font-ui)", fontSize: "12px" }}>
-          Observatory scan initiated — results may take a moment
-        </div>
-      )}
-    </Panel>
-  );
-}

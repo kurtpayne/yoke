@@ -324,7 +324,6 @@ export interface AnalysisResult {
   llms_txt: LlmsTxt | null;
   wayback: WaybackData | null;
   tranco_rank: number | null;
-  observatory: ObservatoryData | null;
   screenshot_url?: string | null; // Deprecated — kept for cached responses
   email_auth: EmailAuth | null;
   http_protocols: HttpProtocols | null;
@@ -419,12 +418,6 @@ export interface WaybackData {
   last_snapshot: string | null;
   total_snapshots: number | null;
   archive_url: string;
-}
-export interface ObservatoryData {
-  grade: string | null;
-  score: number | null;
-  tests_passed: number | null;
-  tests_total: number | null;
 }
 export interface EmailAuth {
   spf: { found: boolean; record: string | null; mechanisms: string[]; all_qualifier: string | null };

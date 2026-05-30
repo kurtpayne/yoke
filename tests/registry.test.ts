@@ -24,7 +24,6 @@ describe("Phase 2 Check Registry", () => {
     "llms_txt",
     "wayback",
     "tranco_rank",
-    "observatory",
     "email_auth",
     "carbon",
     "shodan",
@@ -67,8 +66,8 @@ describe("Phase 2 Check Registry", () => {
     }
   });
 
-  it("should have 29 checks (Phase 2 total)", () => {
-    expect(registry.length).toBe(29);
+  it("should have 28 checks (Phase 2 total)", () => {
+    expect(registry.length).toBe(28);
   });
 
   it("should have a default value defined for every check", () => {

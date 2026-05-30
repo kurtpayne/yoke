@@ -505,11 +505,6 @@ function buildExternalLinks(data: AnalysisResult): ExternalToolLink[] {
     category: "Security",
   });
   links.push({
-    name: "Mozilla Observatory",
-    url: `https://observatory.mozilla.org/analyze/${domain}`,
-    category: "Security",
-  });
-  links.push({
     name: "SSL Labs",
     url: `https://www.ssllabs.com/ssltest/analyze.html?d=${domain}`,
     category: "Security",

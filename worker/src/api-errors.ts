@@ -113,7 +113,6 @@ const API_REGISTRY: { api: string; label: string; url: string }[] = [
   { api: "hackertarget", label: "HackerTarget", url: "api.hackertarget.com" },
   { api: "ssllabs", label: "SSL Labs", url: "api.ssllabs.com" },
   { api: "ssl", label: "SSL (fallback)", url: "direct TLS connect" },
-  { api: "observatory", label: "Mozilla Observatory", url: "observatory.mozilla.org" },
   { api: "shodan", label: "Shodan InternetDB", url: "internetdb.shodan.io" },
   { api: "greynoise", label: "GreyNoise", url: "api.greynoise.io" },
   { api: "wayback", label: "Wayback Machine", url: "archive.org" },
