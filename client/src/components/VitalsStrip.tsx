@@ -85,7 +85,7 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
         <Tooltip text="Security headers grade based on the presence of protective HTTP headers like CSP, HSTS, X-Frame-Options, and others. A means most headers are present; lower grades indicate missing protections.">
           <div className="vital-pill" style={{ cursor: "help" }}>
             <Wifi size={12} style={{ color: "var(--dim)" }} />
-            <span style={{ color: secGrade === "A" ? "var(--success)" : secGrade === "B" ? "#7ee787" : secGrade === "C" ? "var(--warning)" : "var(--danger)" }}>
+            <span style={{ color: secGrade.startsWith("A") ? "var(--success)" : secGrade.startsWith("B") ? "#7ee787" : secGrade.startsWith("C") ? "var(--warning)" : "var(--danger)" }}>
               HDR {secGrade}
             </span>
           </div>
