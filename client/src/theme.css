@@ -71,7 +71,7 @@
   --surface-hover: #e8ecf1;
   --text: #1f2328;
   --text-secondary: #59636e;
-  --dim: #6e7781;
+  --dim: #626d78;
   --border: #d1d9e0;
   --border-muted: #e4e8ec;
   --accent: #0969da;
@@ -1208,4 +1208,43 @@ main {
     opacity: 0.4;
     padding: 4px;
   }
+}
+
+/* ─── Focus-visible styles (a11y) ──────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Ensure the search input's outline-none is overridden for keyboard users */
+input.outline-none:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Skip link visible on focus (a11y) ────────────────────────── */
+.sr-only:focus,
+.sr-only:focus-visible {
+  position: fixed !important;
+  left: 8px !important;
+  top: 8px !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+  white-space: nowrap;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 10000;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }

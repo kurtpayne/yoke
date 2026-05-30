@@ -478,7 +478,13 @@ function TabContent({
 }
 
 // ─── Rate Limit Pill ────────────────────────────────────────────────
-function RateLimitPill({ rateLimit, sessionCount }: { rateLimit: RateLimitInfo | null; sessionCount: number }) {
+function RateLimitPill({
+  rateLimit,
+  sessionCount: _sessionCount,
+}: {
+  rateLimit: RateLimitInfo | null;
+  sessionCount: number;
+}) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [expanded, setExpanded] = useState(false);
 
@@ -801,50 +807,52 @@ export function App() {
     <main className="min-h-screen pb-12" style={{ background: "var(--bg)" }}>
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 pt-6">
         {/* Header */}
-        <div className="flex items-center gap-2 sm:gap-3 mb-5 min-w-0">
-          <a
-            href="/"
-            onClick={(e) => {
-              e.preventDefault();
-              setDomain("");
-              analyze.reset();
-              setActiveTab("overview");
-              setCompareMode(false);
-              window.history.pushState({}, "", "/");
-              document.title = "Yoke";
-            }}
-            style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none", cursor: "pointer" }}
-          >
-            <img
-              src="data:image/png;base64,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"
-              alt="Yoke"
-              className="site-logo"
-              style={{ width: "24px", height: "24px", flexShrink: 0 }}
-            />
-            <h1
-              style={{
-                fontFamily: "var(--font-ui)",
-                fontSize: "20px",
-                fontWeight: 700,
-                color: "var(--text)",
-                letterSpacing: "-0.02em",
-                whiteSpace: "nowrap",
-                margin: 0,
+        <header>
+          <div className="flex items-center gap-2 sm:gap-3 mb-5 min-w-0">
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                setDomain("");
+                analyze.reset();
+                setActiveTab("overview");
+                setCompareMode(false);
+                window.history.pushState({}, "", "/");
+                document.title = "Yoke";
               }}
+              style={{ display: "flex", alignItems: "center", gap: "8px", textDecoration: "none", cursor: "pointer" }}
             >
-              Yoke
-            </h1>
-          </a>
-          <div className="h-4 w-px hidden sm:block" style={{ background: "var(--border)" }} />
-          <span
-            className="hidden sm:inline"
-            style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--dim)", whiteSpace: "nowrap" }}
-          >
-            Domain Intelligence
-          </span>
-          <div className="flex-1" />
-          <ThemeToggle />
-        </div>
+              <img
+                src="data:image/png;base64,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"
+                alt="Yoke"
+                className="site-logo"
+                style={{ width: "24px", height: "24px", flexShrink: 0 }}
+              />
+              <h1
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  color: "var(--text)",
+                  letterSpacing: "-0.02em",
+                  whiteSpace: "nowrap",
+                  margin: 0,
+                }}
+              >
+                Yoke
+              </h1>
+            </a>
+            <div className="h-4 w-px hidden sm:block" style={{ background: "var(--border)" }} />
+            <span
+              className="hidden sm:inline"
+              style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--dim)", whiteSpace: "nowrap" }}
+            >
+              Domain Intelligence
+            </span>
+            <div className="flex-1" />
+            <ThemeToggle />
+          </div>
+        </header>
 
         {/* Search Bar + Compare toggle */}
         <div className="mb-0">
@@ -951,7 +959,9 @@ export function App() {
             {/* Tab Bar - shown when we have results or are loading */}
             {(analyze.data || analyze.isPending) && (
               <div className="mt-3 mb-3 sticky top-0 z-10" style={{ background: "var(--bg)" }}>
-                <TabBar active={activeTab} onChange={handleTabChange} />
+                <nav aria-label="Analysis tabs">
+                  <TabBar active={activeTab} onChange={handleTabChange} />
+                </nav>
               </div>
             )}
 
@@ -994,6 +1004,9 @@ export function App() {
             {/* Streaming progress + partial results */}
             {analyze.isPending && (
               <>
+                <div role="status" aria-live="polite" className="sr-only">
+                  Analyzing domain…
+                </div>
                 <StreamingProgress progress={analyze.progress} />
                 {analyze.partialData && hasEnoughForTabs(analyze.partialData) && (
                   <div className="mt-3">
@@ -1063,7 +1076,10 @@ export function App() {
 
             {/* Final results */}
             {analyze.data && !analyze.isPending && (
-              <div className="mt-0">
+              <div className="mt-0" role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+                <div role="status" aria-live="polite" className="sr-only">
+                  Analysis complete for {analyze.data.domain}
+                </div>
                 {/* Curl API showcase bar — hidden on tabs without direct API mapping */}
                 {activeTab !== "ai" && activeTab !== "explore" && (
                   <div className="mb-3">
@@ -1247,104 +1263,124 @@ export function App() {
           color: "var(--dim)",
         }}
       >
-        <a
-          href="https://github.com/yokedotlol/yoke"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            color: "var(--dim)",
-            textDecoration: "none",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.35rem",
-            transition: "color 0.15s",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-          </svg>
-          GitHub ⭐
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="https://yoke.canny.io"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          Feedback
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="/api/docs"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          API
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="/status"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          Status
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="/privacy"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          Privacy
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="/terms"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          Terms
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="/about"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          About
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          Chrome Extension
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <a
-          href="/cli"
-          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
-        >
-          CLI
-        </a>
-        <span style={{ color: "var(--border)" }}>·</span>
-        <ResetLayoutButton />
+        <nav aria-label="Site links" style={{ display: "contents" }}>
+          <a
+            href="https://github.com/yokedotlol/yoke"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "var(--dim)",
+              textDecoration: "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              transition: "color 0.15s",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            GitHub ⭐
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="https://yoke.canny.io"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            Feedback
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="/api/docs"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            API
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="/status"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            Status
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="/privacy"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            Privacy
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="/terms"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            Terms
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="/about"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            About
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            Chrome Extension
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <a
+            href="/cli"
+            style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+          >
+            CLI
+          </a>
+          <span style={{ color: "var(--border)" }} aria-hidden="true">
+            ·
+          </span>
+          <ResetLayoutButton />
+        </nav>
       </footer>
     </main>
   );

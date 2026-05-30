@@ -650,10 +650,21 @@ export function DomainSignals({ data, streaming }: { data: AnalysisResult; strea
     <div className="panel">
       <div className="panel-header flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="opacity-60">
+          <span className="opacity-60" aria-hidden="true">
             <Info size={14} />
           </span>
-          <span>Domain Signals</span>
+          <h3
+            style={{
+              fontSize: "inherit",
+              fontWeight: "inherit",
+              textTransform: "inherit",
+              letterSpacing: "inherit",
+              color: "inherit",
+              margin: 0,
+            }}
+          >
+            Domain Signals
+          </h3>
         </div>
         <div className="flex items-center gap-2">
           {groups.issue.length > 0 && (
@@ -677,8 +688,10 @@ export function DomainSignals({ data, streaming }: { data: AnalysisResult; strea
         {nonEmptyGroups.map((type) => (
           <div key={type}>
             <div className="flex items-center gap-1.5 mb-2">
-              <span style={{ color: colorMap[type] }}>{iconMap[type]}</span>
-              <span
+              <span style={{ color: colorMap[type] }} aria-hidden="true">
+                {iconMap[type]}
+              </span>
+              <h4
                 style={{
                   fontFamily: "var(--font-ui)",
                   fontSize: "11px",
@@ -686,10 +699,11 @@ export function DomainSignals({ data, streaming }: { data: AnalysisResult; strea
                   color: colorMap[type],
                   textTransform: "uppercase",
                   letterSpacing: "0.06em",
+                  margin: 0,
                 }}
               >
                 {labelMap[type]}
-              </span>
+              </h4>
               <Tooltip text={tooltipMap[type]} help />
             </div>
             <div className="space-y-1">

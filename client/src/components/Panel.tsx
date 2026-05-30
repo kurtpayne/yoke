@@ -46,6 +46,7 @@ function CollapsiblePanel({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [animHeight, setAnimHeight] = useState<number | "auto">(collapsed ? 0 : "auto");
   const mounted = useRef(false);
+  const contentId = `panel-content-${title.replace(/\s+/g, "-").toLowerCase()}`;
 
   useEffect(() => {
     if (!mounted.current) {
@@ -70,13 +71,26 @@ function CollapsiblePanel({
 
   return (
     <div className="panel">
+      {/* biome-ignore lint/a11y/useSemanticElements: panel header toggle is a composite widget, not a simple button */}
       <div
         className="panel-header flex items-center justify-between"
         onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        aria-controls={contentId}
         style={{ cursor: "pointer", userSelect: "none", borderBottomColor: collapsed ? "transparent" : undefined }}
       >
         <div className="flex items-center gap-2.5">
           {/* Drag handle */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle uses mouse-only events intentionally */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: drag handle uses mouse-only events intentionally */}
           <span
             className="yoke-grip"
             onClick={(e) => e.stopPropagation()}
@@ -84,7 +98,7 @@ function CollapsiblePanel({
             onMouseUp={() => ctx?.onGripMouseUp?.()}
             title="Drag to reorder"
           >
-            <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
+            <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true">
               <circle cx="2" cy="2" r="1.1" />
               <circle cx="6" cy="2" r="1.1" />
               <circle cx="2" cy="7" r="1.1" />
@@ -96,9 +110,15 @@ function CollapsiblePanel({
           <span className="opacity-60">{icon}</span>
           <span>{title}</span>
         </div>
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation container, not an interactive element */}
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation container, not an interactive element */}
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {!collapsed && badge}
-          <span className="yoke-chevron" style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0)" }}>
+          <span
+            className="yoke-chevron"
+            style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0)" }}
+            aria-hidden="true"
+          >
             <svg
               width="12"
               height="12"
@@ -114,8 +134,11 @@ function CollapsiblePanel({
           </span>
         </div>
       </div>
+      {/* biome-ignore lint/a11y/useSemanticElements: collapsible content region paired with button via aria-controls */}
       <div
         ref={bodyRef}
+        id={contentId}
+        role="region"
         style={{
           height: heightStyle,
           overflow: collapsed || animHeight !== "auto" ? "hidden" : "visible",
@@ -164,6 +187,8 @@ export function DataRow({
   }, []);
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: click-to-copy convenience, not primary interaction
+    // biome-ignore lint/a11y/noStaticElementInteractions: click-to-copy data row
     <div
       className={`data-row${isCopiable ? " data-row-copiable" : ""}`}
       onClick={isCopiable ? handleCopy : undefined}

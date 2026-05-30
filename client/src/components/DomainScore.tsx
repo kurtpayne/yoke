@@ -134,7 +134,9 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
+  // biome-ignore lint/style/noNonNullAssertion: null-checked via ternary guard
   const values = AXES.map((a) => (axes[a].not_measured || axes[a].score == null ? 0 : axes[a].score! * animProgress));
+  // biome-ignore lint/style/noNonNullAssertion: null-checked via ternary guard
   const rawScores = AXES.map((a) => (axes[a].not_measured || axes[a].score == null ? 0 : axes[a].score!));
   const dataPoints = polygonPoints(values);
 
@@ -158,6 +160,8 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         style={{ overflow: "visible" }}
         preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label={`Radar chart showing domain scores: ${AXES.map((a) => `${AXIS_LABELS[a]} ${axes[a].not_measured || axes[a].score == null ? "not measured" : axes[a].score}`).join(", ")}`}
       >
         <defs>
           {/* Radial gradient: white/bg center → saturated accent edge */}
@@ -306,9 +310,8 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
 
           return (
             <g key={axis}>
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG text labels with hover behavior */}
               <text
-                x={x}
-                y={y}
                 textAnchor="middle"
                 dominantBaseline="central"
                 style={{
@@ -326,6 +329,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
                 {AXIS_LABELS[axis]}
               </text>
               {/* Score under label — opacity scales with axis score */}
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG text labels with hover behavior */}
               <text
                 x={x}
                 y={y + 12}
@@ -353,6 +357,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
           const angle = (2 * Math.PI * i) / AXES.length;
           const [x, y] = polarToCartesian(angle, RADIUS * 0.6);
           return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: SVG hover zone
             <circle
               key={`zone-${axis}`}
               cx={x}
@@ -426,7 +431,7 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
     <div className="panel">
       <div className="panel-header flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="opacity-60">
+          <span className="opacity-60" aria-hidden="true">
             <svg
               width="14"
               height="14"
@@ -440,7 +445,18 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           </span>
-          <span>Domain Score</span>
+          <h3
+            style={{
+              fontSize: "inherit",
+              fontWeight: "inherit",
+              textTransform: "inherit",
+              letterSpacing: "inherit",
+              color: "inherit",
+              margin: 0,
+            }}
+          >
+            Domain Score
+          </h3>
         </div>
         {/* Archetype chip */}
         <div className="flex items-center gap-2">
@@ -516,10 +532,18 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
                 const a = ds.axes[axis];
                 const nm = a.not_measured || a.score == null;
                 return (
+                  // biome-ignore lint/a11y/useAriaPropsSupportedByRole: role conditionally set via nm flag
                   <div
                     key={axis}
                     className="flex items-center gap-2"
                     style={{ fontSize: "11px", opacity: nm ? 0.5 : 1 }}
+                    role={nm ? undefined : "meter"}
+                    aria-valuenow={nm ? undefined : (a.score ?? 0)}
+                    aria-valuemin={nm ? undefined : 0}
+                    aria-valuemax={nm ? undefined : 100}
+                    aria-label={
+                      nm ? `${AXIS_LABELS[axis]}: Not measured` : `${AXIS_LABELS[axis]}: ${a.score} out of 100`
+                    }
                   >
                     <span
                       style={{
@@ -556,7 +580,11 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
                             style={{
                               width: `${a.score}%`,
                               background:
-                                a.score! >= 80 ? "var(--success)" : a.score! >= 60 ? "var(--warning)" : "var(--danger)",
+                                (a.score ?? 0) >= 80
+                                  ? "var(--success)"
+                                  : (a.score ?? 0) >= 60
+                                    ? "var(--warning)"
+                                    : "var(--danger)",
                               transition: "width 0.6s ease-out",
                             }}
                           />
@@ -621,7 +649,18 @@ function TopFindings({ axes }: { axes: Record<Axis, AxisScoreData> }) {
           marginBottom: 6,
         }}
       >
-        Key Findings
+        <h3
+          style={{
+            fontSize: "inherit",
+            fontWeight: "inherit",
+            textTransform: "inherit",
+            letterSpacing: "inherit",
+            color: "inherit",
+            margin: 0,
+          }}
+        >
+          Key Findings
+        </h3>
       </div>
       <div className="space-y-1">
         {allFindings.map((f, i) => (

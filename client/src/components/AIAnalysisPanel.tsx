@@ -1101,6 +1101,7 @@ function AdvancedSettings({
     <div style={{ width: open ? "100%" : "auto" }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
+          type="button"
           onClick={toggleOpen}
           title="Advanced AI settings"
           style={{
@@ -1220,6 +1221,7 @@ function AdvancedSettings({
                   }}
                 />
                 <button
+                  type="button"
                   onClick={() => setShowKey(!showKey)}
                   title={showKey ? "Hide key" : "Show key"}
                   style={{
@@ -1239,6 +1241,7 @@ function AdvancedSettings({
                 </button>
               </div>
               <button
+                type="button"
                 onClick={handleKeySave}
                 style={{
                   padding: "7px 14px",
@@ -1257,6 +1260,7 @@ function AdvancedSettings({
             </div>
             {hasKey && (
               <button
+                type="button"
                 onClick={handleKeyRemove}
                 style={{
                   marginTop: "6px",
@@ -1286,6 +1290,7 @@ function AdvancedSettings({
             <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
               {AVAILABLE_MODELS.map((m) => (
                 <button
+                  type="button"
                   key={m.id}
                   onClick={() => handleModelChange(m.id)}
                   disabled={!hasKey}
@@ -1332,6 +1337,7 @@ function AdvancedSettings({
               <div style={{ marginLeft: "auto", display: "flex", gap: "4px" }}>
                 {promptEdited && (
                   <button
+                    type="button"
                     onClick={handlePromptReset}
                     title="Reset to default"
                     style={{
@@ -1351,6 +1357,7 @@ function AdvancedSettings({
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={handlePromptCopy}
                   title="Copy prompt"
                   style={{
@@ -1517,6 +1524,7 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
           Copy the analysis prompt and paste it into ChatGPT, Claude, Gemini, or any AI assistant.
         </p>
         <button
+          type="button"
           onClick={handleCopy}
           style={{
             display: "flex",
@@ -1596,6 +1604,7 @@ function RateLimitView({ data, onKeySet }: { data: RateLimitResponse; onKeySet: 
             }}
           />
           <button
+            type="button"
             onClick={handleKeySave}
             style={{
               padding: "7px 14px",
@@ -1812,9 +1821,9 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
       </div>
 
       {/* Fix items */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <ol style={{ display: "flex", flexDirection: "column", gap: "8px", listStyle: "none", margin: 0, padding: 0 }}>
         {itemsWithRunning.map((item, i) => (
-          <div
+          <li
             key={i}
             style={{
               display: "flex",
@@ -1827,6 +1836,7 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
             }}
           >
             <span
+              aria-hidden="true"
               style={{
                 fontSize: "11px",
                 fontWeight: 700,
@@ -1916,12 +1926,13 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
             >
               Σ +{item.runningTotal.toFixed(1)}
             </span>
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
 
       {hasMore && (
         <button
+          type="button"
           onClick={() => setExpanded((prev) => !prev)}
           style={{
             background: "none",
@@ -2043,6 +2054,8 @@ function CrossSignalInsightsCard({ insights }: { insights: CrossSignalInsight[] 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
       {insights.map((insight, i) => (
+        // biome-ignore lint/a11y/noStaticElementInteractions: expandable insight card
+        // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard support handled by parent
         <div
           key={i}
           style={{
@@ -2644,6 +2657,7 @@ export function AIAnalysisPanel({
             <XCircle size={14} style={{ color: "var(--danger)" }} />
             <span style={{ fontSize: "12px", color: "var(--danger)" }}>{error}</span>
             <button
+              type="button"
               onClick={() => {
                 setInsightsResult(null);
                 setStreamingText("");
@@ -2701,6 +2715,7 @@ export function AIAnalysisPanel({
                   SSL/HSTS conflicts, or redundant third-party scripts.
                 </p>
                 <button
+                  type="button"
                   onClick={generateInsights}
                   style={{
                     display: "inline-flex",

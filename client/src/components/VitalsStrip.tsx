@@ -42,8 +42,9 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
     <div className="flex flex-wrap gap-2 px-1">
       {hasStatus && (
         <Tooltip text={statusTooltip + statusCodeNote}>
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: statusColor }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div role="group" className="vital-pill" style={{ cursor: "help" }} aria-label={`Status: ${statusText}`}>
+            <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: statusColor }} aria-hidden="true" />
             <span style={{ color: statusColor, fontWeight: 600 }}>{statusText}</span>
           </div>
         </Tooltip>
@@ -51,7 +52,8 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
       {httpBlocked && !isNotRegistered && (
         <Tooltip text="Our automated HTTP probe was blocked by this site's bot protection. Data shown is based on DNS, SSL, and other non-HTTP sources. The site itself is accessible to regular browsers.">
-          <div className="vital-pill" style={{ cursor: "help" }}>
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div role="group" className="vital-pill" style={{ cursor: "help" }} aria-label="HTTP probe blocked">
             <span style={{ color: "var(--warning)", fontSize: "0.7rem" }}>⚠ HTTP probe blocked</span>
           </div>
         </Tooltip>
@@ -61,8 +63,14 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
         <Tooltip
           text={`Time to first byte from our probe server. Under 300ms is fast, 300-1000ms is average, over 1000ms is slow.`}
         >
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Activity size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div
+            role="group"
+            className="vital-pill"
+            style={{ cursor: "help" }}
+            aria-label={`Response time: ${responseTime}ms`}
+          >
+            <Activity size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span
               style={{
                 color: responseTime < 500 ? "var(--success)" : responseTime < 2000 ? "var(--warning)" : "var(--danger)",
@@ -76,8 +84,9 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
       {ip && (
         <Tooltip text="Primary IPv4 address this domain resolves to">
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Server size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div role="group" className="vital-pill" style={{ cursor: "help" }} aria-label={`IP address: ${ip}`}>
+            <Server size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span style={{ color: "var(--text-secondary)" }}>{ip}</span>
           </div>
         </Tooltip>
@@ -91,8 +100,14 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
               : `SSL/TLS certificate grade from Qualys SSL Labs. A+ is the highest rating (strong config + HSTS). B or below indicates legacy cipher suites or configuration weaknesses.`
           }
         >
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Lock size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div
+            role="group"
+            className="vital-pill"
+            style={{ cursor: "help" }}
+            aria-label={`SSL grade: ${sslGrade === "Valid" ? "Valid" : sslGrade}`}
+          >
+            <Lock size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span
               style={{
                 color:
@@ -115,8 +130,14 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
       {secGrade && secGrade !== "N/A" && (
         <Tooltip text="Security headers grade based on the presence of protective HTTP headers like CSP, HSTS, X-Frame-Options, and others. A means most headers are present; lower grades indicate missing protections.">
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Wifi size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div
+            role="group"
+            className="vital-pill"
+            style={{ cursor: "help" }}
+            aria-label={`Security headers grade: ${secGrade}`}
+          >
+            <Wifi size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span
               style={{
                 color: secGrade.startsWith("A")
@@ -136,8 +157,14 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
       {trancoRank != null && (
         <Tooltip text="Tranco ranking — a research-grade list of the top 1 million websites by traffic, combining data from multiple sources. Lower number = more traffic.">
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Hash size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div
+            role="group"
+            className="vital-pill"
+            style={{ cursor: "help" }}
+            aria-label={`Tranco rank: #${trancoRank.toLocaleString()}`}
+          >
+            <Hash size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span style={{ color: "var(--accent)" }}>#{trancoRank.toLocaleString()}</span>
           </div>
         </Tooltip>
@@ -145,8 +172,14 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
       {domainAge != null && (
         <Tooltip text="How long ago this domain was first registered, based on WHOIS/RDAP data. Older domains generally have more established reputations.">
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Clock size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div
+            role="group"
+            className="vital-pill"
+            style={{ cursor: "help" }}
+            aria-label={`Domain age: ${domainAge > 365 ? `${Math.floor(domainAge / 365)} years ${Math.floor((domainAge % 365) / 30)} months` : `${domainAge} days`}`}
+          >
+            <Clock size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span style={{ color: "var(--text-secondary)" }}>
               {domainAge > 365
                 ? `${Math.floor(domainAge / 365)}y ${Math.floor((domainAge % 365) / 30)}m`
@@ -158,8 +191,9 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
       {data.ip_info?.isp && (
         <Tooltip text="Internet Service Provider or hosting organization that owns the IP address block this domain resolves to">
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Globe size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div role="group" className="vital-pill" style={{ cursor: "help" }} aria-label={`ISP: ${data.ip_info.isp}`}>
+            <Globe size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span style={{ color: "var(--dim)" }}>{data.ip_info.isp}</span>
           </div>
         </Tooltip>
@@ -167,8 +201,9 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
 
       {h3 && (
         <Tooltip text="This site supports HTTP/3 (QUIC), the latest HTTP protocol offering faster connections and improved performance on unreliable networks.">
-          <div className="vital-pill" style={{ cursor: "help" }}>
-            <Zap size={12} style={{ color: "var(--dim)" }} />
+          {/* biome-ignore lint/a11y/useSemanticElements: visual pill group, fieldset inappropriate */}
+          <div role="group" className="vital-pill" style={{ cursor: "help" }} aria-label="HTTP/3 supported">
+            <Zap size={12} style={{ color: "var(--dim)" }} aria-hidden="true" />
             <span style={{ color: "var(--success)" }}>HTTP/3</span>
           </div>
         </Tooltip>

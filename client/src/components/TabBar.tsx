@@ -1,5 +1,5 @@
 import { Building2, Compass, Gauge, Layers, LayoutDashboard, Newspaper, Server, Shield, Sparkles } from "lucide-react";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -36,8 +36,44 @@ export function TabBar({ active, onChange }: TabBarProps) {
     });
   }, [active]);
 
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      const currentIndex = TABS.findIndex((t) => t.id === active);
+      let nextIndex = currentIndex;
+
+      switch (e.key) {
+        case "ArrowRight":
+          nextIndex = (currentIndex + 1) % TABS.length;
+          break;
+        case "ArrowLeft":
+          nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+          break;
+        case "Home":
+          nextIndex = 0;
+          break;
+        case "End":
+          nextIndex = TABS.length - 1;
+          break;
+        default:
+          return;
+      }
+
+      e.preventDefault();
+      const nextTab = TABS[nextIndex];
+      onChange(nextTab.id);
+
+      // Focus the newly active tab button
+      const bar = barRef.current;
+      if (bar) {
+        const btn = bar.querySelector(`[data-tab="${nextTab.id}"]`) as HTMLElement;
+        btn?.focus();
+      }
+    },
+    [active, onChange],
+  );
+
   return (
-    <div className="yoke-tab-bar" ref={barRef}>
+    <div className="yoke-tab-bar" ref={barRef} role="tablist" aria-label="Analysis tabs" onKeyDown={handleKeyDown}>
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = active === tab.id;
@@ -45,14 +81,21 @@ export function TabBar({ active, onChange }: TabBarProps) {
           <button
             key={tab.id}
             type="button"
+            role="tab"
             data-tab={tab.id}
             className={`yoke-tab ${isActive ? "active" : ""}`}
             onClick={() => onChange(tab.id)}
+            aria-selected={isActive}
+            aria-controls={`tabpanel-${tab.id}`}
+            id={`tab-${tab.id}`}
+            tabIndex={isActive ? 0 : -1}
             aria-label={tab.label}
             title={isActive ? undefined : tab.label}
           >
-            <Icon size={14} strokeWidth={isActive ? 2.2 : 1.8} />
-            <span className="yoke-tab-label">{tab.label}</span>
+            <Icon size={14} strokeWidth={isActive ? 2.2 : 1.8} aria-hidden="true" />
+            <span className="yoke-tab-label" aria-hidden="true">
+              {tab.label}
+            </span>
           </button>
         );
       })}
