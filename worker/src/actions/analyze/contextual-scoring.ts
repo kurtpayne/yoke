@@ -717,7 +717,32 @@ export function calculateDomainScore(opts: {
   if (opts.headers && !opts.httpBlocked) {
     const permPolicy = opts.headers["permissions-policy"] ?? opts.headers["feature-policy"] ?? "";
     if (permPolicy) {
-      findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: "Permissions-Policy header set", tradeoff: null, weight: 1 });
+      // Parse directive values: "camera=(), microphone=(), geolocation=(self)"
+      const directives = permPolicy.split(",").map(d => d.trim()).filter(Boolean);
+      let restrictedCount = 0;
+      let unrestrictedFeatures: string[] = [];
+      for (const directive of directives) {
+        const eqIdx = directive.indexOf("=");
+        if (eqIdx === -1) continue;
+        const feature = directive.slice(0, eqIdx).trim();
+        const value = directive.slice(eqIdx + 1).trim();
+        if (value === "()" || value === "(self)" || value === "self" || value === "none") {
+          restrictedCount++;
+        } else if (value === "*" || value.includes("*")) {
+          unrestrictedFeatures.push(feature);
+        }
+      }
+      if (unrestrictedFeatures.length > 0) {
+        findings.push({ signal: "permissions_policy_unrestricted", axis: "security", severity: "medium", label: `Permissions-Policy allows unrestricted access to ${unrestrictedFeatures.join(", ")}`, tradeoff: null, weight: 2 });
+      }
+      if (restrictedCount >= 4) {
+        findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: `Permissions-Policy restricts ${restrictedCount} features`, tradeoff: null, weight: 2 });
+      } else if (restrictedCount > 0 && unrestrictedFeatures.length === 0) {
+        findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: `Permissions-Policy restricts ${restrictedCount} feature${restrictedCount > 1 ? "s" : ""}`, tradeoff: null, weight: 2 });
+      } else if (restrictedCount === 0 && unrestrictedFeatures.length === 0) {
+        // Header present but no parseable directives — still acknowledge it
+        findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: "Permissions-Policy header set", tradeoff: null, weight: 1 });
+      }
     } else {
       findings.push({ signal: "permissions_policy_missing", axis: "security", severity: "low", label: "No Permissions-Policy header", tradeoff: null, weight: 2 });
     }
@@ -2182,6 +2207,18 @@ export function calculateDomainScore(opts: {
         weight: 2,
       });
     }
+  }
+
+  // ─── Resource Hints ───────────────────────────────────────────────
+  if (opts.resourceHints && opts.resourceHints.total > 0) {
+    const rh = opts.resourceHints;
+    const parts: string[] = [];
+    if (rh.preload.length > 0) parts.push(`${rh.preload.length} preload`);
+    if (rh.preconnect.length > 0) parts.push(`${rh.preconnect.length} preconnect`);
+    if (rh.prefetch.length > 0) parts.push(`${rh.prefetch.length} prefetch`);
+    if (rh.dns_prefetch.length > 0) parts.push(`${rh.dns_prefetch.length} dns-prefetch`);
+    if (rh.modulepreload.length > 0) parts.push(`${rh.modulepreload.length} modulepreload`);
+    findings.push({ signal: "resource_hints", axis: "performance", severity: "good", label: `Resource hints detected: ${parts.join(", ")}`, tradeoff: null, weight: 1 });
   }
 
   // ─── Compute Axis Scores ─────────────────────────────────────────

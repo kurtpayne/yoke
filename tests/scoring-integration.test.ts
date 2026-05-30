@@ -49,6 +49,7 @@ function baseOpts(): Parameters<typeof calculateDomainScore>[0] {
     redirects: [],
     statusResult: null,
     robotsParsed: null,
+    resourceHints: null,
   };
 }
 
@@ -216,5 +217,106 @@ describe('calculateDomainScore integration', () => {
       expect(['security', 'performance', 'reliability', 'trust', 'visibility']).toContain(f.axis);
       expect(['critical', 'high', 'medium', 'low', 'info', 'good']).toContain(f.severity);
     }
+  });
+});
+
+// ─── Permissions-Policy Enhanced Parsing ─────────────────────────────
+
+describe('Permissions-Policy enhanced parsing', () => {
+  it('restrictive directives produce a good finding', () => {
+    const opts = baseOpts();
+    opts.headers = {
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    };
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const pp = allFindings.find(f => f.signal === "permissions_policy");
+    expect(pp).toBeDefined();
+    expect(pp!.severity).toBe("good");
+    expect(pp!.label).toContain("restricts 4 features");
+  });
+
+  it('unrestricted feature (camera=*) produces a medium finding', () => {
+    const opts = baseOpts();
+    opts.headers = {
+      "permissions-policy": "camera=*, microphone=()",
+    };
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const ppUnrestricted = allFindings.find(f => f.signal === "permissions_policy_unrestricted");
+    expect(ppUnrestricted).toBeDefined();
+    expect(ppUnrestricted!.severity).toBe("medium");
+    expect(ppUnrestricted!.label).toContain("camera");
+  });
+
+  it('missing permissions-policy produces a low finding', () => {
+    const opts = baseOpts();
+    opts.headers = {};
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const ppMissing = allFindings.find(f => f.signal === "permissions_policy_missing");
+    expect(ppMissing).toBeDefined();
+    expect(ppMissing!.severity).toBe("low");
+  });
+});
+
+// ─── Resource Hints Scoring ──────────────────────────────────────────
+
+describe('Resource hints scoring', () => {
+  it('produces a good finding when resource hints are present', () => {
+    const opts = baseOpts();
+    opts.resourceHints = {
+      total: 3,
+      preload: ["font.woff2", "style.css"],
+      preconnect: ["https://cdn.example.com"],
+      prefetch: [],
+      dns_prefetch: [],
+      modulepreload: [],
+    };
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const rh = allFindings.find(f => f.signal === "resource_hints");
+    expect(rh).toBeDefined();
+    expect(rh!.severity).toBe("good");
+    expect(rh!.axis).toBe("performance");
+    expect(rh!.label).toContain("2 preload");
+    expect(rh!.label).toContain("1 preconnect");
+  });
+
+  it('produces no finding when resourceHints is null', () => {
+    const opts = baseOpts();
+    opts.resourceHints = null;
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const rh = allFindings.find(f => f.signal === "resource_hints");
+    expect(rh).toBeUndefined();
+  });
+
+  it('produces no finding when total is 0', () => {
+    const opts = baseOpts();
+    opts.resourceHints = {
+      total: 0,
+      preload: [],
+      preconnect: [],
+      prefetch: [],
+      dns_prefetch: [],
+      modulepreload: [],
+    };
+    opts.statusResult = { is_up: true, status_code: 200 };
+
+    const result = calculateDomainScore(opts);
+    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const rh = allFindings.find(f => f.signal === "resource_hints");
+    expect(rh).toBeUndefined();
   });
 });
