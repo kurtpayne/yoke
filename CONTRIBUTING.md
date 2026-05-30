@@ -108,7 +108,7 @@ If your check produces a scoring signal, add it to `worker/src/config/signal-reg
 
 ```typescript
 my_signal: {
-  axis: 'security',       // security | reliability | trust | performance | visibility
+  axis: 'security',       // security | infrastructure | trust | performance | visibility
   actionable: true,
   effort: 'low',          // low | medium | high
   fix: 'Enable the thing to improve security.',

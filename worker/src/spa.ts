@@ -244,7 +244,7 @@ export async function handleSPARoute(request: Request, env: Env, path: string): 
     const indexHtml = await getIndexHtml(env, request.url);
     const ogHtml = injectOgTags(indexHtml, {
       title: `${d1} vs ${d2} — Yoke Domain Intelligence`,
-      description: `Side-by-side domain comparison of ${d1} and ${d2} — security, performance, reliability, trust, and visibility scores.`,
+      description: `Side-by-side domain comparison of ${d1} and ${d2} — security, performance, infrastructure, trust, and visibility scores.`,
       url: `${baseUrl}/compare/${d1}/${d2}`,
     });
     return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=1800", Vary: "Accept" }, baseUrl);

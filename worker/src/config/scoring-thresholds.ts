@@ -156,11 +156,11 @@ export const DOMAIN_EXPIRY: ThresholdConfig = {
   ],
 };
 
-// ─── Reliability ─────────────────────────────────────────────────────
+// ─── Infrastructure ─────────────────────────────────────────────────────
 
 export const NS_COUNT: ThresholdConfig = {
   signal: "ns_count",
-  axis: "reliability",
+  axis: "infrastructure",
   weight: 2, // Aligned with contextual-scoring ns_redundancy weight (M1)
   description: "Number of authoritative nameservers — more = better redundancy",
   bands: [

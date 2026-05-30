@@ -25,7 +25,7 @@ describe("Axis Weights", () => {
 
   it("should have correct values", () => {
     expect(AXIS_WEIGHTS.security).toBe(0.28);
-    expect(AXIS_WEIGHTS.reliability).toBe(0.25);
+    expect(AXIS_WEIGHTS.infrastructure).toBe(0.25);
     expect(AXIS_WEIGHTS.trust).toBe(0.12);
     expect(AXIS_WEIGHTS.performance).toBe(0.2);
     expect(AXIS_WEIGHTS.visibility).toBe(0.15);
@@ -35,9 +35,9 @@ describe("Axis Weights", () => {
     expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.trust);
     expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.performance);
     expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.visibility);
-    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.reliability);
-    expect(AXIS_WEIGHTS.reliability).toBeGreaterThan(AXIS_WEIGHTS.trust);
-    expect(AXIS_WEIGHTS.reliability).toBeGreaterThan(AXIS_WEIGHTS.visibility);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.infrastructure);
+    expect(AXIS_WEIGHTS.infrastructure).toBeGreaterThan(AXIS_WEIGHTS.trust);
+    expect(AXIS_WEIGHTS.infrastructure).toBeGreaterThan(AXIS_WEIGHTS.visibility);
   });
 });
 
@@ -118,19 +118,19 @@ describe("Axis Score Computation", () => {
 
 describe("Composite Score Computation", () => {
   it("should return 100 when all axes are 100", () => {
-    const axes = { security: 100, performance: 100, reliability: 100, trust: 100, visibility: 100 };
+    const axes = { security: 100, performance: 100, infrastructure: 100, trust: 100, visibility: 100 };
     expect(computeComposite(axes, "general")).toBe(100);
     expect(computeComposite(axes, "commerce")).toBe(100);
   });
 
   it("should return 0 when all axes are 0", () => {
-    const axes = { security: 0, performance: 0, reliability: 0, trust: 0, visibility: 0 };
+    const axes = { security: 0, performance: 0, infrastructure: 0, trust: 0, visibility: 0 };
     expect(computeComposite(axes, "general")).toBe(0);
   });
 
   it("should produce the same score regardless of archetype", () => {
     // With fixed weights, archetype no longer affects composite
-    const axes = { security: 100, performance: 30, reliability: 30, trust: 30, visibility: 30 };
+    const axes = { security: 100, performance: 30, infrastructure: 30, trust: 30, visibility: 30 };
     const commerceScore = computeComposite(axes, "commerce");
     const contentScore = computeComposite(axes, "content");
     expect(commerceScore).toBe(contentScore);
@@ -138,7 +138,7 @@ describe("Composite Score Computation", () => {
 
   it("all archetypes should produce the same composite for the same inputs", () => {
     // With fixed weights, archetype no longer changes composite
-    const axes = { security: 30, performance: 30, reliability: 30, trust: 30, visibility: 100 };
+    const axes = { security: 30, performance: 30, infrastructure: 30, trust: 30, visibility: 100 };
     const generalScore = computeComposite(axes, "general");
     const contentScore = computeComposite(axes, "content");
     const commerceScore = computeComposite(axes, "commerce");
@@ -147,7 +147,7 @@ describe("Composite Score Computation", () => {
   });
 
   it("should use fixed weights (Sec=0.28, Rel=0.25, Trust=0.12, Perf=0.20, Vis=0.15)", () => {
-    const axes = { security: 60, performance: 80, reliability: 70, trust: 90, visibility: 50 };
+    const axes = { security: 60, performance: 80, infrastructure: 70, trust: 90, visibility: 50 };
     const expected = Math.round(60 * 0.28 + 80 * 0.2 + 70 * 0.25 + 90 * 0.12 + 50 * 0.15);
     expect(computeComposite(axes, "general")).toBe(expected);
   });
@@ -164,7 +164,7 @@ describe("Composite Score Computation", () => {
     ];
     for (const arch of archetypes) {
       const score = computeComposite(
-        { security: 50, performance: 50, reliability: 50, trust: 50, visibility: 50 },
+        { security: 50, performance: 50, infrastructure: 50, trust: 50, visibility: 50 },
         arch,
       );
       expect(score).toBeGreaterThanOrEqual(0);

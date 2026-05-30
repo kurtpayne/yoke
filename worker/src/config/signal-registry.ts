@@ -40,7 +40,7 @@ export const SEVERITY_SCORES: Record<Severity, number> = {
 
 export const AXIS_WEIGHTS: Record<Axis, number> = {
   security: 0.28,
-  reliability: 0.25,
+  infrastructure: 0.25,
   trust: 0.12,
   performance: 0.2,
   visibility: 0.15,
@@ -710,17 +710,17 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [2, 2],
   },
 
-  // ── Reliability ───────────────────────────────────────────────────
+  // ── Infrastructure ───────────────────────────────────────────────────
 
   ns_redundancy: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "Nameserver Count",
     actionable: false,
     canBeNonGood: false,
     weightRange: [0, 0],
   },
   ipv6: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "IPv6 Support",
     actionable: true,
     canBeNonGood: true,
@@ -729,14 +729,14 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [1, 1],
   },
   lb: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "Load Balancing",
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
   },
   caa: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "CAA Records",
     actionable: true,
     canBeNonGood: true,
@@ -745,14 +745,14 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [1, 1],
   },
   low_ttl: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "Low DNS TTL",
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
   },
   tcp_connection_time: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "TCP Connection Time",
     actionable: true,
     canBeNonGood: true,
@@ -761,14 +761,14 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [2, 2],
   },
   dns_resolution_time: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "DNS Resolution Time",
     actionable: false,
     canBeNonGood: true,
     weightRange: [2, 2],
   },
   ns_provider_diversity: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "NS Provider Diversity",
     actionable: true,
     canBeNonGood: true,
@@ -777,35 +777,35 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [1, 1],
   },
   mx_redundancy: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "MX Redundancy",
     actionable: false,
     canBeNonGood: false,
     weightRange: [2, 2],
   },
   site_unreachable: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "Site Unreachable",
     actionable: false,
     canBeNonGood: true,
     weightRange: [5, 5],
   },
-  http_blocked_reliability: {
-    axis: "reliability",
-    label: "HTTP Blocked (Reliability)",
+  http_blocked_infrastructure: {
+    axis: "infrastructure",
+    label: "HTTP Blocked (Infrastructure)",
     actionable: false,
     canBeNonGood: true,
     weightRange: [3, 3],
   },
   http_error_response: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "HTTP Error Response",
     actionable: false,
     canBeNonGood: true,
     weightRange: [3, 4],
   },
   dns_inconsistent: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "DNS Inconsistency",
     actionable: true,
     canBeNonGood: true,
@@ -814,21 +814,21 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     weightRange: [3, 3],
   },
   dns_consistent: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "DNS Consistent",
     actionable: false,
     canBeNonGood: false,
     weightRange: [1, 1],
   },
   bgp_unstable: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "BGP Instability",
     actionable: false,
     canBeNonGood: true,
     weightRange: [2, 2],
   },
   low_visibility: {
-    axis: "reliability",
+    axis: "infrastructure",
     label: "Low Visibility",
     actionable: false,
     canBeNonGood: true,

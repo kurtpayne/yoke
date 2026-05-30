@@ -33,7 +33,7 @@ All notable changes to Yoke are documented here.
 ### Scoring Overhaul
 - **106 detection signals** — expanded from 83 with 23 new signals: mixed content detection, canonical URL validation, subresource integrity checks, form action security, mobile app deep links, MTA-STS/BIMI email auth, DMARC policy granularity, RSS/Atom feeds, hreflang international targeting, favicon/title/meta description presence, ads.txt, CSP report-only detection
 - **Scoring calibration** — steepened severity curve (info 92→85, low 80→70, medium 65→50, high 30→20), raised A threshold to ≥90, grade distribution now 35% A / 57% B / 4% C / 4% D (was 93% A / 7% B)
-- **Fixed axis weights** — single weight set for all archetypes: Security (0.25), Reliability (0.25), Trust (0.20), Performance (0.18), Visibility (0.12)
+- **Fixed axis weights** — single weight set for all archetypes: Security (0.25), Infrastructure (0.25), Trust (0.20), Performance (0.18), Visibility (0.12)
 - **Breach grade cap** — >100M breached accounts caps grade at B
 
 ### Features
@@ -82,7 +82,7 @@ All notable changes to Yoke are documented here.
 - **D1 cleanup endpoint** — `GET /api/cleanup` (admin-gated) clears stale cache, rate limits, and error logs
 - **Domain comparison** — side-by-side scoring at `/compare/domain1/domain2` with overlaid radar, per-axis deltas, and key differences
 - **83 detection signals** — expanded from 70 with 13 new signals extracted from existing data: open ports (Shodan), known vulnerabilities, cookie security, server version disclosure, referrer policy, permissions policy, HTTP-to-HTTPS redirect, redirect chain length, site unreachable, HTTP error response, security.txt, restrictive robots, PWA readiness
-- **Fixed axis weights** — Security (0.25), Reliability (0.25), Trust (0.20), Performance (0.18), Visibility (0.12) replace per-archetype weight profiles for more consistent scoring
+- **Fixed axis weights** — Security (0.25), Infrastructure (0.25), Trust (0.20), Performance (0.18), Visibility (0.12) replace per-archetype weight profiles for more consistent scoring
 - **Breach grade cap** — domains with >100M breached accounts capped at B grade
 - **Social verification** — Instagram and Threads added to rel="me" verification and footer links (7 platforms total)
 - **Threads detection fix** — Threads accounts no longer misidentified as Mastodon due to generic Mastodon URL pattern

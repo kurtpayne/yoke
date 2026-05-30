@@ -54,7 +54,7 @@ import type {
 
 // ─── Types ───────────────────────────────────────────────────────────
 
-export type Axis = "security" | "performance" | "reliability" | "trust" | "visibility";
+export type Axis = "security" | "performance" | "infrastructure" | "trust" | "visibility";
 export type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
 export type ArchetypeName =
   | "commerce"
@@ -2082,7 +2082,7 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // ─── Reliability Axis Findings ───────────────────────────────────
+  // ─── Infrastructure Axis Findings ───────────────────────────────────
 
   const dns = opts.dnsRecords;
 
@@ -2090,7 +2090,7 @@ export function calculateDomainScore(opts: {
   const nsCount = dns.filter((r) => r.type === "NS").length;
   findings.push({
     signal: "ns_redundancy",
-    axis: "reliability",
+    axis: "infrastructure",
     severity: "good",
     label: `${nsCount} nameserver${nsCount !== 1 ? "s" : ""}`,
     tradeoff: null,
@@ -2102,7 +2102,7 @@ export function calculateDomainScore(opts: {
   if (mxCount > 0) {
     findings.push({
       signal: "mx_redundancy",
-      axis: "reliability",
+      axis: "infrastructure",
       severity: mxCount >= 2 ? "good" : "info",
       label: `${mxCount} MX record${mxCount !== 1 ? "s" : ""}`,
       tradeoff: null,
@@ -2114,7 +2114,7 @@ export function calculateDomainScore(opts: {
   const hasIpv6 = dns.some((r) => r.type === "AAAA");
   findings.push({
     signal: "ipv6",
-    axis: "reliability",
+    axis: "infrastructure",
     severity: hasIpv6 ? "good" : "info",
     label: hasIpv6 ? "IPv6 supported" : "No IPv6 (AAAA) records",
     tradeoff: null,
@@ -2126,7 +2126,7 @@ export function calculateDomainScore(opts: {
   if (aCount >= 2) {
     findings.push({
       signal: "lb",
-      axis: "reliability",
+      axis: "infrastructure",
       severity: "good",
       label: `${aCount} A records (load balanced)`,
       tradeoff: null,
@@ -2138,7 +2138,7 @@ export function calculateDomainScore(opts: {
   const hasCaa = dns.some((r) => r.type === "CAA");
   findings.push({
     signal: "caa",
-    axis: "reliability",
+    axis: "infrastructure",
     severity: hasCaa ? "good" : "info",
     label: hasCaa ? "CAA records present" : "No CAA records",
     tradeoff: null,
@@ -2152,7 +2152,7 @@ export function calculateDomainScore(opts: {
     if (minTtl < 60) {
       findings.push({
         signal: "low_ttl",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "info",
         label: `Low DNS TTL (${minTtl}s) — enables fast failover`,
         tradeoff: "Low TTLs enable fast failover and traffic management but increase DNS query volume.",
@@ -2171,7 +2171,7 @@ export function calculateDomainScore(opts: {
     if (tcpMs < 300) {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "good",
         label: `TCP connect: ${Math.round(tcpMs)}ms`,
         tradeoff: null,
@@ -2180,7 +2180,7 @@ export function calculateDomainScore(opts: {
     } else if (tcpMs < 500) {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "info",
         label: `TCP connect: ${Math.round(tcpMs)}ms`,
         tradeoff: null,
@@ -2189,7 +2189,7 @@ export function calculateDomainScore(opts: {
     } else if (tcpMs < 1000) {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "low",
         label: `TCP connect: ${Math.round(tcpMs)}ms — above average`,
         tradeoff: "Connection timing depends on server location relative to probe.",
@@ -2198,7 +2198,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "medium",
         label: `TCP connect: ${Math.round(tcpMs)}ms — very slow`,
         tradeoff: "Connection timing depends on server location relative to probe.",
@@ -2214,7 +2214,7 @@ export function calculateDomainScore(opts: {
     if (dnsMs < 100) {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "good",
         label: `DNS resolution: ${Math.round(dnsMs)}ms`,
         tradeoff: null,
@@ -2223,7 +2223,7 @@ export function calculateDomainScore(opts: {
     } else if (dnsMs < 200) {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "info",
         label: `DNS resolution: ${Math.round(dnsMs)}ms`,
         tradeoff: null,
@@ -2232,7 +2232,7 @@ export function calculateDomainScore(opts: {
     } else if (dnsMs < 500) {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "low",
         label: `DNS resolution: ${Math.round(dnsMs)}ms — slow`,
         tradeoff: null,
@@ -2241,7 +2241,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "medium",
         label: `DNS resolution: ${Math.round(dnsMs)}ms — very slow`,
         tradeoff: null,
@@ -2258,7 +2258,7 @@ export function calculateDomainScore(opts: {
       if (nsDiversity.isMultiProvider) {
         findings.push({
           signal: "ns_provider_diversity",
-          axis: "reliability",
+          axis: "infrastructure",
           severity: "good",
           label: `Multi-provider DNS (${nsDiversity.providers.join(", ")})`,
           tradeoff: null,
@@ -2278,7 +2278,7 @@ export function calculateDomainScore(opts: {
     if (!opts.statusResult.is_up && dnsResolves && !opts.statusResult.http_blocked) {
       findings.push({
         signal: "site_unreachable",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "high",
         label: "Site unreachable — DNS resolves but no HTTP response",
         tradeoff: null,
@@ -2309,8 +2309,8 @@ export function calculateDomainScore(opts: {
   // The site is up but blocked our probe, so we can't assess headers, content, etc.
   if (opts.statusResult?.http_blocked) {
     findings.push({
-      signal: "http_blocked_reliability",
-      axis: "reliability",
+      signal: "http_blocked_infrastructure",
+      axis: "infrastructure",
       severity: "medium",
       label: "HTTP probe blocked — analysis is limited",
       tradeoff: "Site may be blocking automated requests. Scoring is based on DNS/WHOIS/SSL data only.",
@@ -2347,7 +2347,7 @@ export function calculateDomainScore(opts: {
       if (code >= 500) {
         findings.push({
           signal: "http_error_response",
-          axis: "reliability",
+          axis: "infrastructure",
           severity: "high",
           label: `Server error (HTTP ${code})`,
           tradeoff: null,
@@ -2356,7 +2356,7 @@ export function calculateDomainScore(opts: {
       } else {
         findings.push({
           signal: "http_error_response",
-          axis: "reliability",
+          axis: "infrastructure",
           severity: "medium",
           label: `Client error response (HTTP ${code})`,
           tradeoff: "Some sites return 4xx to automated probes while working fine in browsers.",
@@ -3382,7 +3382,7 @@ export function calculateDomainScore(opts: {
       if (isBehindCdnForDns) {
         findings.push({
           signal: "dns_consistent",
-          axis: "reliability",
+          axis: "infrastructure",
           severity: "good",
           label: `DNS varies across resolvers (expected: ${opts.hosting!.cdn} anycast)`,
           tradeoff: null,
@@ -3391,7 +3391,7 @@ export function calculateDomainScore(opts: {
       } else {
         findings.push({
           signal: "dns_inconsistent",
-          axis: "reliability",
+          axis: "infrastructure",
           severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
           label: "DNS records inconsistent across resolvers",
           tradeoff: "DNS propagation may still be in progress, or you're using geo-DNS.",
@@ -3401,7 +3401,7 @@ export function calculateDomainScore(opts: {
     } else if (nh.dns_propagation?.consistent) {
       findings.push({
         signal: "dns_consistent",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "good",
         label: "DNS records consistent across all resolvers",
         tradeoff: null,
@@ -3415,7 +3415,7 @@ export function calculateDomainScore(opts: {
       const siteIsUp = opts.statusResult?.is_up === true;
       findings.push({
         signal: "bgp_unstable",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: siteIsUp ? "info" : contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
         label: siteIsUp
           ? `BGP route churn (${nh.ripe_routing.bgp_updates_24h} updates in 24h — site responding normally)`
@@ -3432,7 +3432,7 @@ export function calculateDomainScore(opts: {
       if (vis < 70) {
         findings.push({
           signal: "low_visibility",
-          axis: "reliability",
+          axis: "infrastructure",
           severity: contextualSeverity("low", arch, { commerce: "medium" }),
           label: `Low route visibility (${vis}% of peers)`,
           tradeoff:
@@ -3477,7 +3477,7 @@ export function calculateDomainScore(opts: {
 
   // ─── Compute Axis Scores ─────────────────────────────────────────
 
-  const axes: Axis[] = ["security", "performance", "reliability", "trust", "visibility"];
+  const axes: Axis[] = ["security", "performance", "infrastructure", "trust", "visibility"];
   const axisScores: Record<Axis, AxisScore> = {} as Record<Axis, AxisScore>;
 
   for (const axis of axes) {

@@ -78,7 +78,7 @@ interface ActionItem {
   impact: number; // 0-100, used for sorting
 }
 
-type AxisName = "security" | "performance" | "reliability" | "trust" | "visibility";
+type AxisName = "security" | "performance" | "infrastructure" | "trust" | "visibility";
 
 function generateActionItems(data: AnalysisResult): ActionItem[] {
   const items: ActionItem[] = [];
@@ -90,7 +90,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       title: "Site appears to be down",
       reason: "Users and search engines can't reach your site. Everything else is secondary until this is resolved.",
       effort: "Investigate immediately",
-      axis: "reliability",
+      axis: "infrastructure",
       severity: "critical",
       impact: 100,
     });
@@ -394,7 +394,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         title: "Add IPv6 (AAAA) records",
         reason: "A growing share of mobile and international users connect over IPv6. Some networks are IPv6-only.",
         effort: "DNS config — ~15 min",
-        axis: "reliability",
+        axis: "infrastructure",
         severity: "low",
         impact: 15,
       });
@@ -548,14 +548,14 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       const axisLabels: Record<AxisName, string> = {
         security: "Security",
         performance: "Performance",
-        reliability: "Reliability",
+        infrastructure: "Infrastructure",
         trust: "Trust",
         visibility: "Visibility",
       };
       const axisAdvice: Record<AxisName, string> = {
         security: "headers, email auth, and TLS configuration",
         performance: "page speed, compression, and script optimization",
-        reliability: "DNS redundancy, IPv6, and uptime",
+        infrastructure: "DNS, networking, and hosting health",
         trust: "email authentication, domain registration, and compliance",
         visibility: "structured data, social meta, and accessibility",
       };
@@ -1755,14 +1755,14 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
   const axisLabels: Record<string, string> = {
     security: "Security",
     performance: "Performance",
-    reliability: "Reliability",
+    infrastructure: "Infrastructure",
     trust: "Trust",
     visibility: "Visibility",
   };
   const axisColors: Record<string, string> = {
     security: "#f85149",
     performance: "#58a6ff",
-    reliability: "#7ee787",
+    infrastructure: "#7ee787",
     trust: "#d2a221",
     visibility: "#bc8cff",
   };

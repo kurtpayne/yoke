@@ -107,7 +107,7 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[], env:
 // ─── Blocklist Checks ────────────────────────────────────────────────
 
 // ─── Blocklist Configuration ─────────────────────────────────────────
-// Reliability notes (verified 2026-05-24):
+// Infrastructure notes (verified 2026-05-24):
 //
 // KEEP:
 //   Barracuda (b.barracudacentral.org) — reliable, no false positives on major domains

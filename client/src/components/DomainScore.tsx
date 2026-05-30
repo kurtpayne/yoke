@@ -5,11 +5,11 @@ import { Tooltip } from "./Tooltip";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-const AXES: Axis[] = ["security", "performance", "reliability", "trust", "visibility"];
+const AXES: Axis[] = ["security", "performance", "infrastructure", "trust", "visibility"];
 const AXIS_LABELS: Record<Axis, string> = {
   security: "Security",
   performance: "Performance",
-  reliability: "Reliability",
+  infrastructure: "Infrastructure",
   trust: "Trust",
   visibility: "Visibility",
 };
@@ -35,20 +35,20 @@ const ARCHETYPE_LABELS: Record<ArchetypeName, string> = {
 };
 
 const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
-  commerce: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
-  content: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
-  application: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
-  corporate: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
-  infrastructure: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
-  institutional: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
-  general: "Security & Reliability weighted highest, then Trust, Performance, Visibility",
+  commerce: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
+  content: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
+  application: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
+  corporate: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
+  infrastructure: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
+  institutional: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
+  general: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
 };
 
 // Fixed axis weights — all archetypes use the same weights now.
 // SYNC: must match server AXIS_WEIGHTS in contextual-scoring.ts
 const FIXED_WEIGHTS: Record<Axis, number> = {
   security: 0.28,
-  reliability: 0.25,
+  infrastructure: 0.25,
   performance: 0.2,
   visibility: 0.15,
   trust: 0.12,

@@ -237,7 +237,7 @@ describe("Signal Registry", () => {
 
   it("AXIS_WEIGHTS has all 5 axes", () => {
     expect(AXIS_WEIGHTS).toHaveProperty("security");
-    expect(AXIS_WEIGHTS).toHaveProperty("reliability");
+    expect(AXIS_WEIGHTS).toHaveProperty("infrastructure");
     expect(AXIS_WEIGHTS).toHaveProperty("trust");
     expect(AXIS_WEIGHTS).toHaveProperty("performance");
     expect(AXIS_WEIGHTS).toHaveProperty("visibility");

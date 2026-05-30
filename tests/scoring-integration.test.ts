@@ -61,7 +61,7 @@ describe("calculateDomainScore integration", () => {
     expect(result.axes).toBeDefined();
     expect(result.archetype).toBeDefined();
     // All 5 axes should be present
-    for (const axis of ["security", "performance", "reliability", "trust", "visibility"] as const) {
+    for (const axis of ["security", "performance", "infrastructure", "trust", "visibility"] as const) {
       expect(result.axes[axis]).toBeDefined();
       const score = result.axes[axis].score;
       // score can be number or null
@@ -268,7 +268,7 @@ describe("calculateDomainScore integration", () => {
       expect(f.axis).toBeTruthy();
       expect(f.severity).toBeTruthy();
       expect(f.label).toBeTruthy();
-      expect(["security", "performance", "reliability", "trust", "visibility"]).toContain(f.axis);
+      expect(["security", "performance", "infrastructure", "trust", "visibility"]).toContain(f.axis);
       expect(["critical", "high", "medium", "low", "info", "good"]).toContain(f.severity);
     }
   });

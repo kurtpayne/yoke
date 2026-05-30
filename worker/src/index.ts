@@ -883,7 +883,7 @@ export default {
               fix_desc_map: FIX_DESC_MAP,
               thresholds: ALL_THRESHOLDS,
               archetype_note:
-                "Fixed axis weights: Security (0.28), Reliability (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥70, D+≥65, D≥50, F<50. Performance blending is mobile-first (60% mobile + 40% desktop). Breach trust impact uses time decay: <1yr 1.0×, 1–3yr 0.75×, 3–5yr 0.50×, 5–10yr 0.25×, >10yr 0.10×; unknown-date breaches get 0.50×; grade cap only applies to breaches <3 years old. Site archetype is detected for contextual severity adjustments on individual findings.",
+                "Fixed axis weights: Security (0.28), Infrastructure (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥70, D+≥65, D≥50, F<50. Performance blending is mobile-first (60% mobile + 40% desktop). Breach trust impact uses time decay: <1yr 1.0×, 1–3yr 0.75×, 3–5yr 0.50×, 5–10yr 0.25×, >10yr 0.10×; unknown-date breaches get 0.50×; grade cap only applies to breaches <3 years old. Site archetype is detected for contextual severity adjustments on individual findings.",
             },
             200,
           );

@@ -742,7 +742,7 @@ export interface GreynoiseData {
 
 // ─── Contextual Domain Score types ───────────────────────────────────
 
-export type Axis = "security" | "performance" | "reliability" | "trust" | "visibility";
+export type Axis = "security" | "performance" | "infrastructure" | "trust" | "visibility";
 export type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
 export type ArchetypeName =
   | "commerce"

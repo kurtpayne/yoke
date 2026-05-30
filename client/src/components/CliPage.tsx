@@ -202,7 +202,7 @@ export default function CliPage() {
 │                                                             │
 │ SECURITY       ███████████████████░ 98                      │
 │ PERFORMANCE    █████████████░░░░░░░ 69                      │
-│ RELIABILITY    ██████████████████░░ 90                      │
+│ INFRASTRUCTURE ██████████████████░░ 90                      │
 │ TRUST          ████████████████████ 100                     │
 │ VISIBILITY     ███████████████████░ 97                      │
 │                                                             │
@@ -250,7 +250,7 @@ export default function CliPage() {
               <OutputBlock
                 text={`"security: 98"
 "performance: 69"
-"reliability: 90"
+"infrastructure: 90"
 "trust: 100"
 "visibility: 97"`}
               />
@@ -269,7 +269,7 @@ export default function CliPage() {
 
   SECURITY         98 vs 96   +2
   PERFORMANCE      69 vs 73   -4
-  RELIABILITY      90 vs 94   -4
+  INFRASTRUCTURE   90 vs 94   -4
   TRUST           100 vs 100  +0
   VISIBILITY       97 vs 100  -3
 

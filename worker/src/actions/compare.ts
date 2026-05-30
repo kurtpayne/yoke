@@ -66,7 +66,7 @@ export async function compareDomains(body: CompareRequest, env: Env): Promise<Re
     archetype: { detected: string; confidence: number };
   } | null;
 
-  const axes = ["security", "performance", "reliability", "trust", "visibility"];
+  const axes = ["security", "performance", "infrastructure", "trust", "visibility"];
   const deltas: AxisDelta[] = axes.map((axis) => {
     const s1 = score1?.axes?.[axis]?.score ?? 0;
     const s2 = score2?.axes?.[axis]?.score ?? 0;

@@ -16,7 +16,7 @@ interface SharePayload {
   d: string; // domain
   s: number; // composite score
   g: string; // grade
-  a: number[]; // axis scores [security, reliability, trust, performance, visibility]
+  a: number[]; // axis scores [security, infrastructure, trust, performance, visibility]
   t: number; // unix timestamp (seconds)
 }
 
@@ -27,7 +27,7 @@ interface CompareSharePayload {
   s2: number; // composite score 2
   g1: string; // grade 1
   g2: string; // grade 2
-  a1: number[]; // axis scores 1 [security, reliability, trust, performance, visibility]
+  a1: number[]; // axis scores 1 [security, infrastructure, trust, performance, visibility]
   a2: number[]; // axis scores 2
   t: number; // unix timestamp (seconds)
 }
@@ -206,7 +206,7 @@ function scoreColor(score: number): string {
   return "#f85149"; // red (matches --danger)
 }
 
-const AXIS_LABELS = ["Security", "Reliability", "Trust", "Performance", "Visibility"];
+const AXIS_LABELS = ["Security", "Infrastructure", "Trust", "Performance", "Visibility"];
 
 // ─── OG Image (SVG) ─────────────────────────────────────────────────
 
@@ -324,10 +324,10 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>${domain} scored ${score} (${esc(grade)}) — Yoke</title>
-  <meta name="description" content="Security ${data.a[0]} · Reliability ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
+  <meta name="description" content="Security ${data.a[0]} · Infrastructure ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
   <meta property="og:type" content="website"/>
   <meta property="og:title" content="${domain} scored ${score} (${esc(grade)}) — Yoke"/>
-  <meta property="og:description" content="Security ${data.a[0]} · Reliability ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
+  <meta property="og:description" content="Security ${data.a[0]} · Infrastructure ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
   <meta property="og:image" content="${ogImageUrl}"/>
   <meta property="og:image:type" content="image/png"/>
   <meta property="og:image:width" content="1200"/>
@@ -335,7 +335,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
   <meta property="og:url" content="${shareUrl}"/>
   <meta name="twitter:card" content="summary_large_image"/>
   <meta name="twitter:title" content="${domain} scored ${score} (${esc(grade)}) — Yoke"/>
-  <meta name="twitter:description" content="Security ${data.a[0]} · Reliability ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]}"/>
+  <meta name="twitter:description" content="Security ${data.a[0]} · Infrastructure ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]}"/>
   <meta name="twitter:image" content="${ogImageUrl}"/>
   <link rel="canonical" href="${shareUrl}"/>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
@@ -477,7 +477,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 <title>${domain} scored ${d.s} (${esc(d.g)}) — Yoke</title>
 <meta property="og:type" content="website"/>
 <meta property="og:title" content="${domain} scored ${d.s} (${esc(d.g)}) — Yoke"/>
-<meta property="og:description" content="Security ${d.a[0]} · Reliability ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]} — Free domain intelligence report"/>
+<meta property="og:description" content="Security ${d.a[0]} · Infrastructure ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]} — Free domain intelligence report"/>
 <meta property="og:image" content="${esc(ogImageUrl)}"/>
 <meta property="og:image:type" content="image/png"/>
 <meta property="og:image:width" content="1200"/>
@@ -485,7 +485,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 <meta property="og:url" content="${esc(shareUrl)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${domain} scored ${d.s} (${esc(d.g)}) — Yoke"/>
-<meta name="twitter:description" content="Security ${d.a[0]} · Reliability ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]}"/>
+<meta name="twitter:description" content="Security ${d.a[0]} · Infrastructure ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]}"/>
 <meta name="twitter:image" content="${esc(ogImageUrl)}"/>
 <link rel="canonical" href="${esc(shareUrl)}"/>
 </head><body></body></html>`;
