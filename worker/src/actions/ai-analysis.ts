@@ -37,8 +37,8 @@ const MAX_STRING_LENGTH = 500;
 
 /** Truncate long string values and strip HTML/XML tags to prevent prompt injection */
 function sanitizeStringValue(value: string): string {
-  // Strip HTML/XML-like tags that could contain instructions
-  let cleaned = value.replace(/<[^>]*>/g, "");
+  // Strip HTML/XML-like tags — handles malformed tags like <foo bar=">
+  let cleaned = value.replace(/<[^>]*>|<[^>]*$/g, "");
   // Truncate and mark
   if (cleaned.length > MAX_STRING_LENGTH) {
     cleaned = cleaned.slice(0, MAX_STRING_LENGTH) + " [truncated]";
@@ -576,7 +576,13 @@ export async function getAIAnalysis(
   }
 
   // Get the analysis data for this domain (from cache or fresh)
-  const analysisCache = (await getFromCache(env.REFERENCE_DATA!, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
+  if (!env.REFERENCE_DATA) {
+    return new Response(
+      JSON.stringify({ error: "AI analysis temporarily unavailable — cache service offline" }),
+      { status: 503, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+    );
+  }
+  const analysisCache = (await getFromCache(env.REFERENCE_DATA, normalized, "analysis", 60 * 60 * 1000)) as Record<string, unknown> | null;
 
   if (!analysisCache) {
     return new Response(
@@ -590,7 +596,7 @@ export async function getAIAnalysis(
   const aiCacheType = `ai_analysis:${inputHash}`;
 
   // Check cache — serve if signals haven't changed (TTL is just a safety net)
-  const cached = (await getFromCache(env.REFERENCE_DATA!, normalized, aiCacheType, AI_CACHE_TTL_MS)) as CachedAIResult | null;
+  const cached = (await getFromCache(env.REFERENCE_DATA, normalized, aiCacheType, AI_CACHE_TTL_MS)) as CachedAIResult | null;
   if (cached && cached.result?.cross_signal_insights) {
     return new Response(JSON.stringify({ ...cached, cached: true }), {
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -714,7 +720,11 @@ export async function getAIAnalysis(
           analyzed_at: new Date().toISOString(),
           domain: normalized,
         };
-        await setCache(env.REFERENCE_DATA!, normalized, aiCacheType, responseData);
+        if (env.REFERENCE_DATA) {
+          if (env.REFERENCE_DATA) {
+      await setCache(env.REFERENCE_DATA, normalized, aiCacheType, responseData);
+    }
+        }
       }
       try { await cleanupOldRateLimits(env.STATS_DB); } catch { /* non-critical */ }
     }).catch(async (err) => {
@@ -745,7 +755,7 @@ export async function getAIAnalysis(
       domain: normalized,
     };
 
-    await setCache(env.REFERENCE_DATA!, normalized, aiCacheType, responseData);
+    await setCache(env.REFERENCE_DATA, normalized, aiCacheType, responseData);
 
     try {
       await cleanupOldRateLimits(env.STATS_DB);

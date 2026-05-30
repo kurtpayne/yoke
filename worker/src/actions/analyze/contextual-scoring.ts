@@ -43,7 +43,7 @@ export interface ArchetypeResult {
   secondary: ArchetypeName | null;
   signals: string[];
   platform: string | null; // managed platform if detected
-  weights: Record<ArchetypeName, Record<Axis, number>>; // all archetype weight profiles for client-side recalc
+  weights: Record<Axis, number>; // single fixed axis weights (all archetypes use the same)
 }
 
 export interface AxisScore {
@@ -107,16 +107,8 @@ export const AXIS_WEIGHTS: Record<Axis, number> = {
   visibility: 0.15,
 };
 
-// Legacy export — kept for API compatibility; every archetype returns the same weights.
-export const ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
-  commerce:       AXIS_WEIGHTS,
-  content:        AXIS_WEIGHTS,
-  application:    AXIS_WEIGHTS,
-  corporate:      AXIS_WEIGHTS,
-  infrastructure: AXIS_WEIGHTS,
-  institutional:  AXIS_WEIGHTS,
-  general:        AXIS_WEIGHTS,
-};
+// ARCHETYPE_WEIGHTS removed — all archetypes use AXIS_WEIGHTS.
+// Use AXIS_WEIGHTS as the single source of truth.
 
 // ─── Archetype Detection ─────────────────────────────────────────────
 
@@ -266,13 +258,13 @@ export function detectArchetype(opts: {
   const second = ranked[1];
 
   if (!top || top[1].score < 0.3) {
-    return { detected: "general", confidence: 1.0, secondary: null, signals: ["No strong archetype signals"], platform, weights: ARCHETYPE_WEIGHTS };
+    return { detected: "general", confidence: 1.0, secondary: null, signals: ["No strong archetype signals"], platform, weights: AXIS_WEIGHTS };
   }
 
   const confidence = Math.min(1.0, top[1].score);
   const secondary = (second && second[1].score > 0.25 && top[1].score - second[1].score < 0.15) ? second[0] : null;
 
-  return { detected: top[0], confidence, secondary, signals: top[1].signals, platform, weights: ARCHETYPE_WEIGHTS };
+  return { detected: top[0], confidence, secondary, signals: top[1].signals, platform, weights: AXIS_WEIGHTS };
 }
 
 // ─── Scoring Engine ──────────────────────────────────────────────────
@@ -553,6 +545,65 @@ export function calculateDomainScore(opts: {
     // Certificate volume — removed: 306/306 identical, zero discrimination
   }
 
+  // ─── CT-CAA Cross-Reference ──────────────────────────────────────
+  // Compare Certificate Transparency log issuers against CAA records.
+  // Info-only, zero penalty — flags potential oversight without penalizing.
+  if (opts.certTransparency && !opts.certTransparency.error && opts.certTransparency.certs.length > 0) {
+    const caaRecords = opts.dnsRecords.filter(r => r.type === "CAA");
+    // Only run if CAA records exist (can't mismatch against nothing)
+    if (caaRecords.length > 0) {
+      // Parse CAA issue/issuewild directives → set of authorized CA domains
+      const authorizedCAs = new Set<string>();
+      for (const caa of caaRecords) {
+        // CAA data format: "0 issue \"letsencrypt.org\"" or "0 issuewild \"digicert.com\""
+        const match = caa.data.match(/\b(?:issue|issuewild)\s+"([^"]+)"/i);
+        if (match) authorizedCAs.add(match[1].toLowerCase());
+      }
+
+      if (authorizedCAs.size > 0) {
+        // Filter CT certs to last 2 years only (by not_before date)
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        const recentCerts = opts.certTransparency.certs.filter(c => {
+          const notBefore = new Date(c.not_before);
+          return notBefore >= twoYearsAgo;
+        });
+
+        // Find issuers not authorized by CAA
+        // Normalize issuer names: extract the CA organization from the issuer DN
+        const unauthorizedCAs = new Set<string>();
+        let unauthorizedCertCount = 0;
+        for (const cert of recentCerts) {
+          // Issuer from certspotter is a DN like "C=US, O=Let's Encrypt, CN=R3"
+          // Extract the O= (Organization) field for matching
+          const orgMatch = cert.issuer.match(/O=([^,]+)/i);
+          const issuerOrg = orgMatch ? orgMatch[1].trim().toLowerCase() : cert.issuer.toLowerCase();
+          // Check if any authorized CA domain appears in the issuer org name
+          const isAuthorized = [...authorizedCAs].some(ca => {
+            const caDomain = ca.replace(/\.$/, ""); // strip trailing dot
+            const caName = caDomain.split(".")[0]; // e.g., "letsencrypt" from "letsencrypt.org"
+            return issuerOrg.includes(caName) || issuerOrg.includes(caDomain);
+          });
+          if (!isAuthorized) {
+            unauthorizedCAs.add(orgMatch ? orgMatch[1].trim() : cert.issuer);
+            unauthorizedCertCount++;
+          }
+        }
+
+        if (unauthorizedCAs.size > 0) {
+          const caList = [...unauthorizedCAs].slice(0, 5).join(", ");
+          findings.push({
+            signal: "ct_caa_mismatch", axis: "trust",
+            severity: "info",
+            label: `${unauthorizedCertCount} cert${unauthorizedCertCount !== 1 ? "s" : ""} from CA${unauthorizedCAs.size !== 1 ? "s" : ""} not in CAA: ${caList}`,
+            tradeoff: "Certificates from CAs not listed in CAA records may predate CAA deployment or indicate a policy gap. This is informational only.",
+            weight: 0, // zero penalty — informational
+          });
+        }
+      }
+    }
+  }
+
   // ─── NEW: Shodan Open Ports (attack surface) ─────────────────────
   if (opts.shodan) {
     const dangerousPorts = [3306, 5432, 6379, 27017, 9200, 11211, 5984, 1433, 3389, 2379, 2380, 9090, 3000, 5601, 8500];
@@ -589,9 +640,9 @@ export function calculateDomainScore(opts: {
     const cookieCount = opts.cookieSecurity.cookies.length;
     if (cookieCount > 0) {
       if (issues.length === 0) {
-        findings.push({ signal: "cookie_security", axis: "security", severity: "good", label: "All cookies have Secure/HttpOnly/SameSite flags", tradeoff: null, weight: 3 });
+        findings.push({ signal: "cookie_security", axis: "security", severity: "good", label: "All cookies have Secure/HttpOnly flags", tradeoff: null, weight: 3 });
       } else if (issues.length >= 3) {
-        findings.push({ signal: "cookie_security", axis: "security", severity: "medium", label: `${issues.length} cookie security issues (missing Secure/HttpOnly/SameSite)`, tradeoff: null, weight: 3 });
+        findings.push({ signal: "cookie_security", axis: "security", severity: "medium", label: `${issues.length} cookie security issues (missing Secure/HttpOnly)`, tradeoff: null, weight: 3 });
       } else {
         findings.push({ signal: "cookie_security", axis: "security", severity: "low", label: `${issues.length} cookie security issue${issues.length > 1 ? "s" : ""}`, tradeoff: null, weight: 3 });
       }
@@ -1392,7 +1443,7 @@ export function calculateDomainScore(opts: {
       weight: 3,
     });
     // Can't trust performance data if we couldn't fetch the page
-    if (!opts.pagespeed) {
+    if (!opts.performance) {
       findings.push({
         signal: "http_blocked_performance", axis: "performance",
         severity: "medium",
@@ -1437,7 +1488,7 @@ export function calculateDomainScore(opts: {
 
   // ─── Trust Axis Findings ─────────────────────────────────────────
 
-  // Domain age (trust signal — graduated thresholds, 10yr+ for "good")
+  // Domain age (trust signal — graduated thresholds, 5yr+ for "good")
   // Palo Alto: ≤32d = NRD; CF Email: 7d malicious, 30-45d suspicious; NextDNS: 30d block
   const ageDays = opts.rdap?.domain_age_days;
   if (ageDays != null) {
@@ -1506,10 +1557,11 @@ export function calculateDomainScore(opts: {
     let recentBreachCount = 0; // breaches < 3 years old
     for (const breach of opts.breaches.items) {
       const breachDate = breach.breach_date ? new Date(breach.breach_date) : null;
-      const ageYears = breachDate ? (now.getTime() - breachDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000) : 0;
-      const decay = ageYears > 10 ? 0.10 : ageYears > 5 ? 0.25 : ageYears > 3 ? 0.50 : ageYears > 1 ? 0.75 : 1.0;
+      const ageYears = breachDate ? (now.getTime() - breachDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000) : null;
+      // Unknown-date breaches get 0.5× — most missing dates are older breaches; 0.5 balances uncertainty.
+      const decay = ageYears == null ? 0.50 : ageYears > 10 ? 0.10 : ageYears > 5 ? 0.25 : ageYears > 3 ? 0.50 : ageYears > 1 ? 0.75 : 1.0;
       weightedPwned += (breach.pwn_count ?? 0) * decay;
-      if (ageYears < 3) recentBreachCount++;
+      if (ageYears != null && ageYears < 3) recentBreachCount++;
     }
 
     if (weightedPwned > 10_000_000) {

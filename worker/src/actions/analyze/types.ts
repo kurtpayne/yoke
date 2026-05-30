@@ -69,11 +69,19 @@ export interface MtaStsResult { dns_found: boolean; policy_found: boolean; mode:
 export interface TlsRptResult { found: boolean; record: string | null; rua: string | null; }
 
 // ─── Tier 1 Feature Types ─────────────────────────────────────────────
+export interface CertIssuance {
+  issuer: string;
+  not_before: string; // ISO date
+  not_after: string;  // ISO date
+  dns_names: string[];
+}
+
 export interface CertTransparencyResult {
   subdomains: string[];
   total_certs: number;
   has_wildcard: boolean;
   issuers: string[];
+  certs: CertIssuance[]; // per-cert detail for CT-CAA cross-reference
   error: string | null;
 }
 

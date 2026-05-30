@@ -64,7 +64,8 @@ export const CLS: ThresholdConfig = {
   bands: [
     { max: 0.1, severity: "good", label: "CLS: {value}" },
     { max: 0.25, severity: "low", label: "CLS: {value}" },
-    { min: 0.25, severity: "high", label: "CLS: {value}" },
+    { max: 0.5, severity: "medium", label: "CLS: {value}" },
+    { min: 0.5, severity: "high", label: "CLS: {value}" },
   ],
 };
 
@@ -76,7 +77,8 @@ export const TTFB: ThresholdConfig = {
   bands: [
     { max: 800, severity: "good", label: "TTFB: {value}ms" },
     { max: 1800, severity: "low", label: "TTFB: {value}ms" },
-    { min: 1800, severity: "high", label: "TTFB: {value}ms" },
+    { max: 3000, severity: "medium", label: "TTFB: {value}ms" },
+    { min: 3000, severity: "high", label: "TTFB: {value}ms" },
   ],
 };
 

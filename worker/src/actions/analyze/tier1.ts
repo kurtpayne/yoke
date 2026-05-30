@@ -1,6 +1,6 @@
 import { fetchWithTimeout, boundedText, safeFetchWithRedirects } from "../../helpers";
 import type {
-  DnsRecord, CertTransparencyResult, SecurityTxtResult,
+  DnsRecord, CertTransparencyResult, CertIssuance, SecurityTxtResult,
   GreenHostingResult, WellKnownEndpoint, WellKnownResult,
   CaaDisplayResult, GreynoiseResult,
 } from "./types";
@@ -13,26 +13,38 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
       `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(domain)}&include_subdomains=true&expand=dns_names`,
       { timeout: 10000 },
     );
-    if (!res.ok) return { subdomains: [], total_certs: 0, has_wildcard: false, issuers: [], error: `HTTP ${res.status}` };
-    const issuances = await res.json() as Array<{ dns_names: string[]; issuer?: { name?: string } }>;
+    if (!res.ok) return { subdomains: [], total_certs: 0, has_wildcard: false, issuers: [], certs: [], error: `HTTP ${res.status}` };
+    const issuances = await res.json() as Array<{ dns_names: string[]; issuer?: { name?: string }; not_before?: string; not_after?: string }>;
     const allNames = new Set<string>();
     const issuersSet = new Set<string>();
+    const certs: CertIssuance[] = [];
     let hasWildcard = false;
     for (const iss of issuances) {
+      const dnsNames: string[] = [];
       if (iss.dns_names) {
         for (const name of iss.dns_names) {
           if (name.startsWith("*.")) { hasWildcard = true; }
           else { allNames.add(name.toLowerCase()); }
+          dnsNames.push(name);
         }
       }
+      const issuerName = iss.issuer?.name ?? "Unknown";
       if (iss.issuer?.name) issuersSet.add(iss.issuer.name);
+      if (iss.not_before) {
+        certs.push({
+          issuer: issuerName,
+          not_before: iss.not_before,
+          not_after: iss.not_after ?? "",
+          dns_names: dnsNames,
+        });
+      }
     }
     // Remove the domain itself and sort
     allNames.delete(domain.toLowerCase());
     const subdomains = [...allNames].filter(n => n.endsWith(`.${domain.toLowerCase()}`)).sort();
-    return { subdomains, total_certs: issuances.length, has_wildcard: hasWildcard, issuers: [...issuersSet], error: null };
+    return { subdomains, total_certs: issuances.length, has_wildcard: hasWildcard, issuers: [...issuersSet], certs, error: null };
   } catch (e) {
-    return { subdomains: [], total_certs: 0, has_wildcard: false, issuers: [], error: e instanceof Error ? e.message : "Unknown error" };
+    return { subdomains: [], total_certs: 0, has_wildcard: false, issuers: [], certs: [], error: e instanceof Error ? e.message : "Unknown error" };
   }
 }
 

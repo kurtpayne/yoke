@@ -152,6 +152,9 @@ export function auditCookies(headers: Record<string, string> | null): CookieSecu
     cookies.push({ name, secure, httponly, samesite });
 
     if (!secure) issues.push(`${name}: missing Secure flag`);
+    // __Host- prefix already enforces Secure + Path=/ + no Domain; HttpOnly is orthogonal
+    // to those guarantees (it controls JS access, not transport), so we skip the check.
+    // _ga cookies are analytics and commonly set without HttpOnly.
     if (!httponly && !name.startsWith("__Host-") && !name.startsWith("_ga")) {
       issues.push(`${name}: missing HttpOnly flag`);
     }

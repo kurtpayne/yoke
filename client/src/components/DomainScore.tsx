@@ -44,18 +44,8 @@ const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
 };
 
 // Fixed axis weights — all archetypes use the same weights now.
-// Canonical source is worker/src/actions/analyze/contextual-scoring.ts;
-// the analysis response includes archetype.weights so the client uses that when available.
+// SYNC: must match server AXIS_WEIGHTS in contextual-scoring.ts
 const FIXED_WEIGHTS: Record<Axis, number> = { security: 0.28, reliability: 0.25, performance: 0.20, visibility: 0.15, trust: 0.12 };
-const FALLBACK_ARCHETYPE_WEIGHTS: Record<ArchetypeName, Record<Axis, number>> = {
-  commerce:       FIXED_WEIGHTS,
-  content:        FIXED_WEIGHTS,
-  application:    FIXED_WEIGHTS,
-  corporate:      FIXED_WEIGHTS,
-  infrastructure: FIXED_WEIGHTS,
-  institutional:  FIXED_WEIGHTS,
-  general:        FIXED_WEIGHTS,
-};
 
 // ─── Radar Plot SVG ──────────────────────────────────────────────────
 
@@ -99,11 +89,11 @@ function radarEdgeOpacity(score: number): number {
 interface RadarPlotProps {
   axes: Record<Axis, AxisScoreData>;
   archetype: ArchetypeName;
-  weightsTable?: Record<ArchetypeName, Record<Axis, number>>;
+  weightsTable?: Record<Axis, number>;
 }
 
 export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
-  const weights = (weightsTable ?? FALLBACK_ARCHETYPE_WEIGHTS)[archetype];
+  const weights = weightsTable ?? FIXED_WEIGHTS;
   const [animProgress, setAnimProgress] = useState(0);
   const [hoveredAxis, setHoveredAxis] = useState<Axis | null>(null);
   const [isLight, setIsLight] = useState(() => {
@@ -433,8 +423,8 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
   // Always use the detected archetype — manual override removed after calibration
   const activeArchetype = ds.archetype.detected;
 
-  // Resolve weights table: prefer API response, fall back to hardcoded
-  const weightsTable = ds.archetype.weights ?? FALLBACK_ARCHETYPE_WEIGHTS;
+  // Resolve weights: prefer API response, fall back to hardcoded
+  const weightsTable = ds.archetype.weights ?? FIXED_WEIGHTS;
   const { composite, grade } = { composite: ds.composite, grade: ds.grade };
 
   return (

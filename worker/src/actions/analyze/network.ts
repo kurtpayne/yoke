@@ -114,8 +114,16 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
           }
         }
 
-        // Only add if not already listed for this blocklist (dedup across A records)
-        if (!results.some(r => r.name === bl.name && r.listed)) {
+        // Dedup across A records: keep the most significant result per blocklist.
+        // If this IP is listed and we previously recorded not-listed, upgrade the entry.
+        const existingIdx = results.findIndex(r => r.name === bl.name);
+        if (existingIdx >= 0) {
+          if ((listed && !isPbl) && !results[existingIdx].listed) {
+            // Upgrade: previous entry was not-listed, this IP is truly listed
+            results[existingIdx] = { name: bl.name, zone: bl.zone, listed: true, detail };
+          }
+          // Otherwise skip — already have an equal or better entry
+        } else {
           results.push({
             name: bl.name,
             zone: bl.zone,

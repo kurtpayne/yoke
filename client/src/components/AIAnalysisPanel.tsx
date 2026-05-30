@@ -345,6 +345,8 @@ const SEVERITY_SCORES: Record<string, number> = {
   critical: 0, high: 15, medium: 40, low: 65, info: 82, good: 100,
 };
 
+// SYNC: must match server AXIS_WEIGHTS in contextual-scoring.ts
+// TODO: fetch from /api/scoring endpoint for single source of truth
 const AXIS_WEIGHTS: Record<string, number> = {
   security: 0.28, reliability: 0.25, trust: 0.12, performance: 0.20, visibility: 0.15,
 };
@@ -1712,18 +1714,39 @@ export function AIAnalysisPanel({ domain, analysisData, streaming }: { domain: s
               let jsonStr = accumulated.trim();
               const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
               if (jsonMatch) jsonStr = jsonMatch[1].trim();
+              // Handle truncated output: strip opening fence if closing ``` is missing
+              else if (jsonStr.startsWith("```")) {
+                jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").trim();
+              }
               jsonStr = jsonStr.replace(/^\uFEFF/, '').trim();
 
+              // Try direct parse, then salvage truncated JSON
+              let parsed: AIAnalysisResult | null = null;
               try {
-                const parsed = JSON.parse(jsonStr) as AIAnalysisResult;
-                if (parsed.cross_signal_insights && parsed.cross_signal_insights.length > 0) {
-                  _insightsCache[domain] = parsed;
-                  for (const s of stream.subscribers) s.setInsightsResult(parsed);
-                  const meta = { analyzed_at: new Date().toISOString(), cached: false };
-                  _metadataCache[domain] = meta;
-                  for (const s of stream.subscribers) s.setAnalysisMetadata(meta);
-                }
+                parsed = JSON.parse(jsonStr) as AIAnalysisResult;
               } catch {
+                // Salvage truncated JSON by closing open structures
+                try {
+                  let salvaged = jsonStr;
+                  const quoteCount = (salvaged.match(/(?<!\\)"/g) || []).length;
+                  if (quoteCount % 2 !== 0) salvaged += '"';
+                  const openBraces = (salvaged.match(/{/g) || []).length;
+                  const closeBraces = (salvaged.match(/}/g) || []).length;
+                  const openBrackets = (salvaged.match(/\[/g) || []).length;
+                  const closeBrackets = (salvaged.match(/]/g) || []).length;
+                  salvaged = salvaged.replace(/,\s*$/, "");
+                  for (let i = 0; i < openBrackets - closeBrackets; i++) salvaged += "]";
+                  for (let i = 0; i < openBraces - closeBraces; i++) salvaged += "}";
+                  parsed = JSON.parse(salvaged) as AIAnalysisResult;
+                } catch { /* salvage failed */ }
+              }
+              if (parsed?.cross_signal_insights && parsed.cross_signal_insights.length > 0) {
+                _insightsCache[domain] = parsed;
+                for (const s of stream.subscribers) s.setInsightsResult(parsed);
+                const meta = { analyzed_at: new Date().toISOString(), cached: false };
+                _metadataCache[domain] = meta;
+                for (const s of stream.subscribers) s.setAnalysisMetadata(meta);
+              } else if (!parsed) {
                 stream.error = "Failed to parse AI response";
                 for (const s of stream.subscribers) s.setError(stream.error);
               }

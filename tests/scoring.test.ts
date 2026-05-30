@@ -6,7 +6,7 @@ import { SEVERITY_SCORES } from '@worker/config/scoring-thresholds';
 import {
   type ArchetypeName,
   type Finding,
-  ARCHETYPE_WEIGHTS,
+  AXIS_WEIGHTS,
   computeAxisScore,
   computeComposite,
   gradeFromComposite,
@@ -15,36 +15,29 @@ import {
 
 type SeverityMap = Partial<Record<ArchetypeName, Severity>>;
 
-// ─── Archetype Weight Tests ──────────────────────────────────────────
+// ─── Axis Weight Tests ───────────────────────────────────────────────
 
-describe('Archetype Weight Profiles', () => {
-  it('weights should sum to 1.0 for every archetype', () => {
-    for (const [name, weights] of Object.entries(ARCHETYPE_WEIGHTS)) {
-      const sum = Object.values(weights).reduce((a, b) => a + b, 0);
-      expect(sum).toBeCloseTo(1.0, 5);
-    }
+describe('Axis Weights', () => {
+  it('weights should sum to 1.0', () => {
+    const sum = Object.values(AXIS_WEIGHTS).reduce((a, b) => a + b, 0);
+    expect(sum).toBeCloseTo(1.0, 5);
   });
 
-  it('all archetypes should use the same fixed weights', () => {
-    const archetypes: ArchetypeName[] = ["commerce", "content", "application", "corporate", "infrastructure", "institutional", "general"];
-    for (const arch of archetypes) {
-      const w = ARCHETYPE_WEIGHTS[arch];
-      expect(w.security).toBe(0.28);
-      expect(w.reliability).toBe(0.25);
-      expect(w.trust).toBe(0.12);
-      expect(w.performance).toBe(0.20);
-      expect(w.visibility).toBe(0.15);
-    }
+  it('should have correct values', () => {
+    expect(AXIS_WEIGHTS.security).toBe(0.28);
+    expect(AXIS_WEIGHTS.reliability).toBe(0.25);
+    expect(AXIS_WEIGHTS.trust).toBe(0.12);
+    expect(AXIS_WEIGHTS.performance).toBe(0.20);
+    expect(AXIS_WEIGHTS.visibility).toBe(0.15);
   });
 
   it('security should be weighted highest', () => {
-    const w = ARCHETYPE_WEIGHTS.general;
-    expect(w.security).toBeGreaterThan(w.trust);
-    expect(w.security).toBeGreaterThan(w.performance);
-    expect(w.security).toBeGreaterThan(w.visibility);
-    expect(w.security).toBeGreaterThan(w.reliability);
-    expect(w.reliability).toBeGreaterThan(w.trust);
-    expect(w.reliability).toBeGreaterThan(w.visibility);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.trust);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.performance);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.visibility);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.reliability);
+    expect(AXIS_WEIGHTS.reliability).toBeGreaterThan(AXIS_WEIGHTS.trust);
+    expect(AXIS_WEIGHTS.reliability).toBeGreaterThan(AXIS_WEIGHTS.visibility);
   });
 });
 
