@@ -105,6 +105,14 @@ CORS headers are applied by the `json()` helper in `helpers.ts` for public endpo
 - Endpoint rate limits: D1-backed (`STATS_DB`), per-IP, checked via `checkRateLimit()`.
 - AI analysis: separate rate limit table in `STATS_DB`, slot reserved before API call, refunded on failure using the specific row ID (not `ORDER BY id DESC LIMIT 1` — that's racy).
 
+## Common Gotchas
+
+- **Grade strings include plus tiers** — the grading system produces `A+`, `A`, `B+`, `B`, `C+`, `C`, `D+`, `D`, `F`. Any string comparison (display labels, signal text, conditionals) must handle the `+` variants, not just bare letters. E.g. checking `grade === "A"` misses `A+`.
+- **Client changes require a deploy** — edits to `client/build.ts` or `client/src/` only take effect after CI builds and deploys. Don't expect changes to be live immediately when testing against production.
+- **DNS inconsistency is expected for distributed hosting** — sites using CDN anycast, geo-DNS, or multi-datacenter hosting intentionally return different IPs to different resolvers. The scoring logic suppresses this when a CDN is detected OR when the site is up with multiple IPs. Don't flag it as a problem.
+- **The 5 axes are: Security, Performance, Infrastructure, Trust, Visibility** — "Infrastructure" (formerly "Reliability") measures DNS hygiene and hosting best practices, not actual uptime. D1 column names still say `reliability_score` (internal storage only).
+- **Social account detection depends on `rel="me"` links in served HTML** — adding a link to `client/build.ts` doesn't make it detectable until the build is deployed and the target site's HTML is re-fetched.
+
 ## Anti-Patterns — Don't Do These
 
 - **No `as any`** — the codebase is fully typed, keep it that way
