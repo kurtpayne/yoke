@@ -952,6 +952,15 @@ export function App() {
         </a>
         <span style={{ color: "var(--border)" }}>·</span>
         <a
+          href="/about"
+          style={{ color: "var(--dim)", textDecoration: "none", transition: "color 0.15s" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--dim)")}
+        >
+          About
+        </a>
+        <span style={{ color: "var(--border)" }}>·</span>
+        <a
           href="https://chromewebstore.google.com/detail/yoke/fghkhjlelidaepapcdfjifnlcjmkgpcj"
           target="_blank"
           rel="noopener noreferrer"

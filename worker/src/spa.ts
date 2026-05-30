@@ -3,7 +3,7 @@
 
 import type { Env } from "./helpers";
 import { getBaseUrl, YOKE_VERSION } from "./helpers";
-import { PRIVACY_HTML, TERMS_HTML, SECURITY_TXT } from "./pages";
+import { PRIVACY_HTML, TERMS_HTML, ABOUT_HTML, SECURITY_TXT } from "./pages";
 
 // ─── Security Headers ────────────────────────────────────────────────
 // Applied to all HTML responses served by the worker.
@@ -195,6 +195,9 @@ export async function handleSPARoute(
   if (method === "GET" && path === "/terms") {
     return htmlResponse(TERMS_HTML, { "Cache-Control": "public, max-age=86400" }, baseUrl);
   }
+  if (method === "GET" && path === "/about") {
+    return htmlResponse(ABOUT_HTML, { "Cache-Control": "public, max-age=86400" }, baseUrl);
+  }
   // /cli is a client-side rendered page — serve the SPA shell
   if (method === "GET" && path === "/cli") {
     const indexHtml = await getIndexHtml(env, request.url);
@@ -330,12 +333,13 @@ export async function serveAssetOrFallback(request: Request, env: Env): Promise<
   if (assetResp.ok) {
     const ct = assetResp.headers.get("content-type") || "";
     if (ct.includes("text/html")) {
-      // Clone and add security headers
+      // Clone and add security headers + consistent cache policy
       return new Response(assetResp.body, {
         status: assetResp.status,
         headers: {
           ...Object.fromEntries(assetResp.headers.entries()),
           ...HTML_SECURITY_HEADERS,
+          "Cache-Control": "public, max-age=1800",
         },
       });
     }
