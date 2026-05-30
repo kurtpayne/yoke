@@ -28,7 +28,7 @@ import { checkTrustSignals } from "./trust";
 import { isActuallyCloudflare, sanitizeCfHeaders, detectHosting, auditCookies } from "./security";
 import {
   parseRobotsDeep, detectHttpProtocols, probeHttpProtocols, extractJsonLd,
-  extractSocialMeta, detectLegalPages, calculateAiReadiness,
+  extractSocialMeta, detectLegalPages, detectResourceHints, calculateAiReadiness,
   type AnsResult,
 } from "./content";
 import { calculateDomainScore } from "./contextual-scoring";
@@ -566,6 +566,7 @@ export async function runAnalysis(
 
   const socialMeta = extractSocialMeta(html);
   const legal = detectLegalPages(html, domain);
+  const resourceHints = detectResourceHints(html);
   const cookieSecurity = auditCookies(effectiveHeaders);
   const compression = detectCompression(effectiveHeaders);
   const cacheAnalysis = checkCacheHeaders(effectiveHeaders);
@@ -626,6 +627,7 @@ export async function runAnalysis(
     jsonLd,
     meta,
     legal,
+    resourceHints,
     wayback,
     certTransparency,
     greynoise: greynoiseResult,
@@ -691,6 +693,7 @@ export async function runAnalysis(
     hosting,
     social_meta: socialMeta,
     legal,
+    resource_hints: resourceHints,
     cookie_security: cookieSecurity,
     compression,
     cache_analysis: cacheAnalysis,

@@ -288,6 +288,7 @@ export function calculateDomainScore(opts: {
   jsonLd: JsonLdItem[] | null;
   meta: MetaResult | null;
   legal: LegalResult | null;
+  resourceHints: { total: number; preload: string[]; preconnect: string[]; prefetch: string[]; dns_prefetch: string[]; modulepreload: string[] } | null;
   wayback: { total_snapshots: number | null } | null;
   certTransparency: CertTransparencyResult | null;
   greynoise: GreynoiseResult | null;
@@ -524,9 +525,36 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // CAA records
-  if (opts.dnsRecords.some(r => r.type === "CAA")) {
-    findings.push({ signal: "caa_records", axis: "security", severity: "good", label: "CAA records restrict certificate issuance", tradeoff: null, weight: 1 });
+  // CAA records — detailed parsing
+  const caaRecords = opts.dnsRecords.filter(r => r.type === "CAA");
+  if (caaRecords.length > 0) {
+    // Parse CAA directives for detail
+    const issueDirectives: string[] = [];
+    const issuewildDirectives: string[] = [];
+    let hasIodef = false;
+    for (const rec of caaRecords) {
+      const match = rec.data.match(/^\d+\s+(\w+)\s+"?([^"]*)"?$/);
+      if (!match) continue;
+      const tag = match[1].toLowerCase();
+      const value = match[2];
+      if (tag === "issue") issueDirectives.push(value);
+      else if (tag === "issuewild") issuewildDirectives.push(value);
+      else if (tag === "iodef") hasIodef = true;
+    }
+    if (issueDirectives.length > 0) {
+      const caNames = issueDirectives.filter(v => v !== ";").slice(0, 3).join(", ");
+      findings.push({ signal: "caa_records", axis: "security", severity: "good", label: `CAA restricts issuance to: ${caNames || "none (issuance blocked)"}`, tradeoff: null, weight: 1 });
+    } else {
+      findings.push({ signal: "caa_records", axis: "security", severity: "good", label: "CAA records restrict certificate issuance", tradeoff: null, weight: 1 });
+    }
+    // Flag if issue is set but issuewild is not — wildcards can be issued by any CA
+    if (issueDirectives.length > 0 && issuewildDirectives.length === 0) {
+      findings.push({ signal: "caa_wildcard_unrestricted", axis: "security", severity: "info", label: "CAA: no issuewild restriction — wildcard certs unrestricted", tradeoff: "Consider adding issuewild CAA records to restrict which CAs can issue wildcard certificates.", weight: 0 });
+    }
+    // Credit iodef (violation reporting configured)
+    if (hasIodef) {
+      findings.push({ signal: "caa_iodef", axis: "security", severity: "good", label: "CAA: violation reporting configured (iodef)", tradeoff: null, weight: 1 });
+    }
   }
 
   // Certificate Transparency
@@ -668,14 +696,18 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // ─── NEW: Referrer-Policy ────────────────────────────────────────
+  // ─── Referrer-Policy Value Parsing ───────────────────────────────
   if (opts.headers && !opts.httpBlocked) {
-    const referrerPolicy = (opts.headers["referrer-policy"] ?? "").toLowerCase();
+    const referrerPolicy = (opts.headers["referrer-policy"] ?? "").toLowerCase().trim();
     const goodPolicies = ["no-referrer", "strict-origin-when-cross-origin", "same-origin", "strict-origin"];
+    const weakPolicies = ["origin", "origin-when-cross-origin"];
+    const unsafePolicies = ["unsafe-url", "no-referrer-when-downgrade"];
     if (goodPolicies.includes(referrerPolicy)) {
       findings.push({ signal: "referrer_policy", axis: "security", severity: "good", label: `Referrer-Policy: ${referrerPolicy}`, tradeoff: null, weight: 1 });
-    } else if (referrerPolicy === "unsafe-url") {
-      findings.push({ signal: "referrer_policy", axis: "security", severity: "medium", label: "Referrer-Policy: unsafe-url leaks full URLs cross-origin", tradeoff: null, weight: 2 });
+    } else if (unsafePolicies.includes(referrerPolicy)) {
+      findings.push({ signal: "referrer_policy", axis: "security", severity: "medium", label: `Referrer-Policy: ${referrerPolicy} leaks full URLs cross-origin`, tradeoff: null, weight: 2 });
+    } else if (weakPolicies.includes(referrerPolicy)) {
+      findings.push({ signal: "referrer_policy", axis: "security", severity: "info", label: `Referrer-Policy: ${referrerPolicy} (acceptable but not ideal)`, tradeoff: "Leaks the origin on cross-origin requests. Consider strict-origin-when-cross-origin for better privacy.", weight: 1 });
     } else if (!referrerPolicy) {
       findings.push({ signal: "referrer_policy_missing", axis: "security", severity: "low", label: "No Referrer-Policy header", tradeoff: null, weight: 2 });
     }

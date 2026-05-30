@@ -643,4 +643,38 @@ export function calculateAiReadiness(
   return { score, max_score: maxScore, grade, checks, rss_feed: rssFeed, ans: ansResult ?? null };
 }
 
+// ─── Resource Hints Detection ───────────────────────────────────────
+
+export interface ResourceHintsResult {
+  preload: string[];
+  preconnect: string[];
+  prefetch: string[];
+  dns_prefetch: string[];
+  modulepreload: string[];
+  total: number;
+}
+
+export function detectResourceHints(html: string): ResourceHintsResult {
+  const result: ResourceHintsResult = {
+    preload: [], preconnect: [], prefetch: [], dns_prefetch: [], modulepreload: [], total: 0,
+  };
+  // Match <link rel="..." href="..."> tags
+  const linkRegex = /<link[^>]+>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = linkRegex.exec(html)) !== null) {
+    const tag = match[0];
+    const relMatch = tag.match(/rel=["']([^"']+)["']/i);
+    const hrefMatch = tag.match(/href=["']([^"']+)["']/i);
+    if (!relMatch) continue;
+    const rel = relMatch[1].toLowerCase();
+    const href = hrefMatch?.[1] ?? "";
+    if (rel === "preload" && href) { result.preload.push(href); result.total++; }
+    else if (rel === "preconnect" && href) { result.preconnect.push(href); result.total++; }
+    else if (rel === "prefetch" && href) { result.prefetch.push(href); result.total++; }
+    else if (rel === "dns-prefetch" && href) { result.dns_prefetch.push(href); result.total++; }
+    else if (rel === "modulepreload" && href) { result.modulepreload.push(href); result.total++; }
+  }
+  return result;
+}
+
 // ─── NEW: Domain Health Score ───────────────────────────────────────

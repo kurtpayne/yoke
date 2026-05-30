@@ -14,7 +14,7 @@ export function getHtmlSecurityHeaders(baseUrl?: string): Record<string, string>
     "X-Content-Type-Options": "nosniff",
     "X-XSS-Protection": "0",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), hid=(), ambient-light-sensor=(), accelerometer=(), gyroscope=(), magnetometer=()",
     "Content-Security-Policy":
       "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; " +
       "style-src 'self' 'unsafe-inline'; " +
