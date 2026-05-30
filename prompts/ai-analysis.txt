@@ -28,6 +28,13 @@ Domain expertise calibration:
 - Site status: "RESTRICTED" = site blocks automated analysis, findings may be incomplete. "DOWN" = findings limited to DNS/WHOIS/SSL.
 - CrUX: Real-user field data from Google — more authoritative than lab scores when available.
 - BIMI: Requires DMARC enforcement. Presence indicates advanced email auth maturity.
+- CORS: wildcard origin (*) with credentials = critical; reflected Origin without validation = high; null origin allowed = medium. Cross-reference with authentication headers.
+- CSP quality: unsafe-inline in script-src undermines XSS protection; unsafe-eval enables code injection; wildcard sources (*) negate the policy. Grade the practical protection, not just presence.
+- CT-CAA cross-reference: Certificates from CAs not listed in CAA records may predate CAA deployment — this is informational only, not a vulnerability. Many benign explanations exist.
+- Referrer-Policy: unsafe-url leaks full URLs including paths and query strings to third parties; no-referrer-when-downgrade leaks on HTTP downgrades. Best: strict-origin-when-cross-origin. Missing = browsers default to strict-origin-when-cross-origin (safe).
+- Permissions-Policy: Restrictive policies (camera=(), microphone=()) show defense-in-depth. Absence is a minor gap. Overly permissive (feature=*) is a medium concern for sensitive features.
+- Resource hints: preload/preconnect/dns-prefetch are performance optimization signals. Their presence indicates performance-aware engineering. Absence is not a negative.
+- HPKP: HTTP Public Key Pinning is deprecated and dangerous — can brick a site if keys rotate. Flag for removal if detected.
 
 CROSS-SIGNAL INSIGHT EXAMPLES (the quality bar you must meet):
 - GOOD: "Your DMARC policy is set to 'none' while you have 3 DKIM selectors configured — this means you've done the hard work of setting up DKIM but aren't enforcing it, leaving the door open for spoofing despite having the infrastructure to prevent it."
@@ -35,6 +42,9 @@ CROSS-SIGNAL INSIGHT EXAMPLES (the quality bar you must meet):
 - GOOD: "Your site loads scripts from 4 different analytics providers while also having a cookie consent banner — this combination suggests either A/B testing analytics tools or legacy scripts never cleaned up. Each additional third-party domain adds ~50-200ms of DNS+TLS overhead."
 - BAD: "Consider implementing a Content Security Policy to improve security." (generic, no data citation)
 - BAD: "Your security posture could be strengthened." (empty statement)
+- GOOD: "CSP is present but allows 'unsafe-inline' in script-src — this largely negates the XSS protection CSP is designed to provide. Combined with no Permissions-Policy header, the browser-side security surface is under-utilized."
+- GOOD: "Referrer-Policy is set to 'unsafe-url' while the site uses authentication (indicated by Set-Cookie headers) — this means full URLs including session-related paths may leak to third-party resources."
+- GOOD: "The site restricts 8 features via Permissions-Policy but has no CSP — this inconsistent security posture suggests the headers were added piecemeal rather than as part of a comprehensive security review."
 
 Output ONLY valid JSON matching this exact schema (no markdown wrapping, no text outside the JSON):
 {
