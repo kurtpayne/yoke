@@ -3375,16 +3375,29 @@ export function calculateDomainScore(opts: {
   if (opts.networkHealth) {
     const nh = opts.networkHealth;
 
-    // DNS inconsistency — skip when behind a CDN, since CDN anycast intentionally
-    // returns different edge IPs to different resolvers (geo-routing, not misconfiguration)
-    const isBehindCdnForDns = !!opts.hosting?.cdn;
+    // DNS inconsistency — suppress when the site is actually reachable or behind a CDN.
+    // CDN anycast, geo-DNS, and multi-datacenter hosting all intentionally return
+    // different IPs to different resolvers. If the site is up, the DNS is working.
+    const isBehindCdn = !!opts.hosting?.cdn;
+    const siteIsUp = !!opts.statusResult?.is_up;
+    const hasMultipleIps = (nh.dns_propagation?.unique_ips?.length ?? 0) >= 2;
     if (nh.dns_propagation && !nh.dns_propagation.consistent) {
-      if (isBehindCdnForDns) {
+      if (isBehindCdn) {
         findings.push({
           signal: "dns_consistent",
           axis: "infrastructure",
           severity: "good",
           label: `DNS varies across resolvers (expected: ${opts.hosting!.cdn} anycast)`,
+          tradeoff: null,
+          weight: 1,
+        });
+      } else if (siteIsUp && hasMultipleIps) {
+        // Site responds and has multiple IPs — this is geo-DNS / distributed hosting
+        findings.push({
+          signal: "dns_consistent",
+          axis: "infrastructure",
+          severity: "good",
+          label: "DNS varies across resolvers (distributed hosting)",
           tradeoff: null,
           weight: 1,
         });
