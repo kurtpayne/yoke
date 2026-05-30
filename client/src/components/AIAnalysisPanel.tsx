@@ -1033,6 +1033,13 @@ function AdvancedSettings({
     }
   };
 
+  // Load prompt when panel starts open (e.g. persisted in localStorage)
+  useEffect(() => {
+    if (open && !promptText && domain) {
+      loadPrompt();
+    }
+  }, [domain]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadPrompt = async () => {
     setPromptLoading(true);
     try {
