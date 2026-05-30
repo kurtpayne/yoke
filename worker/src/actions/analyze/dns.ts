@@ -189,6 +189,9 @@ export const RDAP_ENDPOINTS: Record<string, string> = {
   ua: "https://rdap.hostmaster.ua",
   th: "https://rdap.thains.co.th",
   tw: "https://ccrdap.twnic.tw/tw",
+  sg: "https://rdap.nic.sg",
+  ec: "https://rdap.nic.ec",
+  ke: "https://rdap.kenic.or.ke",
 };
 
 // ─── IANA Bootstrap (Dynamic TLD→RDAP map, cached in-memory) ─────────

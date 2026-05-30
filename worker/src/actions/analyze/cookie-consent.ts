@@ -100,6 +100,41 @@ const CMP_PATTERNS: CmpPattern[] = [
     scriptPatterns: [/app\.usercentrics\.eu/i, /usercentrics\.com/i],
     htmlPatterns: [/usercentrics/i, /uc-banner/i],
   },
+  {
+    name: "Enzuzo",
+    scriptPatterns: [/enzuzo\.com/i, /cdn\.enzuzo\.com/i],
+    htmlPatterns: [/enzuzo-cookie/i, /enzuzo-consent/i],
+  },
+  {
+    name: "Ketch",
+    scriptPatterns: [/global\.ketchcdn\.com/i, /ketch\.com/i],
+    htmlPatterns: [/ketch-consent/i, /lanyard/i],
+  },
+  {
+    name: "Sirdata",
+    scriptPatterns: [/sirdata\.io/i, /sddan\.com/i, /cache\.consentframework\.com/i],
+    htmlPatterns: [/sirdata/i, /sd-cmp/i],
+  },
+  {
+    name: "Crownpeak",
+    scriptPatterns: [/cdn\.crownpeak\.net/i, /evidon\.com/i, /crownpeak\.com/i],
+    htmlPatterns: [/evidon-banner/i, /crownpeak-consent/i],
+  },
+  {
+    name: "Clarip",
+    scriptPatterns: [/clarip\.com/i],
+    htmlPatterns: [/clarip-consent/i, /clarip-cookie/i],
+  },
+  {
+    name: "Consentmanager",
+    scriptPatterns: [/cdn\.consentmanager\.net/i, /consentmanager\.net/i],
+    htmlPatterns: [/cmpbox/i, /consentmanager/i],
+  },
+  {
+    name: "Piwik PRO Consent",
+    scriptPatterns: [/piwik\.pro.*consent/i, /piwikpro.*consent/i],
+    htmlPatterns: [/ppms_cm/i, /piwik-pro-consent/i],
+  },
 ];
 
 // ─── Cookie Parsing ─────────────────────────────────────────────────
@@ -138,7 +173,7 @@ function parseSetCookieHeaders(headers: Record<string, string>, pageDomain: stri
     // SameSite
     let sameSite: string | null = null;
     const ssMatch = lower.match(/samesite\s*=\s*(strict|lax|none)/);
-    if (ssMatch) sameSite = ssMatch[1]!;
+    if (ssMatch) sameSite = ssMatch[1] ?? null;
 
     // Domain
     let cookieDomain = pageDomain;
@@ -313,7 +348,7 @@ export function analyzeCookieConsent(
   const longLivedCookies = cookiesSet.filter((c) => {
     if (!c.expires) return false;
     const maxAgeMatch = c.expires.match(/max-age=(\d+)/);
-    if (maxAgeMatch) return parseInt(maxAgeMatch[1]!, 10) > 365 * 24 * 60 * 60;
+    if (maxAgeMatch) return parseInt(maxAgeMatch[1] ?? "0", 10) > 365 * 24 * 60 * 60;
     return false;
   });
   if (longLivedCookies.length > 0) {

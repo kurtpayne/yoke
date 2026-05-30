@@ -62,6 +62,8 @@ const CATEGORY_PATTERNS: CategoryPattern[] = [
       /umami\./i,
       /simpleanalytics\.com/i,
       /simple-analytics/i,
+      /pirsch\.io/i,
+      /tinyanalytics\.io/i,
     ],
   },
   {
@@ -142,6 +144,9 @@ const CATEGORY_PATTERNS: CategoryPattern[] = [
       /rec\.smartlook\.com/i,
       /cdn\.luckyorange\.com/i,
       /luckyorange\.com/i,
+      /posthog\.com/i,
+      /us\.posthog\.com/i,
+      /eu\.posthog\.com/i,
     ],
   },
   {
@@ -200,6 +205,10 @@ const CATEGORY_PATTERNS: CategoryPattern[] = [
       /complianz/i,
       /cookieyes\.com/i,
       /cdn-cookieyes\.com/i,
+      /enzuzo\.com/i,
+      /ketchcdn\.com/i,
+      /sirdata\.io/i,
+      /consentmanager\.net/i,
     ],
   },
   {

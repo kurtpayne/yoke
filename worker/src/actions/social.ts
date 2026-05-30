@@ -149,6 +149,11 @@ export async function getSocialAccounts(kv: KVNamespace, rawDomain: string, env?
       pattern: /https?:\/\/(?:www\.)?gitlab\.com\/([a-zA-Z0-9_.-]+)(?:[/?#]|$)/gi,
       selfDomain: "gitlab.com",
     },
+    {
+      platform: "Substack",
+      pattern: /https?:\/\/([a-zA-Z0-9_-]+)\.substack\.com(?:[/?#]|$)/gi,
+      selfDomain: "substack.com",
+    },
   ];
 
   // Determine the base domain being analyzed (to skip self-referencing links)

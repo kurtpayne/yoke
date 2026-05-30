@@ -151,6 +151,20 @@ const KNOWN_PLUGINS: Record<string, { name: string; category: string }> = {
   "google-tag-manager": { name: "Google Tag Manager", category: "Analytics" },
   "header-footer-code-manager": { name: "Header Footer Code Manager", category: "Utility" },
   "insert-headers-and-footers": { name: "WPCode", category: "Utility" },
+  "cookieyes-plugin": { name: "CookieYes GDPR Consent", category: "Privacy" },
+  "cookie-law-info": { name: "CookieYes (Cookie Law Info)", category: "Privacy" },
+  "complianz-gdpr": { name: "Complianz GDPR/CCPA", category: "Privacy" },
+  cookiebot: { name: "Cookiebot CMP", category: "Privacy" },
+  "starter-templates": { name: "Starter Templates (Astra)", category: "Page Builder" },
+  "astra-sites": { name: "Starter Templates (Astra)", category: "Page Builder" },
+  "fluent-smtp": { name: "FluentSMTP", category: "Email" },
+  "wp-mail-smtp": { name: "WP Mail SMTP", category: "Email" },
+  "seo-simple-pack": { name: "SEO Simple Pack", category: "SEO" },
+  suretriggers: { name: "SureTriggers", category: "Automation" },
+  "wp-recipe-maker": { name: "WP Recipe Maker", category: "Content" },
+  "wps-hide-login": { name: "WPS Hide Login", category: "Security" },
+  "safe-svg": { name: "Safe SVG", category: "Media" },
+  "converter-for-media": { name: "Converter for Media (WebP)", category: "Media" },
 };
 
 // ─── Known theme database ───────────────────────────────────────────
