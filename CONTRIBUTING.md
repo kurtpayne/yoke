@@ -11,6 +11,9 @@ bun install
 cd client && bun install && cd ..
 cd worker && bun install && cd ..
 
+# Enable pre-commit hooks (lockfile freshness check)
+git config core.hooksPath .githooks
+
 # Run tests
 npx vitest run
 
@@ -176,6 +179,20 @@ npx vitest run scoring      # Run specific test file
 - Helper/utility functions
 - WHOIS/RDAP parsing for new TLD formats
 - New analysis checks (expected output shape + graceful failure on error)
+
+## Git Hooks
+
+The repo includes pre-commit hooks in `.githooks/`. Enable them after cloning:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This runs automatically before each commit:
+
+- **Lockfile freshness** — verifies `bun.lockb` in all three roots (root, client, worker) matches `package.json`. Blocks the commit if lockfiles are stale, with instructions to fix.
+
+If you need to bypass the hook for a WIP commit: `git commit --no-verify`.
 
 ## Pull Request Checklist
 

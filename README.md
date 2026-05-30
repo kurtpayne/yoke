@@ -273,6 +273,9 @@ cd worker && bun install && cd ..
 
 # OG Worker (share card image renderer) — uses npm, not bun
 cd og-worker && npm install && cd ..
+
+# Enable pre-commit hooks (recommended)
+git config core.hooksPath .githooks
 ```
 
 ### Step 2: Create Cloudflare resources
