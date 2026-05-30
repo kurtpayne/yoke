@@ -770,39 +770,161 @@ export function calculateDomainScore(opts: {
   }
 
   // ─── CSP Quality Gradation ──────────────────────────────────────
+  // Parse CSP directives properly to avoid false positives (e.g., unsafe-inline
+  // in style-src is common and acceptable; only flag it in script-src/default-src).
   if (!opts.httpBlocked && opts.headers) {
     const cspHeader = opts.headers["content-security-policy"] ?? "";
+    const cspReportOnly = opts.headers["content-security-policy-report-only"] ?? "";
     if (cspHeader) {
-      const hasUnsafeInline = /unsafe-inline/i.test(cspHeader);
-      const hasUnsafeEval = /unsafe-eval/i.test(cspHeader);
-      const hasWildcard = /(?:^|[\s;])(?:default-src|script-src)\s+[^;]*\*/i.test(cspHeader);
-      const hasDefaultSrc = /default-src/i.test(cspHeader);
+      // Parse directives into a map: directive-name → values string
+      const directives: Record<string, string> = {};
+      for (const part of cspHeader.split(";")) {
+        const trimmed = part.trim();
+        const spaceIdx = trimmed.indexOf(" ");
+        if (spaceIdx > 0) {
+          directives[trimmed.slice(0, spaceIdx).toLowerCase()] = trimmed.slice(spaceIdx + 1);
+        } else if (trimmed) {
+          directives[trimmed.toLowerCase()] = "";
+        }
+      }
 
-      if (hasUnsafeInline || hasUnsafeEval || hasWildcard) {
+      // The effective script policy comes from script-src, or falls back to default-src
+      const scriptSrc = directives["script-src"] ?? directives["default-src"] ?? "";
+      const hasDefaultSrc = "default-src" in directives;
+      const hasScriptSrc = "script-src" in directives;
+      const hasObjectSrc = "object-src" in directives;
+      const hasBaseUri = "base-uri" in directives;
+
+      // Check for dangerous patterns in the script policy only
+      const scriptUnsafeInline = /('unsafe-inline'|unsafe-inline)/i.test(scriptSrc);
+      const scriptUnsafeEval = /('unsafe-eval'|unsafe-eval)/i.test(scriptSrc);
+      const scriptWildcard = /(?:^|\s)\*(?:\s|$)/.test(scriptSrc);
+
+      const issues: string[] = [];
+      if (scriptUnsafeInline) issues.push("'unsafe-inline' in scripts");
+      if (scriptUnsafeEval) issues.push("'unsafe-eval' in scripts");
+      if (scriptWildcard) issues.push("wildcard script source");
+
+      if (issues.length > 0) {
         findings.push({
           signal: "csp_quality", axis: "security",
-          severity: "low",
-          label: `CSP present but permissive (${[hasUnsafeInline && "unsafe-inline", hasUnsafeEval && "unsafe-eval", hasWildcard && "wildcard"].filter(Boolean).join(", ")})`,
-          tradeoff: "Tightening CSP may break inline scripts or third-party integrations.",
-          weight: 2,
+          severity: contextualSeverity("medium", arch, { content: "low", infrastructure: "low" }),
+          label: `CSP present but permissive (${issues.join(", ")})`,
+          tradeoff: "Tightening CSP may break inline scripts or third-party integrations. Consider using nonces or hashes instead of 'unsafe-inline'.",
+          weight: 3,
         });
-      } else if (hasDefaultSrc) {
+      } else if (hasDefaultSrc || hasScriptSrc) {
         findings.push({
           signal: "csp_quality", axis: "security",
           severity: "good",
-          label: "CSP is restrictive (no unsafe-* or wildcards)",
-          tradeoff: null, weight: 2,
+          label: "CSP is restrictive (no unsafe-* or wildcards in script policy)",
+          tradeoff: null, weight: 3,
         });
       } else {
         findings.push({
           signal: "csp_quality", axis: "security",
           severity: "info",
-          label: "CSP present but missing default-src directive",
+          label: "CSP present but missing default-src and script-src directives",
           tradeoff: null, weight: 2,
         });
       }
+
+      // Missing object-src (allows Flash/plugin exploits via default-src fallback)
+      if (!hasObjectSrc) {
+        const defaultSrc = directives["default-src"] ?? "";
+        const defaultSrcRestrictive = /('none'|'self')/i.test(defaultSrc);
+        if (!defaultSrcRestrictive) {
+          findings.push({
+            signal: "csp_missing_object_src", axis: "security",
+            severity: contextualSeverity("info", arch, { application: "low", commerce: "low" }),
+            label: "CSP missing object-src directive (plugin injection risk)",
+            tradeoff: "Add object-src 'none' to block Flash and plugin-based attacks.",
+            weight: 1,
+          });
+        }
+      }
+
+      // Missing base-uri (allows <base> tag injection for relative URL hijacking)
+      if (!hasBaseUri) {
+        findings.push({
+          signal: "csp_missing_base_uri", axis: "security",
+          severity: contextualSeverity("info", arch, { application: "low" }),
+          label: "CSP missing base-uri directive",
+          tradeoff: "Add base-uri 'self' or 'none' to prevent <base> tag injection.",
+          weight: 1,
+        });
+      }
+    } else if (cspReportOnly && !cspHeader) {
+      // Report-Only without enforcing CSP — monitoring but not protective
+      findings.push({
+        signal: "csp_report_only", axis: "security",
+        severity: "info",
+        label: "CSP in report-only mode (monitoring but not enforcing)",
+        tradeoff: "Report-only is a good first step. Switch to enforcing mode once you've resolved violations.",
+        weight: 1,
+      });
     }
-    // No CSP = skip (handled by csp_missing above)
+    // No CSP at all = skip (handled by csp_missing above)
+  }
+
+  // ─── CORS Misconfiguration Detection ────────────────────────────
+  if (!opts.httpBlocked && opts.headers) {
+    const acao = (opts.headers["access-control-allow-origin"] ?? "").trim();
+    const acac = (opts.headers["access-control-allow-credentials"] ?? "").trim().toLowerCase();
+
+    if (acao) {
+      if (acao === "*" && acac === "true") {
+        // Wildcard origin + credentials = dangerous: allows any site to make credentialed requests
+        findings.push({
+          signal: "cors_wildcard_credentials", axis: "security",
+          severity: contextualSeverity("high", arch, { infrastructure: "critical", application: "critical", commerce: "critical" }),
+          label: "CORS misconfiguration: wildcard origin with credentials allowed",
+          tradeoff: "This allows any website to make authenticated requests to your API. Restrict Access-Control-Allow-Origin to specific trusted origins.",
+          weight: 4,
+        });
+      } else if (acao === "null") {
+        // null origin is exploitable via sandboxed iframes and data: URIs
+        findings.push({
+          signal: "cors_null_origin", axis: "security",
+          severity: contextualSeverity("medium", arch, { application: "high", commerce: "high" }),
+          label: "CORS allows null origin (exploitable via sandboxed iframes)",
+          tradeoff: "The 'null' origin can be forged. Use specific origins instead.",
+          weight: 2,
+        });
+      } else if (acao === "*") {
+        // Wildcard without credentials — common for public APIs, usually intentional
+        findings.push({
+          signal: "cors_wildcard", axis: "security",
+          severity: "info",
+          label: "CORS allows any origin (Access-Control-Allow-Origin: *)",
+          tradeoff: "Common for public APIs and CDN-hosted resources. Ensure no sensitive data is exposed without authentication.",
+          weight: 1,
+        });
+      }
+    }
+  }
+
+  // ─── HPKP Deprecated Header Detection ──────────────────────────
+  if (!opts.httpBlocked && opts.headers) {
+    const hasHpkp = !!opts.headers["public-key-pins"];
+    const hasHpkpRo = !!opts.headers["public-key-pins-report-only"];
+    if (hasHpkp) {
+      findings.push({
+        signal: "hpkp_deprecated", axis: "security",
+        severity: "medium",
+        label: "HPKP (Public-Key-Pins) is deprecated — can permanently DoS your domain",
+        tradeoff: "Chrome removed HPKP support in 2018. If pins are rotated incorrectly, the domain becomes permanently inaccessible to pinned clients. Remove this header.",
+        weight: 2,
+      });
+    } else if (hasHpkpRo) {
+      findings.push({
+        signal: "hpkp_deprecated", axis: "security",
+        severity: "info",
+        label: "HPKP-Report-Only header present (deprecated, no browsers enforce)",
+        tradeoff: "Safe but useless — no browser implements HPKP anymore. Consider removing to reduce header bloat.",
+        weight: 1,
+      });
+    }
   }
 
   // ─── Vulnerable JavaScript Libraries ────────────────────────────

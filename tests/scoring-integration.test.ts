@@ -181,8 +181,10 @@ describe('calculateDomainScore integration', () => {
     // Count CSP-related findings across all axes
     const allFindings = Object.values(result.axes).flatMap(a => a.findings);
     const cspFindings = allFindings.filter(f => f.signal.includes('csp'));
-    // CSP presence (csp) and CSP quality (csp_quality) are complementary — allow 2
-    expect(cspFindings.length).toBeLessThanOrEqual(2);
+    // CSP presence (csp), CSP quality (csp_quality), and optional granular
+    // sub-findings (csp_missing_object_src, csp_missing_base_uri, csp_report_only)
+    // are complementary, not double-counting the same signal.
+    expect(cspFindings.length).toBeLessThanOrEqual(4);
   });
 
   it('grade boundaries are consistent', () => {
