@@ -112,6 +112,7 @@ const html = `<!DOCTYPE html>
     <link rel="me" href="https://www.reddit.com/u/yokelol" />
     <link rel="me" href="https://www.instagram.com/yokedotlol/" />
     <link rel="me" href="https://www.threads.net/@yokedotlol" />
+    <link rel="me" href="https://www.linkedin.com/company/yokelol" />
     <link rel="me" href="https://gitlab.com/yokelol" />
     <script type="application/ld+json">
     {
