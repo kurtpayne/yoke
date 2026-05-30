@@ -8,6 +8,7 @@ on:
       - 'client/**'
       - 'tests/**'
       - 'prompts/**'
+      - '*.lock'
       - 'package.json'
       - 'vitest.config.ts'
       - '.github/workflows/ci.yml'
@@ -18,6 +19,7 @@ on:
       - 'client/**'
       - 'tests/**'
       - 'prompts/**'
+      - '*.lock'
 
 permissions:
   contents: read
