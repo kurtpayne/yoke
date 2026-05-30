@@ -10,7 +10,7 @@ Yoke is a domain intelligence / OSINT tool. Users enter a domain → get a compr
 
 ```
 worker/src/          → Cloudflare Worker (TypeScript). Hand-rolled router, NO framework.
-client/src/          → React SPA (Vite + TypeScript). NO Tailwind — plain CSS.
+client/src/          → React SPA (Vite + TypeScript + Tailwind v4)
 fly-proxy/           → Go HTTP proxy on Fly.io (SSL probing, GeoIP, SSRF-safe fetch)
 extension/           → Chrome extension (Manifest V3, side panel iframe to yoke.lol)
 cli/                 → Go CLI (goreleaser, Homebrew tap at yokedotlol/homebrew-tap)
