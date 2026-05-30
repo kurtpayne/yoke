@@ -282,11 +282,6 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     effort: "~15 min — restrict CORS config", fixDescription: "Remove null from CORS allowed origins",
     weightRange: [2, 2],
   },
-  open_resolver: {
-    axis: "security", label: "Open DNS Resolver", actionable: true, canBeNonGood: true,
-    effort: "~30 min — restrict recursion on nameserver", fixDescription: "Disable recursive queries on authoritative nameservers",
-    weightRange: [3, 3],
-  },
   cors_wildcard_credentials: {
     axis: "security", label: "CORS Wildcard with Credentials", actionable: true, canBeNonGood: true,
     effort: "~15 min — fix CORS config", fixDescription: "Remove credentials with wildcard CORS origin",

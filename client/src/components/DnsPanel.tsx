@@ -73,6 +73,18 @@ export function DnsPanel({ data }: { data: AnalysisResult }) {
           </div>
         );
       })}
+      <div style={{ marginTop: "8px", paddingTop: "6px", borderTop: "1px solid var(--border)", textAlign: "right" }}>
+        <a
+          href="https://openresolver.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: "11px", color: "var(--text-muted)", textDecoration: "none" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--accent)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+        >
+          Test for open resolvers →
+        </a>
+      </div>
     </Panel>
   );
 }

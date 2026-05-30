@@ -123,7 +123,6 @@ export interface AnalysisResult {
   third_party_scripts: unknown;
   cookie_consent: unknown;
   social_accounts: { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> } | null;
-  open_resolver: import("../checks/open-resolver").OpenResolverResult | null;
   [key: string]: unknown;
 }
 
@@ -204,7 +203,6 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     third_party_scripts: null,
     cookie_consent: null,
     social_accounts: null,
-    open_resolver: null,
   };
 }
 
@@ -471,7 +469,6 @@ export async function runAnalysis(
   const outageLinks = (results.outage_links ?? null) as import("./network-health").OutageLinks | null;
   const connectionTimingResult = (results.connection_timing ?? null) as import("./network-health").ConnectionTiming | null;
   const socialAccountsResult = (results.social_accounts ?? { accounts: [] }) as { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> };
-  const openResolverResult = (results.open_resolver ?? null) as import("../checks/open-resolver").OpenResolverResult | null;
 
   // Build merged meta
   const meta: MetaResult = {
@@ -657,7 +654,6 @@ export async function runAnalysis(
     redirects: httpProbeSucceeded ? (httpAnalysis?.redirects ?? []) : [],
     statusResult: enhancedStatus,
     robotsParsed,
-    openResolver: openResolverResult,
   });
 
   const result: AnalysisResult = {
@@ -719,7 +715,6 @@ export async function runAnalysis(
     cookie_consent: cookieConsentResult,
     network_health: networkHealth,
     social_accounts: socialAccountsResult,
-    open_resolver: openResolverResult,
   };
 
   // ── Post-analysis: score logging, caching, cleanup ───────────────

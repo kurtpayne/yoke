@@ -313,7 +313,6 @@ export function calculateDomainScore(opts: {
   redirects: RedirectHop[];
   statusResult: { is_up: boolean; status_code: number | null; http_blocked?: boolean; status_label?: string } | null;
   robotsParsed: RobotsParsed | null;
-  openResolver?: { checked: boolean; open_resolvers: Array<{ ns: string; ip: string; method: string }> } | null;
 }): DomainScoreResult {
   // Step 1: Detect archetype
   const archetype = detectArchetype({
@@ -1458,18 +1457,6 @@ export function calculateDomainScore(opts: {
       // run massive anycast networks — single provider doesn't imply single point of failure.
       // Unrecognized providers = skip
     }
-  }
-
-  // ─── Open Resolver Detection ───────────────────────────────────
-  if (opts.openResolver?.checked && opts.openResolver.open_resolvers.length > 0) {
-    const nsNames = opts.openResolver.open_resolvers.map(r => r.ns).join(", ");
-    findings.push({
-      signal: "open_resolver", axis: "security",
-      severity: "high",
-      label: `Open DNS resolver detected: ${nsNames}`,
-      tradeoff: "Open resolvers can be abused for DNS amplification attacks. Disable recursive queries on authoritative nameservers.",
-      weight: 3,
-    });
   }
 
   // ─── NEW: Site Unreachable ───────────────────────────────────────
