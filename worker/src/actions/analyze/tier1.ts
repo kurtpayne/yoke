@@ -57,6 +57,14 @@ export async function checkSecurityTxt(domain: string, instanceHost?: string): P
     is_expired: false, has_bug_bounty: false, bug_bounty_platform: null, raw: null,
   };
 
+  // Self-analysis bypass: CF Workers can't fetch their own domain.
+  // Return our known security.txt content directly.
+  if (instanceHost && domain === instanceHost) {
+    const { SECURITY_TXT } = await import("../../pages");
+    const text = SECURITY_TXT;
+    return parseSecurityTxt(text, empty, `https://${domain}/.well-known/security.txt`);
+  }
+
   const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
   // Try both with and without www
@@ -74,6 +82,10 @@ export async function checkSecurityTxt(domain: string, instanceHost?: string): P
   }
 
   if (!text) return empty;
+  return parseSecurityTxt(text, empty, urls[0]!);
+}
+
+function parseSecurityTxt(text: string, empty: SecurityTxtResult, canonicalUrl: string): SecurityTxtResult {
     const result: SecurityTxtResult = { ...empty, found: true, raw: text.slice(0, 2000) };
     for (const line of text.split("\n")) {
       const trimmed = line.split("#")[0]?.trim() ?? "";
