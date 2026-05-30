@@ -372,12 +372,13 @@ func probeGeoIP(ip string) GeoResult {
 	if result := tryMaxMind(ip); result != nil {
 		return *result
 	}
-	// Fall back to ip-api.com (45 req/min, no key needed)
-	if result := tryIpApi(ip); result != nil {
+	// Fall back to ipwho.is (HTTPS, no key needed)
+	if result := tryIpWhois(ip); result != nil {
 		return *result
 	}
-	// Fall back to ipwho.is
-	if result := tryIpWhois(ip); result != nil {
+	// Last resort: ip-api.com (HTTP only on free tier — acceptable since
+	// the IP being looked up is already public hosting-IP information)
+	if result := tryIpApi(ip); result != nil {
 		return *result
 	}
 	errStr := "all geolocation providers failed"

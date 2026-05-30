@@ -2,6 +2,29 @@
 
 All notable changes to Yoke are documented here.
 
+## [1.5.0] — 2026-05-29
+
+### Features
+- **Permissions-Policy header detection** — parses and evaluates browser feature permissions
+- **Referrer-Policy analysis** — detects and scores referrer policy configuration
+- **Resource Hints detection** — dns-prefetch, preconnect, preload, prefetch, modulepreload signals
+- **Recursive DNS enumeration** — zone-walking and brute-force subdomain discovery endpoint
+- **llms.txt self-analysis bypass** — Yoke no longer flags its own llms.txt as missing
+- **AI prompt calibration** — domain expertise expanded for social verification, cookie security, server version, permissions/referrer policy, security.txt, redirect chains, PWA, robots.txt
+- **Grade-Up Simulator improvements** — clean blocklist severity fixed (info → good), non-actionable signals filtered, org page labels show which page is missing
+- **API version headers** — `X-Yoke-Version` and `X-Yoke-Min-Client` on all API responses; CLI warns when outdated
+- **API docs expansion** — `/api/docs` now documents all 18 endpoints with rate limits and request formats
+
+### Bug Fixes
+- **TSC type errors resolved** — missing imports, ProgressState reset, ActionItem/GradeUpItem type compatibility, ArchetypeData weights type
+- **SHARE_SECRET hardening** — removed dev fallback secret; worker now fails explicitly if SHARE_SECRET is not configured
+- **ip-api.com HTTPS** — GeoIP fallback chain now prefers HTTPS sources (ipwho.is before ip-api.com)
+- **Dead code removal** — removed legacy HealthScoreData type definitions
+
+### Maintenance
+- **Version sync** — all components aligned to 1.5.0
+- **178 tests passing** — no regressions
+
 ## [1.4.0] — 2026-05-27
 
 ### Scoring Overhaul

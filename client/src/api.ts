@@ -282,7 +282,6 @@ export interface AnalysisResult {
   compression: CompressionData | null;
   cache_analysis: CacheAnalysisData | null;
   ai_readiness: AiReadinessData | null;
-  health_score?: HealthScoreData | null; // Deprecated — kept for cached responses
   wordpress: WordPressData | null;
   breaches: BreachData | null;
 
@@ -401,7 +400,6 @@ export interface CacheAnalysisData {
   issues: string[];
 }
 export interface AiReadinessData { score: number; max_score: number; grade: string; checks: Array<{ name: string; passed: boolean; points: number }>; rss_feed: string | null; ans: { ans_found: boolean; ans_records: string[]; agents_found: boolean; agents_records: string[]; agent_json_found: boolean } | null; }
-export interface HealthScoreData { score: number; max_score: number; grade: string; breakdown: Record<string, number>; }
 
 export interface WordPressPlugin { slug: string; name: string; category: string | null; }
 export interface WordPressData {
@@ -574,7 +572,7 @@ export interface ArchetypeData {
   secondary: ArchetypeName | null;
   signals: string[];
   platform: string | null;
-  weights?: Record<ArchetypeName, Record<Axis, number>>;
+  weights?: Record<Axis, number>;
 }
 
 export interface DomainScoreData {

@@ -640,7 +640,7 @@ function getFixLink(finding: ScoreFinding, data: AnalysisResult): { url: string;
 // ─── Quick Wins Filter ──────────────────────────────────────────────
 
 /** Unified quick win classification — used by both the Quick Wins section and the ⚡ badge */
-function isQuickWinItem(item: ActionItem): boolean {
+function isQuickWinItem(item: { effort: string; severity?: string }): boolean {
   const effort = item.effort.toLowerCase();
   const isQuickEffort = effort.includes("5 min") || effort.includes("10 min") || effort.includes("15 min") || effort.includes("30 min") || effort.includes("one-line") || effort.includes("one response header");
   const isHighImpact = item.severity === "high" || item.severity === "critical";

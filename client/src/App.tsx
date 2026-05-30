@@ -266,7 +266,7 @@ function useStreamingAnalysis() {
     setPartialData(null);
     setIsPending(false);
     setError(null);
-    setProgress({ phase: "", label: "", completed: 0, total: 0, checks: new Map() });
+    setProgress({ phase: "", label: "", completed: 0, total: 0, checks: new Map(), startedAt: 0 });
   }, []);
 
   return { data, partialData, isPending, error, progress, rateLimit, sessionCount, mutate, reset };

@@ -71,10 +71,11 @@ function bytesToText(bytes: Uint8Array): string {
 
 // ─── HMAC ────────────────────────────────────────────────────────────
 
-const DEV_FALLBACK_SECRET = "yoke-dev-share-secret-do-not-use-in-production";
-
 async function getHmacKey(env: Env): Promise<CryptoKey> {
-  const secret = (env as Record<string, unknown>).SHARE_SECRET as string | undefined || DEV_FALLBACK_SECRET;
+  const secret = env.SHARE_SECRET;
+  if (!secret) {
+    throw new Error("SHARE_SECRET environment variable is not configured — share feature is unavailable");
+  }
   return crypto.subtle.importKey(
     "raw",
     textToBytes(secret),

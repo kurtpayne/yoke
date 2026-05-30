@@ -86,7 +86,10 @@ export async function fetchWithTimeout(
 
 // ─── Version ─────────────────────────────────────────────────────────
 
-export const YOKE_VERSION = "1.3.0";
+export const YOKE_VERSION = "1.5.0";
+
+/** Minimum CLI version required. Bump when shipping breaking API changes. */
+export const MIN_CLIENT_VERSION = "1.0.0";
 
 // ─── Shared Constants ────────────────────────────────────────────────
 
@@ -96,9 +99,12 @@ export const CORS_HEADERS: Record<string, string> = {
   // (e.g., DELETE /api/cache) should not be callable cross-origin from browsers.
   // Non-browser clients (curl, scripts) ignore CORS and can still use DELETE with auth.
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-OpenRouter-Key",
+  "Access-Control-Expose-Headers": "X-Yoke-Version, X-Yoke-Min-Client",
   "X-Content-Type-Options": "nosniff",
   "Content-Security-Policy": "frame-ancestors 'self' https://*.chromiumapp.org chrome-extension://*",
+  "X-Yoke-Version": YOKE_VERSION,
+  "X-Yoke-Min-Client": MIN_CLIENT_VERSION,
 };
 
 export const MULTI_PART_TLDS = ["co.uk", "com.au", "co.nz", "co.jp", "com.br", "co.in", "org.uk", "net.au", "ac.uk"];

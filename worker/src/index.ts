@@ -22,7 +22,7 @@ import { trackUsage, getUsageStats } from "./usage-tracking";
 import { renderUsagePage } from "./usage-page";
 import { trackRequest } from "./request-tracking";
 
-import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, YOKE_VERSION } from "./helpers";
+import { CORS_HEADERS, cleanDomain, getFromCache, getBaseUrl, YOKE_VERSION, MIN_CLIENT_VERSION, safeFetchWithRedirects, boundedText } from "./helpers";
 import type { Env } from "./helpers";
 import { logError } from "./logger";
 import { handleSPARoute, serveAssetOrFallback, getHtmlSecurityHeaders, wantsJSON } from "./spa";
@@ -857,21 +857,90 @@ export default {
             name: "Yoke Domain Intelligence API",
             version: YOKE_VERSION,
             endpoints: {
-              "GET /{domain}": "Full domain analysis (content negotiation: JSON for curl/API clients, HTML for browsers)",
-              "POST /api/analyze": "Full domain analysis (JSON body: {domain: string})",
-              "POST /api/compare": "Compare two domains side-by-side (JSON body: {domain1: string, domain2: string})",
-              "POST /api/subdomains": "Subdomain enumeration (JSON body: {domain: string})",
-              "GET /api/subdomains": "Subdomain enumeration (query: ?domain=example.com)",
-              "POST /api/company": "Company/business info (JSON body: {domain: string})",
-              "POST /api/news": "News articles (JSON body: {domain: string})",
-              "POST /api/social": "Social accounts (JSON body: {domain: string})",
-              "POST /api/suggestions": "Domain suggestions (JSON body: {domain: string})",
-              "POST /api/availability": "Global availability check (JSON body: {domain: string})",
-              "POST /api/reverse-ip": "Reverse IP lookup (JSON body: {ip: string})",
-              // AI analysis not listed — restricted to web/extension only
-              "GET /api/health": "Health check",
-              "GET /api/scoring": "Scoring methodology — all thresholds, weights, and severity bands",
-              "GET /api/js-audit?domain=example.com": "Deep JS vulnerability scan — detects outdated/vulnerable client-side libraries",
+              "GET /{domain}": {
+                description: "Full domain analysis (content negotiation: JSON for curl/API clients, HTML for browsers)",
+                rate_limit: "50 req/hr",
+              },
+              "POST /api/analyze": {
+                description: "Full domain analysis. Supports SSE streaming (Accept: text/event-stream) or JSON response.",
+                body: '{"domain": "example.com"}',
+                rate_limit: "50 req/hr",
+              },
+              "POST /api/compare": {
+                description: "Compare two domains side-by-side",
+                body: '{"domain1": "a.com", "domain2": "b.com"}',
+                rate_limit: "50 req/hr",
+              },
+              "POST /api/subdomains": {
+                description: "Subdomain enumeration via certificate transparency logs",
+                body: '{"domain": "example.com"}',
+                rate_limit: "none",
+              },
+              "GET /api/subdomains?domain=example.com": {
+                description: "Subdomain enumeration (GET variant)",
+                rate_limit: "none",
+              },
+              "POST /api/subdomain-scan": {
+                description: "Active subdomain DNS scan — resolves discovered subdomains",
+                body: '{"domain": "example.com"}',
+                rate_limit: "30 req/hr",
+              },
+              "POST /api/recursive-dns": {
+                description: "Recursive DNS enumeration — discovers subdomains via zone walking and brute-force",
+                body: '{"domain": "example.com"}',
+                rate_limit: "30 req/hr",
+              },
+              "POST /api/ai-analysis": {
+                description: "AI-powered domain analysis from 6 expert personas. Requires OpenRouter API key via X-OpenRouter-Key header or server-side config.",
+                body: '{"domain": "example.com", "model": "optional-model-id"}',
+                rate_limit: "none (API-key gated)",
+              },
+              "POST /api/company": {
+                description: "Company/business info via Wikidata, Brandfetch, Crunchbase",
+                body: '{"domain": "example.com"}',
+                rate_limit: "none",
+              },
+              "POST /api/news": {
+                description: "Recent news articles about the domain",
+                body: '{"domain": "example.com"}',
+                rate_limit: "none",
+              },
+              "POST /api/social": {
+                description: "Social media account discovery",
+                body: '{"domain": "example.com"}',
+                rate_limit: "none",
+              },
+              "POST /api/suggestions": {
+                description: "Domain suggestions based on analysis",
+                body: '{"domain": "example.com"}',
+                rate_limit: "none",
+              },
+              "POST /api/availability": {
+                description: "Global availability check from multiple regions",
+                body: '{"domain": "example.com"}',
+                rate_limit: "60 req/hr",
+              },
+              "POST /api/reverse-ip": {
+                description: "Reverse IP lookup — other domains on the same IP",
+                body: '{"ip": "1.2.3.4"}',
+                rate_limit: "none",
+              },
+              "GET /api/js-audit?domain=example.com": {
+                description: "Deep JS vulnerability scan — detects outdated/vulnerable client-side libraries",
+                rate_limit: "20 req/hr",
+              },
+              "GET /api/health": {
+                description: "Health check",
+                rate_limit: "none",
+              },
+              "GET /api/scoring": {
+                description: "Scoring methodology — all thresholds, weights, and severity bands",
+                rate_limit: "none",
+              },
+              "GET /api/recent": {
+                description: "Recently analyzed domains",
+                rate_limit: "none",
+              },
             },
             examples: {
               curl_simple: `curl ${host}/stripe.com`,

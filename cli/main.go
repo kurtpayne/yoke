@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,53 @@ var (
 )
 
 var apiBase string
+
+// ─── Version Check ──────────────────────────────────────────────────
+
+var versionCheckDone bool
+
+// checkServerMinVersion reads X-Yoke-Min-Client from a response and
+// warns on stderr if the CLI version is older than required.
+// Safe to call multiple times — only prints once per invocation.
+func checkServerMinVersion(resp *http.Response) {
+	if versionCheckDone || version == "dev" {
+		return
+	}
+	versionCheckDone = true
+	minClient := resp.Header.Get("X-Yoke-Min-Client")
+	if minClient == "" {
+		return
+	}
+	if semverLessThan(version, minClient) {
+		fmt.Fprintf(os.Stderr, "⚠ Update available: your CLI is v%s, server requires v%s. Run: brew upgrade yokedotlol/tap/yoke\n", version, minClient)
+	}
+}
+
+// semverLessThan returns true if a < b using simple major.minor.patch comparison.
+func semverLessThan(a, b string) bool {
+	aParts := parseSemver(a)
+	bParts := parseSemver(b)
+	for i := 0; i < 3; i++ {
+		if aParts[i] < bParts[i] {
+			return true
+		}
+		if aParts[i] > bParts[i] {
+			return false
+		}
+	}
+	return false
+}
+
+func parseSemver(v string) [3]int {
+	v = strings.TrimPrefix(v, "v")
+	parts := strings.SplitN(v, ".", 3)
+	var result [3]int
+	for i := 0; i < 3 && i < len(parts); i++ {
+		n, _ := strconv.Atoi(parts[i])
+		result[i] = n
+	}
+	return result
+}
 
 // ─── Config ─────────────────────────────────────────────────────────
 
@@ -236,6 +284,7 @@ func fetchJSON(url string) ([]byte, error) {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
+	checkServerMinVersion(resp)
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
@@ -330,6 +379,7 @@ func fetchAnalysisStream(domain string) (*AnalysisResult, error) {
 		return fetchAnalysis(domain) // fallback
 	}
 	defer resp.Body.Close()
+	checkServerMinVersion(resp)
 
 	// If server returned JSON instead of SSE, parse it directly.
 	ct := resp.Header.Get("Content-Type")
