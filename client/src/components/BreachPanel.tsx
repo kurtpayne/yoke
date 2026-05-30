@@ -189,9 +189,9 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
               <BreachCard key={breach.name} breach={breach} />
             ))}
 
-            {/* HIBP attribution */}
+            {/* HIBP attribution (CC BY 4.0) */}
             <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", textAlign: "center", marginTop: "8px" }}>
-              Data from <a href="https://haveibeenpwned.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Have I Been Pwned</a>
+              Data from <a href="https://haveibeenpwned.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Have I Been Pwned</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>CC BY 4.0</a>
             </div>
           </div>
         ) : check_failed ? (
@@ -212,6 +212,9 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
             </div>
             <div style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", marginTop: "4px" }}>
               This domain does not appear in any known breach databases
+            </div>
+            <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", marginTop: "8px" }}>
+              Data from <a href="https://haveibeenpwned.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Have I Been Pwned</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>CC BY 4.0</a>
             </div>
           </div>
         )}
