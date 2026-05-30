@@ -2,7 +2,7 @@
 // DNS propagation, RIPE routing, outage page detection, connection timing.
 // All checks degrade gracefully — null on failure, never throws.
 
-import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../../helpers";
+import { type Env, fetchWithTimeout, getFlyAuthHeaders, getFlyProbeUrl } from "../../helpers";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -52,8 +52,14 @@ export interface NetworkHealth {
 // ─── DNS Propagation Check ───────────────────────────────────────────
 // Query A records from multiple public DoH resolvers in parallel.
 
-interface DohAnswer { data: string; type: number }
-interface DohResponse { Status: number; Answer?: DohAnswer[] }
+interface DohAnswer {
+  data: string;
+  type: number;
+}
+interface DohResponse {
+  Status: number;
+  Answer?: DohAnswer[];
+}
 
 const DOH_RESOLVERS: Array<{ name: string; url: (domain: string) => string; headers?: Record<string, string> }> = [
   {
@@ -97,13 +103,13 @@ export async function checkDnsPropagation(domain: string): Promise<DnsPropagatio
           const isTimeout = err instanceof Error && (err.message.includes("timeout") || err.message.includes("abort"));
           return { name: resolver.name, ips: [], response_time_ms: elapsed, status: isTimeout ? "timeout" : "error" };
         }
-      })
+      }),
     );
 
     const resolvers = results.map((r) =>
       r.status === "fulfilled"
         ? r.value
-        : { name: "Unknown", ips: [] as string[], response_time_ms: 0, status: "error" as const }
+        : { name: "Unknown", ips: [] as string[], response_time_ms: 0, status: "error" as const },
     );
 
     // Determine consistency — use overlap analysis instead of exact match.
@@ -111,9 +117,7 @@ export async function checkDnsPropagation(domain: string): Promise<DnsPropagatio
     // different resolvers. Only flag inconsistency when a resolver returns IPs
     // with ZERO overlap with ALL other resolvers, or returns NXDOMAIN while
     // others succeed.
-    const successfulSets = resolvers
-      .filter((r) => r.status === "ok" && r.ips.length > 0)
-      .map((r) => new Set(r.ips));
+    const successfulSets = resolvers.filter((r) => r.status === "ok" && r.ips.length > 0).map((r) => new Set(r.ips));
     const failedWithNoIps = resolvers.filter((r) => r.status === "ok" && r.ips.length === 0);
     const hasNxdomainWhileOthersSucceed = failedWithNoIps.length > 0 && successfulSets.length > 0;
 
@@ -168,7 +172,7 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
     // Step 1: Get ASN and prefix for this IP
     const prefixRes = await fetchWithTimeout(
       `https://stat.ripe.net/data/prefix-overview/data.json?resource=${encodeURIComponent(ip)}`,
-      { timeout: 5000 }
+      { timeout: 5000 },
     );
     if (!prefixRes.ok) return null;
     const prefixData = (await prefixRes.json()) as {
@@ -188,13 +192,12 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
 
     // Step 2: Visibility + BGP updates in parallel
     const [visResult, bgpResult] = await Promise.allSettled([
-      fetchWithTimeout(
-        `https://stat.ripe.net/data/routing-status/data.json?resource=${encodeURIComponent(prefix)}`,
-        { timeout: 5000 }
-      ),
+      fetchWithTimeout(`https://stat.ripe.net/data/routing-status/data.json?resource=${encodeURIComponent(prefix)}`, {
+        timeout: 5000,
+      }),
       fetchWithTimeout(
         `https://stat.ripe.net/data/bgp-updates/data.json?resource=${encodeURIComponent(prefix)}&starttime=${new Date(Date.now() - 86400000).toISOString().replace(/\.\d+Z$/, "")}`,
-        { timeout: 5000 }
+        { timeout: 5000 },
       ),
     ]);
 
@@ -215,7 +218,9 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
             percentage: Math.round((v4.seeing_peers / v4.total_peers) * 100),
           };
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     }
 
     // Parse BGP updates count
@@ -225,8 +230,10 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
         const bgpData = (await bgpResult.value.json()) as {
           data?: { nr_updates?: number; updates?: unknown[] };
         };
-        bgpUpdates = bgpData.data?.nr_updates ?? (bgpData.data?.updates?.length ?? null);
-      } catch { /* ignore parse errors */ }
+        bgpUpdates = bgpData.data?.nr_updates ?? bgpData.data?.updates?.length ?? null;
+      } catch {
+        /* ignore parse errors */
+      }
     }
 
     // Determine stability — anycast/CDN providers (Cloudflare, Akamai, Fastly,
@@ -234,30 +241,30 @@ export async function checkRipeRouting(ip: string): Promise<RipeRouting | null> 
     // traffic engineering, DDoS mitigation, and PoP failover. Use relaxed
     // thresholds for known anycast ASNs to avoid false positives.
     const ANYCAST_ASNS = new Set([
-      13335,  // Cloudflare
-      20940,  // Akamai
-      16509,  // Amazon/AWS
-      15169,  // Google
-      8075,   // Microsoft/Azure
-      54113,  // Fastly
-      16625,  // Akamai (alt)
-      14618,  // Amazon (alt)
+      13335, // Cloudflare
+      20940, // Akamai
+      16509, // Amazon/AWS
+      15169, // Google
+      8075, // Microsoft/Azure
+      54113, // Fastly
+      16625, // Akamai (alt)
+      14618, // Amazon (alt)
       396982, // Google Cloud
       209242, // Cloudflare (alt)
-      32934,  // Meta
-      714,    // Apple
-      2906,   // Netflix
-      16276,  // OVH
-      36459,  // GitHub
-      46489,  // Twitch
-      19551,  // Incapsula/Imperva
-      30148,  // Sucuri
-      24940,  // Hetzner
-      63949,  // Akamai/Linode
+      32934, // Meta
+      714, // Apple
+      2906, // Netflix
+      16276, // OVH
+      36459, // GitHub
+      46489, // Twitch
+      19551, // Incapsula/Imperva
+      30148, // Sucuri
+      24940, // Hetzner
+      63949, // Akamai/Linode
       398101, // StackPath/Highwinds
-      13414,  // Twitter/X
-      36183,  // Akamai (CDN)
-      16591,  // Google Fiber
+      13414, // Twitter/X
+      36183, // Akamai (CDN)
+      16591, // Google Fiber
     ]);
     const isAnycast = asn !== null && ANYCAST_ASNS.has(asn);
     let stability: RipeRouting["routing_stability"] = null;
@@ -328,16 +335,20 @@ export async function checkConnectionTiming(domain: string, env: Env): Promise<C
   if (!probeUrl) return null;
 
   try {
-    const res = await fetchWithTimeout(
-      `${probeUrl}/probe-timing?host=${encodeURIComponent(domain)}`,
-      { timeout: 8000, headers: getFlyAuthHeaders(env) }
-    );
+    const res = await fetchWithTimeout(`${probeUrl}/probe-timing?host=${encodeURIComponent(domain)}`, {
+      timeout: 8000,
+      headers: getFlyAuthHeaders(env),
+    });
     if (!res.ok) return null;
 
     const data = (await res.json()) as {
-      dns_ms: number; tcp_ms: number; tls_ms: number;
-      total_ms: number; ip: string | null;
-      tls_version: string | null; error: string | null;
+      dns_ms: number;
+      tcp_ms: number;
+      tls_ms: number;
+      total_ms: number;
+      ip: string | null;
+      tls_version: string | null;
+      error: string | null;
     };
 
     if (data.error) return null;

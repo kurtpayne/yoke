@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkBreaches } from "../actions/breaches";
+import type { Check } from "./types";
 
 export const breachesCheck: Check = {
   key: "breaches",

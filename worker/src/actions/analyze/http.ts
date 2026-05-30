@@ -1,8 +1,8 @@
-import { fetchWithTimeout, boundedText, isBlockedUrl } from "../../helpers";
-import type { Env } from "../../helpers";
 import { fingerprints } from "../../fingerprints";
+import type { Env } from "../../helpers";
+import { boundedText, fetchWithTimeout, isBlockedUrl } from "../../helpers";
 import { getHtmlSecurityHeaders } from "../../spa";
-import type { SecurityHeaderCheck, TechItem, HttpAnalysis, MetaResult, RedirectHop } from "./types";
+import type { HttpAnalysis, MetaResult, RedirectHop, SecurityHeaderCheck, TechItem } from "./types";
 
 // ─── HTTP Fetch + Headers + Tech + Meta ──────────────────────────────
 
@@ -10,17 +10,57 @@ export function auditSecurityHeaders(headers: Record<string, string>): { audit: 
   const checks: SecurityHeaderCheck[] = [];
   const headerDefs = [
     // Core security headers — these define your grade
-    { name: "Strict-Transport-Security", key: "strict-transport-security", weight: 20, recommend: "Add HSTS header with max-age of at least 31536000" },
-    { name: "Content-Security-Policy", key: "content-security-policy", weight: 20, recommend: "Implement CSP to prevent XSS and injection attacks" },
-    { name: "X-Content-Type-Options", key: "x-content-type-options", weight: 15, recommend: 'Set to "nosniff" to prevent MIME-type sniffing' },
-    { name: "X-Frame-Options", key: "x-frame-options", weight: 15, recommend: 'Set to "DENY" or "SAMEORIGIN" to prevent clickjacking' },
+    {
+      name: "Strict-Transport-Security",
+      key: "strict-transport-security",
+      weight: 20,
+      recommend: "Add HSTS header with max-age of at least 31536000",
+    },
+    {
+      name: "Content-Security-Policy",
+      key: "content-security-policy",
+      weight: 20,
+      recommend: "Implement CSP to prevent XSS and injection attacks",
+    },
+    {
+      name: "X-Content-Type-Options",
+      key: "x-content-type-options",
+      weight: 15,
+      recommend: 'Set to "nosniff" to prevent MIME-type sniffing',
+    },
+    {
+      name: "X-Frame-Options",
+      key: "x-frame-options",
+      weight: 15,
+      recommend: 'Set to "DENY" or "SAMEORIGIN" to prevent clickjacking',
+    },
     // Recommended — good practice, minor weight
-    { name: "Referrer-Policy", key: "referrer-policy", weight: 10, recommend: 'Set to "strict-origin-when-cross-origin" or stricter' },
-    { name: "Permissions-Policy", key: "permissions-policy", weight: 5, recommend: "Restrict browser features with Permissions-Policy" },
+    {
+      name: "Referrer-Policy",
+      key: "referrer-policy",
+      weight: 10,
+      recommend: 'Set to "strict-origin-when-cross-origin" or stricter',
+    },
+    {
+      name: "Permissions-Policy",
+      key: "permissions-policy",
+      weight: 5,
+      recommend: "Restrict browser features with Permissions-Policy",
+    },
     // Situational — shown for awareness, zero scoring weight
     { name: "X-XSS-Protection", key: "x-xss-protection", weight: 0, recommend: "Deprecated — modern CSP is preferred" },
-    { name: "Cross-Origin-Opener-Policy", key: "cross-origin-opener-policy", weight: 0, recommend: 'Set to "same-origin" if using cross-origin isolation' },
-    { name: "Cross-Origin-Resource-Policy", key: "cross-origin-resource-policy", weight: 0, recommend: 'Set to "same-origin" if using cross-origin isolation' },
+    {
+      name: "Cross-Origin-Opener-Policy",
+      key: "cross-origin-opener-policy",
+      weight: 0,
+      recommend: 'Set to "same-origin" if using cross-origin isolation',
+    },
+    {
+      name: "Cross-Origin-Resource-Policy",
+      key: "cross-origin-resource-policy",
+      weight: 0,
+      recommend: 'Set to "same-origin" if using cross-origin isolation',
+    },
   ];
 
   let score = 0;
@@ -29,8 +69,17 @@ export function auditSecurityHeaders(headers: Record<string, string>): { audit: 
     maxScore += def.weight;
     const val = headers[def.key] ?? null;
     const isCoreOrRecommended = def.weight >= 10;
-    if (val) { checks.push({ header: def.name, status: "pass", value: val, recommendation: null }); score += def.weight; }
-    else { checks.push({ header: def.name, status: isCoreOrRecommended ? "fail" : "warning", value: null, recommendation: def.recommend }); }
+    if (val) {
+      checks.push({ header: def.name, status: "pass", value: val, recommendation: null });
+      score += def.weight;
+    } else {
+      checks.push({
+        header: def.name,
+        status: isCoreOrRecommended ? "fail" : "warning",
+        value: null,
+        recommendation: def.recommend,
+      });
+    }
   }
 
   // Thresholds calibrated so:
@@ -57,28 +106,43 @@ export function detectTechStack(headers: Record<string, string>, html: string): 
     if (fp.patterns.headers) {
       for (const [key, regex] of Object.entries(fp.patterns.headers)) {
         const val = headers[key];
-        if (val && regex.test(val)) { matched = true; confidenceScore += 3; }
+        if (val && regex.test(val)) {
+          matched = true;
+          confidenceScore += 3;
+        }
       }
     }
     if (fp.patterns.meta) {
       for (const [, regex] of Object.entries(fp.patterns.meta)) {
         const metaMatch = html.match(/<meta[^>]+(?:name|property)=["']generator["'][^>]+content=["']([^"']+)["']/i);
-        if (metaMatch?.[1] && regex.test(metaMatch[1])) { matched = true; confidenceScore += 3; }
+        if (metaMatch?.[1] && regex.test(metaMatch[1])) {
+          matched = true;
+          confidenceScore += 3;
+        }
       }
     }
     if (fp.patterns.scriptUrls) {
       for (const regex of fp.patterns.scriptUrls) {
-        if (regex.test(html)) { matched = true; confidenceScore += 2; }
+        if (regex.test(html)) {
+          matched = true;
+          confidenceScore += 2;
+        }
       }
     }
     if (fp.patterns.cssUrls) {
       for (const regex of fp.patterns.cssUrls) {
-        if (regex.test(html)) { matched = true; confidenceScore += 1; }
+        if (regex.test(html)) {
+          matched = true;
+          confidenceScore += 1;
+        }
       }
     }
     if (fp.patterns.htmlPatterns) {
       for (const regex of fp.patterns.htmlPatterns) {
-        if (regex.test(html)) { matched = true; confidenceScore += 2; }
+        if (regex.test(html)) {
+          matched = true;
+          confidenceScore += 2;
+        }
       }
     }
 
@@ -90,13 +154,19 @@ export function detectTechStack(headers: Record<string, string>, html: string): 
           if (metaMatch) {
             for (const m of metaMatch) {
               const vMatch = m.match(fp.versionExtract.pattern);
-              if (vMatch?.[1]) { version = vMatch[1]; break; }
+              if (vMatch?.[1]) {
+                version = vMatch[1];
+                break;
+              }
             }
           }
         } else if (fp.versionExtract.source === "header") {
           for (const val of Object.values(headers)) {
             const vMatch = val.match(fp.versionExtract.pattern);
-            if (vMatch?.[1]) { version = vMatch[1]; break; }
+            if (vMatch?.[1]) {
+              version = vMatch[1];
+              break;
+            }
           }
         } else if (fp.versionExtract.source === "script") {
           const vMatch = html.match(fp.versionExtract.pattern);
@@ -104,7 +174,9 @@ export function detectTechStack(headers: Record<string, string>, html: string): 
         }
       }
       found.push({
-        category: fp.category, name: fp.name, version,
+        category: fp.category,
+        name: fp.name,
+        version,
         confidence: confidenceScore >= 5 ? "high" : confidenceScore >= 2 ? "medium" : "low",
       });
     }
@@ -123,10 +195,10 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
       ...Object.fromEntries(Object.entries(runtimeHeaders).map(([k, v]) => [k.toLowerCase(), v])),
       "content-type": "text/html;charset=utf-8",
       "cache-control": "public, max-age=1800",
-      "server": "cloudflare",
-      "vary": "Accept-Encoding",
+      server: "cloudflare",
+      vary: "Accept-Encoding",
       "content-encoding": "br",
-      "alt-svc": "h3=\":443\"; ma=86400",
+      "alt-svc": 'h3=":443"; ma=86400',
       "cf-ray": "self-analysis",
     };
     // Prefer build-time HTML, then fetch from ASSETS at runtime, then empty fallback
@@ -135,26 +207,47 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
       try {
         const resp = await env.ASSETS.fetch(new Request(`https://${instanceHost}/index.html`));
         if (resp.ok) html = await resp.text();
-      } catch { /* ignore — fall through to empty */ }
+      } catch {
+        /* ignore — fall through to empty */
+      }
     }
     const { audit, grade } = auditSecurityHeaders(selfHeaders);
-    const techStack = html ? detectTechStack(selfHeaders, html) : [
-      { category: "Web Server", name: "Cloudflare Workers", version: null, confidence: "high" },
-    ];
-    const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] ?? null;
-    const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1] ?? null;
-    const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1] ?? null;
+    const techStack = html
+      ? detectTechStack(selfHeaders, html)
+      : [{ category: "Web Server", name: "Cloudflare Workers", version: null, confidence: "high" }];
+    const ogTitle =
+      html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1] ??
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] ??
+      null;
+    const ogDesc =
+      html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1] ??
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1] ??
+      null;
+    const ogImage =
+      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] ??
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1] ??
+      null;
     let faviconUrl = html.match(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i)?.[1] ?? null;
     if (faviconUrl && !faviconUrl.startsWith("http")) faviconUrl = new URL(faviconUrl, `https://${instanceHost}`).href;
     return {
       redirects: [{ url: `https://${instanceHost}`, status_code: 200, server: "cloudflare", response_time_ms: 1 }],
       headers: { raw: selfHeaders, security_audit: audit, security_grade: grade },
       tech_stack: techStack,
-      meta: { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null, og_title: ogTitle, og_description: ogDesc, og_image: ogImage, favicon_url: faviconUrl }, // robots/sitemap populated by Phase 2 _robots_sitemap check
-      final_url: `https://${instanceHost}`, html, status_code: 200, response_time_ms: 1,
+      meta: {
+        robots_txt: null,
+        robots_txt_exists: false,
+        sitemap_detected: false,
+        sitemap_url: null,
+        sitemap_page_count: null,
+        og_title: ogTitle,
+        og_description: ogDesc,
+        og_image: ogImage,
+        favicon_url: faviconUrl,
+      }, // robots/sitemap populated by Phase 2 _robots_sitemap check
+      final_url: `https://${instanceHost}`,
+      html,
+      status_code: 200,
+      response_time_ms: 1,
     };
   }
 
@@ -169,12 +262,21 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
     const start = Date.now();
     try {
       const res = await fetchWithTimeout(currentUrl, {
-        redirect: "manual", timeout: 8000,
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+        redirect: "manual",
+        timeout: 8000,
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
       });
       const elapsed = Date.now() - start;
       totalTime += elapsed;
-      redirects.push({ url: currentUrl, status_code: res.status, server: res.headers.get("server"), response_time_ms: elapsed });
+      redirects.push({
+        url: currentUrl,
+        status_code: res.status,
+        server: res.headers.get("server"),
+        response_time_ms: elapsed,
+      });
 
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get("location");
@@ -187,23 +289,39 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
       }
       finalStatusCode = res.status;
       finalHeaders = {};
-      res.headers.forEach((v, k) => { finalHeaders[k.toLowerCase()] = v; });
-      try { html = await boundedText(res); } catch { html = ""; }
+      res.headers.forEach((v, k) => {
+        finalHeaders[k.toLowerCase()] = v;
+      });
+      try {
+        html = await boundedText(res);
+      } catch {
+        html = "";
+      }
       break;
-    } catch { /* redirect or network error */
-      if (i === 0 && currentUrl.startsWith("https://")) { currentUrl = `http://${domain}`; continue; }
+    } catch {
+      /* redirect or network error */
+      if (i === 0 && currentUrl.startsWith("https://")) {
+        currentUrl = `http://${domain}`;
+        continue;
+      }
       break;
     }
   }
 
   if (redirects.length === 0) return null;
 
-  const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] ?? null;
-  const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1] ?? null;
-  const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-    ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1] ?? null;
+  const ogTitle =
+    html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1] ??
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i)?.[1] ??
+    null;
+  const ogDesc =
+    html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1] ??
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i)?.[1] ??
+    null;
+  const ogImage =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1] ??
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1] ??
+    null;
   let faviconUrl = html.match(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]+href=["']([^"']+)["']/i)?.[1] ?? null;
   if (faviconUrl && !faviconUrl.startsWith("http")) faviconUrl = new URL(faviconUrl, `https://${domain}`).href;
 
@@ -211,17 +329,43 @@ export async function analyzeHttp(domain: string, instanceHost?: string, env?: E
   const techStack = detectTechStack(finalHeaders, html);
 
   return {
-    redirects, headers: { raw: finalHeaders, security_audit: audit, security_grade: grade },
+    redirects,
+    headers: { raw: finalHeaders, security_audit: audit, security_grade: grade },
     tech_stack: techStack,
-    meta: { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null, og_title: ogTitle, og_description: ogDesc, og_image: ogImage, favicon_url: faviconUrl },
-    final_url: currentUrl, html, status_code: finalStatusCode, response_time_ms: totalTime,
+    meta: {
+      robots_txt: null,
+      robots_txt_exists: false,
+      sitemap_detected: false,
+      sitemap_url: null,
+      sitemap_page_count: null,
+      og_title: ogTitle,
+      og_description: ogDesc,
+      og_image: ogImage,
+      favicon_url: faviconUrl,
+    },
+    final_url: currentUrl,
+    html,
+    status_code: finalStatusCode,
+    response_time_ms: totalTime,
   };
 }
 
 // ─── Robots & Sitemap ────────────────────────────────────────────────
 
-export async function checkRobotsSitemap(domain: string, instanceHost?: string, env?: Env): Promise<Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">> {
-  const result = { robots_txt: null as string | null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null as string | null, sitemap_page_count: null as number | null };
+export async function checkRobotsSitemap(
+  domain: string,
+  instanceHost?: string,
+  _env?: Env,
+): Promise<
+  Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">
+> {
+  const result = {
+    robots_txt: null as string | null,
+    robots_txt_exists: false,
+    sitemap_detected: false,
+    sitemap_url: null as string | null,
+    sitemap_page_count: null as number | null,
+  };
   const isSelf = instanceHost && domain === instanceHost;
 
   // ─── robots.txt ────────────────────────────────────────────────────
@@ -233,10 +377,19 @@ export async function checkRobotsSitemap(domain: string, instanceHost?: string, 
       text = `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml`;
     } else {
       const res = await fetchWithTimeout(`https://${domain}/robots.txt`, { timeout: 5000 });
-      if (res.ok) { const body = await boundedText(res); const lower = body.toLowerCase(); if (body && !lower.includes("<!doctype") && !lower.includes("<html")) text = body; }
+      if (res.ok) {
+        const body = await boundedText(res);
+        const lower = body.toLowerCase();
+        if (body && !lower.includes("<!doctype") && !lower.includes("<html")) text = body;
+      }
     }
-    if (text) { result.robots_txt = text.slice(0, 2000); result.robots_txt_exists = true; }
-  } catch { /* ignore */ }
+    if (text) {
+      result.robots_txt = text.slice(0, 2000);
+      result.robots_txt_exists = true;
+    }
+  } catch {
+    /* ignore */
+  }
 
   // ─── sitemap.xml ───────────────────────────────────────────────────
   try {
@@ -250,11 +403,15 @@ export async function checkRobotsSitemap(domain: string, instanceHost?: string, 
       if (res.ok) text = await boundedText(res);
     }
     if (text && (text.includes("<urlset") || text.includes("<sitemapindex"))) {
-      result.sitemap_detected = true; result.sitemap_url = `https://${domain}/sitemap.xml`;
-      const urlMatches = text.match(/<url>/gi); const sitemapMatches = text.match(/<sitemap>/gi);
+      result.sitemap_detected = true;
+      result.sitemap_url = `https://${domain}/sitemap.xml`;
+      const urlMatches = text.match(/<url>/gi);
+      const sitemapMatches = text.match(/<sitemap>/gi);
       if (urlMatches) result.sitemap_page_count = urlMatches.length;
       else if (sitemapMatches) result.sitemap_page_count = sitemapMatches.length;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return result;
 }

@@ -8,7 +8,7 @@ export const ANALYSIS_CACHE_TTL_MS = 60 * 60 * 1000;
 export function getAnalysisCacheTtlMs(env?: { CACHE_TTL_HOURS?: string }): number {
   if (env?.CACHE_TTL_HOURS) {
     const hours = parseFloat(env.CACHE_TTL_HOURS);
-    if (!isNaN(hours) && hours >= 0) return hours * 60 * 60 * 1000;
+    if (!Number.isNaN(hours) && hours >= 0) return hours * 60 * 60 * 1000;
   }
   return ANALYSIS_CACHE_TTL_MS;
 }

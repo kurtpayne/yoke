@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkCertTransparency } from "../actions/analyze/tier1";
+import type { Check } from "./types";
 
 export const certTransparencyCheck: Check = {
   key: "cert_transparency",

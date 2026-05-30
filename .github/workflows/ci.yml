@@ -12,6 +12,7 @@ on:
       - 'package.json'
       - 'vitest.config.ts'
       - '.github/workflows/ci.yml'
+      - 'biome.json'
   pull_request:
     branches: [main]
     paths:
@@ -92,36 +93,8 @@ jobs:
             echo "✓ Bundle size OK"
           fi
 
-      - name: Lint (TypeScript)
-        run: |
-          # Catch common issues without a full eslint setup
-          echo "Checking for 'as any' casts..."
-          ANY_COUNT=$(grep -rn 'as any' worker/src/ client/src/ --include='*.ts' --include='*.tsx' | grep -v node_modules | grep -v '// eslint-disable' | wc -l || true)
-          if [ "$ANY_COUNT" -gt 0 ]; then
-            echo "::warning::Found $ANY_COUNT 'as any' casts:"
-            grep -rn 'as any' worker/src/ client/src/ --include='*.ts' --include='*.tsx' | grep -v node_modules | grep -v '// eslint-disable' | head -20
-          else
-            echo "✓ No 'as any' casts"
-          fi
-
-          echo "Checking for bare console.log..."
-          LOG_COUNT=$(grep -rn 'console\.log(' worker/src/ --include='*.ts' | grep -v node_modules | grep -v logger.ts | grep -v '// ok' | wc -l || true)
-          if [ "$LOG_COUNT" -gt 0 ]; then
-            echo "::warning::Found $LOG_COUNT bare console.log() calls in worker (use structured logger):"
-            grep -rn 'console\.log(' worker/src/ --include='*.ts' | grep -v node_modules | grep -v logger.ts | grep -v '// ok' | head -20
-          else
-            echo "✓ No bare console.log in worker"
-          fi
-
-          echo "Checking for empty catch blocks..."
-          CATCH_COUNT=$(grep -Prn 'catch\s*\([^)]*\)\s*\{\s*\}' worker/src/ --include='*.ts' | grep -v node_modules | wc -l || true)
-          if [ "$CATCH_COUNT" -gt 0 ]; then
-            echo "::warning::Found $CATCH_COUNT empty catch {} blocks:"
-            grep -Prn 'catch\s*\([^)]*\)\s*\{\s*\}' worker/src/ --include='*.ts' | grep -v node_modules | head -20
-          else
-            echo "✓ No empty catch blocks"
-          fi
-        continue-on-error: true
+      - name: Lint (Biome)
+        run: npx @biomejs/biome check .
 
   deploy:
     needs: test

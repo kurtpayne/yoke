@@ -11,7 +11,7 @@ export async function loadData<T>(kv: KVNamespace | undefined, key: string): Pro
   const cached = cache.get(key);
   if (cached && Date.now() - cached.loaded < TTL) return cached.data as T;
 
-  const raw = await kv.get(key, 'json');
+  const raw = await kv.get(key, "json");
   if (raw) cache.set(key, { data: raw, loaded: Date.now() });
   return raw as T | null;
 }

@@ -1,8 +1,8 @@
 import { Globe } from "lucide-react";
-import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
-import { CliButton, dnsCliCommands } from "./CliModal";
-import { Tooltip } from "./Tooltip";
 import type { AnalysisResult } from "../utils/types";
+import { CliButton, dnsCliCommands } from "./CliModal";
+import { DataRow, ErrorState, Panel, StatusBadge } from "./Panel";
+import { Tooltip } from "./Tooltip";
 
 const TYPE_ORDER = ["A", "AAAA", "CNAME", "MX", "NS", "TXT", "SOA", "CAA"];
 
@@ -21,11 +21,12 @@ const DNS_TYPE_TOOLTIPS: Record<string, string> = {
 
 export function DnsPanel({ data }: { data: AnalysisResult }) {
   const dns = data.dns;
-  if (!dns) return (
-    <Panel title="DNS Records" icon={<Globe size={14} />}>
-      <ErrorState message="DNS lookup failed or returned no records" />
-    </Panel>
-  );
+  if (!dns)
+    return (
+      <Panel title="DNS Records" icon={<Globe size={14} />}>
+        <ErrorState message="DNS lookup failed or returned no records" />
+      </Panel>
+    );
 
   const grouped = new Map<string, typeof dns.records>();
   for (const rec of dns.records) {
@@ -34,9 +35,7 @@ export function DnsPanel({ data }: { data: AnalysisResult }) {
     grouped.set(rec.type, existing);
   }
 
-  const sortedTypes = [...grouped.keys()].sort(
-    (a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b)
-  );
+  const sortedTypes = [...grouped.keys()].sort((a, b) => TYPE_ORDER.indexOf(a) - TYPE_ORDER.indexOf(b));
 
   return (
     <Panel
@@ -64,8 +63,25 @@ export function DnsPanel({ data }: { data: AnalysisResult }) {
               return (
                 <DataRow
                   key={`${type}-${i}`}
-                  label={<span className="flex items-center gap-1">{isSubdomain && <span style={{ color: "var(--accent)", fontSize: "10px", fontFamily: "var(--font-mono)" }}>{rec.name}</span>}TTL {rec.ttl} <Tooltip text={`Time to Live: DNS resolvers cache this record for ${rec.ttl} seconds before re-querying`} help /></span>}
-                  value={<span className="break-all" style={{ fontSize: "11px" }}>{rec.data}</span>}
+                  label={
+                    <span className="flex items-center gap-1">
+                      {isSubdomain && (
+                        <span style={{ color: "var(--accent)", fontSize: "10px", fontFamily: "var(--font-mono)" }}>
+                          {rec.name}
+                        </span>
+                      )}
+                      TTL {rec.ttl}{" "}
+                      <Tooltip
+                        text={`Time to Live: DNS resolvers cache this record for ${rec.ttl} seconds before re-querying`}
+                        help
+                      />
+                    </span>
+                  }
+                  value={
+                    <span className="break-all" style={{ fontSize: "11px" }}>
+                      {rec.data}
+                    </span>
+                  }
                   copyValue={rec.data}
                 />
               );

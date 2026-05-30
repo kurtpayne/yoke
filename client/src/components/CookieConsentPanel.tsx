@@ -1,7 +1,7 @@
+import { AlertTriangle, Check, ChevronDown, ChevronRight, Cookie, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useState } from "react";
-import { Cookie, ShieldCheck, ShieldAlert, AlertTriangle, Check, XCircle, ChevronDown, ChevronRight } from "lucide-react";
-import { Panel, StatusBadge } from "./Panel";
 import type { AnalysisResult, CookieInfoData } from "../utils/types";
+import { Panel, StatusBadge } from "./Panel";
 
 // ─── Cookie row ──────────────────────────────────────────────────────
 
@@ -28,34 +28,44 @@ function CookieRow({ cookie }: { cookie: CookieInfoData }) {
           color: "var(--text)",
         }}
       >
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "11px",
-          fontWeight: 500,
-          flex: 1,
-          textAlign: "left",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          minWidth: 0,
-        }}>
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px",
+            fontWeight: 500,
+            flex: 1,
+            textAlign: "left",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            minWidth: 0,
+          }}
+        >
           {cookie.name}
         </span>
-        <span style={{
-          fontSize: "9px",
-          fontWeight: 600,
-          color: categoryColors[cookie.category] ?? "var(--dim)",
-          textTransform: "uppercase",
-          letterSpacing: "0.03em",
-          flexShrink: 0,
-        }}>
+        <span
+          style={{
+            fontSize: "9px",
+            fontWeight: 600,
+            color: categoryColors[cookie.category] ?? "var(--dim)",
+            textTransform: "uppercase",
+            letterSpacing: "0.03em",
+            flexShrink: 0,
+          }}
+        >
           {cookie.category}
         </span>
-        {expanded ? <ChevronDown size={10} style={{ color: "var(--dim)", flexShrink: 0 }} /> : <ChevronRight size={10} style={{ color: "var(--dim)", flexShrink: 0 }} />}
+        {expanded ? (
+          <ChevronDown size={10} style={{ color: "var(--dim)", flexShrink: 0 }} />
+        ) : (
+          <ChevronRight size={10} style={{ color: "var(--dim)", flexShrink: 0 }} />
+        )}
       </button>
       {expanded && (
         <div className="px-4 pb-2 flex flex-wrap gap-x-3 gap-y-1" style={{ paddingLeft: "1rem", fontSize: "10px" }}>
-          <span style={{ color: "var(--dim)" }}>domain: <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)" }}>{cookie.domain}</span></span>
+          <span style={{ color: "var(--dim)" }}>
+            domain: <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)" }}>{cookie.domain}</span>
+          </span>
           <span style={{ color: cookie.secure ? "var(--success)" : "var(--danger)" }}>
             {cookie.secure ? "✓" : "✗"} Secure
           </span>
@@ -65,9 +75,7 @@ function CookieRow({ cookie }: { cookie: CookieInfoData }) {
           <span style={{ color: cookie.sameSite ? "var(--success)" : "var(--warning)" }}>
             SameSite: {cookie.sameSite ?? "none"}
           </span>
-          {cookie.expires && (
-            <span style={{ color: "var(--dim)" }}>expires: {cookie.expires}</span>
-          )}
+          {cookie.expires && <span style={{ color: "var(--dim)" }}>expires: {cookie.expires}</span>}
         </div>
       )}
     </div>
@@ -120,9 +128,7 @@ export function CookieConsentPanel({ data }: { data: AnalysisResult }) {
           ) : (
             <StatusBadge status="warn" label="No CMP" />
           )}
-          {cc.pre_consent_cookies > 0 && (
-            <StatusBadge status="fail" label={`${cc.pre_consent_cookies} pre-consent`} />
-          )}
+          {cc.pre_consent_cookies > 0 && <StatusBadge status="fail" label={`${cc.pre_consent_cookies} pre-consent`} />}
         </div>
       }
     >
@@ -151,8 +157,18 @@ export function CookieConsentPanel({ data }: { data: AnalysisResult }) {
       </div>
 
       {/* Quick stats row */}
-      <div className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1" style={{ borderBottom: "1px solid var(--border-muted)", fontSize: "11px", fontFamily: "var(--font-ui)", color: "var(--dim)" }}>
-        <span>{cookieCount} cookie{cookieCount !== 1 ? "s" : ""} set</span>
+      <div
+        className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1"
+        style={{
+          borderBottom: "1px solid var(--border-muted)",
+          fontSize: "11px",
+          fontFamily: "var(--font-ui)",
+          color: "var(--dim)",
+        }}
+      >
+        <span>
+          {cookieCount} cookie{cookieCount !== 1 ? "s" : ""} set
+        </span>
         {cc.pre_consent_cookies > 0 && (
           <>
             <span style={{ color: "var(--border)" }}>|</span>
@@ -177,7 +193,10 @@ export function CookieConsentPanel({ data }: { data: AnalysisResult }) {
 
       {/* Compliance flags */}
       {hasIssues && (
-        <div className="px-4 py-2" style={{ borderBottom: "1px solid var(--border-muted)", background: "rgba(248, 81, 73, 0.04)" }}>
+        <div
+          className="px-4 py-2"
+          style={{ borderBottom: "1px solid var(--border-muted)", background: "rgba(248, 81, 73, 0.04)" }}
+        >
           <div className="flex items-center gap-1.5 mb-1">
             <ShieldAlert size={11} style={{ color: "var(--danger)" }} />
             <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 600, color: "var(--danger)" }}>
@@ -194,7 +213,16 @@ export function CookieConsentPanel({ data }: { data: AnalysisResult }) {
       {cookieCount > 0 && (
         <>
           <div className="px-4 py-1.5" style={{ borderBottom: "1px solid var(--border-muted)" }}>
-            <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            <span
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "10px",
+                fontWeight: 600,
+                color: "var(--dim)",
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+              }}
+            >
               Cookies Set ({cookieCount})
             </span>
           </div>

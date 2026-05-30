@@ -139,6 +139,8 @@ cd client && bun run dev         # local Vite dev server
 
 Type checking: `cd worker && bun run typecheck` (must pass with zero errors — CI enforces this).
 
+Linting: `npx @biomejs/biome check .` (must pass with zero errors — CI enforces this). Auto-fix: `npx @biomejs/biome check --write .`. Config in `biome.json`. Covers formatting (2-space indent, double quotes, trailing commas), import sorting, and lint rules across `worker/src/`, `client/src/`, `tests/`, and `client/build.ts`. CSS files excluded (Tailwind v4's `@theme` syntax isn't supported by Biome's parser).
+
 Secrets (OpenRouter, WhoisFreaks, PageSpeed API keys, ADMIN_KEY, SHARE_SECRET) are CF Worker secrets — never in code or wrangler.toml. `SHARE_SECRET` hard-fails if missing (no dev fallback).
 
 ## File Quick Reference

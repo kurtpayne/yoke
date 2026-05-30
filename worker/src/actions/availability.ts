@@ -10,8 +10,8 @@
 // datacenter is identified via request.cf metadata so the UI can show where
 // the probe originated.
 
-import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../helpers";
 import { logApiError } from "../api-errors";
+import { type Env, fetchWithTimeout, getFlyAuthHeaders, getFlyProbeUrl } from "../helpers";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -43,39 +43,53 @@ interface EdgeInfo {
 // ─── DNS Resolution ──────────────────────────────────────────────────
 
 const DNS_RESOLVERS = [
-  { name: "Cloudflare", url: "https://cloudflare-dns.com/dns-query", country_code: "US", country: "United States", city: "Cloudflare" },
-  { name: "Google", url: "https://dns.google/resolve", country_code: "US", country: "United States", city: "Google DNS" },
+  {
+    name: "Cloudflare",
+    url: "https://cloudflare-dns.com/dns-query",
+    country_code: "US",
+    country: "United States",
+    city: "Cloudflare",
+  },
+  {
+    name: "Google",
+    url: "https://dns.google/resolve",
+    country_code: "US",
+    country: "United States",
+    city: "Google DNS",
+  },
   { name: "NextDNS", url: "https://dns.nextdns.io/dns-query", country_code: "EU", country: "Europe", city: "NextDNS" },
 ];
 
 async function resolveViaDoH(domain: string, resolverUrl: string): Promise<string[]> {
   try {
-    const res = await fetchWithTimeout(
-      `${resolverUrl}?name=${encodeURIComponent(domain)}&type=A`,
-      { timeout: 5000, headers: { Accept: "application/dns-json" } }
-    );
+    const res = await fetchWithTimeout(`${resolverUrl}?name=${encodeURIComponent(domain)}&type=A`, {
+      timeout: 5000,
+      headers: { Accept: "application/dns-json" },
+    });
     if (!res.ok) return [];
     // DoH JSON response shape
     const data = (await res.json()) as { Answer?: Array<{ type: number; data: string }> };
-    return (data.Answer ?? [])
-      .filter((a) => a.type === 1)
-      .map((a) => a.data);
+    return (data.Answer ?? []).filter((a) => a.type === 1).map((a) => a.data);
   } catch {
     return [];
   }
 }
 
 async function checkDnsResolvers(domain: string): Promise<AvailabilityResult[]> {
-  const results = await Promise.allSettled(
-    DNS_RESOLVERS.map(r => resolveViaDoH(domain, r.url))
-  );
+  const results = await Promise.allSettled(DNS_RESOLVERS.map((r) => resolveViaDoH(domain, r.url)));
 
   return DNS_RESOLVERS.map((resolver, i) => {
     const r = results[i];
     const ips = r.status === "fulfilled" ? r.value : [];
     return {
       node: `dns-${resolver.name.toLowerCase()}`,
-      location: { country_code: resolver.country_code, country: resolver.country, city: resolver.city, ip: "", asn: "" },
+      location: {
+        country_code: resolver.country_code,
+        country: resolver.country,
+        city: resolver.city,
+        ip: "",
+        asn: "",
+      },
       type: "dns" as const,
       status: (ips.length > 0 ? "up" : "error") as "up" | "error",
       status_code: null,
@@ -99,10 +113,13 @@ type CheckHostResultEntry = [[number, number, string, string, string]] | null;
 type CheckHostResults = Record<string, CheckHostResultEntry>;
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function checkHostProbes(domain: string, env: Env): Promise<{
+async function checkHostProbes(
+  domain: string,
+  env: Env,
+): Promise<{
   results: AvailabilityResult[];
   request_id: string | null;
   permanent_link: string | null;
@@ -112,14 +129,24 @@ async function checkHostProbes(domain: string, env: Env): Promise<{
   try {
     startRes = await fetchWithTimeout(
       `${getFlyProbeUrl(env)}/check-http?host=${encodeURIComponent(domain)}&max_nodes=20`,
-      { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders(env) } }
+      { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders(env) } },
     );
   } catch (e) {
-    logApiError(env.STATS_DB, { api: "fly-probe", status: 0, message: `check-host start: ${String(e).slice(0, 150)}`, domain });
+    logApiError(env.STATS_DB, {
+      api: "fly-probe",
+      status: 0,
+      message: `check-host start: ${String(e).slice(0, 150)}`,
+      domain,
+    });
     return null;
   }
   if (!startRes.ok) {
-    logApiError(env.STATS_DB, { api: "fly-probe", status: startRes.status, message: "check-host start failed", domain });
+    logApiError(env.STATS_DB, {
+      api: "fly-probe",
+      status: startRes.status,
+      message: "check-host start failed",
+      domain,
+    });
     return null;
   }
 
@@ -138,14 +165,14 @@ async function checkHostProbes(domain: string, env: Env): Promise<{
   for (let attempt = 0; attempt < 3; attempt++) {
     await sleep(attempt === 0 ? 3000 : 2000);
     try {
-      const pollRes = await fetchWithTimeout(
-        `${getFlyProbeUrl(env)}/check-result/${check.request_id}`,
-        { timeout: 10000, headers: { Accept: "application/json", ...getFlyAuthHeaders(env) } }
-      );
+      const pollRes = await fetchWithTimeout(`${getFlyProbeUrl(env)}/check-result/${check.request_id}`, {
+        timeout: 10000,
+        headers: { Accept: "application/json", ...getFlyAuthHeaders(env) },
+      });
       if (pollRes.ok) {
         rawResults = (await pollRes.json()) as CheckHostResults;
         // Check if all nodes reported
-        const allDone = nodeEntries.every(([name]) => rawResults![name] != null);
+        const allDone = nodeEntries.every(([name]) => rawResults?.[name] != null);
         if (allDone) break;
       }
     } catch {
@@ -158,13 +185,18 @@ async function checkHostProbes(domain: string, env: Env): Promise<{
   // Step 3: Map to AvailabilityResult
   const results: AvailabilityResult[] = nodeEntries.map(([nodeName, nodeInfo]) => {
     const [cc, country, city, nodeIp, asn] = nodeInfo;
-    const entry = rawResults![nodeName];
+    const entry = rawResults?.[nodeName];
 
     if (!entry || !Array.isArray(entry) || !entry[0]) {
       return {
-        node: nodeName, type: "http" as const, status: "pending" as const,
+        node: nodeName,
+        type: "http" as const,
+        status: "pending" as const,
         location: { country_code: cc, country, city, ip: nodeIp, asn },
-        status_code: null, response_time_ms: null, ip: null, message: "Still checking...",
+        status_code: null,
+        response_time_ms: null,
+        ip: null,
+        message: "Still checking...",
       };
     }
 
@@ -176,10 +208,11 @@ async function checkHostProbes(domain: string, env: Env): Promise<{
     const resolvedIp = typeof r[4] === "string" ? r[4] : null;
 
     return {
-      node: nodeName, type: "http" as const,
+      node: nodeName,
+      type: "http" as const,
       location: { country_code: cc, country, city, ip: nodeIp, asn },
-      status: success ? "up" as const : "down" as const,
-      status_code: !isNaN(statusCode ?? NaN) ? statusCode : null,
+      status: success ? ("up" as const) : ("down" as const),
+      status_code: !Number.isNaN(statusCode ?? NaN) ? statusCode : null,
       response_time_ms: timeSec != null ? Math.round(timeSec * 1000) : null,
       ip: resolvedIp,
       message: statusText,
@@ -194,7 +227,15 @@ async function checkHostProbes(domain: string, env: Env): Promise<{
     return a.response_time_ms - b.response_time_ms;
   });
 
-  return { results, request_id: check.request_id, permanent_link: check.permanent_link ? check.permanent_link.replace('yoke-probe.fly.dev:443', 'check-host.net').replace('yoke-probe.fly.dev', 'check-host.net') : null };
+  return {
+    results,
+    request_id: check.request_id,
+    permanent_link: check.permanent_link
+      ? check.permanent_link
+          .replace("yoke-probe.fly.dev:443", "check-host.net")
+          .replace("yoke-probe.fly.dev", "check-host.net")
+      : null,
+  };
 }
 
 // ─── Fallback: enhanced edge probes ──────────────────────────────────
@@ -210,14 +251,16 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
   try {
     const dnsRes = await fetchWithTimeout(
       `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`,
-      { timeout: 3000, headers: { Accept: "application/dns-json" } }
+      { timeout: 3000, headers: { Accept: "application/dns-json" } },
     );
     if (dnsRes.ok) {
       // DoH JSON response shape
       const dnsData = (await dnsRes.json()) as { Answer?: Array<{ type: number; data: string }> };
       ips = (dnsData.Answer ?? []).filter((a) => a.type === 1).map((a) => a.data);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // HTTPS + HTTP direct probes
   const probes = await Promise.allSettled(
@@ -226,15 +269,23 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
       const start = Date.now();
       try {
         const res = await fetchWithTimeout(url, {
-          method: "HEAD", timeout: 8000, redirect: "follow",
+          method: "HEAD",
+          timeout: 8000,
+          redirect: "follow",
           headers: { "User-Agent": "Yoke/1.0 (Domain Intelligence)" },
         });
         return { proto, ok: res.ok, status: res.status, time_ms: Date.now() - start, error: null as string | null };
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown";
-        return { proto, ok: false, status: null as number | null, time_ms: Date.now() - start, error: msg.includes("abort") ? "Timeout" : msg };
+        return {
+          proto,
+          ok: false,
+          status: null as number | null,
+          time_ms: Date.now() - start,
+          error: msg.includes("abort") ? "Timeout" : msg,
+        };
       }
-    })
+    }),
   );
 
   for (const r of probes) {
@@ -243,7 +294,13 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
     results.push({
       node: `edge-${proto}`,
       type: "http",
-      location: { country_code: edgeCountry, country: edgeCountry, city: `${edgeCity} (${proto.toUpperCase()})`, ip: "", asn: edge.colo ? `CF ${edge.colo}` : "" },
+      location: {
+        country_code: edgeCountry,
+        country: edgeCountry,
+        city: `${edgeCity} (${proto.toUpperCase()})`,
+        ip: "",
+        asn: edge.colo ? `CF ${edge.colo}` : "",
+      },
       status: ok ? "up" : error ? "error" : "down",
       status_code: status,
       response_time_ms: time_ms,
@@ -260,15 +317,23 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
         const start = Date.now();
         try {
           const res = await fetchWithTimeout(`https://${domain}`, {
-            method: "HEAD", timeout: 8000, redirect: "follow",
+            method: "HEAD",
+            timeout: 8000,
+            redirect: "follow",
             headers: { "User-Agent": "Yoke/1.0", Host: domain },
           });
           return { ip, ok: res.ok, status: res.status, time_ms: Date.now() - start, error: null as string | null };
         } catch (e) {
           const msg = e instanceof Error ? e.message : "Unknown";
-          return { ip, ok: false, status: null as number | null, time_ms: Date.now() - start, error: msg.includes("abort") ? "Timeout" : msg };
+          return {
+            ip,
+            ok: false,
+            status: null as number | null,
+            time_ms: Date.now() - start,
+            error: msg.includes("abort") ? "Timeout" : msg,
+          };
         }
-      })
+      }),
     );
 
     for (const r of ipProbes) {
@@ -277,7 +342,13 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
       results.push({
         node: `ip-${ip}`,
         type: "http",
-        location: { country_code: edgeCountry, country: edgeCountry, city: `${edgeCity} → ${ip}`, ip, asn: edge.colo ? `CF ${edge.colo}` : "" },
+        location: {
+          country_code: edgeCountry,
+          country: edgeCountry,
+          city: `${edgeCity} → ${ip}`,
+          ip,
+          asn: edge.colo ? `CF ${edge.colo}` : "",
+        },
         status: ok ? "up" : error ? "error" : "down",
         status_code: status,
         response_time_ms: time_ms,
@@ -292,7 +363,11 @@ async function edgeProbes(domain: string, edge: EdgeInfo): Promise<AvailabilityR
 
 // ─── Main entry point ────────────────────────────────────────────────
 
-export async function checkGlobalAvailability(domain: string, edge?: EdgeInfo, env?: Env): Promise<{
+export async function checkGlobalAvailability(
+  domain: string,
+  edge?: EdgeInfo,
+  env?: Env,
+): Promise<{
   results: AvailabilityResult[];
   request_id: string | null;
   permanent_link: string | null;
@@ -300,10 +375,7 @@ export async function checkGlobalAvailability(domain: string, edge?: EdgeInfo, e
   edge_colo: string | null;
 }> {
   // Run DNS checks and check-host.net probes in parallel
-  const [dnsResults, checkHostResult] = await Promise.all([
-    checkDnsResolvers(domain),
-    checkHostProbes(domain, env!),
-  ]);
+  const [dnsResults, checkHostResult] = await Promise.all([checkDnsResolvers(domain), checkHostProbes(domain, env!)]);
 
   let httpResults: AvailabilityResult[];
   let requestId: string | null = null;

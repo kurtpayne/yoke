@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkWellKnownEndpoints } from "../actions/analyze/tier1";
+import type { Check } from "./types";
 
 export const wellKnownCheck: Check = {
   key: "well_known",

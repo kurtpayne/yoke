@@ -9,7 +9,12 @@ async function apiFetch<T>(url: string, opts?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = await res.text();
     let msg = `API error ${res.status}`;
-    try { const j = JSON.parse(body); if (j.error) msg = j.error; } catch { /* ignore */ }
+    try {
+      const j = JSON.parse(body);
+      if (j.error) msg = j.error;
+    } catch {
+      /* ignore */
+    }
     throw new Error(msg);
   }
   return res.json() as Promise<T>;
@@ -38,7 +43,7 @@ export async function analyzeStream(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Accept": "text/event-stream",
+      Accept: "text/event-stream",
     },
     body: JSON.stringify({ domain, ...(force ? { force: true } : {}) }),
     signal,
@@ -69,7 +74,9 @@ export async function analyzeStream(
       if (j.error) msg = j.error;
       if (j.code) code = j.code;
       if (j.reset) reset = j.reset;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     if (res.status === 429 || code === "RATE_LIMITED") {
       const resetIn = reset ? Math.max(0, reset - Math.floor(Date.now() / 1000)) : 0;
       const mins = Math.ceil(resetIn / 60);
@@ -110,7 +117,9 @@ export async function analyzeStream(
         try {
           const parsed = JSON.parse(eventData);
           onEvent({ type: eventType as StreamEvent["type"], data: parsed });
-        } catch { /* skip malformed */ }
+        } catch {
+          /* skip malformed */
+        }
       }
     }
   }
@@ -120,8 +129,7 @@ export const api = {
   analyzeDomain: (args: { domain: string }) =>
     apiFetch<AnalysisResult>("/api/analyze", { method: "POST", body: JSON.stringify(args) }),
 
-  getRecentLookups: (args: { limit: number }) =>
-    apiFetch<RecentLookupsResult>(`/api/recent?limit=${args.limit}`),
+  getRecentLookups: (args: { limit: number }) => apiFetch<RecentLookupsResult>(`/api/recent?limit=${args.limit}`),
 
   getSubdomains: (args: { domain: string }) =>
     apiFetch<SubdomainsResult>("/api/subdomains", { method: "POST", body: JSON.stringify(args) }),
@@ -219,47 +227,99 @@ export interface AnalysisResult {
   cached: boolean;
   cached_at?: number;
   analyzed_at: string;
-  status: { is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label?: string; http_blocked?: boolean } | null;
+  status: {
+    is_up: boolean;
+    status_code: number | null;
+    response_time_ms: number | null;
+    error: string | null;
+    status_label?: string;
+    http_blocked?: boolean;
+  } | null;
   not_registered?: boolean;
   http_probe_blocked?: boolean;
   is_subdomain?: boolean;
   dns: { records: DnsRecord[] } | null;
   rdap: {
-    registrar: string | null; registration_date: string | null; expiration_date: string | null;
-    last_changed: string | null; nameservers: string[]; status: string[];
-    domain_age_days: number | null; days_until_expiry: number | null;
+    registrar: string | null;
+    registration_date: string | null;
+    expiration_date: string | null;
+    last_changed: string | null;
+    nameservers: string[];
+    status: string[];
+    domain_age_days: number | null;
+    days_until_expiry: number | null;
   } | null;
-  ssl: { grade: string | null; issuer: string | null; valid_from: string | null; valid_to: string | null; protocols: string[]; key_exchange: string | null; error: string | null } | null;
+  ssl: {
+    grade: string | null;
+    issuer: string | null;
+    valid_from: string | null;
+    valid_to: string | null;
+    protocols: string[];
+    key_exchange: string | null;
+    error: string | null;
+  } | null;
   headers: { raw: Record<string, string>; security_audit: SecurityCheck[]; security_grade: string } | null;
   tech_stack: TechItem[] | null;
   ip_info: {
-    ip: string; isp: string | null; org: string | null; asn: string | null;
-    city: string | null; country: string | null; country_code: string | null;
-    lat: number | null; lon: number | null; reverse_dns: string | null; ipv6: string | null;
+    ip: string;
+    isp: string | null;
+    org: string | null;
+    asn: string | null;
+    city: string | null;
+    country: string | null;
+    country_code: string | null;
+    lat: number | null;
+    lon: number | null;
+    reverse_dns: string | null;
+    ipv6: string | null;
   } | null;
   blocklists: BlocklistItem[] | null;
   performance: {
-    score: number | null; fcp: number | null; lcp: number | null; tbt: number | null;
-    cls: number | null; si: number | null; ttfb: number | null;
-    strategy: string; error: string | null; screenshot: string | null;
+    score: number | null;
+    fcp: number | null;
+    lcp: number | null;
+    tbt: number | null;
+    cls: number | null;
+    si: number | null;
+    ttfb: number | null;
+    strategy: string;
+    error: string | null;
+    screenshot: string | null;
   } | null;
   performance_desktop: {
-    score: number | null; fcp: number | null; lcp: number | null; tbt: number | null;
-    cls: number | null; si: number | null; ttfb: number | null;
-    strategy: string; error: string | null; screenshot: string | null;
+    score: number | null;
+    fcp: number | null;
+    lcp: number | null;
+    tbt: number | null;
+    cls: number | null;
+    si: number | null;
+    ttfb: number | null;
+    strategy: string;
+    error: string | null;
+    screenshot: string | null;
   } | null;
   performance_crux: {
-    lcp_p75: number | null; fcp_p75: number | null; cls_p75: number | null;
-    inp_p75: number | null; ttfb_p75: number | null; rtt_p75: number | null;
+    lcp_p75: number | null;
+    fcp_p75: number | null;
+    cls_p75: number | null;
+    inp_p75: number | null;
+    ttfb_p75: number | null;
+    rtt_p75: number | null;
     form_factors: { desktop: number; phone: number; tablet: number } | null;
     collection_period: { first_date: string; last_date: string } | null;
     has_data: boolean;
   } | null;
   redirects: RedirectHop[] | null;
   meta: {
-    robots_txt: string | null; robots_txt_exists: boolean;
-    sitemap_detected: boolean; sitemap_url: string | null; sitemap_page_count: number | null;
-    og_title: string | null; og_description: string | null; og_image: string | null; favicon_url: string | null;
+    robots_txt: string | null;
+    robots_txt_exists: boolean;
+    sitemap_detected: boolean;
+    sitemap_url: string | null;
+    sitemap_page_count: number | null;
+    og_title: string | null;
+    og_description: string | null;
+    og_image: string | null;
+    favicon_url: string | null;
   } | null;
   llms_txt: LlmsTxt | null;
   wayback: WaybackData | null;
@@ -318,50 +378,128 @@ export interface AnalysisResult {
   network_health: NetworkHealthData | null;
 }
 
-export interface DnsRecord { type: string; name: string; ttl: number; data: string; }
-export interface SecurityCheck { header: string; status: "pass" | "fail" | "warning"; value: string | null; recommendation: string | null; }
-export interface TechItem { category: string; name: string; version: string | null; confidence: string; }
-export interface BlocklistItem { name: string; zone: string; listed: boolean; detail: string | null; }
-export interface RedirectHop { url: string; status_code: number; server: string | null; response_time_ms: number; }
-export interface LlmsTxt { found: boolean; content: string | null; full_found: boolean; full_content: string | null; }
-export interface WaybackData { first_snapshot: string | null; last_snapshot: string | null; total_snapshots: number | null; archive_url: string; }
-export interface ObservatoryData { grade: string | null; score: number | null; tests_passed: number | null; tests_total: number | null; }
+export interface DnsRecord {
+  type: string;
+  name: string;
+  ttl: number;
+  data: string;
+}
+export interface SecurityCheck {
+  header: string;
+  status: "pass" | "fail" | "warning";
+  value: string | null;
+  recommendation: string | null;
+}
+export interface TechItem {
+  category: string;
+  name: string;
+  version: string | null;
+  confidence: string;
+}
+export interface BlocklistItem {
+  name: string;
+  zone: string;
+  listed: boolean;
+  detail: string | null;
+}
+export interface RedirectHop {
+  url: string;
+  status_code: number;
+  server: string | null;
+  response_time_ms: number;
+}
+export interface LlmsTxt {
+  found: boolean;
+  content: string | null;
+  full_found: boolean;
+  full_content: string | null;
+}
+export interface WaybackData {
+  first_snapshot: string | null;
+  last_snapshot: string | null;
+  total_snapshots: number | null;
+  archive_url: string;
+}
+export interface ObservatoryData {
+  grade: string | null;
+  score: number | null;
+  tests_passed: number | null;
+  tests_total: number | null;
+}
 export interface EmailAuth {
   spf: { found: boolean; record: string | null; mechanisms: string[]; all_qualifier: string | null };
-  dmarc: { found: boolean; record: string | null; policy: string | null; subdomain_policy: string | null; rua: string | null; ruf: string | null };
+  dmarc: {
+    found: boolean;
+    record: string | null;
+    policy: string | null;
+    subdomain_policy: string | null;
+    rua: string | null;
+    ruf: string | null;
+  };
   dkim_selectors_found: string[];
   bimi?: { found: boolean; record: string | null; logo_url: string | null; authority_url: string | null };
   mta_sts?: { dns_found: boolean; policy_found: boolean; mode: string | null };
   tls_rpt?: { found: boolean; record: string | null; rua: string | null };
 }
-export interface HttpProtocols { http2: boolean; http3: boolean; alt_svc: string | null; }
-export interface CarbonData { co2_per_view: number | null; cleaner_than: number | null; green: boolean; }
+export interface HttpProtocols {
+  http2: boolean;
+  http3: boolean;
+  alt_svc: string | null;
+}
+export interface CarbonData {
+  co2_per_view: number | null;
+  cleaner_than: number | null;
+  green: boolean;
+}
 export interface RobotsParsed {
   blocks: Array<{ user_agent: string; disallow: string[]; allow: string[] }>;
-  crawl_delay: number | null; sitemaps: string[]; interesting_blocked: string[];
-  is_restrictive: boolean; is_missing: boolean;
+  crawl_delay: number | null;
+  sitemaps: string[];
+  interesting_blocked: string[];
+  is_restrictive: boolean;
+  is_missing: boolean;
 }
-export interface JsonLdItem { type: string; name: string | null; description: string | null; url: string | null; }
+export interface JsonLdItem {
+  type: string;
+  name: string | null;
+  description: string | null;
+  url: string | null;
+}
 
 export interface RecentLookupsResult {
   lookups: Array<{ id: number; domain: string; analyzed_at: string; is_up: boolean | null; ssl_grade: string | null }>;
 }
-export interface SubdomainsResult { subdomains: string[]; cached: boolean; }
+export interface SubdomainsResult {
+  subdomains: string[];
+  cached: boolean;
+}
 export interface CompanyInfoResult {
   company: {
-    name: string | null; description: string | null; founded: string | null;
-    ceo: string | null; hq: string | null; industry: string | null;
-    employees: number | null; exchange: string | null; ticker: string | null;
-    logo_url: string | null; wikidata_id: string | null;
+    name: string | null;
+    description: string | null;
+    founded: string | null;
+    ceo: string | null;
+    hq: string | null;
+    industry: string | null;
+    employees: number | null;
+    exchange: string | null;
+    ticker: string | null;
+    logo_url: string | null;
+    wikidata_id: string | null;
     revenue: string | null;
     parent_org: string | null;
     social_links: { platform: string; url: string }[];
     source: string;
   } | null;
   stock: {
-    price: number | null; change: number | null; change_percent: number | null;
-    market_cap: number | null; volume: number | null;
-    high_52w: number | null; low_52w: number | null; currency: string | null;
+    price: number | null;
+    change: number | null;
+    change_percent: number | null;
+    market_cap: number | null;
+    volume: number | null;
+    high_52w: number | null;
+    low_52w: number | null;
+    currency: string | null;
     sparkline?: number[] | null;
   } | null;
   crunchbase_url: string | null;
@@ -376,32 +514,98 @@ export interface SocialResult {
   accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }>;
   cached: boolean;
 }
-export interface ReverseIPResult { domains: string[]; cached: boolean; }
+export interface ReverseIPResult {
+  domains: string[];
+  cached: boolean;
+}
 
 // ─── New v2 types ────────────────────────────────────────────────────
 
-export interface ShodanData { ports: number[]; cpes: string[]; vulns: string[]; tags: string[]; hostnames: string[]; }
-export interface DnssecData { enabled: boolean; has_dnskey: boolean; has_ds: boolean; validated: boolean; }
-export interface HostingData { provider: string | null; cdn: string | null; waf: string | null; }
-export interface SocialMetaData {
-  og: { title: string | null; description: string | null; image: string | null; type: string | null; url: string | null; site_name: string | null; locale: string | null };
-  twitter: { card: string | null; site: string | null; creator: string | null; title: string | null; description: string | null; image: string | null };
-  score: number; missing: string[];
+export interface ShodanData {
+  ports: number[];
+  cpes: string[];
+  vulns: string[];
+  tags: string[];
+  hostnames: string[];
 }
-export interface LegalData { pages_found: Array<{ name: string; url: string }>; cookie_consent_detected: boolean; consent_provider: string | null; }
-export interface CookieSecurityData { cookies: Array<{ name: string; secure: boolean; httponly: boolean; samesite: string | null }>; issues: string[]; }
-export interface CompressionData { encoding: string | null; vary_accept_encoding: boolean; }
+export interface DnssecData {
+  enabled: boolean;
+  has_dnskey: boolean;
+  has_ds: boolean;
+  validated: boolean;
+}
+export interface HostingData {
+  provider: string | null;
+  cdn: string | null;
+  waf: string | null;
+}
+export interface SocialMetaData {
+  og: {
+    title: string | null;
+    description: string | null;
+    image: string | null;
+    type: string | null;
+    url: string | null;
+    site_name: string | null;
+    locale: string | null;
+  };
+  twitter: {
+    card: string | null;
+    site: string | null;
+    creator: string | null;
+    title: string | null;
+    description: string | null;
+    image: string | null;
+  };
+  score: number;
+  missing: string[];
+}
+export interface LegalData {
+  pages_found: Array<{ name: string; url: string }>;
+  cookie_consent_detected: boolean;
+  consent_provider: string | null;
+}
+export interface CookieSecurityData {
+  cookies: Array<{ name: string; secure: boolean; httponly: boolean; samesite: string | null }>;
+  issues: string[];
+}
+export interface CompressionData {
+  encoding: string | null;
+  vary_accept_encoding: boolean;
+}
 export interface CacheAnalysisData {
-  cache_control: { raw: string | null; directives: Record<string, string | true>; effective_ttl_seconds: number | null; ttl_human: string | null };
+  cache_control: {
+    raw: string | null;
+    directives: Record<string, string | true>;
+    effective_ttl_seconds: number | null;
+    ttl_human: string | null;
+  };
   cdn_cache: { status: string | null; provider: string | null; age_seconds: number | null };
   conditional: { etag: boolean; last_modified: boolean; varies_on: string[] };
   verdict: "excellent" | "good" | "fair" | "poor" | "none";
   verdict_label: string;
   issues: string[];
 }
-export interface AiReadinessData { score: number; max_score: number; grade: string; checks: Array<{ name: string; passed: boolean; points: number }>; rss_feed: string | null; ans: { ans_found: boolean; ans_records: string[]; agents_found: boolean; agents_records: string[]; agent_json_found: boolean } | null; }
+export interface AiReadinessData {
+  score: number;
+  max_score: number;
+  grade: string;
+  checks: Array<{ name: string; passed: boolean; points: number }>;
+  rss_feed: string | null;
+  ans: {
+    ans_found: boolean;
+    ans_records: string[];
+    agents_found: boolean;
+    agents_records: string[];
+    agent_json_found: boolean;
+  } | null;
+}
 
-export interface WordPressPlugin { slug: string; name: string; category: string | null; }
+export interface WordPressPlugin {
+  slug: string;
+  name: string;
+  category: string | null;
+}
 export interface WordPressData {
   detected: true;
   version: string | null;
@@ -547,7 +751,14 @@ export interface GreynoiseData {
 
 export type Axis = "security" | "performance" | "reliability" | "trust" | "visibility";
 export type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
-export type ArchetypeName = "commerce" | "content" | "application" | "corporate" | "infrastructure" | "institutional" | "general";
+export type ArchetypeName =
+  | "commerce"
+  | "content"
+  | "application"
+  | "corporate"
+  | "infrastructure"
+  | "institutional"
+  | "general";
 
 export interface ScoreFinding {
   signal: string;
@@ -716,7 +927,6 @@ export interface CookieConsentData {
   compliance_flags: string[];
   p3p_present: boolean;
 }
-
 
 // ─── WAF Detection types ──────────────────────────────────────────────
 

@@ -3,7 +3,7 @@
 
 import type { Env } from "./helpers";
 import { getBaseUrl, YOKE_VERSION } from "./helpers";
-import { PRIVACY_HTML, TERMS_HTML, ABOUT_HTML, SECURITY_TXT } from "./pages";
+import { ABOUT_HTML, PRIVACY_HTML, SECURITY_TXT, TERMS_HTML } from "./pages";
 
 // ─── Security Headers ────────────────────────────────────────────────
 // Applied to all HTML responses served by the worker.
@@ -14,7 +14,8 @@ export function getHtmlSecurityHeaders(baseUrl?: string): Record<string, string>
     "X-Content-Type-Options": "nosniff",
     "X-XSS-Protection": "0",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), hid=(), ambient-light-sensor=(), accelerometer=(), gyroscope=(), magnetometer=()",
+    "Permissions-Policy":
+      "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), hid=(), ambient-light-sensor=(), accelerometer=(), gyroscope=(), magnetometer=()",
     "Content-Security-Policy":
       "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; " +
       "style-src 'self' 'unsafe-inline'; " +
@@ -51,10 +52,13 @@ function textResponse(body: string, contentType: string, cacheSeconds = 86400): 
 // ─── Content Negotiation ─────────────────────────────────────────────
 // Determines whether a request wants JSON (API client) or HTML (browser).
 
-const DOMAIN_PATH_RE = /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
+const DOMAIN_PATH_RE =
+  /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
 // Matches /domain.tld/anything — used to strip trailing path segments
-const DOMAIN_WITH_PATH_RE = /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))\/.+$/;
-const COMPARE_PATH_RE = /^\/compare\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
+const DOMAIN_WITH_PATH_RE =
+  /^\/([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))\/.+$/;
+const COMPARE_PATH_RE =
+  /^\/compare\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))\/([a-zA-Z0-9][a-zA-Z0-9.-]+\.(?:[a-zA-Z]{2,}|xn--[a-zA-Z0-9-]+))$/;
 
 export function wantsJSON(request: Request): boolean {
   const accept = request.headers.get("Accept") || "";
@@ -89,20 +93,20 @@ export function wantsJSON(request: Request): boolean {
     ua.includes("twitterbot") ||
     ua.includes("facebookexternalhit") ||
     ua.includes("facebot") ||
-    ua.includes("instagram") ||     // Instagrambot + IG in-app browser
-    ua.includes("fban") ||           // FB/IG app embedded browser (FBAN/FBIOS)
-    ua.includes("fbav") ||           // FB/IG app version marker
+    ua.includes("instagram") || // Instagrambot + IG in-app browser
+    ua.includes("fban") || // FB/IG app embedded browser (FBAN/FBIOS)
+    ua.includes("fbav") || // FB/IG app version marker
     ua.includes("applebot") ||
     ua.includes("iframely") ||
     ua.includes("embedly") ||
     ua.includes("preview") ||
-    ua.includes("googlebot") ||      // Google's crawler
-    ua.includes("bingbot") ||        // Bing's crawler
-    ua.includes("yandex") ||         // Yandex
-    ua.includes("baiduspider") ||    // Baidu
-    ua.includes("duckduckbot") ||    // DuckDuckGo
-    ua.includes("pinterestbot") ||   // Pinterest
-    ua.includes("redditbot")         // Reddit
+    ua.includes("googlebot") || // Google's crawler
+    ua.includes("bingbot") || // Bing's crawler
+    ua.includes("yandex") || // Yandex
+    ua.includes("baiduspider") || // Baidu
+    ua.includes("duckduckbot") || // DuckDuckGo
+    ua.includes("pinterestbot") || // Pinterest
+    ua.includes("redditbot") // Reddit
   )
     return false;
   // */* with no text/html preference = likely programmatic
@@ -130,12 +134,12 @@ export function matchComparePath(path: string): [string, string] | null {
 
 /** Escape a string for safe injection into HTML attribute values. */
 function escHtmlAttr(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Escape a string for safe injection into HTML text content (e.g. <title>). */
 function escHtmlText(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function injectOgTags(html: string, opts: { title: string; description: string; url: string }): string {
@@ -167,11 +171,7 @@ async function getIndexHtml(env: Env, requestUrl: string): Promise<string> {
 // Handles non-API routes: static pages, domain paths with OG tags, and SPA fallback.
 // Returns null if the route is not handled (caller should proceed to API routing).
 
-export async function handleSPARoute(
-  request: Request,
-  env: Env,
-  path: string,
-): Promise<Response | null> {
+export async function handleSPARoute(request: Request, env: Env, path: string): Promise<Response | null> {
   const method = request.method;
   const baseUrl = getBaseUrl(request, env);
 
@@ -186,7 +186,7 @@ export async function handleSPARoute(
   if (method === "GET" && path === "/install.sh") {
     return new Response("", {
       status: 302,
-      headers: { "Location": "https://raw.githubusercontent.com/yokedotlol/yoke/main/cli/install.sh" },
+      headers: { Location: "https://raw.githubusercontent.com/yokedotlol/yoke/main/cli/install.sh" },
     });
   }
   if (method === "GET" && path === "/privacy") {
@@ -209,7 +209,15 @@ export async function handleSPARoute(
   const domainMatch = matchDomainPath(path);
   if (domainMatch && method === "GET") {
     // Skip paths that look like static files, not domains
-    if (path.endsWith(".js") || path.endsWith(".css") || path.endsWith(".map") || path.endsWith(".ico") || path.endsWith(".png") || path.endsWith(".svg") || path.endsWith(".woff2")) {
+    if (
+      path.endsWith(".js") ||
+      path.endsWith(".css") ||
+      path.endsWith(".map") ||
+      path.endsWith(".ico") ||
+      path.endsWith(".png") ||
+      path.endsWith(".svg") ||
+      path.endsWith(".woff2")
+    ) {
       return null; // let asset handler deal with it
     }
 
@@ -226,7 +234,7 @@ export async function handleSPARoute(
       description: `Free domain intelligence report for ${domain} — DNS, SSL, WHOIS, security audit, tech stack, performance, and more.`,
       url: `${baseUrl}/${domain}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=1800", "Vary": "Accept" }, baseUrl);
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=1800", Vary: "Accept" }, baseUrl);
   }
 
   // ── Compare path: SPA with OG tags ──
@@ -239,7 +247,7 @@ export async function handleSPARoute(
       description: `Side-by-side domain comparison of ${d1} and ${d2} — security, performance, reliability, trust, and visibility scores.`,
       url: `${baseUrl}/compare/${d1}/${d2}`,
     });
-    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=1800", "Vary": "Accept" }, baseUrl);
+    return htmlResponse(ogHtml, { "Cache-Control": "public, max-age=1800", Vary: "Accept" }, baseUrl);
   }
 
   // ── Domain with trailing path: /github.com/kurtpayne → redirect to /github.com ──
@@ -247,7 +255,7 @@ export async function handleSPARoute(
   if (domainWithPathMatch && method === "GET") {
     return new Response(null, {
       status: 301,
-      headers: { "Location": `${baseUrl}/${domainWithPathMatch}` },
+      headers: { Location: `${baseUrl}/${domainWithPathMatch}` },
     });
   }
 
@@ -300,15 +308,12 @@ async function serveDomainJSON(request: Request, env: Env, domain: string): Prom
         "X-Yoke-Version": YOKE_VERSION,
         "X-Yoke-Docs": `${baseUrl}/api/docs`,
         "Cache-Control": "public, max-age=1800",
-        "Vary": "Accept",
+        Vary: "Accept",
       },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analysis failed";
-    return jsonResponse(
-      { error: msg, _meta: { api_version: YOKE_VERSION, docs: `${baseUrl}/api/docs` } },
-      500,
-    );
+    return jsonResponse({ error: msg, _meta: { api_version: YOKE_VERSION, docs: `${baseUrl}/api/docs` } }, 500);
   }
 }
 

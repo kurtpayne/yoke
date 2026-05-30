@@ -25,7 +25,7 @@ export interface VulnerableLibrary {
  * Handles 2-part (1.6) and 3-part (3.5.1) versions. Non-numeric parts are ignored.
  */
 export function isVersionBelow(version: string, threshold: string): boolean {
-  const parse = (v: string) => v.split(".").map(p => parseInt(p, 10) || 0);
+  const parse = (v: string) => v.split(".").map((p) => parseInt(p, 10) || 0);
   const a = parse(version);
   const b = parse(threshold);
   const len = Math.max(a.length, b.length);
@@ -73,11 +73,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
   // ── lodash ─────────────────────────────────────────────────────
   {
     name: "lodash",
-    patterns: [
-      /lodash[.-](\d+\.\d+\.\d+)/i,
-      /lodash\/(\d+\.\d+\.\d+)\//i,
-      /lodash(?:\.min)?\.js.*?(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/lodash[.-](\d+\.\d+\.\d+)/i, /lodash\/(\d+\.\d+\.\d+)\//i, /lodash(?:\.min)?\.js.*?(\d+\.\d+\.\d+)/i],
     vulnerableBelow: "4.17.21",
     cves: ["CVE-2021-23337", "CVE-2020-28500"],
     severity: "medium",
@@ -86,11 +82,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
   // ── moment.js ──────────────────────────────────────────────────
   {
     name: "moment.js",
-    patterns: [
-      /moment[.-](\d+\.\d+\.\d+)/i,
-      /moment\/(\d+\.\d+\.\d+)\//i,
-      /moment(?:\.min)?\.js.*?(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/moment[.-](\d+\.\d+\.\d+)/i, /moment\/(\d+\.\d+\.\d+)\//i, /moment(?:\.min)?\.js.*?(\d+\.\d+\.\d+)/i],
     vulnerableBelow: null, // all versions — deprecated
     cves: ["CVE-2022-31129"],
     severity: "medium",
@@ -220,11 +212,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
   // ── Chart.js ───────────────────────────────────────────────────
   {
     name: "Chart.js",
-    patterns: [
-      /chart[.-](\d+\.\d+\.\d+)/i,
-      /chart\.js\/(\d+\.\d+\.\d+)\//i,
-      /Chart(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/chart[.-](\d+\.\d+\.\d+)/i, /chart\.js\/(\d+\.\d+\.\d+)\//i, /Chart(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i],
     vulnerableBelow: "3.0.0",
     cves: [],
     severity: "medium",
@@ -259,11 +247,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
   // ── D3.js ──────────────────────────────────────────────────────
   {
     name: "D3.js",
-    patterns: [
-      /d3[.-](\d+\.\d+\.\d+)/i,
-      /d3\/(\d+\.\d+\.\d+)\//i,
-      /d3(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/d3[.-](\d+\.\d+\.\d+)/i, /d3\/(\d+\.\d+\.\d+)\//i, /d3(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i],
     vulnerableBelow: "6.0.0",
     cves: [],
     severity: "medium",
@@ -272,11 +256,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
   // ── Ember.js ───────────────────────────────────────────────────
   {
     name: "Ember.js",
-    patterns: [
-      /ember[.-](\d+\.\d+\.\d+)/i,
-      /ember\.js\/(\d+\.\d+\.\d+)\//i,
-      /ember(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/ember[.-](\d+\.\d+\.\d+)/i, /ember\.js\/(\d+\.\d+\.\d+)\//i, /ember(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i],
     vulnerableBelow: "3.24.0",
     cves: ["CVE-2021-4127"],
     severity: "medium",
@@ -298,11 +278,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
   // ── Dojo ───────────────────────────────────────────────────────
   {
     name: "Dojo",
-    patterns: [
-      /dojo[.-](\d+\.\d+\.\d+)/i,
-      /dojo\/(\d+\.\d+\.\d+)\//i,
-      /dojo(?:\.min)?\.js.*?(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/dojo[.-](\d+\.\d+\.\d+)/i, /dojo\/(\d+\.\d+\.\d+)\//i, /dojo(?:\.min)?\.js.*?(\d+\.\d+\.\d+)/i],
     vulnerableBelow: "1.16.0",
     cves: ["CVE-2020-5258", "CVE-2020-5259"],
     severity: "medium",
@@ -338,11 +314,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
   // ── Axios ──────────────────────────────────────────────────────
   {
     name: "Axios",
-    patterns: [
-      /axios[.-](\d+\.\d+\.\d+)/i,
-      /axios\/(\d+\.\d+\.\d+)\//i,
-      /axios(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/axios[.-](\d+\.\d+\.\d+)/i, /axios\/(\d+\.\d+\.\d+)\//i, /axios(?:\.min)?\.js.*?v(\d+\.\d+\.\d+)/i],
     vulnerableBelow: "0.21.1",
     cves: ["CVE-2020-28168"],
     severity: "medium",
@@ -352,11 +324,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
 
   {
     name: "YUI",
-    patterns: [
-      /yui[.-](\d+\.\d+\.\d+)/i,
-      /yui\/(\d+\.\d+\.\d+)\//i,
-      /yui(?:-min|\.min)?\.js.*?(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/yui[.-](\d+\.\d+\.\d+)/i, /yui\/(\d+\.\d+\.\d+)\//i, /yui(?:-min|\.min)?\.js.*?(\d+\.\d+\.\d+)/i],
     vulnerableBelow: null,
     cves: [],
     severity: "medium",
@@ -378,11 +346,7 @@ export const VULNERABLE_LIBRARIES: VulnerableLibrary[] = [
 
   {
     name: "MooTools",
-    patterns: [
-      /mootools[.-](\d+\.\d+\.\d+)/i,
-      /mootools\/(\d+\.\d+\.\d+)\//i,
-      /MooTools.*?(\d+\.\d+\.\d+)/i,
-    ],
+    patterns: [/mootools[.-](\d+\.\d+\.\d+)/i, /mootools\/(\d+\.\d+\.\d+)\//i, /MooTools.*?(\d+\.\d+\.\d+)/i],
     vulnerableBelow: null,
     cves: [],
     severity: "medium",
@@ -440,7 +404,7 @@ export function scanForVulnerableLibraries(html: string): VulnScanResult[] {
       for (const src of scriptSrcs) {
         const match = pattern.exec(src);
         pattern.lastIndex = 0; // reset stateful regex
-        if (match && match[1]) {
+        if (match?.[1]) {
           const version = match[1];
           const key = `${lib.name}:${version}`;
           if (seen.has(key)) continue;
@@ -466,19 +430,15 @@ export function scanForVulnerableLibraries(html: string): VulnScanResult[] {
       }
 
       // Check inline content (version comments like /* jQuery v3.4.1 */)
-      if (!seen.has(lib.name + ":")) {
+      if (!seen.has(`${lib.name}:`)) {
         const inlineMatch = pattern.exec(inlineContent);
         pattern.lastIndex = 0;
-        if (inlineMatch && inlineMatch[1]) {
+        if (inlineMatch?.[1]) {
           const version = inlineMatch[1];
           const key = `${lib.name}:${version}`;
           if (seen.has(key)) continue;
 
-          const isVuln = lib.eol
-            ? true
-            : lib.vulnerableBelow
-              ? isVersionBelow(version, lib.vulnerableBelow)
-              : true;
+          const isVuln = lib.eol ? true : lib.vulnerableBelow ? isVersionBelow(version, lib.vulnerableBelow) : true;
 
           if (isVuln) {
             seen.add(key);

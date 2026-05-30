@@ -1,7 +1,8 @@
 // Build script for the Yoke client using Bun's native bundler + Tailwind CSS v4
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
+
 import tailwind from "bun-plugin-tailwind";
+import { mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
 
 const outdir = join(import.meta.dir, "dist");
 mkdirSync(outdir, { recursive: true });
@@ -35,22 +36,22 @@ if (!result.success) {
 }
 
 // Find outputs
-const jsOutputs = result.outputs.filter(o => o.path.endsWith(".js"));
-const cssOutput = result.outputs.find(o => o.path.endsWith(".css"));
+const jsOutputs = result.outputs.filter((o) => o.path.endsWith(".js"));
+const cssOutput = result.outputs.find((o) => o.path.endsWith(".css"));
 
 // Entry point is the one matching the entrypoint name pattern
-const jsEntry = jsOutputs.find(o => o.path.includes("/main-")) ?? jsOutputs[0];
+const jsEntry = jsOutputs.find((o) => o.path.includes("/main-")) ?? jsOutputs[0];
 
 if (!jsEntry) {
   console.error("No JS entry output found");
   process.exit(1);
 }
 
-const jsPath = jsEntry.path.replace(outdir + "/", "");
-const cssPath = cssOutput ? cssOutput.path.replace(outdir + "/", "") : null;
+const jsPath = jsEntry.path.replace(`${outdir}/`, "");
+const cssPath = cssOutput ? cssOutput.path.replace(`${outdir}/`, "") : null;
 
 // Report all chunks
-const jsChunks = jsOutputs.filter(o => o !== jsEntry);
+const jsChunks = jsOutputs.filter((o) => o !== jsEntry);
 console.log(`  Chunks: ${jsChunks.length} lazy-loaded chunk(s)`);
 
 // Generate index.html
@@ -187,6 +188,7 @@ writeFileSync(join(outdir, "index.html"), html);
 
 // Copy logo/favicon images to dist for social crawlers and /logo.png, /favicon.ico routes
 import { copyFileSync, cpSync } from "fs";
+
 const assetsDir = join(import.meta.dir, "..", "assets", "logo");
 copyFileSync(join(assetsDir, "mark-transparent-512.png"), join(outdir, "logo.png"));
 copyFileSync(join(assetsDir, "icon-32.png"), join(outdir, "favicon.ico"));

@@ -1,6 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-type Theme = "dark" | "light" | "arcade" | "deep-blue" | "enterprise" | "newsprint" | "lcars" | "synthwave" | "botanical" | "slate" | "rose" | "high-contrast";
+type Theme =
+  | "dark"
+  | "light"
+  | "arcade"
+  | "deep-blue"
+  | "enterprise"
+  | "newsprint"
+  | "lcars"
+  | "synthwave"
+  | "botanical"
+  | "slate"
+  | "rose"
+  | "high-contrast";
 
 const THEMES: { id: Theme; label: string; emoji: string }[] = [
   { id: "dark", label: "Midnight", emoji: "🌙" },
@@ -25,13 +37,19 @@ function getInitialTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && VALID_THEMES.has(stored)) return stored as Theme;
-  } catch { /* localStorage blocked (e.g. iframe/extension context) */ }
+  } catch {
+    /* localStorage blocked (e.g. iframe/extension context) */
+  }
   return "dark";
 }
 
 function applyTheme(theme: Theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    /* */
+  }
 }
 
 export function ThemeToggle() {

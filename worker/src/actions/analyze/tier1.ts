@@ -1,8 +1,14 @@
-import { fetchWithTimeout, boundedText, safeFetchWithRedirects } from "../../helpers";
+import { boundedText, fetchWithTimeout, safeFetchWithRedirects } from "../../helpers";
 import type {
-  DnsRecord, CertTransparencyResult, CertIssuance, SecurityTxtResult,
-  GreenHostingResult, WellKnownEndpoint, WellKnownResult,
-  CaaDisplayResult, GreynoiseResult,
+  CaaDisplayResult,
+  CertIssuance,
+  CertTransparencyResult,
+  DnsRecord,
+  GreenHostingResult,
+  GreynoiseResult,
+  SecurityTxtResult,
+  WellKnownEndpoint,
+  WellKnownResult,
 } from "./types";
 
 // ─── Tier 1: Certificate Transparency (CertSpotter) ─────────────────
@@ -13,8 +19,21 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
       `https://api.certspotter.com/v1/issuances?domain=${encodeURIComponent(domain)}&include_subdomains=true&expand=dns_names`,
       { timeout: 10000 },
     );
-    if (!res.ok) return { subdomains: [], total_certs: 0, has_wildcard: false, issuers: [], certs: [], error: `HTTP ${res.status}` };
-    const issuances = await res.json() as Array<{ dns_names: string[]; issuer?: { name?: string }; not_before?: string; not_after?: string }>;
+    if (!res.ok)
+      return {
+        subdomains: [],
+        total_certs: 0,
+        has_wildcard: false,
+        issuers: [],
+        certs: [],
+        error: `HTTP ${res.status}`,
+      };
+    const issuances = (await res.json()) as Array<{
+      dns_names: string[];
+      issuer?: { name?: string };
+      not_before?: string;
+      not_after?: string;
+    }>;
     const allNames = new Set<string>();
     const issuersSet = new Set<string>();
     const certs: CertIssuance[] = [];
@@ -23,8 +42,11 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
       const dnsNames: string[] = [];
       if (iss.dns_names) {
         for (const name of iss.dns_names) {
-          if (name.startsWith("*.")) { hasWildcard = true; }
-          else { allNames.add(name.toLowerCase()); }
+          if (name.startsWith("*.")) {
+            hasWildcard = true;
+          } else {
+            allNames.add(name.toLowerCase());
+          }
           dnsNames.push(name);
         }
       }
@@ -41,10 +63,24 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
     }
     // Remove the domain itself and sort
     allNames.delete(domain.toLowerCase());
-    const subdomains = [...allNames].filter(n => n.endsWith(`.${domain.toLowerCase()}`)).sort();
-    return { subdomains, total_certs: issuances.length, has_wildcard: hasWildcard, issuers: [...issuersSet], certs, error: null };
+    const subdomains = [...allNames].filter((n) => n.endsWith(`.${domain.toLowerCase()}`)).sort();
+    return {
+      subdomains,
+      total_certs: issuances.length,
+      has_wildcard: hasWildcard,
+      issuers: [...issuersSet],
+      certs,
+      error: null,
+    };
   } catch (e) {
-    return { subdomains: [], total_certs: 0, has_wildcard: false, issuers: [], certs: [], error: e instanceof Error ? e.message : "Unknown error" };
+    return {
+      subdomains: [],
+      total_certs: 0,
+      has_wildcard: false,
+      issuers: [],
+      certs: [],
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
   }
 }
 
@@ -52,9 +88,19 @@ export async function checkCertTransparency(domain: string): Promise<CertTranspa
 
 export async function checkSecurityTxt(domain: string, instanceHost?: string): Promise<SecurityTxtResult> {
   const empty: SecurityTxtResult = {
-    found: false, contact: [], encryption: null, acknowledgments: null, policy: null,
-    hiring: null, canonical: null, preferred_languages: null, expires: null,
-    is_expired: false, has_bug_bounty: false, bug_bounty_platform: null, raw: null,
+    found: false,
+    contact: [],
+    encryption: null,
+    acknowledgments: null,
+    policy: null,
+    hiring: null,
+    canonical: null,
+    preferred_languages: null,
+    expires: null,
+    is_expired: false,
+    has_bug_bounty: false,
+    bug_bounty_platform: null,
+    raw: null,
   };
 
   // Self-analysis bypass: CF Workers can't fetch their own domain.
@@ -65,7 +111,8 @@ export async function checkSecurityTxt(domain: string, instanceHost?: string): P
     return parseSecurityTxt(text, empty, `https://${domain}/.well-known/security.txt`);
   }
 
-  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+  const ua =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
   // Try both with and without www
   const urls = [`https://${domain}/.well-known/security.txt`];
@@ -77,48 +124,81 @@ export async function checkSecurityTxt(domain: string, instanceHost?: string): P
       const res = await safeFetchWithRedirects(url, { timeout: 6000, headers: { "User-Agent": ua } });
       if (!res.ok) continue;
       const body = await boundedText(res);
-      if (body.includes("Contact:") || body.includes("contact:")) { text = body; break; }
-    } catch { /* try next */ }
+      if (body.includes("Contact:") || body.includes("contact:")) {
+        text = body;
+        break;
+      }
+    } catch {
+      /* try next */
+    }
   }
 
   if (!text) return empty;
   return parseSecurityTxt(text, empty, urls[0]!);
 }
 
-function parseSecurityTxt(text: string, empty: SecurityTxtResult, canonicalUrl: string): SecurityTxtResult {
-    const result: SecurityTxtResult = { ...empty, found: true, raw: text.slice(0, 2000) };
-    for (const line of text.split("\n")) {
-      const trimmed = line.split("#")[0]?.trim() ?? "";
-      if (!trimmed) continue;
-      const colonIdx = trimmed.indexOf(":");
-      if (colonIdx < 0) continue;
-      const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
-      const value = trimmed.substring(colonIdx + 1).trim();
-      switch (key) {
-        case "contact": result.contact.push(value); break;
-        case "encryption": result.encryption = value; break;
-        case "acknowledgments": case "acknowledgements": result.acknowledgments = value; break;
-        case "policy": result.policy = value; break;
-        case "hiring": result.hiring = value; break;
-        case "canonical": result.canonical = value; break;
-        case "preferred-languages": result.preferred_languages = value; break;
-        case "expires": result.expires = value; break;
-      }
+function parseSecurityTxt(text: string, empty: SecurityTxtResult, _canonicalUrl: string): SecurityTxtResult {
+  const result: SecurityTxtResult = { ...empty, found: true, raw: text.slice(0, 2000) };
+  for (const line of text.split("\n")) {
+    const trimmed = line.split("#")[0]?.trim() ?? "";
+    if (!trimmed) continue;
+    const colonIdx = trimmed.indexOf(":");
+    if (colonIdx < 0) continue;
+    const key = trimmed.substring(0, colonIdx).trim().toLowerCase();
+    const value = trimmed.substring(colonIdx + 1).trim();
+    switch (key) {
+      case "contact":
+        result.contact.push(value);
+        break;
+      case "encryption":
+        result.encryption = value;
+        break;
+      case "acknowledgments":
+      case "acknowledgements":
+        result.acknowledgments = value;
+        break;
+      case "policy":
+        result.policy = value;
+        break;
+      case "hiring":
+        result.hiring = value;
+        break;
+      case "canonical":
+        result.canonical = value;
+        break;
+      case "preferred-languages":
+        result.preferred_languages = value;
+        break;
+      case "expires":
+        result.expires = value;
+        break;
     }
-    // Check expiry
-    if (result.expires) {
-      try {
-        const expiryDate = new Date(result.expires);
-        result.is_expired = expiryDate.getTime() < Date.now();
-      } catch { /* ignore invalid date */ }
+  }
+  // Check expiry
+  if (result.expires) {
+    try {
+      const expiryDate = new Date(result.expires);
+      result.is_expired = expiryDate.getTime() < Date.now();
+    } catch {
+      /* ignore invalid date */
     }
-    // Detect bug bounty platforms
-    const allText = (result.contact.join(" ") + " " + (result.policy ?? "")).toLowerCase();
-    if (allText.includes("hackerone")) { result.has_bug_bounty = true; result.bug_bounty_platform = "HackerOne"; }
-    else if (allText.includes("bugcrowd")) { result.has_bug_bounty = true; result.bug_bounty_platform = "Bugcrowd"; }
-    else if (allText.includes("intigriti")) { result.has_bug_bounty = true; result.bug_bounty_platform = "Intigriti"; }
-    else if (allText.includes("yeswehack")) { result.has_bug_bounty = true; result.bug_bounty_platform = "YesWeHack"; }
-    return result;
+  }
+  // Detect bug bounty platforms
+  const allText = `${result.contact.join(" ")} ${result.policy ?? ""}`.toLowerCase();
+  if (allText.includes("hackerone")) {
+    result.has_bug_bounty = true;
+    result.bug_bounty_platform = "HackerOne";
+  } else if (allText.includes("bugcrowd")) {
+    result.has_bug_bounty = true;
+    result.bug_bounty_platform = "Bugcrowd";
+  } else if (allText.includes("intigriti")) {
+    result.has_bug_bounty = true;
+    result.bug_bounty_platform = "Intigriti";
+  } else if (allText.includes("yeswehack")) {
+    result.has_bug_bounty = true;
+    result.bug_bounty_platform = "YesWeHack";
+  }
+  return result;
 }
 
 // ─── Tier 1: Green Web Foundation ───────────────────────────────────
@@ -130,10 +210,20 @@ export async function checkGreenHosting(domain: string): Promise<GreenHostingRes
       { timeout: 8000 },
     );
     if (!res.ok) return { green: false, hosted_by: null, hosted_by_website: null, error: `HTTP ${res.status}` };
-    const data = await res.json() as { green: boolean; hosted_by?: string; hosted_by_website?: string };
-    return { green: data.green === true, hosted_by: data.hosted_by ?? null, hosted_by_website: data.hosted_by_website ?? null, error: null };
+    const data = (await res.json()) as { green: boolean; hosted_by?: string; hosted_by_website?: string };
+    return {
+      green: data.green === true,
+      hosted_by: data.hosted_by ?? null,
+      hosted_by_website: data.hosted_by_website ?? null,
+      error: null,
+    };
   } catch (e) {
-    return { green: false, hosted_by: null, hosted_by_website: null, error: e instanceof Error ? e.message : "Unknown error" };
+    return {
+      green: false,
+      hosted_by: null,
+      hosted_by_website: null,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
   }
 }
 
@@ -147,7 +237,8 @@ export async function checkWellKnownEndpoints(domain: string): Promise<WellKnown
     { path: "/.well-known/assetlinks.json", name: "Android Asset Links" },
   ];
 
-  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+  const ua =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
   const results: WellKnownEndpoint[] = [];
   let pwaReady = false;
   let hasMobileApps = false;
@@ -177,21 +268,31 @@ export async function checkWellKnownEndpoints(domain: string): Promise<WellKnown
       }
 
       if (ep.path === "/ads.txt") {
-        const lines = text.split("\n").filter(l => l.trim() && !l.trim().startsWith("#"));
+        const lines = text.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
         adsPartnerCount = lines.length;
         const partners = new Set<string>();
         for (const line of lines.slice(0, 200)) {
           const parts = line.split(",");
           if (parts.length >= 2) partners.add(parts[0].trim().toLowerCase());
         }
-        results.push({ path: ep.path, name: ep.name, found: true, data: { partner_count: adsPartnerCount, top_partners: [...partners].slice(0, 10) } });
+        results.push({
+          path: ep.path,
+          name: ep.name,
+          found: true,
+          data: { partner_count: adsPartnerCount, top_partners: [...partners].slice(0, 10) },
+        });
       } else if (ep.path === "/manifest.json") {
         try {
           const manifest = JSON.parse(text) as Record<string, unknown>;
           const display = manifest.display as string | undefined;
-          pwaReady = !!manifest.name && !!manifest.start_url && (display === "standalone" || display === "fullscreen" || display === "minimal-ui");
+          pwaReady =
+            !!manifest.name &&
+            !!manifest.start_url &&
+            (display === "standalone" || display === "fullscreen" || display === "minimal-ui");
           results.push({
-            path: ep.path, name: "Web App Manifest", found: true,
+            path: ep.path,
+            name: "Web App Manifest",
+            found: true,
             data: {
               name: manifest.name ?? manifest.short_name ?? null,
               theme_color: manifest.theme_color ?? null,
@@ -229,7 +330,11 @@ export async function checkWellKnownEndpoints(domain: string): Promise<WellKnown
           const links = JSON.parse(text) as Array<{ target?: { namespace?: string; package_name?: string } }>;
           if (Array.isArray(links) && links.length > 0) {
             hasMobileApps = true;
-            const packages = links.filter(l => l.target?.namespace === "android_app").map(l => l.target?.package_name).filter(Boolean).slice(0, 5);
+            const packages = links
+              .filter((l) => l.target?.namespace === "android_app")
+              .map((l) => l.target?.package_name)
+              .filter(Boolean)
+              .slice(0, 5);
             results.push({ path: ep.path, name: ep.name, found: true, data: { package_names: packages } });
           } else {
             results.push({ path: ep.path, name: ep.name, found: false, data: null });
@@ -251,23 +356,42 @@ export async function checkWellKnownEndpoints(domain: string): Promise<WellKnown
     return a.path.localeCompare(b.path);
   });
 
-  return { endpoints: results, pwa_ready: pwaReady, has_mobile_apps: hasMobileApps, ads_partner_count: adsPartnerCount };
+  return {
+    endpoints: results,
+    pwa_ready: pwaReady,
+    has_mobile_apps: hasMobileApps,
+    ads_partner_count: adsPartnerCount,
+  };
 }
 
 // ─── Tier 1: Enhanced CAA Display ───────────────────────────────────
 
 export function analyzeCaaRecords(dnsRecords: DnsRecord[]): CaaDisplayResult {
-  const caaRecords = dnsRecords.filter(r => r.type === "CAA");
+  const caaRecords = dnsRecords.filter((r) => r.type === "CAA");
   if (caaRecords.length === 0) return { records: [], has_wildcard_policy: false, iodef: null, has_caa: false };
 
   const caNameMap: Record<string, string> = {
-    "digicert.com": "DigiCert", "letsencrypt.org": "Let's Encrypt", "pki.goog": "Google Trust Services",
-    "globalsign.com": "GlobalSign", "sectigo.com": "Sectigo (Comodo)", "comodoca.com": "Sectigo (Comodo)",
-    "godaddy.com": "GoDaddy", "starfieldtech.com": "GoDaddy (Starfield)", "amazon.com": "Amazon Trust Services",
-    "amazontrust.com": "Amazon Trust Services", "buypass.com": "Buypass", "ssl.com": "SSL.com",
-    "entrust.net": "Entrust", "usertrust.com": "USERTrust (Sectigo)", "thawte.com": "Thawte (DigiCert)",
-    "geotrust.com": "GeoTrust (DigiCert)", "rapidssl.com": "RapidSSL (DigiCert)", "symantec.com": "Symantec (DigiCert)",
-    "microsoft.com": "Microsoft", "apple.com": "Apple", "cloudflare.com": "Cloudflare",
+    "digicert.com": "DigiCert",
+    "letsencrypt.org": "Let's Encrypt",
+    "pki.goog": "Google Trust Services",
+    "globalsign.com": "GlobalSign",
+    "sectigo.com": "Sectigo (Comodo)",
+    "comodoca.com": "Sectigo (Comodo)",
+    "godaddy.com": "GoDaddy",
+    "starfieldtech.com": "GoDaddy (Starfield)",
+    "amazon.com": "Amazon Trust Services",
+    "amazontrust.com": "Amazon Trust Services",
+    "buypass.com": "Buypass",
+    "ssl.com": "SSL.com",
+    "entrust.net": "Entrust",
+    "usertrust.com": "USERTrust (Sectigo)",
+    "thawte.com": "Thawte (DigiCert)",
+    "geotrust.com": "GeoTrust (DigiCert)",
+    "rapidssl.com": "RapidSSL (DigiCert)",
+    "symantec.com": "Symantec (DigiCert)",
+    "microsoft.com": "Microsoft",
+    "apple.com": "Apple",
+    "cloudflare.com": "Cloudflare",
   };
 
   const records: CaaDisplayResult["records"] = [];
@@ -278,7 +402,7 @@ export function analyzeCaaRecords(dnsRecords: DnsRecord[]): CaaDisplayResult {
     // CAA record format: flags tag "value"
     const match = rec.data.match(/^(\d+)\s+(\w+)\s+"?([^"]*)"?$/);
     if (!match) continue;
-    const flags = parseInt(match[1]);
+    const flags = parseInt(match[1], 10);
     const tag = match[2].toLowerCase();
     const value = match[3];
 
@@ -291,7 +415,10 @@ export function analyzeCaaRecords(dnsRecords: DnsRecord[]): CaaDisplayResult {
     // Map value to human-readable CA name
     let caName = value;
     for (const [domain, name] of Object.entries(caNameMap)) {
-      if (value.toLowerCase().includes(domain)) { caName = name; break; }
+      if (value.toLowerCase().includes(domain)) {
+        caName = name;
+        break;
+      }
     }
 
     records.push({ flags, tag, value, ca_name: caName });
@@ -304,16 +431,33 @@ export function analyzeCaaRecords(dnsRecords: DnsRecord[]): CaaDisplayResult {
 
 export async function checkGreynoise(ip: string): Promise<GreynoiseResult> {
   try {
-    const res = await fetchWithTimeout(
-      `https://viz.greynoise.io/api/v3/community/${encodeURIComponent(ip)}`,
-      { timeout: 8000, headers: { "Accept": "application/json" } },
-    );
+    const res = await fetchWithTimeout(`https://viz.greynoise.io/api/v3/community/${encodeURIComponent(ip)}`, {
+      timeout: 8000,
+      headers: { Accept: "application/json" },
+    });
     if (!res.ok) {
       // 404 means IP not found in their database — that's a valid result
-      if (res.status === 404) return { ip, classification: "unknown", name: null, link: null, noise: false, riot: false, error: null };
-      return { ip, classification: null, name: null, link: null, noise: false, riot: false, error: `HTTP ${res.status}` };
+      if (res.status === 404)
+        return { ip, classification: "unknown", name: null, link: null, noise: false, riot: false, error: null };
+      return {
+        ip,
+        classification: null,
+        name: null,
+        link: null,
+        noise: false,
+        riot: false,
+        error: `HTTP ${res.status}`,
+      };
     }
-    const data = await res.json() as { ip?: string; classification?: string; name?: string; link?: string; noise?: boolean; riot?: boolean; message?: string };
+    const data = (await res.json()) as {
+      ip?: string;
+      classification?: string;
+      name?: string;
+      link?: string;
+      noise?: boolean;
+      riot?: boolean;
+      message?: string;
+    };
     return {
       ip: data.ip ?? ip,
       classification: data.classification ?? "unknown",
@@ -324,6 +468,14 @@ export async function checkGreynoise(ip: string): Promise<GreynoiseResult> {
       error: null,
     };
   } catch (e) {
-    return { ip, classification: null, name: null, link: null, noise: false, riot: false, error: e instanceof Error ? e.message : "Unknown error" };
+    return {
+      ip,
+      classification: null,
+      name: null,
+      link: null,
+      noise: false,
+      riot: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
   }
 }

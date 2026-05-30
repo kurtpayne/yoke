@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkAnsRecords } from "../actions/analyze/content";
+import type { Check } from "./types";
 
 export const ansCheck: Check = {
   key: "ans",

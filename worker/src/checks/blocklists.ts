@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkBlocklists } from "../actions/analyze/network";
+import type { Check } from "./types";
 
 export const blocklistsCheck: Check = {
   key: "blocklists",

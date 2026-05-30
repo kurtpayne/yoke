@@ -1,11 +1,18 @@
-import { normalizeDomain, fetchWithTimeout, getFromCache, setCache } from "../helpers";
 import { logApiError } from "../api-errors";
+import { fetchWithTimeout, getFromCache, normalizeDomain, setCache } from "../helpers";
 
 interface CompanyData {
-  name: string | null; description: string | null; founded: string | null;
-  ceo: string | null; hq: string | null; industry: string | null;
-  employees: number | null; exchange: string | null; ticker: string | null;
-  logo_url: string | null; wikidata_id: string | null;
+  name: string | null;
+  description: string | null;
+  founded: string | null;
+  ceo: string | null;
+  hq: string | null;
+  industry: string | null;
+  employees: number | null;
+  exchange: string | null;
+  ticker: string | null;
+  logo_url: string | null;
+  wikidata_id: string | null;
   // New enriched fields
   revenue: string | null;
   parent_org: string | null;
@@ -14,9 +21,14 @@ interface CompanyData {
 }
 
 interface StockData {
-  price: number | null; change: number | null; change_percent: number | null;
-  market_cap: number | null; volume: number | null;
-  high_52w: number | null; low_52w: number | null; currency: string | null;
+  price: number | null;
+  change: number | null;
+  change_percent: number | null;
+  market_cap: number | null;
+  volume: number | null;
+  high_52w: number | null;
+  low_52w: number | null;
+  currency: string | null;
   sparkline: number[] | null;
 }
 
@@ -45,19 +57,29 @@ function domainToBrandName(domain: string): string {
   return domain;
 }
 
-async function enrichFromBrandfetch(domain: string, statsDb?: D1Database): Promise<{ name: string | null; logo_url: string | null }> {
+async function enrichFromBrandfetch(
+  domain: string,
+  statsDb?: D1Database,
+): Promise<{ name: string | null; logo_url: string | null }> {
   try {
     const res = await fetchWithTimeout(`https://api.brandfetch.io/v2/search/${encodeURIComponent(domain)}`, {
       timeout: 5000,
       headers: { "User-Agent": "Mozilla/5.0 (compatible; YokeBot/1.0)" },
     });
     if (!res.ok) {
-      if (statsDb) logApiError(statsDb, { api: "brandfetch", status: res.status, message: "Brand lookup failed", domain });
+      if (statsDb)
+        logApiError(statsDb, { api: "brandfetch", status: res.status, message: "Brand lookup failed", domain });
       return { name: null, logo_url: null };
     }
-    const data = (await res.json()) as Array<{ domain?: string; name?: string; icon?: string; qualityScore?: number; claimed?: boolean }>;
+    const data = (await res.json()) as Array<{
+      domain?: string;
+      name?: string;
+      icon?: string;
+      qualityScore?: number;
+      claimed?: boolean;
+    }>;
     // Find exact domain match or best match
-    const exact = data.find(d => d.domain === domain);
+    const exact = data.find((d) => d.domain === domain);
     const best = exact ?? data[0];
     if (best) {
       return {
@@ -83,7 +105,7 @@ async function enrichFromWikidata(domain: string, statsDb?: D1Database): Promise
     `<http://www.${domain}>`,
     `<http://www.${domain}/>`,
   ];
-  const urlFilter = variants.map(u => `{ ?item wdt:P856 ${u} }`).join(" UNION ");
+  const urlFilter = variants.map((u) => `{ ?item wdt:P856 ${u} }`).join(" UNION ");
 
   const sparql = `SELECT ?item ?itemLabel ?itemDescription ?inception ?ceoLabel ?hqLabel ?industryLabel ?employees ?exchangeLabel ?ticker ?bloombergTicker ?cashtag ?logo ?parentLabel ?revenue WHERE {
   ${urlFilter}
@@ -105,13 +127,19 @@ async function enrichFromWikidata(domain: string, statsDb?: D1Database): Promise
   try {
     const wdRes = await fetchWithTimeout(
       `https://query.wikidata.org/sparql?query=${encodeURIComponent(sparql)}&format=json`,
-      { timeout: 10000, headers: { Accept: "application/sparql-results+json", "User-Agent": "YokeBot/1.0 (domain-intelligence)" } }
+      {
+        timeout: 10000,
+        headers: { Accept: "application/sparql-results+json", "User-Agent": "YokeBot/1.0 (domain-intelligence)" },
+      },
     );
     if (!wdRes.ok) {
-      if (statsDb) logApiError(statsDb, { api: "wikidata", status: wdRes.status, message: "SPARQL query failed", domain });
+      if (statsDb)
+        logApiError(statsDb, { api: "wikidata", status: wdRes.status, message: "SPARQL query failed", domain });
       return null;
     }
-    const wdData = await wdRes.json() as { results?: { bindings?: Array<Record<string, { value: string; type: string }>> } };
+    const wdData = (await wdRes.json()) as {
+      results?: { bindings?: Array<Record<string, { value: string; type: string }>> };
+    };
     const binding = wdData.results?.bindings?.[0];
     if (!binding) return null;
 
@@ -129,11 +157,13 @@ async function enrichFromWikidata(domain: string, statsDb?: D1Database): Promise
 } LIMIT 10`;
         const socialRes = await fetchWithTimeout(
           `https://query.wikidata.org/sparql?query=${encodeURIComponent(socialSparql)}&format=json`,
-          { timeout: 5000, headers: { Accept: "application/sparql-results+json", "User-Agent": "YokeBot/1.0" } }
+          { timeout: 5000, headers: { Accept: "application/sparql-results+json", "User-Agent": "YokeBot/1.0" } },
         );
         if (socialRes.ok) {
-          const socialData = await socialRes.json() as { results?: { bindings?: Array<Record<string, { value: string }>> } };
-          for (const b of (socialData.results?.bindings ?? [])) {
+          const socialData = (await socialRes.json()) as {
+            results?: { bindings?: Array<Record<string, { value: string }>> };
+          };
+          for (const b of socialData.results?.bindings ?? []) {
             const propId = b.prop?.value?.split("/").pop() ?? "";
             const val = b.value?.value ?? "";
             const platformMap: Record<string, { name: string; urlPrefix: string }> = {
@@ -152,7 +182,9 @@ async function enrichFromWikidata(domain: string, statsDb?: D1Database): Promise
             }
           }
         }
-      } catch { /* social query failed */ }
+      } catch {
+        /* social query failed */
+      }
     }
 
     return {
@@ -162,11 +194,12 @@ async function enrichFromWikidata(domain: string, statsDb?: D1Database): Promise
       ceo: binding.ceoLabel?.value ?? null,
       hq: binding.hqLabel?.value ?? null,
       industry: binding.industryLabel?.value ?? null,
-      employees: binding.employees?.value ? parseInt(binding.employees.value) : null,
+      employees: binding.employees?.value ? parseInt(binding.employees.value, 10) : null,
       exchange: binding.exchangeLabel?.value ?? null,
-      ticker: binding.ticker?.value
-        ?? (binding.bloombergTicker?.value ? binding.bloombergTicker.value.split(":")[0] : null)
-        ?? (() => {
+      ticker:
+        binding.ticker?.value ??
+        (binding.bloombergTicker?.value ? binding.bloombergTicker.value.split(":")[0] : null) ??
+        (() => {
           // Only use cashtag if it looks like a real ticker symbol (1-5 uppercase letters)
           const raw = binding.cashtag?.value?.replace(/^\$/, "").toUpperCase();
           return raw && /^[A-Z]{1,5}$/.test(raw) ? raw : null;
@@ -190,27 +223,39 @@ async function searchWikidataByName(domain: string, statsDb?: D1Database): Promi
   try {
     const searchRes = await fetchWithTimeout(
       `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(brandName)}&language=en&limit=5&format=json`,
-      { timeout: 5000, headers: { "User-Agent": "YokeBot/1.0" } }
+      { timeout: 5000, headers: { "User-Agent": "YokeBot/1.0" } },
     );
     if (!searchRes.ok) return null;
-    const searchData = await searchRes.json() as { search?: Array<{ id: string; label: string; description?: string }> };
+    const searchData = (await searchRes.json()) as {
+      search?: Array<{ id: string; label: string; description?: string }>;
+    };
     const candidates = searchData.search ?? [];
 
     // Find a candidate that's a company/business
     for (const c of candidates) {
       const desc = (c.description ?? "").toLowerCase();
-      if (desc.includes("company") || desc.includes("corporation") || desc.includes("technology") ||
-          desc.includes("enterprise") || desc.includes("platform") || desc.includes("service") ||
-          desc.includes("software") || desc.includes("business") || desc.includes("inc.") ||
-          desc.includes("startup")) {
+      if (
+        desc.includes("company") ||
+        desc.includes("corporation") ||
+        desc.includes("technology") ||
+        desc.includes("enterprise") ||
+        desc.includes("platform") ||
+        desc.includes("service") ||
+        desc.includes("software") ||
+        desc.includes("business") ||
+        desc.includes("inc.") ||
+        desc.includes("startup")
+      ) {
         // Verify this entity has P856 (official website) matching our domain
         try {
           const claimsRes = await fetchWithTimeout(
             `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${c.id}&property=P856&format=json`,
-            { timeout: 5000, headers: { "User-Agent": "YokeBot/1.0" } }
+            { timeout: 5000, headers: { "User-Agent": "YokeBot/1.0" } },
           );
           if (claimsRes.ok) {
-            const claimsData = await claimsRes.json() as { claims?: Record<string, Array<{ mainsnak: { datavalue: { value: string } } }>> };
+            const claimsData = (await claimsRes.json()) as {
+              claims?: Record<string, Array<{ mainsnak: { datavalue: { value: string } } }>>;
+            };
             const websites = claimsData.claims?.P856 ?? [];
             for (const ws of websites) {
               const url = ws.mainsnak?.datavalue?.value ?? "";
@@ -220,10 +265,12 @@ async function searchWikidataByName(domain: string, statsDb?: D1Database): Promi
               }
             }
           }
-        } catch { continue; }
+        } catch {}
       }
     }
-  } catch { /* search failed */ }
+  } catch {
+    /* search failed */
+  }
   return null;
 }
 
@@ -232,12 +279,16 @@ export async function getCompanyInfo(kv: KVNamespace, rawDomain: string, force?:
 
   // Check company cache (24h)
   if (!force) {
-  const cachedCompany = await getFromCache(kv, domain, "company_info", 24 * 60 * 60 * 1000);
-  if (cachedCompany) {
-    const c = cachedCompany as { company: CompanyData | null; stock: StockData | null; crunchbase_url: string | null };
-    const cachedStock = await getFromCache(kv, domain, "stock_quote", 15 * 60 * 1000) as StockData | null;
-    return { company: c.company, stock: cachedStock ?? c.stock, crunchbase_url: c.crunchbase_url, cached: true };
-  }
+    const cachedCompany = await getFromCache(kv, domain, "company_info", 24 * 60 * 60 * 1000);
+    if (cachedCompany) {
+      const c = cachedCompany as {
+        company: CompanyData | null;
+        stock: StockData | null;
+        crunchbase_url: string | null;
+      };
+      const cachedStock = (await getFromCache(kv, domain, "stock_quote", 15 * 60 * 1000)) as StockData | null;
+      return { company: c.company, stock: cachedStock ?? c.stock, crunchbase_url: c.crunchbase_url, cached: true };
+    }
   }
 
   // Parallel: Wikidata + Brandfetch
@@ -261,10 +312,21 @@ export async function getCompanyInfo(kv: KVNamespace, rawDomain: string, force?:
   } else if (bf?.name) {
     // Create minimal company data from Brandfetch
     company = {
-      name: bf.name, description: null, founded: null, ceo: null, hq: null,
-      industry: null, employees: null, exchange: null, ticker: null,
-      logo_url: bf.logo_url, wikidata_id: null, revenue: null,
-      parent_org: null, social_links: [], source: "brandfetch",
+      name: bf.name,
+      description: null,
+      founded: null,
+      ceo: null,
+      hq: null,
+      industry: null,
+      employees: null,
+      exchange: null,
+      ticker: null,
+      logo_url: bf.logo_url,
+      wikidata_id: null,
+      revenue: null,
+      parent_org: null,
+      social_links: [],
+      source: "brandfetch",
     };
   }
 
@@ -279,25 +341,47 @@ export async function getCompanyInfo(kv: KVNamespace, rawDomain: string, force?:
     try {
       const searchRes = await fetchWithTimeout(
         `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(company.name)}&quotesCount=5&newsCount=0`,
-        { timeout: 5000, headers: { "User-Agent": "Mozilla/5.0" } }
+        { timeout: 5000, headers: { "User-Agent": "Mozilla/5.0" } },
       );
       if (searchRes.ok) {
-        const searchData = await searchRes.json() as { quotes?: Array<{ symbol?: string; shortname?: string; exchDisp?: string; quoteType?: string }> };
-        const equity = searchData.quotes?.find(q => q.quoteType === "EQUITY" && q.symbol && !q.symbol.includes("."));
+        const searchData = (await searchRes.json()) as {
+          quotes?: Array<{ symbol?: string; shortname?: string; exchDisp?: string; quoteType?: string }>;
+        };
+        const equity = searchData.quotes?.find((q) => q.quoteType === "EQUITY" && q.symbol && !q.symbol.includes("."));
         if (equity?.symbol) {
           company.ticker = equity.symbol;
         }
       }
-    } catch { /* Yahoo search failed */ }
+    } catch {
+      /* Yahoo search failed */
+    }
   }
 
   // Fetch stock quote if ticker found
   if (company?.ticker) {
     try {
       const symbol = company.ticker;
-      const yfRes = await fetchWithTimeout(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`, { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0" } });
+      const yfRes = await fetchWithTimeout(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`,
+        { timeout: 8000, headers: { "User-Agent": "Mozilla/5.0" } },
+      );
       if (yfRes.ok) {
-        const yfData = await yfRes.json() as { chart?: { result?: Array<{ meta?: { regularMarketPrice?: number; previousClose?: number; fiftyTwoWeekHigh?: number; fiftyTwoWeekLow?: number; regularMarketVolume?: number; marketCap?: number; currency?: string }; indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> } };
+        const yfData = (await yfRes.json()) as {
+          chart?: {
+            result?: Array<{
+              meta?: {
+                regularMarketPrice?: number;
+                previousClose?: number;
+                fiftyTwoWeekHigh?: number;
+                fiftyTwoWeekLow?: number;
+                regularMarketVolume?: number;
+                marketCap?: number;
+                currency?: string;
+              };
+              indicators?: { quote?: Array<{ close?: (number | null)[] }> };
+            }>;
+          };
+        };
         const chartResult = yfData.chart?.result?.[0];
         const meta = chartResult?.meta;
         if (meta) {
@@ -308,17 +392,22 @@ export async function getCompanyInfo(kv: KVNamespace, rawDomain: string, force?:
           const rawClose = chartResult?.indicators?.quote?.[0]?.close;
           const sparkline = rawClose ? rawClose.filter((v): v is number => v != null) : null;
           stock = {
-            price, change: change ? parseFloat(change.toFixed(2)) : null,
+            price,
+            change: change ? parseFloat(change.toFixed(2)) : null,
             change_percent: changePct ? parseFloat(changePct.toFixed(2)) : null,
-            market_cap: meta.marketCap ?? null, volume: meta.regularMarketVolume ?? null,
-            high_52w: meta.fiftyTwoWeekHigh ?? null, low_52w: meta.fiftyTwoWeekLow ?? null,
+            market_cap: meta.marketCap ?? null,
+            volume: meta.regularMarketVolume ?? null,
+            high_52w: meta.fiftyTwoWeekHigh ?? null,
+            low_52w: meta.fiftyTwoWeekLow ?? null,
             currency: meta.currency ?? null,
             sparkline: sparkline && sparkline.length >= 2 ? sparkline : null,
           };
           await setCache(kv, domain, "stock_quote", stock, 15 * 60 * 1000);
         }
       }
-    } catch { /* stock fetch failed */ }
+    } catch {
+      /* stock fetch failed */
+    }
   }
 
   const result = { company, stock, crunchbase_url };

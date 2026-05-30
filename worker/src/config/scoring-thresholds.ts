@@ -6,17 +6,17 @@
 import type { Severity } from "./contextual-scoring-types";
 
 export interface ThresholdBand {
-  min?: number;     // >= this value (inclusive)
-  max?: number;     // <= this value (inclusive); first matching band wins
+  min?: number; // >= this value (inclusive)
+  max?: number; // <= this value (inclusive); first matching band wins
   severity: Severity;
-  label?: string;   // template with {value} placeholder
+  label?: string; // template with {value} placeholder
 }
 
 export interface ThresholdConfig {
   signal: string;
   axis: string;
   description: string;
-  source?: string;  // citation/rationale
+  source?: string; // citation/rationale
   unit?: string;
   bands: ThresholdBand[];
   weight: number;
@@ -24,13 +24,20 @@ export interface ThresholdConfig {
 
 // ─── Severity → Score mapping ────────────────────────────────────────
 export const SEVERITY_SCORES: Record<Severity, number> = {
-  critical: 0, high: 15, medium: 40, low: 65, info: 82, good: 100,
+  critical: 0,
+  high: 15,
+  medium: 40,
+  low: 65,
+  info: 82,
+  good: 100,
 };
 
 // ─── Performance ─────────────────────────────────────────────────────
 
 export const PERF_SCORE: ThresholdConfig = {
-  signal: "perf_score", axis: "performance", weight: 5,
+  signal: "perf_score",
+  axis: "performance",
+  weight: 5,
   description: "Google PageSpeed Insights overall performance score (mobile)",
   source: "Google Lighthouse scoring: 90+ green, 50-89 orange, <50 red",
   unit: "points",
@@ -44,7 +51,9 @@ export const PERF_SCORE: ThresholdConfig = {
 };
 
 export const LCP: ThresholdConfig = {
-  signal: "lcp", axis: "performance", weight: 4,
+  signal: "lcp",
+  axis: "performance",
+  weight: 4,
   description: "Largest Contentful Paint — time until the largest visible element renders",
   source: "Web Vitals: ≤2.5s good, ≤4.0s needs improvement, >4.0s poor (web.dev/lcp)",
   unit: "seconds",
@@ -57,7 +66,9 @@ export const LCP: ThresholdConfig = {
 };
 
 export const CLS: ThresholdConfig = {
-  signal: "cls", axis: "performance", weight: 3,
+  signal: "cls",
+  axis: "performance",
+  weight: 3,
   description: "Cumulative Layout Shift — visual stability of the page",
   source: "Web Vitals: ≤0.1 good, ≤0.25 needs improvement, >0.25 poor (web.dev/cls)",
   unit: "score",
@@ -70,7 +81,9 @@ export const CLS: ThresholdConfig = {
 };
 
 export const TTFB: ThresholdConfig = {
-  signal: "ttfb", axis: "performance", weight: 3,
+  signal: "ttfb",
+  axis: "performance",
+  weight: 3,
   description: "Time to First Byte — server response time",
   source: "Web Vitals: ≤800ms good, ≤1800ms needs improvement, >1800ms poor (web.dev/ttfb)",
   unit: "ms",
@@ -85,17 +98,21 @@ export const TTFB: ThresholdConfig = {
 // ─── Security ────────────────────────────────────────────────────────
 
 export const SSL_GRADE: ThresholdConfig = {
-  signal: "ssl_grade", axis: "security", weight: 3,
+  signal: "ssl_grade",
+  axis: "security",
+  weight: 3,
   description: "SSL Labs server test grade",
   source: "Qualys SSL Labs grading: A+/A are best practice, B has minor issues, C+ has configuration problems",
   bands: [
-    { min: 0, severity: "good", label: "SSL grade {value}" },   // A+, A
+    { min: 0, severity: "good", label: "SSL grade {value}" }, // A+, A
     // B, C etc handled by string matching in scoring engine
   ],
 };
 
 export const BLOCKLIST: ThresholdConfig = {
-  signal: "blocklist", axis: "security", weight: 5,
+  signal: "blocklist",
+  axis: "security",
+  weight: 5,
   description: "IP presence on DNS blocklists (Spamhaus, SURBL, etc.)",
   source: "Industry standard DNSBL providers",
   bands: [
@@ -109,22 +126,26 @@ export const BLOCKLIST: ThresholdConfig = {
 // ─── Trust ───────────────────────────────────────────────────────────
 
 export const DOMAIN_AGE: ThresholdConfig = {
-  signal: "domain_age_trust", axis: "trust", weight: 3,
+  signal: "domain_age_trust",
+  axis: "trust",
+  weight: 3,
   description: "Domain registration age — newer domains are higher risk",
   source: "NextDNS NRD: domains <30 days are newly registered; industry treats <1 year as young",
   unit: "days",
   bands: [
-    { min: 1825, severity: "good", label: "Established domain ({value} days)" },       // 5+ years
-    { min: 1095, severity: "info", label: "Mature domain ({value} days)" },             // 3-5 years
-    { min: 365, severity: "low", label: "Domain age: {value} days" },                   // 1-3 years
-    { min: 90, severity: "medium", label: "Young domain ({value} days)" },              // 90d-1yr
-    { min: 30, severity: "high", label: "Recently registered ({value} days)" },         // 30-90d
+    { min: 1825, severity: "good", label: "Established domain ({value} days)" }, // 5+ years
+    { min: 1095, severity: "info", label: "Mature domain ({value} days)" }, // 3-5 years
+    { min: 365, severity: "low", label: "Domain age: {value} days" }, // 1-3 years
+    { min: 90, severity: "medium", label: "Young domain ({value} days)" }, // 90d-1yr
+    { min: 30, severity: "high", label: "Recently registered ({value} days)" }, // 30-90d
     { min: 0, severity: "critical", label: "Newly registered domain ({value} days) — high risk NRD" }, // <30d
   ],
 };
 
 export const DOMAIN_EXPIRY: ThresholdConfig = {
-  signal: "domain_expiry", axis: "trust", weight: 2,
+  signal: "domain_expiry",
+  axis: "trust",
+  weight: 2,
   description: "Domain registration expiry — short registrations may indicate low commitment",
   unit: "days",
   bands: [
@@ -138,7 +159,9 @@ export const DOMAIN_EXPIRY: ThresholdConfig = {
 // ─── Reliability ─────────────────────────────────────────────────────
 
 export const NS_COUNT: ThresholdConfig = {
-  signal: "ns_count", axis: "reliability", weight: 2, // Aligned with contextual-scoring ns_redundancy weight (M1)
+  signal: "ns_count",
+  axis: "reliability",
+  weight: 2, // Aligned with contextual-scoring ns_redundancy weight (M1)
   description: "Number of authoritative nameservers — more = better redundancy",
   bands: [
     { min: 4, severity: "good", label: "{value} nameservers" },
@@ -150,7 +173,9 @@ export const NS_COUNT: ThresholdConfig = {
 // ─── Visibility ──────────────────────────────────────────────────────
 
 export const INP: ThresholdConfig = {
-  signal: "inp", axis: "performance", weight: 3,
+  signal: "inp",
+  axis: "performance",
+  weight: 3,
   description: "Interaction to Next Paint — responsiveness to user interactions",
   source: "Web Vitals: ≤200ms good, ≤500ms needs improvement, >500ms poor (web.dev/inp)",
   unit: "ms",
@@ -162,7 +187,9 @@ export const INP: ThresholdConfig = {
 };
 
 export const FCP: ThresholdConfig = {
-  signal: "fcp", axis: "performance", weight: 2,
+  signal: "fcp",
+  axis: "performance",
+  weight: 2,
   description: "First Contentful Paint — time until first content renders",
   source: "Web Vitals: ≤1.8s good, ≤3.0s needs improvement, >3.0s poor (web.dev/fcp)",
   unit: "seconds",
@@ -174,7 +201,9 @@ export const FCP: ThresholdConfig = {
 };
 
 export const TBT: ThresholdConfig = {
-  signal: "tbt", axis: "performance", weight: 2,
+  signal: "tbt",
+  axis: "performance",
+  weight: 2,
   description: "Total Blocking Time — JS execution blocking the main thread",
   source: "Lighthouse: <200ms good, <600ms needs improvement, ≥600ms poor",
   unit: "ms",
@@ -188,7 +217,9 @@ export const TBT: ThresholdConfig = {
 // ─── Visibility ──────────────────────────────────────────────────────
 
 export const A11Y_SCORE: ThresholdConfig = {
-  signal: "accessibility", axis: "visibility", weight: 1,
+  signal: "accessibility",
+  axis: "visibility",
+  weight: 1,
   description: "WCAG accessibility quick scan score",
   source: "9 WCAG 2.1 Level A/AA automated checks",
   unit: "points",
@@ -202,9 +233,17 @@ export const A11Y_SCORE: ThresholdConfig = {
 // ─── All configs for API export ──────────────────────────────────────
 
 export const ALL_THRESHOLDS: ThresholdConfig[] = [
-  PERF_SCORE, LCP, CLS, TTFB, INP, FCP, TBT,
-  SSL_GRADE, BLOCKLIST,
-  DOMAIN_AGE, DOMAIN_EXPIRY,
+  PERF_SCORE,
+  LCP,
+  CLS,
+  TTFB,
+  INP,
+  FCP,
+  TBT,
+  SSL_GRADE,
+  BLOCKLIST,
+  DOMAIN_AGE,
+  DOMAIN_EXPIRY,
   NS_COUNT,
   A11Y_SCORE,
 ];

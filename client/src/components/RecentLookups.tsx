@@ -27,11 +27,20 @@ export function RecentLookups({ lookups, onSelect }: RecentLookupsProps) {
             fontSize: "12px",
             color: "var(--text-secondary)",
           }}
-          onMouseOver={(e) => { e.currentTarget.style.borderColor = "var(--accent-dim)"; e.currentTarget.style.color = "var(--text)"; }}
-          onMouseOut={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.borderColor = "var(--accent-dim)";
+            e.currentTarget.style.color = "var(--text)";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.borderColor = "var(--border)";
+            e.currentTarget.style.color = "var(--text-secondary)";
+          }}
         >
           {l.is_up != null && (
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: l.is_up ? "var(--success)" : "var(--danger)" }} />
+            <div
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ background: l.is_up ? "var(--success)" : "var(--danger)" }}
+            />
           )}
           <span>{l.domain}</span>
         </button>

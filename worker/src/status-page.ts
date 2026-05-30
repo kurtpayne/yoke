@@ -2,7 +2,7 @@
 // Server-rendered HTML status page showing external API dependency health.
 // Served at /status — no client JS bundle needed.
 
-import { getStatusPageData, type ApiStatusRow } from "./api-errors";
+import { type ApiStatusRow, getStatusPageData } from "./api-errors";
 import { CORS_HEADERS } from "./helpers";
 
 function timeAgo(ts: number | null): string {
@@ -33,11 +33,13 @@ function barColor(errors: number): string {
 }
 
 function renderRow(api: ApiStatusRow): string {
-  const bars = api.hourly.map(h => {
-    const c = barColor(h.errors);
-    const title = `${h.hour} UTC — ${h.errors} error${h.errors !== 1 ? "s" : ""}`;
-    return `<div class="bar" style="background:${c}" title="${title}"></div>`;
-  }).join("");
+  const bars = api.hourly
+    .map((h) => {
+      const c = barColor(h.errors);
+      const title = `${h.hour} UTC — ${h.errors} error${h.errors !== 1 ? "s" : ""}`;
+      return `<div class="bar" style="background:${c}" title="${title}"></div>`;
+    })
+    .join("");
 
   const sc = statusColor(api.errors_24h);
   const sl = statusLabel(api.errors_24h);
@@ -71,11 +73,12 @@ export async function renderStatusPage(db: D1Database, baseUrl = "https://yoke.l
 
   const totalErrors24h = data.apis.reduce((s, a) => s + a.errors_24h, 0);
   const overallColor = statusColor(totalErrors24h);
-  const overallLabel = totalErrors24h === 0
-    ? "All Systems Operational"
-    : totalErrors24h <= 5
-      ? "Some Services Degraded"
-      : "Service Disruptions Detected";
+  const overallLabel =
+    totalErrors24h === 0
+      ? "All Systems Operational"
+      : totalErrors24h <= 5
+        ? "Some Services Degraded"
+        : "Service Disruptions Detected";
 
   const rows = data.apis.map(renderRow).join("");
 

@@ -1,17 +1,20 @@
-import { Database, Clock, Globe, RefreshCw, AlertTriangle } from "lucide-react";
-import { Panel, DataRow, StatusBadge } from "./Panel";
-import { CliButton, cacheCliCommands } from "./CliModal";
-import { Tooltip } from "./Tooltip";
+import { AlertTriangle, Clock, Database, Globe, RefreshCw } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
+import { CliButton, cacheCliCommands } from "./CliModal";
+import { DataRow, Panel, StatusBadge } from "./Panel";
+import { Tooltip } from "./Tooltip";
 
 const DIRECTIVE_STYLES: Record<string, { color: "pass" | "warn" | "fail" | "info"; tooltip: string }> = {
-  "public": { color: "pass", tooltip: "Response can be cached by browsers and CDNs" },
-  "private": { color: "warn", tooltip: "Response can be cached by browsers but not shared CDN caches" },
-  "immutable": { color: "pass", tooltip: "Response body will not change — browser can skip revalidation" },
+  public: { color: "pass", tooltip: "Response can be cached by browsers and CDNs" },
+  private: { color: "warn", tooltip: "Response can be cached by browsers but not shared CDN caches" },
+  immutable: { color: "pass", tooltip: "Response body will not change — browser can skip revalidation" },
   "no-store": { color: "fail", tooltip: "Response must not be stored in any cache" },
   "no-cache": { color: "warn", tooltip: "Cache must revalidate with the server before using a stored response" },
   "must-revalidate": { color: "info", tooltip: "Stale responses must not be used without revalidation" },
-  "stale-while-revalidate": { color: "pass", tooltip: "Serve stale content while asynchronously revalidating in the background" },
+  "stale-while-revalidate": {
+    color: "pass",
+    tooltip: "Serve stale content while asynchronously revalidating in the background",
+  },
   "no-transform": { color: "info", tooltip: "Intermediaries must not modify the response body" },
 };
 
@@ -96,7 +99,12 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
               })}
             </div>
           }
-          copyValue={directiveKeys.map(key => { const val = directives[key]; return val === true ? key : `${key}=${val}`; }).join(", ")}
+          copyValue={directiveKeys
+            .map((key) => {
+              const val = directives[key];
+              return val === true ? key : `${key}=${val}`;
+            })
+            .join(", ")}
         />
       )}
 
@@ -131,7 +139,13 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
               )}
             </div>
           }
-          copyValue={[cache.cdn_cache.provider, cache.cdn_cache.status, cache.cdn_cache.age_seconds != null ? `age: ${cache.cdn_cache.age_seconds}s` : null].filter(Boolean).join(" · ")}
+          copyValue={[
+            cache.cdn_cache.provider,
+            cache.cdn_cache.status,
+            cache.cdn_cache.age_seconds != null ? `age: ${cache.cdn_cache.age_seconds}s` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         />
       )}
 
@@ -146,12 +160,18 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
         value={
           <div className="flex items-center gap-1.5">
             <Tooltip text="ETag allows efficient revalidation — server returns 304 Not Modified if content hasn't changed">
-              <span className={`badge badge-${cache.conditional.etag ? "pass" : "neutral"}`} style={{ fontSize: "9px", cursor: "help" }}>
+              <span
+                className={`badge badge-${cache.conditional.etag ? "pass" : "neutral"}`}
+                style={{ fontSize: "9px", cursor: "help" }}
+              >
                 ETag {cache.conditional.etag ? "✓" : "✗"}
               </span>
             </Tooltip>
             <Tooltip text="Last-Modified enables date-based revalidation via If-Modified-Since">
-              <span className={`badge badge-${cache.conditional.last_modified ? "pass" : "neutral"}`} style={{ fontSize: "9px", cursor: "help" }}>
+              <span
+                className={`badge badge-${cache.conditional.last_modified ? "pass" : "neutral"}`}
+                style={{ fontSize: "9px", cursor: "help" }}
+              >
                 Last-Modified {cache.conditional.last_modified ? "✓" : "✗"}
               </span>
             </Tooltip>
@@ -166,8 +186,14 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
           value={
             <div className="flex flex-wrap gap-1 justify-end">
               {cache.conditional.varies_on.map((v) => (
-                <Tooltip key={v} text={v === "*" ? "Vary: * effectively disables caching" : `Cache varies on the ${v} request header`}>
-                  <span className={`badge badge-${v === "*" ? "fail" : "info"}`} style={{ fontSize: "9px", cursor: "help" }}>
+                <Tooltip
+                  key={v}
+                  text={v === "*" ? "Vary: * effectively disables caching" : `Cache varies on the ${v} request header`}
+                >
+                  <span
+                    className={`badge badge-${v === "*" ? "fail" : "info"}`}
+                    style={{ fontSize: "9px", cursor: "help" }}
+                  >
                     {v}
                   </span>
                 </Tooltip>
@@ -180,7 +206,15 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
 
       {/* Verdict */}
       <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
-        <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--text-secondary)", lineHeight: "16px", margin: 0 }}>
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "11px",
+            color: "var(--text-secondary)",
+            lineHeight: "16px",
+            margin: 0,
+          }}
+        >
           {cache.verdict_label}
         </p>
       </div>
@@ -189,7 +223,11 @@ export function CachePanel({ data }: { data: AnalysisResult }) {
       {cache.issues.length > 0 && (
         <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
           {cache.issues.map((issue, i) => (
-            <div key={i} className="flex items-start gap-1.5" style={{ marginBottom: i < cache.issues.length - 1 ? "4px" : 0 }}>
+            <div
+              key={i}
+              className="flex items-start gap-1.5"
+              style={{ marginBottom: i < cache.issues.length - 1 ? "4px" : 0 }}
+            >
               <AlertTriangle size={10} style={{ color: "var(--warning)", marginTop: "3px", flexShrink: 0 }} />
               <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "16px" }}>
                 {issue}

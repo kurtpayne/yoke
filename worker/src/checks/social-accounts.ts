@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { getSocialAccounts } from "../actions/social";
+import type { Check } from "./types";
 
 export const socialAccountsCheck: Check = {
   key: "social_accounts",

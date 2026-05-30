@@ -11,7 +11,7 @@ bun install
 cd client && bun install && cd ..
 cd worker && bun install && cd ..
 
-# Enable pre-commit hooks (lockfile freshness check)
+# Enable pre-commit hooks (Biome lint + lockfile freshness)
 git config core.hooksPath .githooks
 
 # Run tests
@@ -19,6 +19,12 @@ npx vitest run
 
 # Type check (must pass with zero errors — CI enforces this)
 cd worker && bun run typecheck
+
+# Lint (must pass with zero errors — CI enforces this)
+npx @biomejs/biome check .
+
+# Auto-fix lint and formatting issues
+npx @biomejs/biome check --write .
 
 # Local development
 cd client && bun run dev        # Vite dev server for the SPA
@@ -190,6 +196,7 @@ git config core.hooksPath .githooks
 
 This runs automatically before each commit:
 
+- **Biome lint & format** — checks staged `.ts`/`.tsx`/`.js`/`.json` files for lint errors and formatting issues. Blocks the commit if errors are found; run `npx @biomejs/biome check --write .` to auto-fix.
 - **Lockfile freshness** — verifies `bun.lockb` in all three roots (root, client, worker) matches `package.json`. Blocks the commit if lockfiles are stale, with instructions to fix.
 
 If you need to bypass the hook for a WIP commit: `git commit --no-verify`.
@@ -198,6 +205,7 @@ If you need to bypass the hook for a WIP commit: `git commit --no-verify`.
 
 - [ ] `npx vitest run` passes (all 192 tests)
 - [ ] `cd worker && bun run typecheck` passes with zero errors
+- [ ] `npx @biomejs/biome check .` passes with zero errors (warnings are OK)
 - [ ] New checks include a test for the expected output shape
 - [ ] New scoring signals are added to `signal-registry.ts`
 - [ ] No hardcoded secrets or API keys

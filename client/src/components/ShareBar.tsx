@@ -1,5 +1,5 @@
 import { Link2, Share2 } from "lucide-react";
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Axis, AxisScoreData } from "../api";
 
 // ─── Base64url encoding ──────────────────────────────────────────────
@@ -32,24 +32,21 @@ function buildPayload(
   axes: Record<Axis, AxisScoreData>,
   analyzedAt: string,
 ): string {
-  const axisScores = AXIS_ORDER.map(a => axes[a]?.score ?? 0);
+  const axisScores = AXIS_ORDER.map((a) => axes[a]?.score ?? 0);
   const ts = Math.floor(new Date(analyzedAt).getTime() / 1000);
   const obj = { d: domain, s: composite, g: grade, a: axisScores, t: ts };
   const json = JSON.stringify(obj);
   return base64urlEncode(new TextEncoder().encode(json));
 }
 
-async function getSignedUrl(
-  payload: string,
-  origin: string,
-): Promise<string> {
+async function getSignedUrl(payload: string, origin: string): Promise<string> {
   const resp = await fetch(`${origin}/api/share-sign`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ payload }),
   });
   if (!resp.ok) throw new Error("Failed to sign share payload");
-  const data = await resp.json() as { signature: string };
+  const data = (await resp.json()) as { signature: string };
   return `${origin}/r/${payload}.${data.signature}`;
 }
 
@@ -81,13 +78,15 @@ export function ShareBar({ domain, composite, grade, axes, analyzedAt }: ShareBa
     // Deduplicate concurrent sign requests
     if (!signingRef.current) {
       const payload = buildPayload(domain, composite!, grade!, axes!, analyzedAt!);
-      signingRef.current = getSignedUrl(payload, window.location.origin).then(url => {
-        signedUrlRef.current = url;
-        return url;
-      }).catch(() => {
-        signingRef.current = null;
-        return `${window.location.origin}/${domain}`;
-      });
+      signingRef.current = getSignedUrl(payload, window.location.origin)
+        .then((url) => {
+          signedUrlRef.current = url;
+          return url;
+        })
+        .catch(() => {
+          signingRef.current = null;
+          return `${window.location.origin}/${domain}`;
+        });
     }
     return signingRef.current;
   }, [domain, composite, grade, axes, analyzedAt, hasScoreData]);
@@ -116,7 +115,7 @@ export function ShareBar({ domain, composite, grade, axes, analyzedAt }: ShareBa
     window.open(
       `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
       "_blank",
-      "noopener,noreferrer,width=550,height=420"
+      "noopener,noreferrer,width=550,height=420",
     );
   }, [domain, getShareUrl]);
 
@@ -125,7 +124,7 @@ export function ShareBar({ domain, composite, grade, axes, analyzedAt }: ShareBa
     window.open(
       `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
       "_blank",
-      "noopener,noreferrer,width=600,height=500"
+      "noopener,noreferrer,width=600,height=500",
     );
   }, [getShareUrl]);
 
@@ -135,7 +134,7 @@ export function ShareBar({ domain, composite, grade, axes, analyzedAt }: ShareBa
     window.open(
       `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
       "_blank",
-      "noopener,noreferrer"
+      "noopener,noreferrer",
     );
   }, [domain, getShareUrl]);
 
@@ -158,53 +157,28 @@ export function ShareBar({ domain, composite, grade, axes, analyzedAt }: ShareBa
 
   return (
     <div className="share-bar">
-      <button
-        type="button"
-        className="share-btn share-copy"
-        onClick={copyLink}
-        title="Copy permalink"
-      >
+      <button type="button" className="share-btn share-copy" onClick={copyLink} title="Copy permalink">
         <Link2 size={12} />
         <span>{copied ? "Copied!" : "Copy link"}</span>
       </button>
 
-      <button
-        type="button"
-        className="share-btn"
-        onClick={shareToX}
-        title="Share on X"
-      >
+      <button type="button" className="share-btn" onClick={shareToX} title="Share on X">
         <XIcon />
         <span className="share-label-wide">Share</span>
       </button>
 
-      <button
-        type="button"
-        className="share-btn"
-        onClick={shareToLinkedIn}
-        title="Share on LinkedIn"
-      >
+      <button type="button" className="share-btn" onClick={shareToLinkedIn} title="Share on LinkedIn">
         <LinkedInIcon />
         <span className="share-label-wide">Share</span>
       </button>
 
-      <button
-        type="button"
-        className="share-btn"
-        onClick={shareToReddit}
-        title="Share on Reddit"
-      >
+      <button type="button" className="share-btn" onClick={shareToReddit} title="Share on Reddit">
         <RedditIcon />
         <span className="share-label-wide">Share</span>
       </button>
 
       {hasNativeShare && (
-        <button
-          type="button"
-          className="share-btn"
-          onClick={nativeShare}
-          title="Share"
-        >
+        <button type="button" className="share-btn" onClick={nativeShare} title="Share">
           <Share2 size={12} />
         </button>
       )}

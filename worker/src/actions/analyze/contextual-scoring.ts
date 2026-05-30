@@ -2,34 +2,68 @@
 // Implements the 5-axis radar scoring with archetype-based contextual weighting.
 // See workspace/yoke-research/scoring-system-design.md for full design doc.
 
-import type {
-  SslResult, DnssecResult, BlocklistResult, PerformanceResult,
-  OgTwitterResult, LegalResult, CompressionResult, JsonLdItem,
-  RobotsParsed, MetaResult, HttpAnalysis, SecurityHeaderCheck,
-  EmailAuthResult, CertTransparencyResult, GreynoiseResult,
-  HostingResult, TechItem, AccessibilityResult, ThirdPartyScriptsResult,
-  CookieConsentResult, CacheAnalysis, WafDetection, TrustSignals,
-  ShodanResult, CookieSecurityResult, SecurityTxtResult, WellKnownResult,
-  RedirectHop, CruxResult,
-} from "./types";
-import type { NetworkHealth } from "./network-health";
-import type { BreachResult } from "../breaches";
 import {
-  PERF_SCORE, LCP, CLS, TTFB, INP, FCP, TBT, DOMAIN_AGE, DOMAIN_EXPIRY, NS_COUNT, A11Y_SCORE,
-  SEVERITY_SCORES, resolveSeverity,
+  CLS,
+  FCP,
+  INP,
+  LCP,
+  PERF_SCORE,
+  resolveSeverity,
+  SEVERITY_SCORES,
+  TBT,
+  TTFB,
 } from "../../config/scoring-thresholds";
 import {
   AXIS_WEIGHTS as REGISTRY_AXIS_WEIGHTS,
   gradeFromComposite as registryGradeFromComposite,
 } from "../../config/signal-registry";
-import { scanForVulnerableLibraries } from "../../data/vulnerable-libraries";
 import { analyzeNsDiversity } from "../../data/ns-providers";
+import { scanForVulnerableLibraries } from "../../data/vulnerable-libraries";
+import type { BreachResult } from "../breaches";
+import type { NetworkHealth } from "./network-health";
+import type {
+  AccessibilityResult,
+  BlocklistResult,
+  CacheAnalysis,
+  CertTransparencyResult,
+  CompressionResult,
+  CookieConsentResult,
+  CookieSecurityResult,
+  CruxResult,
+  DnssecResult,
+  EmailAuthResult,
+  GreynoiseResult,
+  HostingResult,
+  JsonLdItem,
+  LegalResult,
+  MetaResult,
+  OgTwitterResult,
+  PerformanceResult,
+  RedirectHop,
+  RobotsParsed,
+  SecurityHeaderCheck,
+  SecurityTxtResult,
+  ShodanResult,
+  SslResult,
+  TechItem,
+  ThirdPartyScriptsResult,
+  TrustSignals,
+  WafDetection,
+  WellKnownResult,
+} from "./types";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
 export type Axis = "security" | "performance" | "reliability" | "trust" | "visibility";
 export type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
-export type ArchetypeName = "commerce" | "content" | "application" | "corporate" | "infrastructure" | "institutional" | "general";
+export type ArchetypeName =
+  | "commerce"
+  | "content"
+  | "application"
+  | "corporate"
+  | "infrastructure"
+  | "institutional"
+  | "general";
 
 export interface Finding {
   signal: string;
@@ -82,7 +116,7 @@ export function computeAxisScore(findings: Finding[]): number {
   return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 65;
 }
 
-export function computeComposite(axisScores: Record<Axis, number>, archetype: ArchetypeName): number {
+export function computeComposite(axisScores: Record<Axis, number>, _archetype: ArchetypeName): number {
   let composite = 0;
   for (const axis of Object.keys(AXIS_WEIGHTS) as Axis[]) {
     composite += axisScores[axis] * AXIS_WEIGHTS[axis];
@@ -94,7 +128,11 @@ export function gradeFromComposite(score: number): string {
   return registryGradeFromComposite(score);
 }
 
-export function contextualSeverity(baseSeverity: Severity, archetype: ArchetypeName, overrides: Partial<Record<ArchetypeName, Severity>>): Severity {
+export function contextualSeverity(
+  baseSeverity: Severity,
+  archetype: ArchetypeName,
+  overrides: Partial<Record<ArchetypeName, Severity>>,
+): Severity {
   return overrides[archetype] ?? baseSeverity;
 }
 
@@ -137,12 +175,12 @@ export function detectArchetype(opts: {
   // Commerce signals
   const commerceTech = ["shopify", "woocommerce", "magento", "bigcommerce", "prestashop", "opencart", "saleor"];
   for (const t of tech) {
-    if (commerceTech.some(c => t.name.toLowerCase().includes(c))) {
+    if (commerceTech.some((c) => t.name.toLowerCase().includes(c))) {
       scores.commerce.score += 0.4;
       scores.commerce.signals.push(`${t.name} detected`);
     }
   }
-  if (jsonLd.some(j => j.type === "Product" || j.type === "Offer")) {
+  if (jsonLd.some((j) => j.type === "Product" || j.type === "Offer")) {
     scores.commerce.score += 0.3;
     scores.commerce.signals.push("Product schema found");
   }
@@ -156,14 +194,26 @@ export function detectArchetype(opts: {
   }
 
   // Content signals
-  const contentTech = ["wordpress", "ghost", "hugo", "jekyll", "gatsby", "eleventy", "pelican", "hexo", "drupal", "joomla", "squarespace"];
+  const contentTech = [
+    "wordpress",
+    "ghost",
+    "hugo",
+    "jekyll",
+    "gatsby",
+    "eleventy",
+    "pelican",
+    "hexo",
+    "drupal",
+    "joomla",
+    "squarespace",
+  ];
   for (const t of tech) {
-    if (contentTech.some(c => t.name.toLowerCase().includes(c))) {
+    if (contentTech.some((c) => t.name.toLowerCase().includes(c))) {
       scores.content.score += 0.35;
       scores.content.signals.push(`${t.name} (CMS)`);
     }
   }
-  if (jsonLd.some(j => ["Article", "BlogPosting", "NewsArticle", "WebPage"].includes(j.type))) {
+  if (jsonLd.some((j) => ["Article", "BlogPosting", "NewsArticle", "WebPage"].includes(j.type))) {
     scores.content.score += 0.3;
     scores.content.signals.push("Article/Blog schema found");
   }
@@ -175,7 +225,7 @@ export function detectArchetype(opts: {
   // Application signals
   const appTech = ["react", "vue", "angular", "svelte", "next.js", "nuxt", "remix"];
   for (const t of tech) {
-    if (appTech.some(c => t.name.toLowerCase().includes(c))) {
+    if (appTech.some((c) => t.name.toLowerCase().includes(c))) {
       scores.application.score += 0.2;
       scores.application.signals.push(`${t.name} (SPA framework)`);
     }
@@ -194,7 +244,7 @@ export function detectArchetype(opts: {
   }
 
   // Corporate signals
-  if (jsonLd.some(j => j.type === "Organization" || j.type === "Corporation")) {
+  if (jsonLd.some((j) => j.type === "Organization" || j.type === "Corporation")) {
     scores.corporate.score += 0.3;
     scores.corporate.signals.push("Organization schema found");
   }
@@ -234,14 +284,18 @@ export function detectArchetype(opts: {
   // Detect managed platform
   let platform: string | null = null;
   const platformChecks: [RegExp, string][] = [
-    [/shopify/i, "Shopify"], [/wix/i, "Wix"], [/squarespace/i, "Squarespace"],
-    [/wordpress\.com/i, "WordPress.com"], [/vercel/i, "Vercel"],
-    [/netlify/i, "Netlify"], [/cloudflare pages/i, "Cloudflare Pages"],
+    [/shopify/i, "Shopify"],
+    [/wix/i, "Wix"],
+    [/squarespace/i, "Squarespace"],
+    [/wordpress\.com/i, "WordPress.com"],
+    [/vercel/i, "Vercel"],
+    [/netlify/i, "Netlify"],
+    [/cloudflare pages/i, "Cloudflare Pages"],
   ];
   const hostProvider = opts.hosting?.provider ?? "";
   const cdn = opts.hosting?.cdn ?? "";
   for (const [re, name] of platformChecks) {
-    if (re.test(hostProvider) || re.test(cdn) || tech.some(t => re.test(t.name))) {
+    if (re.test(hostProvider) || re.test(cdn) || tech.some((t) => re.test(t.name))) {
       platform = name;
       break;
     }
@@ -256,11 +310,18 @@ export function detectArchetype(opts: {
   const second = ranked[1];
 
   if (!top || top[1].score < 0.3) {
-    return { detected: "general", confidence: 1.0, secondary: null, signals: ["No strong archetype signals"], platform, weights: AXIS_WEIGHTS };
+    return {
+      detected: "general",
+      confidence: 1.0,
+      secondary: null,
+      signals: ["No strong archetype signals"],
+      platform,
+      weights: AXIS_WEIGHTS,
+    };
   }
 
   const confidence = Math.min(1.0, top[1].score);
-  const secondary = (second && second[1].score > 0.25 && top[1].score - second[1].score < 0.15) ? second[0] : null;
+  const secondary = second && second[1].score > 0.25 && top[1].score - second[1].score < 0.15 ? second[0] : null;
 
   return { detected: top[0], confidence, secondary, signals: top[1].signals, platform, weights: AXIS_WEIGHTS };
 }
@@ -286,7 +347,14 @@ export function calculateDomainScore(opts: {
   jsonLd: JsonLdItem[] | null;
   meta: MetaResult | null;
   legal: LegalResult | null;
-  resourceHints: { total: number; preload: string[]; preconnect: string[]; prefetch: string[]; dns_prefetch: string[]; modulepreload: string[] } | null;
+  resourceHints: {
+    total: number;
+    preload: string[];
+    preconnect: string[];
+    prefetch: string[];
+    dns_prefetch: string[];
+    modulepreload: string[];
+  } | null;
   wayback: { total_snapshots: number | null } | null;
   certTransparency: CertTransparencyResult | null;
   greynoise: GreynoiseResult | null;
@@ -335,47 +403,120 @@ export function calculateDomainScore(opts: {
   if (sslGrade) {
     if (sslGrade === "Valid") {
       // Fallback confirmed HTTPS works but SSL Labs didn't provide a letter grade
-      findings.push({ signal: "ssl_grade", axis: "security", severity: "good", label: "SSL certificate verified", tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "ssl_grade",
+        axis: "security",
+        severity: "good",
+        label: "SSL certificate verified",
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (sslGrade.startsWith("A")) {
-      findings.push({ signal: "ssl_grade", axis: "security", severity: "good", label: `SSL grade ${sslGrade}`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "ssl_grade",
+        axis: "security",
+        severity: "good",
+        label: `SSL grade ${sslGrade}`,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (sslGrade.startsWith("B")) {
-      findings.push({ signal: "ssl_grade", axis: "security", severity: contextualSeverity("low", arch, { commerce: "medium", institutional: "medium" }), label: `SSL grade ${sslGrade} — room for improvement`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "ssl_grade",
+        axis: "security",
+        severity: contextualSeverity("low", arch, { commerce: "medium", institutional: "medium" }),
+        label: `SSL grade ${sslGrade} — room for improvement`,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (sslGrade.startsWith("C")) {
-      findings.push({ signal: "ssl_grade", axis: "security", severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }), label: `SSL grade ${sslGrade} — weak configuration`, tradeoff: "Tightening SSL config may drop support for older clients.", weight: 3 });
+      findings.push({
+        signal: "ssl_grade",
+        axis: "security",
+        severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
+        label: `SSL grade ${sslGrade} — weak configuration`,
+        tradeoff: "Tightening SSL config may drop support for older clients.",
+        weight: 3,
+      });
     } else {
-      findings.push({ signal: "ssl_grade", axis: "security", severity: contextualSeverity("high", arch, { commerce: "critical", institutional: "critical" }), label: `SSL grade ${sslGrade} — significant weaknesses`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "ssl_grade",
+        axis: "security",
+        severity: contextualSeverity("high", arch, { commerce: "critical", institutional: "critical" }),
+        label: `SSL grade ${sslGrade} — significant weaknesses`,
+        tradeoff: null,
+        weight: 3,
+      });
     }
   } else if (sslError && !opts.httpBlocked) {
     // SSL Labs couldn't assess but the site was successfully fetched over HTTPS — don't penalize
-    findings.push({ signal: "ssl_grade", axis: "security", severity: "info", label: "SSL present (grade assessment unavailable)", tradeoff: null, weight: 3 });
+    findings.push({
+      signal: "ssl_grade",
+      axis: "security",
+      severity: "info",
+      label: "SSL present (grade assessment unavailable)",
+      tradeoff: null,
+      weight: 3,
+    });
   } else if (!opts.httpBlocked) {
-    findings.push({ signal: "ssl_missing", axis: "security", severity: contextualSeverity("high", arch, { content: "medium" }), label: "No SSL certificate detected", tradeoff: null, weight: 3 });
+    findings.push({
+      signal: "ssl_missing",
+      axis: "security",
+      severity: contextualSeverity("high", arch, { content: "medium" }),
+      label: "No SSL certificate detected",
+      tradeoff: null,
+      weight: 3,
+    });
   }
 
   // HSTS
   const hasHsts = !!opts.headers?.["strict-transport-security"];
   if (!opts.httpBlocked) {
     if (hasHsts) {
-      findings.push({ signal: "hsts", axis: "security", severity: "good", label: "HSTS enabled", tradeoff: null, weight: 4 });
+      findings.push({
+        signal: "hsts",
+        axis: "security",
+        severity: "good",
+        label: "HSTS enabled",
+        tradeoff: null,
+        weight: 4,
+      });
     } else {
       findings.push({
-        signal: "hsts_missing", axis: "security",
-        severity: contextualSeverity("medium", arch, { commerce: "critical", application: "high", content: "low", corporate: "medium" }),
+        signal: "hsts_missing",
+        axis: "security",
+        severity: contextualSeverity("medium", arch, {
+          commerce: "critical",
+          application: "high",
+          content: "low",
+          corporate: "medium",
+        }),
         label: arch === "commerce" ? "No HSTS — payment flows vulnerable to downgrade attacks" : "No HSTS header",
-        tradeoff: arch === "content" ? "Adding HSTS is low-effort. But if you serve mixed content, HSTS will break it." : null,
+        tradeoff:
+          arch === "content" ? "Adding HSTS is low-effort. But if you serve mixed content, HSTS will break it." : null,
         weight: 4, // Highest security weight — HSTS prevents protocol downgrade attacks, the most impactful single header
       });
     }
   }
 
   // CSP
-  const hasCsp = opts.securityAudit.some(a => a.header.toLowerCase().includes("content-security-policy") && a.status === "pass");
+  const hasCsp = opts.securityAudit.some(
+    (a) => a.header.toLowerCase().includes("content-security-policy") && a.status === "pass",
+  );
   if (!opts.httpBlocked) {
     if (hasCsp) {
-      findings.push({ signal: "csp", axis: "security", severity: "good", label: "Content Security Policy present", tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "csp",
+        axis: "security",
+        severity: "good",
+        label: "Content Security Policy present",
+        tradeoff: null,
+        weight: 3,
+      });
     } else {
       findings.push({
-        signal: "csp_missing", axis: "security",
+        signal: "csp_missing",
+        axis: "security",
         severity: contextualSeverity("medium", arch, { application: "high", content: "medium", corporate: "low" }),
         label: arch === "application" ? "No CSP — XSS risk for interactive app" : "No Content Security Policy",
         tradeoff: arch === "application" ? "CSP is hard to retrofit. Start with report-only mode." : null,
@@ -385,42 +526,53 @@ export function calculateDomainScore(opts: {
   }
 
   // X-Frame-Options — skip if CSP frame-ancestors supersedes it (I1 audit fix)
-  const hasXfo = opts.securityAudit.some(a => a.header.toLowerCase().includes("x-frame-options") && a.status === "pass");
+  const hasXfo = opts.securityAudit.some(
+    (a) => a.header.toLowerCase().includes("x-frame-options") && a.status === "pass",
+  );
   const cspHeaderXfo = opts.headers?.["content-security-policy"] ?? "";
   const hasFrameAncestors = /frame-ancestors/i.test(cspHeaderXfo);
   if (!opts.httpBlocked) {
     if (hasXfo || hasFrameAncestors) {
       findings.push({
-        signal: "xfo", axis: "security",
+        signal: "xfo",
+        axis: "security",
         severity: "good",
         label: hasXfo ? "X-Frame-Options set" : "CSP frame-ancestors set (supersedes X-Frame-Options)",
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     } else {
       findings.push({
-        signal: "xfo", axis: "security",
+        signal: "xfo",
+        axis: "security",
         severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
         label: "No clickjacking protection (X-Frame-Options or CSP frame-ancestors)",
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
   }
 
   // X-Content-Type-Options
-  const hasXcto = opts.securityAudit.some(a => a.header.toLowerCase().includes("x-content-type-options") && a.status === "pass");
+  const hasXcto = opts.securityAudit.some(
+    (a) => a.header.toLowerCase().includes("x-content-type-options") && a.status === "pass",
+  );
   if (!opts.httpBlocked) {
     findings.push({
-      signal: "xcto", axis: "security",
+      signal: "xcto",
+      axis: "security",
       severity: hasXcto ? "good" : "low",
       label: hasXcto ? "X-Content-Type-Options set" : "No X-Content-Type-Options",
-      tradeoff: null, weight: 1,
+      tradeoff: null,
+      weight: 1,
     });
   }
 
   // DNSSEC — bonus when present, minimal penalty when absent for most archetypes
   if (opts.dnssec) {
     findings.push({
-      signal: "dnssec", axis: "security",
+      signal: "dnssec",
+      axis: "security",
       severity: opts.dnssec.enabled
         ? "good"
         : contextualSeverity("info", arch, {
@@ -433,32 +585,37 @@ export function calculateDomainScore(opts: {
             general: "info",
           }),
       label: opts.dnssec.enabled ? "DNSSEC enabled" : "DNSSEC not enabled",
-      tradeoff: opts.dnssec.enabled ? null : "DNSSEC adds DNS-level authenticity but can complicate DNS management. Most sites work fine without it.",
+      tradeoff: opts.dnssec.enabled
+        ? null
+        : "DNSSEC adds DNS-level authenticity but can complicate DNS management. Most sites work fine without it.",
       weight: opts.dnssec.enabled ? 2 : 1, // Asymmetric: rewards presence (weight 2) but barely penalizes absence (weight 1) because DNSSEC adoption is low and most sites work fine without it
       source: "DNSSEC adds DNS-level authenticity. Weighted asymmetrically: present=bonus, absent=minimal penalty.",
     });
   }
 
   // Blocklist status
-  const listedCount = (opts.blocklists ?? []).filter(b => b.listed).length;
+  const listedCount = (opts.blocklists ?? []).filter((b) => b.listed).length;
   if (listedCount > 0) {
     // CDN IPs are shared infrastructure — blocklist hits reflect neighbors, not this domain (I4)
     const isBehindCdn = !!opts.hosting?.cdn;
     if (isBehindCdn) {
       findings.push({
-        signal: "blocklist_listed", axis: "security",
+        signal: "blocklist_listed",
+        axis: "security",
         severity: "info",
-        label: `Listed on ${listedCount} blocklist${listedCount > 1 ? "s" : ""} (shared CDN IP: ${opts.hosting!.cdn})`,
+        label: `Listed on ${listedCount} blocklist${listedCount > 1 ? "s" : ""} (shared CDN IP: ${opts.hosting?.cdn})`,
         tradeoff: "Blocklist hits on CDN IPs reflect shared infrastructure, not this domain specifically.",
         weight: 1,
       });
     } else {
-    findings.push({
-      signal: "blocklist_listed", axis: "security",
-      severity: listedCount >= 3 ? "critical" : listedCount >= 2 ? "high" : "medium",
-      label: `Listed on ${listedCount} blocklist${listedCount > 1 ? "s" : ""}`,
-      tradeoff: null, weight: 3,
-    });
+      findings.push({
+        signal: "blocklist_listed",
+        axis: "security",
+        severity: listedCount >= 3 ? "critical" : listedCount >= 2 ? "high" : "medium",
+        label: `Listed on ${listedCount} blocklist${listedCount > 1 ? "s" : ""}`,
+        tradeoff: null,
+        weight: 3,
+      });
     }
   }
 
@@ -471,19 +628,35 @@ export function calculateDomainScore(opts: {
     const emailComplete = hasSpf && hasDmarc && hasDkim;
 
     if (emailComplete && dmarcPolicy === "reject") {
-      findings.push({ signal: "email_auth", axis: "security", severity: "good", label: "Full email auth (SPF+DKIM+DMARC reject)", tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "email_auth",
+        axis: "security",
+        severity: "good",
+        label: "Full email auth (SPF+DKIM+DMARC reject)",
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (emailComplete) {
-      findings.push({ signal: "email_auth", axis: "security", severity: "info", label: `Email auth present (DMARC: ${dmarcPolicy || "none"})`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "email_auth",
+        axis: "security",
+        severity: "info",
+        label: `Email auth present (DMARC: ${dmarcPolicy || "none"})`,
+        tradeoff: null,
+        weight: 3,
+      });
     } else {
       // SPF and DMARC are deterministic lookups; DKIM uses arbitrary selectors
       // that can't always be discovered externally — treat them differently
       const missing = [!hasSpf && "SPF", !hasDmarc && "DMARC"].filter(Boolean);
       if (missing.length > 0) {
         findings.push({
-          signal: "email_auth_incomplete", axis: "security",
+          signal: "email_auth_incomplete",
+          axis: "security",
           severity: contextualSeverity("medium", arch, { corporate: "high" }),
           label: `Missing email auth: ${missing.join(", ")}`,
-          tradeoff: null, weight: 3,
+          tradeoff: null,
+          weight: 3,
         });
       }
       if (!hasDkim && (hasSpf || hasDmarc)) {
@@ -492,7 +665,8 @@ export function calculateDomainScore(opts: {
       // SPF without DMARC — trivially spoofable since there's no enforcement policy
       if (hasSpf && !hasDmarc) {
         findings.push({
-          signal: "spf_without_dmarc", axis: "security",
+          signal: "spf_without_dmarc",
+          axis: "security",
           severity: contextualSeverity("low", arch, { corporate: "medium" }),
           label: "SPF without DMARC — spoofing protection incomplete without enforcement policy",
           tradeoff: "Add a DMARC record (start with p=none) to enforce SPF alignment.",
@@ -505,11 +679,32 @@ export function calculateDomainScore(opts: {
   // WAF detection
   if (opts.waf?.detected) {
     if (opts.waf.confidence === "high") {
-      findings.push({ signal: "waf_detected", axis: "security", severity: "good", label: `WAF detected: ${opts.waf.provider}`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "waf_detected",
+        axis: "security",
+        severity: "good",
+        label: `WAF detected: ${opts.waf.provider}`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (opts.waf.confidence === "medium") {
-      findings.push({ signal: "waf_detected", axis: "security", severity: "good", label: `WAF likely: ${opts.waf.provider}`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "waf_detected",
+        axis: "security",
+        severity: "good",
+        label: `WAF likely: ${opts.waf.provider}`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else {
-      findings.push({ signal: "waf_detected", axis: "security", severity: "good", label: `WAF possible: ${opts.waf.provider}`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "waf_detected",
+        axis: "security",
+        severity: "good",
+        label: `WAF possible: ${opts.waf.provider}`,
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -519,12 +714,19 @@ export function calculateDomainScore(opts: {
   if (opts.headers && !opts.httpBlocked) {
     const hsts = opts.headers["strict-transport-security"] ?? "";
     if (/preload/i.test(hsts) && /max-age\s*=\s*(\d{8,})/i.test(hsts) && /includesubdomains/i.test(hsts)) {
-      findings.push({ signal: "hsts_preload", axis: "security", severity: "good", label: "HSTS preload eligible", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "hsts_preload",
+        axis: "security",
+        severity: "good",
+        label: "HSTS preload eligible",
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
   // CAA records — detailed parsing
-  const caaRecords = opts.dnsRecords.filter(r => r.type === "CAA");
+  const caaRecords = opts.dnsRecords.filter((r) => r.type === "CAA");
   if (caaRecords.length > 0) {
     // Parse CAA directives for detail
     const issueDirectives: string[] = [];
@@ -540,18 +742,49 @@ export function calculateDomainScore(opts: {
       else if (tag === "iodef") hasIodef = true;
     }
     if (issueDirectives.length > 0) {
-      const caNames = issueDirectives.filter(v => v !== ";").slice(0, 3).join(", ");
-      findings.push({ signal: "caa_records", axis: "security", severity: "good", label: `CAA restricts issuance to: ${caNames || "none (issuance blocked)"}`, tradeoff: null, weight: 1 });
+      const caNames = issueDirectives
+        .filter((v) => v !== ";")
+        .slice(0, 3)
+        .join(", ");
+      findings.push({
+        signal: "caa_records",
+        axis: "security",
+        severity: "good",
+        label: `CAA restricts issuance to: ${caNames || "none (issuance blocked)"}`,
+        tradeoff: null,
+        weight: 1,
+      });
     } else {
-      findings.push({ signal: "caa_records", axis: "security", severity: "good", label: "CAA records restrict certificate issuance", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "caa_records",
+        axis: "security",
+        severity: "good",
+        label: "CAA records restrict certificate issuance",
+        tradeoff: null,
+        weight: 1,
+      });
     }
     // Flag if issue is set but issuewild is not — wildcards can be issued by any CA
     if (issueDirectives.length > 0 && issuewildDirectives.length === 0) {
-      findings.push({ signal: "caa_wildcard_unrestricted", axis: "security", severity: "info", label: "CAA: no issuewild restriction — wildcard certs unrestricted", tradeoff: "Consider adding issuewild CAA records to restrict which CAs can issue wildcard certificates.", weight: 0 });
+      findings.push({
+        signal: "caa_wildcard_unrestricted",
+        axis: "security",
+        severity: "info",
+        label: "CAA: no issuewild restriction — wildcard certs unrestricted",
+        tradeoff: "Consider adding issuewild CAA records to restrict which CAs can issue wildcard certificates.",
+        weight: 0,
+      });
     }
     // Credit iodef (violation reporting configured)
     if (hasIodef) {
-      findings.push({ signal: "caa_iodef", axis: "security", severity: "good", label: "CAA: violation reporting configured (iodef)", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "caa_iodef",
+        axis: "security",
+        severity: "good",
+        label: "CAA: violation reporting configured (iodef)",
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -561,7 +794,8 @@ export function calculateDomainScore(opts: {
     // Wildcard certificates — increased attack surface
     if (ct.has_wildcard) {
       findings.push({
-        signal: "cert_wildcard", axis: "security",
+        signal: "cert_wildcard",
+        axis: "security",
         severity: contextualSeverity("info", arch, { institutional: "low", commerce: "low" }),
         label: "Wildcard certificate in use",
         tradeoff: "Wildcards simplify cert management but increase blast radius if the key is compromised.",
@@ -575,7 +809,7 @@ export function calculateDomainScore(opts: {
   // Compare Certificate Transparency log issuers against CAA records.
   // Info-only, zero penalty — flags potential oversight without penalizing.
   if (opts.certTransparency && !opts.certTransparency.error && opts.certTransparency.certs.length > 0) {
-    const caaRecords = opts.dnsRecords.filter(r => r.type === "CAA");
+    const caaRecords = opts.dnsRecords.filter((r) => r.type === "CAA");
     // Only run if CAA records exist (can't mismatch against nothing)
     if (caaRecords.length > 0) {
       // Parse CAA issue/issuewild directives → set of authorized CA domains
@@ -590,7 +824,7 @@ export function calculateDomainScore(opts: {
         // Filter CT certs to last 2 years only (by not_before date)
         const twoYearsAgo = new Date();
         twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-        const recentCerts = opts.certTransparency.certs.filter(c => {
+        const recentCerts = opts.certTransparency.certs.filter((c) => {
           const notBefore = new Date(c.not_before);
           return notBefore >= twoYearsAgo;
         });
@@ -605,7 +839,7 @@ export function calculateDomainScore(opts: {
           const orgMatch = cert.issuer.match(/O=([^,]+)/i);
           const issuerOrg = orgMatch ? orgMatch[1].trim().toLowerCase() : cert.issuer.toLowerCase();
           // Check if any authorized CA domain appears in the issuer org name
-          const isAuthorized = [...authorizedCAs].some(ca => {
+          const isAuthorized = [...authorizedCAs].some((ca) => {
             const caDomain = ca.replace(/\.$/, ""); // strip trailing dot
             const caName = caDomain.split(".")[0]; // e.g., "letsencrypt" from "letsencrypt.org"
             return issuerOrg.includes(caName) || issuerOrg.includes(caDomain);
@@ -619,10 +853,12 @@ export function calculateDomainScore(opts: {
         if (unauthorizedCAs.size > 0) {
           const caList = [...unauthorizedCAs].slice(0, 5).join(", ");
           findings.push({
-            signal: "ct_caa_mismatch", axis: "trust",
+            signal: "ct_caa_mismatch",
+            axis: "trust",
             severity: "info",
             label: `${unauthorizedCertCount} cert${unauthorizedCertCount !== 1 ? "s" : ""} from CA${unauthorizedCAs.size !== 1 ? "s" : ""} not in CAA: ${caList}`,
-            tradeoff: "Certificates from CAs not listed in CAA records may predate CAA deployment or indicate a policy gap. This is informational only.",
+            tradeoff:
+              "Certificates from CAs not listed in CAA records may predate CAA deployment or indicate a policy gap. This is informational only.",
             weight: 0, // zero penalty — informational
           });
         }
@@ -633,13 +869,15 @@ export function calculateDomainScore(opts: {
   // ─── NEW: Shodan Open Ports (attack surface) ─────────────────────
   if (opts.shodan) {
     const dangerousPorts = [3306, 5432, 6379, 27017, 9200, 11211, 5984, 1433, 3389, 2379, 2380, 9090, 3000, 5601, 8500];
-    const exposedDangerous = opts.shodan.ports.filter(p => dangerousPorts.includes(p));
+    const exposedDangerous = opts.shodan.ports.filter((p) => dangerousPorts.includes(p));
     if (exposedDangerous.length > 0) {
       findings.push({
-        signal: "open_ports", axis: "security",
+        signal: "open_ports",
+        axis: "security",
         severity: "high",
         label: `Dangerous port${exposedDangerous.length > 1 ? "s" : ""} exposed: ${exposedDangerous.join(", ")}`,
-        tradeoff: null, weight: 3,
+        tradeoff: null,
+        weight: 3,
       });
     }
     // Non-standard port count removed — complex infrastructure legitimately
@@ -650,7 +888,8 @@ export function calculateDomainScore(opts: {
   if (opts.shodan) {
     if (opts.shodan.vulns.length > 0) {
       findings.push({
-        signal: "known_vulnerabilities", axis: "security",
+        signal: "known_vulnerabilities",
+        axis: "security",
         severity: opts.shodan.vulns.length >= 5 ? "critical" : "high",
         label: `${opts.shodan.vulns.length} known CVE${opts.shodan.vulns.length > 1 ? "s" : ""} detected (Shodan)`,
         tradeoff: "CVEs are based on detected service versions and may include patched vulnerabilities.",
@@ -666,18 +905,39 @@ export function calculateDomainScore(opts: {
     const cookieCount = opts.cookieSecurity.cookies.length;
     if (cookieCount > 0) {
       if (issues.length === 0) {
-        findings.push({ signal: "cookie_security", axis: "security", severity: "good", label: "All cookies have Secure/HttpOnly flags", tradeoff: null, weight: 3 });
+        findings.push({
+          signal: "cookie_security",
+          axis: "security",
+          severity: "good",
+          label: "All cookies have Secure/HttpOnly flags",
+          tradeoff: null,
+          weight: 3,
+        });
       } else if (issues.length >= 3) {
-        findings.push({ signal: "cookie_security", axis: "security", severity: "medium", label: `${issues.length} cookie security issues (missing Secure/HttpOnly)`, tradeoff: null, weight: 3 });
+        findings.push({
+          signal: "cookie_security",
+          axis: "security",
+          severity: "medium",
+          label: `${issues.length} cookie security issues (missing Secure/HttpOnly)`,
+          tradeoff: null,
+          weight: 3,
+        });
       } else {
-        findings.push({ signal: "cookie_security", axis: "security", severity: "low", label: `${issues.length} cookie security issue${issues.length > 1 ? "s" : ""}`, tradeoff: null, weight: 3 });
+        findings.push({
+          signal: "cookie_security",
+          axis: "security",
+          severity: "low",
+          label: `${issues.length} cookie security issue${issues.length > 1 ? "s" : ""}`,
+          tradeoff: null,
+          weight: 3,
+        });
       }
     }
   }
 
   // ─── NEW: Server Version Disclosure ──────────────────────────────
   if (opts.headers && !opts.httpBlocked) {
-    const serverHeader = opts.headers["server"] ?? "";
+    const serverHeader = opts.headers.server ?? "";
     const poweredBy = opts.headers["x-powered-by"] ?? "";
     const versionPattern = /\/[\d.]+/;
     const serverLeaks = versionPattern.test(serverHeader);
@@ -685,7 +945,8 @@ export function calculateDomainScore(opts: {
     if (serverLeaks || poweredByLeaks) {
       const leaked = [serverLeaks && serverHeader, poweredByLeaks && poweredBy].filter(Boolean).join(", ");
       findings.push({
-        signal: "server_version_disclosure", axis: "security",
+        signal: "server_version_disclosure",
+        axis: "security",
         severity: poweredByLeaks ? "medium" : "low",
         label: `Server version disclosed: ${leaked}`,
         tradeoff: "Version info helps attackers target known vulnerabilities.",
@@ -697,17 +958,60 @@ export function calculateDomainScore(opts: {
   // ─── Referrer-Policy Value Parsing ───────────────────────────────
   if (opts.headers && !opts.httpBlocked) {
     const referrerPolicy = (opts.headers["referrer-policy"] ?? "").toLowerCase().trim();
-    const goodPolicies = ["no-referrer", "strict-origin-when-cross-origin", "same-origin", "strict-origin", "origin-when-cross-origin"];
+    const goodPolicies = [
+      "no-referrer",
+      "strict-origin-when-cross-origin",
+      "same-origin",
+      "strict-origin",
+      "origin-when-cross-origin",
+    ];
     if (referrerPolicy === "unsafe-url") {
-      findings.push({ signal: "referrer_policy_unsafe", axis: "security", severity: "high", label: "Referrer-Policy: unsafe-url leaks full URL including path and query to all origins", tradeoff: "This is the least secure policy. Switch to strict-origin-when-cross-origin or no-referrer.", weight: 2 });
+      findings.push({
+        signal: "referrer_policy_unsafe",
+        axis: "security",
+        severity: "high",
+        label: "Referrer-Policy: unsafe-url leaks full URL including path and query to all origins",
+        tradeoff: "This is the least secure policy. Switch to strict-origin-when-cross-origin or no-referrer.",
+        weight: 2,
+      });
     } else if (referrerPolicy === "no-referrer-when-downgrade") {
-      findings.push({ signal: "referrer_policy_unsafe", axis: "security", severity: "medium", label: "Referrer-Policy: no-referrer-when-downgrade leaks full URL to HTTP targets", tradeoff: "Leaks full URL (path + query) on HTTPS→HTTP navigations. Use strict-origin-when-cross-origin instead.", weight: 2 });
+      findings.push({
+        signal: "referrer_policy_unsafe",
+        axis: "security",
+        severity: "medium",
+        label: "Referrer-Policy: no-referrer-when-downgrade leaks full URL to HTTP targets",
+        tradeoff:
+          "Leaks full URL (path + query) on HTTPS→HTTP navigations. Use strict-origin-when-cross-origin instead.",
+        weight: 2,
+      });
     } else if (referrerPolicy === "origin") {
-      findings.push({ signal: "referrer_policy", axis: "security", severity: "info", label: "Referrer-Policy: origin (safe but limited)", tradeoff: "Sends only the origin, never the path. Safe but prevents analytics from seeing referrer paths. Consider strict-origin-when-cross-origin for a balance.", weight: 1 });
+      findings.push({
+        signal: "referrer_policy",
+        axis: "security",
+        severity: "info",
+        label: "Referrer-Policy: origin (safe but limited)",
+        tradeoff:
+          "Sends only the origin, never the path. Safe but prevents analytics from seeing referrer paths. Consider strict-origin-when-cross-origin for a balance.",
+        weight: 1,
+      });
     } else if (goodPolicies.includes(referrerPolicy)) {
-      findings.push({ signal: "referrer_policy", axis: "security", severity: "good", label: `Referrer-Policy: ${referrerPolicy}`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "referrer_policy",
+        axis: "security",
+        severity: "good",
+        label: `Referrer-Policy: ${referrerPolicy}`,
+        tradeoff: null,
+        weight: 1,
+      });
     } else if (!referrerPolicy) {
-      findings.push({ signal: "referrer_policy_missing", axis: "security", severity: "low", label: "No Referrer-Policy header", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "referrer_policy_missing",
+        axis: "security",
+        severity: "low",
+        label: "No Referrer-Policy header",
+        tradeoff: null,
+        weight: 2,
+      });
     }
   }
 
@@ -716,9 +1020,12 @@ export function calculateDomainScore(opts: {
     const permPolicy = opts.headers["permissions-policy"] ?? opts.headers["feature-policy"] ?? "";
     if (permPolicy) {
       // Parse directive values: "camera=(), microphone=(), geolocation=(self)"
-      const directives = permPolicy.split(",").map(d => d.trim()).filter(Boolean);
+      const directives = permPolicy
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean);
       let restrictedCount = 0;
-      let unrestrictedFeatures: string[] = [];
+      const unrestrictedFeatures: string[] = [];
       for (const directive of directives) {
         const eqIdx = directive.indexOf("=");
         if (eqIdx === -1) continue;
@@ -731,18 +1038,53 @@ export function calculateDomainScore(opts: {
         }
       }
       if (unrestrictedFeatures.length > 0) {
-        findings.push({ signal: "permissions_policy_unrestricted", axis: "security", severity: "medium", label: `Permissions-Policy allows unrestricted access to ${unrestrictedFeatures.join(", ")}`, tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "permissions_policy_unrestricted",
+          axis: "security",
+          severity: "medium",
+          label: `Permissions-Policy allows unrestricted access to ${unrestrictedFeatures.join(", ")}`,
+          tradeoff: null,
+          weight: 2,
+        });
       }
       if (restrictedCount >= 4) {
-        findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: `Permissions-Policy restricts ${restrictedCount} features`, tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "permissions_policy",
+          axis: "security",
+          severity: "good",
+          label: `Permissions-Policy restricts ${restrictedCount} features`,
+          tradeoff: null,
+          weight: 2,
+        });
       } else if (restrictedCount > 0 && unrestrictedFeatures.length === 0) {
-        findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: `Permissions-Policy restricts ${restrictedCount} feature${restrictedCount > 1 ? "s" : ""}`, tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "permissions_policy",
+          axis: "security",
+          severity: "good",
+          label: `Permissions-Policy restricts ${restrictedCount} feature${restrictedCount > 1 ? "s" : ""}`,
+          tradeoff: null,
+          weight: 2,
+        });
       } else if (restrictedCount === 0 && unrestrictedFeatures.length === 0) {
         // Header present but no parseable directives — still acknowledge it
-        findings.push({ signal: "permissions_policy", axis: "security", severity: "good", label: "Permissions-Policy header set", tradeoff: null, weight: 1 });
+        findings.push({
+          signal: "permissions_policy",
+          axis: "security",
+          severity: "good",
+          label: "Permissions-Policy header set",
+          tradeoff: null,
+          weight: 1,
+        });
       }
     } else {
-      findings.push({ signal: "permissions_policy_missing", axis: "security", severity: "low", label: "No Permissions-Policy header", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "permissions_policy_missing",
+        axis: "security",
+        severity: "low",
+        label: "No Permissions-Policy header",
+        tradeoff: null,
+        weight: 2,
+      });
     }
   }
 
@@ -753,16 +1095,25 @@ export function calculateDomainScore(opts: {
     const startsHttp = firstUrl.startsWith("http://");
     const endsHttps = lastUrl.startsWith("https://");
     if (startsHttp && endsHttps) {
-      findings.push({ signal: "http_to_https_redirect", axis: "security", severity: "good", label: "HTTP→HTTPS redirect in place", tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "http_to_https_redirect",
+        axis: "security",
+        severity: "good",
+        label: "HTTP→HTTPS redirect in place",
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (opts.ssl?.grade && !startsHttp) {
       // Site has SSL but we can't confirm redirect (probe may have started on HTTPS)
       // No finding — don't penalize when we can't test
     } else if (opts.ssl?.grade && startsHttp && !endsHttps) {
       findings.push({
-        signal: "no_http_to_https_redirect", axis: "security",
+        signal: "no_http_to_https_redirect",
+        axis: "security",
         severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
         label: "No HTTP→HTTPS redirect detected",
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
   }
@@ -777,17 +1128,21 @@ export function calculateDomainScore(opts: {
       const hasActive = activePattern.test(opts.html);
       if (hasActive) {
         findings.push({
-          signal: "mixed_content", axis: "security",
+          signal: "mixed_content",
+          axis: "security",
           severity: contextualSeverity("medium", arch, { commerce: "high", application: "high" }),
           label: "Active mixed content — scripts or iframes loaded over HTTP",
-          tradeoff: null, weight: 3,
+          tradeoff: null,
+          weight: 3,
         });
       } else {
         findings.push({
-          signal: "mixed_content", axis: "security",
+          signal: "mixed_content",
+          axis: "security",
           severity: "low",
           label: `Passive mixed content — ${httpResources.length} resource(s) loaded over HTTP`,
-          tradeoff: null, weight: 2,
+          tradeoff: null,
+          weight: 2,
         });
       }
     }
@@ -810,21 +1165,38 @@ export function calculateDomainScore(opts: {
             thirdPartyWithSri++;
           }
         }
-      } catch { /* skip malformed URLs */ }
+      } catch {
+        /* skip malformed URLs */
+      }
     }
     if (thirdPartyTotal >= 3) {
       if (thirdPartyWithSri === thirdPartyTotal) {
-        findings.push({ signal: "subresource_integrity", axis: "security", severity: "good", label: `All ${thirdPartyTotal} third-party scripts have SRI`, tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "subresource_integrity",
+          axis: "security",
+          severity: "good",
+          label: `All ${thirdPartyTotal} third-party scripts have SRI`,
+          tradeoff: null,
+          weight: 2,
+        });
       } else if (thirdPartyWithSri === 0) {
         findings.push({
-          signal: "subresource_integrity_missing", axis: "security",
+          signal: "subresource_integrity_missing",
+          axis: "security",
           severity: contextualSeverity("info", arch, { commerce: "low", application: "low" }),
           label: `${thirdPartyTotal} third-party scripts without SRI`,
           tradeoff: "SRI ensures CDN-hosted scripts haven't been tampered with.",
           weight: 1,
         });
       } else {
-        findings.push({ signal: "subresource_integrity_partial", axis: "security", severity: "info", label: `${thirdPartyWithSri}/${thirdPartyTotal} third-party scripts have SRI`, tradeoff: null, weight: 1 });
+        findings.push({
+          signal: "subresource_integrity_partial",
+          axis: "security",
+          severity: "info",
+          label: `${thirdPartyWithSri}/${thirdPartyTotal} third-party scripts have SRI`,
+          tradeoff: null,
+          weight: 1,
+        });
       }
     }
   }
@@ -835,10 +1207,12 @@ export function calculateDomainScore(opts: {
     const insecureForms = opts.html.match(formActionPattern) ?? [];
     if (insecureForms.length > 0) {
       findings.push({
-        signal: "form_action_security", axis: "security",
+        signal: "form_action_security",
+        axis: "security",
         severity: contextualSeverity("medium", arch, { commerce: "high", application: "high" }),
         label: `${insecureForms.length} form(s) post to HTTP — data sent in plaintext`,
-        tradeoff: null, weight: 3,
+        tradeoff: null,
+        weight: 3,
       });
     }
   }
@@ -849,9 +1223,23 @@ export function calculateDomainScore(opts: {
   if (opts.emailAuth?.mta_sts) {
     const mta = opts.emailAuth.mta_sts;
     if (mta.policy_found && mta.mode === "enforce") {
-      findings.push({ signal: "mta_sts", axis: "security", severity: "good", label: "MTA-STS enforced — email transport protected from downgrade attacks", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "mta_sts",
+        axis: "security",
+        severity: "good",
+        label: "MTA-STS enforced — email transport protected from downgrade attacks",
+        tradeoff: null,
+        weight: 1,
+      });
     } else if (mta.policy_found && mta.mode === "testing") {
-      findings.push({ signal: "mta_sts", axis: "security", severity: "info", label: "MTA-STS in testing mode", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "mta_sts",
+        axis: "security",
+        severity: "info",
+        label: "MTA-STS in testing mode",
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -865,13 +1253,22 @@ export function calculateDomainScore(opts: {
       "referrer-policy",
       "permissions-policy",
     ];
-    const deployedCount = secHeaders.filter(h => !!opts.headers![h]).length;
-    const sev: Severity = deployedCount >= 6 ? "good" : deployedCount >= 4 ? "info" : deployedCount >= 2 ? contextualSeverity("low", arch, { infrastructure: "info", content: "info" }) : contextualSeverity("medium", arch, { infrastructure: "low", content: "low" });
+    const deployedCount = secHeaders.filter((h) => !!opts.headers?.[h]).length;
+    const sev: Severity =
+      deployedCount >= 6
+        ? "good"
+        : deployedCount >= 4
+          ? "info"
+          : deployedCount >= 2
+            ? contextualSeverity("low", arch, { infrastructure: "info", content: "info" })
+            : contextualSeverity("medium", arch, { infrastructure: "low", content: "low" });
     findings.push({
-      signal: "security_headers_completeness", axis: "security",
+      signal: "security_headers_completeness",
+      axis: "security",
       severity: sev,
       label: `${deployedCount}/6 security headers deployed`,
-      tradeoff: null, weight: 2,
+      tradeoff: null,
+      weight: 2,
     });
   }
 
@@ -913,25 +1310,31 @@ export function calculateDomainScore(opts: {
 
       if (issues.length > 0) {
         findings.push({
-          signal: "csp_quality", axis: "security",
+          signal: "csp_quality",
+          axis: "security",
           severity: contextualSeverity("medium", arch, { content: "low", infrastructure: "low" }),
           label: `CSP present but permissive (${issues.join(", ")})`,
-          tradeoff: "Tightening CSP may break inline scripts or third-party integrations. Consider using nonces or hashes instead of 'unsafe-inline'.",
+          tradeoff:
+            "Tightening CSP may break inline scripts or third-party integrations. Consider using nonces or hashes instead of 'unsafe-inline'.",
           weight: 3,
         });
       } else if (hasDefaultSrc || hasScriptSrc) {
         findings.push({
-          signal: "csp_quality", axis: "security",
+          signal: "csp_quality",
+          axis: "security",
           severity: "good",
           label: "CSP is restrictive (no unsafe-* or wildcards in script policy)",
-          tradeoff: null, weight: 3,
+          tradeoff: null,
+          weight: 3,
         });
       } else {
         findings.push({
-          signal: "csp_quality", axis: "security",
+          signal: "csp_quality",
+          axis: "security",
           severity: "info",
           label: "CSP present but missing default-src and script-src directives",
-          tradeoff: null, weight: 2,
+          tradeoff: null,
+          weight: 2,
         });
       }
 
@@ -941,7 +1344,8 @@ export function calculateDomainScore(opts: {
         const defaultSrcRestrictive = /('none'|'self')/i.test(defaultSrc);
         if (!defaultSrcRestrictive) {
           findings.push({
-            signal: "csp_missing_object_src", axis: "security",
+            signal: "csp_missing_object_src",
+            axis: "security",
             severity: contextualSeverity("info", arch, { application: "low", commerce: "low" }),
             label: "CSP missing object-src directive (plugin injection risk)",
             tradeoff: "Add object-src 'none' to block Flash and plugin-based attacks.",
@@ -953,7 +1357,8 @@ export function calculateDomainScore(opts: {
       // Missing base-uri (allows <base> tag injection for relative URL hijacking)
       if (!hasBaseUri) {
         findings.push({
-          signal: "csp_missing_base_uri", axis: "security",
+          signal: "csp_missing_base_uri",
+          axis: "security",
           severity: contextualSeverity("info", arch, { application: "low" }),
           label: "CSP missing base-uri directive",
           tradeoff: "Add base-uri 'self' or 'none' to prevent <base> tag injection.",
@@ -963,7 +1368,8 @@ export function calculateDomainScore(opts: {
     } else if (cspReportOnly && !cspHeader) {
       // Report-Only without enforcing CSP — monitoring but not protective
       findings.push({
-        signal: "csp_report_only", axis: "security",
+        signal: "csp_report_only",
+        axis: "security",
         severity: "info",
         label: "CSP in report-only mode (monitoring but not enforcing)",
         tradeoff: "Report-only is a good first step. Switch to enforcing mode once you've resolved violations.",
@@ -982,16 +1388,23 @@ export function calculateDomainScore(opts: {
       if (acao === "*" && acac === "true") {
         // Wildcard origin + credentials = dangerous: allows any site to make credentialed requests
         findings.push({
-          signal: "cors_wildcard_credentials", axis: "security",
-          severity: contextualSeverity("high", arch, { infrastructure: "critical", application: "critical", commerce: "critical" }),
+          signal: "cors_wildcard_credentials",
+          axis: "security",
+          severity: contextualSeverity("high", arch, {
+            infrastructure: "critical",
+            application: "critical",
+            commerce: "critical",
+          }),
           label: "CORS misconfiguration: wildcard origin with credentials allowed",
-          tradeoff: "This allows any website to make authenticated requests to your API. Restrict Access-Control-Allow-Origin to specific trusted origins.",
+          tradeoff:
+            "This allows any website to make authenticated requests to your API. Restrict Access-Control-Allow-Origin to specific trusted origins.",
           weight: 4,
         });
       } else if (acao === "null") {
         // null origin is exploitable via sandboxed iframes and data: URIs
         findings.push({
-          signal: "cors_null_origin", axis: "security",
+          signal: "cors_null_origin",
+          axis: "security",
           severity: contextualSeverity("medium", arch, { application: "high", commerce: "high" }),
           label: "CORS allows null origin (exploitable via sandboxed iframes)",
           tradeoff: "The 'null' origin can be forged. Use specific origins instead.",
@@ -1000,10 +1413,12 @@ export function calculateDomainScore(opts: {
       } else if (acao === "*") {
         // Wildcard without credentials — common for public APIs, usually intentional
         findings.push({
-          signal: "cors_wildcard", axis: "security",
+          signal: "cors_wildcard",
+          axis: "security",
           severity: "info",
           label: "CORS allows any origin (Access-Control-Allow-Origin: *)",
-          tradeoff: "Common for public APIs and CDN-hosted resources. Ensure no sensitive data is exposed without authentication.",
+          tradeoff:
+            "Common for public APIs and CDN-hosted resources. Ensure no sensitive data is exposed without authentication.",
           weight: 1,
         });
       }
@@ -1016,15 +1431,18 @@ export function calculateDomainScore(opts: {
     const hasHpkpRo = !!opts.headers["public-key-pins-report-only"];
     if (hasHpkp) {
       findings.push({
-        signal: "hpkp_deprecated", axis: "security",
+        signal: "hpkp_deprecated",
+        axis: "security",
         severity: "medium",
         label: "HPKP (Public-Key-Pins) is deprecated — can permanently DoS your domain",
-        tradeoff: "Chrome removed HPKP support in 2018. If pins are rotated incorrectly, the domain becomes permanently inaccessible to pinned clients. Remove this header.",
+        tradeoff:
+          "Chrome removed HPKP support in 2018. If pins are rotated incorrectly, the domain becomes permanently inaccessible to pinned clients. Remove this header.",
         weight: 2,
       });
     } else if (hasHpkpRo) {
       findings.push({
-        signal: "hpkp_deprecated", axis: "security",
+        signal: "hpkp_deprecated",
+        axis: "security",
         severity: "info",
         label: "HPKP-Report-Only header present (deprecated, no browsers enforce)",
         tradeoff: "Safe but useless — no browser implements HPKP anymore. Consider removing to reduce header bloat.",
@@ -1037,13 +1455,14 @@ export function calculateDomainScore(opts: {
   if (opts.html && !opts.httpBlocked) {
     const vulnResults = scanForVulnerableLibraries(opts.html);
     if (vulnResults.length > 0) {
-      const hasHighSev = vulnResults.some(v => v.severity === "high" || v.severity === "critical");
-      const labels = vulnResults.slice(0, 3).map(v =>
-        `${v.library} ${v.version}${v.eol ? " (EOL)" : ""}${v.cves.length ? ` — ${v.cves[0]}` : ""}`
-      );
+      const hasHighSev = vulnResults.some((v) => v.severity === "high" || v.severity === "critical");
+      const labels = vulnResults
+        .slice(0, 3)
+        .map((v) => `${v.library} ${v.version}${v.eol ? " (EOL)" : ""}${v.cves.length ? ` — ${v.cves[0]}` : ""}`);
       const extra = vulnResults.length > 3 ? ` (+${vulnResults.length - 3} more)` : "";
       findings.push({
-        signal: "vulnerable_js_libraries", axis: "security",
+        signal: "vulnerable_js_libraries",
+        axis: "security",
         severity: vulnResults.length >= 3 ? "high" : hasHighSev ? "medium" : "medium",
         label: `Vulnerable JS: ${labels.join("; ")}${extra}`,
         tradeoff: "Upgrading libraries may require code changes for breaking API differences.",
@@ -1051,29 +1470,59 @@ export function calculateDomainScore(opts: {
       });
     } else {
       findings.push({
-        signal: "vulnerable_js_libraries", axis: "security",
+        signal: "vulnerable_js_libraries",
+        axis: "security",
         severity: "good",
         label: "No known vulnerable JavaScript libraries detected",
-        tradeoff: null, weight: 1,
+        tradeoff: null,
+        weight: 1,
       });
     }
   }
 
   // ─── TLS Protocol Version ──────────────────────────────────────
-  if (opts.ssl && opts.ssl.protocols && opts.ssl.protocols.length > 0) {
-    const protocols = opts.ssl.protocols.map(p => p.toLowerCase());
-    const hasTls13 = protocols.some(p => p.includes("1.3"));
-    const hasTls12 = protocols.some(p => p.includes("1.2"));
-    const hasOldTls = protocols.some(p => p.includes("1.0") || p.includes("1.1") || p.includes("ssl"));
+  if (opts.ssl?.protocols && opts.ssl.protocols.length > 0) {
+    const protocols = opts.ssl.protocols.map((p) => p.toLowerCase());
+    const hasTls13 = protocols.some((p) => p.includes("1.3"));
+    const hasTls12 = protocols.some((p) => p.includes("1.2"));
+    const hasOldTls = protocols.some((p) => p.includes("1.0") || p.includes("1.1") || p.includes("ssl"));
 
     if (hasOldTls) {
-      findings.push({ signal: "tls_version", axis: "security", severity: "high", label: "Legacy TLS (1.0/1.1) still supported — vulnerable to downgrade attacks", tradeoff: "Disabling old TLS may drop support for very old clients.", weight: 3 });
+      findings.push({
+        signal: "tls_version",
+        axis: "security",
+        severity: "high",
+        label: "Legacy TLS (1.0/1.1) still supported — vulnerable to downgrade attacks",
+        tradeoff: "Disabling old TLS may drop support for very old clients.",
+        weight: 3,
+      });
     } else if (hasTls13 && !hasTls12) {
-      findings.push({ signal: "tls_version", axis: "security", severity: "good", label: "TLS 1.3 only — best available encryption", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "tls_version",
+        axis: "security",
+        severity: "good",
+        label: "TLS 1.3 only — best available encryption",
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (hasTls13) {
-      findings.push({ signal: "tls_version", axis: "security", severity: "good", label: "TLS 1.3 + 1.2 supported", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "tls_version",
+        axis: "security",
+        severity: "good",
+        label: "TLS 1.3 + 1.2 supported",
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (hasTls12) {
-      findings.push({ signal: "tls_version", axis: "security", severity: "info", label: "TLS 1.2 only (no TLS 1.3)", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "tls_version",
+        axis: "security",
+        severity: "info",
+        label: "TLS 1.2 only (no TLS 1.3)",
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -1083,14 +1532,45 @@ export function calculateDomainScore(opts: {
     const maxAgeMatch = hstsHeader.match(/max-age\s*=\s*(\d+)/i);
     if (maxAgeMatch) {
       const maxAge = parseInt(maxAgeMatch[1], 10);
-      if (maxAge >= 31536000) { // 1 year
-        findings.push({ signal: "hsts_max_age", axis: "security", severity: "good", label: `HSTS max-age ≥1 year (${Math.floor(maxAge / 86400)}d)`, tradeoff: null, weight: 1 });
-      } else if (maxAge >= 15768000) { // ~6 months
-        findings.push({ signal: "hsts_max_age", axis: "security", severity: "info", label: `HSTS max-age ~6 months`, tradeoff: null, weight: 1 });
-      } else if (maxAge >= 86400) { // 1 day
-        findings.push({ signal: "hsts_max_age", axis: "security", severity: "low", label: `HSTS max-age too short (${Math.floor(maxAge / 86400)}d)`, tradeoff: null, weight: 1 });
+      if (maxAge >= 31536000) {
+        // 1 year
+        findings.push({
+          signal: "hsts_max_age",
+          axis: "security",
+          severity: "good",
+          label: `HSTS max-age ≥1 year (${Math.floor(maxAge / 86400)}d)`,
+          tradeoff: null,
+          weight: 1,
+        });
+      } else if (maxAge >= 15768000) {
+        // ~6 months
+        findings.push({
+          signal: "hsts_max_age",
+          axis: "security",
+          severity: "info",
+          label: `HSTS max-age ~6 months`,
+          tradeoff: null,
+          weight: 1,
+        });
+      } else if (maxAge >= 86400) {
+        // 1 day
+        findings.push({
+          signal: "hsts_max_age",
+          axis: "security",
+          severity: "low",
+          label: `HSTS max-age too short (${Math.floor(maxAge / 86400)}d)`,
+          tradeoff: null,
+          weight: 1,
+        });
       } else {
-        findings.push({ signal: "hsts_max_age", axis: "security", severity: "medium", label: `HSTS max-age extremely short (${maxAge}s)`, tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "hsts_max_age",
+          axis: "security",
+          severity: "medium",
+          label: `HSTS max-age extremely short (${maxAge}s)`,
+          tradeoff: null,
+          weight: 2,
+        });
       }
     }
   }
@@ -1102,17 +1582,54 @@ export function calculateDomainScore(opts: {
       const now = new Date();
       const daysUntilExpiry = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       if (daysUntilExpiry < 1) {
-        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "critical", label: "SSL certificate expired or expiring today", tradeoff: null, weight: 4 });
+        findings.push({
+          signal: "cert_expiry_proximity",
+          axis: "security",
+          severity: "critical",
+          label: "SSL certificate expired or expiring today",
+          tradeoff: null,
+          weight: 4,
+        });
       } else if (daysUntilExpiry < 7) {
-        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "high", label: `SSL certificate expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? "s" : ""}`, tradeoff: null, weight: 3 });
+        findings.push({
+          signal: "cert_expiry_proximity",
+          axis: "security",
+          severity: "high",
+          label: `SSL certificate expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? "s" : ""}`,
+          tradeoff: null,
+          weight: 3,
+        });
       } else if (daysUntilExpiry < 14) {
-        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "medium", label: `SSL certificate expires in ${daysUntilExpiry} days`, tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "cert_expiry_proximity",
+          axis: "security",
+          severity: "medium",
+          label: `SSL certificate expires in ${daysUntilExpiry} days`,
+          tradeoff: null,
+          weight: 2,
+        });
       } else if (daysUntilExpiry < 30) {
-        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "low", label: `SSL certificate expires in ${daysUntilExpiry} days`, tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "cert_expiry_proximity",
+          axis: "security",
+          severity: "low",
+          label: `SSL certificate expires in ${daysUntilExpiry} days`,
+          tradeoff: null,
+          weight: 2,
+        });
       } else {
-        findings.push({ signal: "cert_expiry_proximity", axis: "security", severity: "good", label: `SSL certificate valid for ${daysUntilExpiry}+ days`, tradeoff: null, weight: 1 });
+        findings.push({
+          signal: "cert_expiry_proximity",
+          axis: "security",
+          severity: "good",
+          label: `SSL certificate valid for ${daysUntilExpiry}+ days`,
+          tradeoff: null,
+          weight: 1,
+        });
       }
-    } catch { /* invalid date — skip */ }
+    } catch {
+      /* invalid date — skip */
+    }
   }
 
   // ─── Cross-Origin Isolation Headers ─────────────────────────────
@@ -1122,9 +1639,23 @@ export function calculateDomainScore(opts: {
     const hasCorp = !!opts.headers["cross-origin-resource-policy"];
     const coiCount = [hasCoop, hasCoep, hasCorp].filter(Boolean).length;
     if (coiCount === 3) {
-      findings.push({ signal: "cross_origin_isolation", axis: "security", severity: "good", label: "Full cross-origin isolation (COOP+COEP+CORP)", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "cross_origin_isolation",
+        axis: "security",
+        severity: "good",
+        label: "Full cross-origin isolation (COOP+COEP+CORP)",
+        tradeoff: null,
+        weight: 1,
+      });
     } else if (coiCount >= 1) {
-      findings.push({ signal: "cross_origin_isolation", axis: "security", severity: "info", label: `Partial cross-origin isolation (${coiCount}/3 headers)`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "cross_origin_isolation",
+        axis: "security",
+        severity: "info",
+        label: `Partial cross-origin isolation (${coiCount}/3 headers)`,
+        tradeoff: null,
+        weight: 1,
+      });
     }
     // None = skip (too rare to penalize)
   }
@@ -1133,44 +1664,88 @@ export function calculateDomainScore(opts: {
   // underlying signals already scored individually, inflating Trust axis by ~15 points.
   if (opts.trustSignals) {
     // DMARC enforcement — bidirectional: reward reject, penalize weak/absent
-    const dmarcRejecting = opts.trustSignals.signals.some(s => s.name === "DMARC Enforcement" && s.present && s.value?.includes("reject"));
+    const dmarcRejecting = opts.trustSignals.signals.some(
+      (s) => s.name === "DMARC Enforcement" && s.present && s.value?.includes("reject"),
+    );
     if (dmarcRejecting) {
-      findings.push({ signal: "dmarc_reject", axis: "trust", severity: "good", label: "DMARC policy=reject prevents email spoofing", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "dmarc_reject",
+        axis: "trust",
+        severity: "good",
+        label: "DMARC policy=reject prevents email spoofing",
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (opts.emailAuth?.dmarc?.found) {
       const policy = opts.emailAuth.dmarc.policy;
       if (policy === "quarantine") {
-        findings.push({ signal: "dmarc_reject", axis: "trust", severity: "info", label: "DMARC policy=quarantine — partial email protection", tradeoff: "Upgrade to p=reject for full spoofing prevention.", weight: 2 });
+        findings.push({
+          signal: "dmarc_reject",
+          axis: "trust",
+          severity: "info",
+          label: "DMARC policy=quarantine — partial email protection",
+          tradeoff: "Upgrade to p=reject for full spoofing prevention.",
+          weight: 2,
+        });
       } else {
         // p=none or unrecognized
-        findings.push({ signal: "dmarc_reject", axis: "trust", severity: "low", label: "DMARC policy=none — monitoring only, no protection", tradeoff: "Move to quarantine/reject once reports look clean.", weight: 2 });
+        findings.push({
+          signal: "dmarc_reject",
+          axis: "trust",
+          severity: "low",
+          label: "DMARC policy=none — monitoring only, no protection",
+          tradeoff: "Move to quarantine/reject once reports look clean.",
+          weight: 2,
+        });
       }
     } else {
       // No DMARC at all
-      findings.push({ signal: "dmarc_reject", axis: "trust", severity: "medium", label: "No DMARC — domain vulnerable to email spoofing", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "dmarc_reject",
+        axis: "trust",
+        severity: "medium",
+        label: "No DMARC — domain vulnerable to email spoofing",
+        tradeoff: null,
+        weight: 2,
+      });
     }
 
     // Operational transparency bonus
-    const opsSignals = opts.trustSignals.signals.filter(s => s.category === "operational" && s.present);
+    const opsSignals = opts.trustSignals.signals.filter((s) => s.category === "operational" && s.present);
     if (opsSignals.length >= 2) {
-      findings.push({ signal: "ops_transparency", axis: "trust", severity: "good", label: `${opsSignals.length} operational transparency tools (status page, monitoring, etc.)`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "ops_transparency",
+        axis: "trust",
+        severity: "good",
+        label: `${opsSignals.length} operational transparency tools (status page, monitoring, etc.)`,
+        tradeoff: null,
+        weight: 2,
+      });
     }
   }
 
   // ─── Performance Axis Findings ───────────────────────────────────
 
-  const perf = opts.performance;           // PSI mobile (always present)
-  const perfDesktop = opts.performanceDesktop;  // PSI desktop (new)
-  const crux = opts.crux;                  // CrUX field data (new)
+  const perf = opts.performance; // PSI mobile (always present)
+  const perfDesktop = opts.performanceDesktop; // PSI desktop (new)
+  const crux = opts.crux; // CrUX field data (new)
 
   // Determine the primary performance score source
   // Priority: CrUX field data > blended lab > mobile-only lab
-  const hasCrux = crux && crux.has_data;
+  const hasCrux = crux?.has_data;
   const hasMobile = perf && perf.score != null;
   const hasDesktop = perfDesktop && perfDesktop.score != null;
 
   if (hasCrux) {
     // ── CrUX field data available — use real user metrics ──
-    findings.push({ signal: "crux_field_data", axis: "performance", severity: "good", label: "Real-user field data available (Chrome UX Report)", tradeoff: null, weight: 1 });
+    findings.push({
+      signal: "crux_field_data",
+      axis: "performance",
+      severity: "good",
+      label: "Real-user field data available (Chrome UX Report)",
+      tradeoff: null,
+      weight: 1,
+    });
 
     // Derive a synthetic performance score from CrUX p75 values using ThresholdConfig bands.
     // Each metric is resolved via resolveSeverity() then mapped to a numeric score via SEVERITY_SCORES,
@@ -1185,33 +1760,82 @@ export function calculateDomainScore(opts: {
     if (cruxScores.length > 0) {
       const avgScore = Math.round(cruxScores.reduce((a, b) => a + b, 0) / cruxScores.length);
       const ps = resolveSeverity(PERF_SCORE, avgScore);
-      const psSev = avgScore >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, avgScore >= 50 ? { content: "high" } : {});
-      findings.push({ signal: PERF_SCORE.signal, axis: "performance", severity: psSev, label: `Performance score ${avgScore}/100 (field data)`, tradeoff: null, weight: PERF_SCORE.weight, source: "Chrome UX Report (real users)" });
+      const psSev =
+        avgScore >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, avgScore >= 50 ? { content: "high" } : {});
+      findings.push({
+        signal: PERF_SCORE.signal,
+        axis: "performance",
+        severity: psSev,
+        label: `Performance score ${avgScore}/100 (field data)`,
+        tradeoff: null,
+        weight: PERF_SCORE.weight,
+        source: "Chrome UX Report (real users)",
+      });
     }
 
     // Individual CrUX metrics
     if (crux.lcp_p75 != null) {
       const lcpSec = crux.lcp_p75 / 1000;
       const lcp = resolveSeverity(LCP, lcpSec);
-      findings.push({ signal: LCP.signal, axis: "performance", severity: lcp.severity, label: `LCP: ${lcpSec.toFixed(1)}s (p75 field)`, tradeoff: null, weight: LCP.weight, source: "CrUX" });
+      findings.push({
+        signal: LCP.signal,
+        axis: "performance",
+        severity: lcp.severity,
+        label: `LCP: ${lcpSec.toFixed(1)}s (p75 field)`,
+        tradeoff: null,
+        weight: LCP.weight,
+        source: "CrUX",
+      });
     }
     if (crux.cls_p75 != null) {
       const cls = resolveSeverity(CLS, crux.cls_p75);
-      findings.push({ signal: CLS.signal, axis: "performance", severity: cls.severity, label: `CLS: ${crux.cls_p75.toFixed(3)} (p75 field)`, tradeoff: null, weight: CLS.weight, source: "CrUX" });
+      findings.push({
+        signal: CLS.signal,
+        axis: "performance",
+        severity: cls.severity,
+        label: `CLS: ${crux.cls_p75.toFixed(3)} (p75 field)`,
+        tradeoff: null,
+        weight: CLS.weight,
+        source: "CrUX",
+      });
     }
     if (crux.ttfb_p75 != null) {
       const ttfb = resolveSeverity(TTFB, crux.ttfb_p75);
-      findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(crux.ttfb_p75)}ms (p75 field)`, tradeoff: null, weight: TTFB.weight, source: "CrUX" });
+      findings.push({
+        signal: TTFB.signal,
+        axis: "performance",
+        severity: ttfb.severity,
+        label: `TTFB: ${Math.round(crux.ttfb_p75)}ms (p75 field)`,
+        tradeoff: null,
+        weight: TTFB.weight,
+        source: "CrUX",
+      });
     }
     if (crux.fcp_p75 != null) {
       const fcpSec = crux.fcp_p75 / 1000;
       const fcpResult = resolveSeverity(FCP, fcpSec);
-      findings.push({ signal: FCP.signal, axis: "performance", severity: fcpResult.severity, label: `FCP: ${fcpSec.toFixed(1)}s (p75 field)`, tradeoff: null, weight: FCP.weight, source: "CrUX" });
+      findings.push({
+        signal: FCP.signal,
+        axis: "performance",
+        severity: fcpResult.severity,
+        label: `FCP: ${fcpSec.toFixed(1)}s (p75 field)`,
+        tradeoff: null,
+        weight: FCP.weight,
+        source: "CrUX",
+      });
     }
     if (crux.inp_p75 != null) {
       // INP (Interaction to Next Paint) — Core Web Vital, only from CrUX
       const inpResult = resolveSeverity(INP, crux.inp_p75);
-      findings.push({ signal: INP.signal, axis: "performance", severity: inpResult.severity, label: `INP: ${Math.round(crux.inp_p75)}ms (p75 field)`, tradeoff: null, weight: INP.weight, source: "CrUX — Interaction to Next Paint" });
+      findings.push({
+        signal: INP.signal,
+        axis: "performance",
+        severity: inpResult.severity,
+        label: `INP: ${Math.round(crux.inp_p75)}ms (p75 field)`,
+        tradeoff: null,
+        weight: INP.weight,
+        source: "CrUX — Interaction to Next Paint",
+      });
     }
   } else if (hasMobile || hasDesktop) {
     // ── No CrUX — use lab data ──
@@ -1220,19 +1844,30 @@ export function calculateDomainScore(opts: {
     let blendedScore: number;
     let sourceLabel: string;
     if (hasMobile && hasDesktop) {
-      blendedScore = Math.round(perf!.score! * 0.6 + perfDesktop!.score! * 0.4);
+      blendedScore = Math.round(perf?.score! * 0.6 + perfDesktop?.score! * 0.4);
       sourceLabel = "Lighthouse lab (mobile 60% + desktop 40%)";
     } else if (hasMobile) {
-      blendedScore = perf!.score!;
+      blendedScore = perf?.score!;
       sourceLabel = "Lighthouse lab (mobile)";
     } else {
-      blendedScore = perfDesktop!.score!;
+      blendedScore = perfDesktop?.score!;
       sourceLabel = "Lighthouse lab (desktop)";
     }
 
     const ps = resolveSeverity(PERF_SCORE, blendedScore);
-    const psSev = blendedScore >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, blendedScore >= 50 ? { content: "high" } : {});
-    findings.push({ signal: PERF_SCORE.signal, axis: "performance", severity: psSev, label: `Performance score ${blendedScore}/100`, tradeoff: null, weight: PERF_SCORE.weight, source: sourceLabel });
+    const psSev =
+      blendedScore >= 80
+        ? ps.severity
+        : contextualSeverity(ps.severity, arch, blendedScore >= 50 ? { content: "high" } : {});
+    findings.push({
+      signal: PERF_SCORE.signal,
+      axis: "performance",
+      severity: psSev,
+      label: `Performance score ${blendedScore}/100`,
+      tradeoff: null,
+      weight: PERF_SCORE.weight,
+      source: sourceLabel,
+    });
 
     // Use mobile metrics as primary when available (mobile-first), fallback to desktop
     const primaryPerf = hasMobile ? perf! : perfDesktop!;
@@ -1241,29 +1876,55 @@ export function calculateDomainScore(opts: {
     if (primaryPerf.lcp != null) {
       const lcpSec = primaryPerf.lcp / 1000;
       const lcp = resolveSeverity(LCP, lcpSec);
-      findings.push({ signal: LCP.signal, axis: "performance", severity: lcp.severity, label: `LCP: ${lcpSec.toFixed(1)}s`, tradeoff: null, weight: LCP.weight, source: LCP.source });
+      findings.push({
+        signal: LCP.signal,
+        axis: "performance",
+        severity: lcp.severity,
+        label: `LCP: ${lcpSec.toFixed(1)}s`,
+        tradeoff: null,
+        weight: LCP.weight,
+        source: LCP.source,
+      });
     }
 
     // CLS
     if (primaryPerf.cls != null) {
       const cls = resolveSeverity(CLS, primaryPerf.cls);
-      findings.push({ signal: CLS.signal, axis: "performance", severity: cls.severity, label: `CLS: ${primaryPerf.cls.toFixed(3)}`, tradeoff: null, weight: CLS.weight, source: CLS.source });
+      findings.push({
+        signal: CLS.signal,
+        axis: "performance",
+        severity: cls.severity,
+        label: `CLS: ${primaryPerf.cls.toFixed(3)}`,
+        tradeoff: null,
+        weight: CLS.weight,
+        source: CLS.source,
+      });
     }
 
     // TTFB
     if (primaryPerf.ttfb != null) {
       const ttfb = resolveSeverity(TTFB, primaryPerf.ttfb);
-      findings.push({ signal: TTFB.signal, axis: "performance", severity: ttfb.severity, label: `TTFB: ${Math.round(primaryPerf.ttfb)}ms`, tradeoff: null, weight: TTFB.weight, source: TTFB.source });
+      findings.push({
+        signal: TTFB.signal,
+        axis: "performance",
+        severity: ttfb.severity,
+        label: `TTFB: ${Math.round(primaryPerf.ttfb)}ms`,
+        tradeoff: null,
+        weight: TTFB.weight,
+        source: TTFB.source,
+      });
     }
 
     // TBT (Total Blocking Time) — JS execution blocking metric (lab only)
     if (primaryPerf.tbt != null) {
       const tbtResult = resolveSeverity(TBT, primaryPerf.tbt);
       findings.push({
-        signal: TBT.signal, axis: "performance",
+        signal: TBT.signal,
+        axis: "performance",
         severity: tbtResult.severity,
         label: tbtResult.label,
-        tradeoff: null, weight: TBT.weight,
+        tradeoff: null,
+        weight: TBT.weight,
         source: TBT.source,
       });
     }
@@ -1273,24 +1934,41 @@ export function calculateDomainScore(opts: {
       const fcpSec = primaryPerf.fcp / 1000;
       const fcpResult = resolveSeverity(FCP, fcpSec);
       findings.push({
-        signal: FCP.signal, axis: "performance",
+        signal: FCP.signal,
+        axis: "performance",
         severity: fcpResult.severity,
         label: `FCP: ${fcpSec.toFixed(1)}s`,
-        tradeoff: null, weight: FCP.weight,
+        tradeoff: null,
+        weight: FCP.weight,
         source: FCP.source,
       });
     }
-  } else if (perf && perf.error) {
+  } else if (perf?.error) {
     // PageSpeed unavailable — don't penalize, but acknowledge the gap
     // This prevents score inflation when PageSpeed data is missing
-    findings.push({ signal: "pagespeed_unavailable", axis: "performance", severity: "low", label: "PageSpeed Insights unavailable", tradeoff: null, weight: 2 });
+    findings.push({
+      signal: "pagespeed_unavailable",
+      axis: "performance",
+      severity: "low",
+      label: "PageSpeed Insights unavailable",
+      tradeoff: null,
+      weight: 2,
+    });
   }
 
   // Compression — removed: 275/275 = good, zero discrimination
   // Keep no_compression penalty only
   if (opts.compression) {
     if (!opts.compression.encoding && !opts.httpBlocked) {
-      findings.push({ signal: "no_compression", axis: "performance", severity: "low", label: "No compression detected", tradeoff: "Compression check is header-based and may not reflect actual server behavior (e.g., Cloudflare decompresses for Workers).", weight: 1 });
+      findings.push({
+        signal: "no_compression",
+        axis: "performance",
+        severity: "low",
+        label: "No compression detected",
+        tradeoff:
+          "Compression check is header-based and may not reflect actual server behavior (e.g., Cloudflare decompresses for Workers).",
+        weight: 1,
+      });
     }
   }
 
@@ -1298,30 +1976,86 @@ export function calculateDomainScore(opts: {
   if (opts.cacheAnalysis && !opts.httpBlocked) {
     const cv = opts.cacheAnalysis.verdict;
     if (cv === "excellent" || cv === "good") {
-      findings.push({ signal: "cache_headers", axis: "performance", severity: "good", label: opts.cacheAnalysis.verdict_label, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "cache_headers",
+        axis: "performance",
+        severity: "good",
+        label: opts.cacheAnalysis.verdict_label,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (cv === "fair") {
-      findings.push({ signal: "cache_headers", axis: "performance", severity: "info", label: opts.cacheAnalysis.verdict_label, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "cache_headers",
+        axis: "performance",
+        severity: "info",
+        label: opts.cacheAnalysis.verdict_label,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (cv === "poor") {
-      findings.push({ signal: "cache_headers", axis: "performance", severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }), label: opts.cacheAnalysis.verdict_label, tradeoff: "Aggressive caching may serve stale content to users.", weight: 3 });
+      findings.push({
+        signal: "cache_headers",
+        axis: "performance",
+        severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }),
+        label: opts.cacheAnalysis.verdict_label,
+        tradeoff: "Aggressive caching may serve stale content to users.",
+        weight: 3,
+      });
     } else if (cv === "none") {
-      findings.push({ signal: "cache_headers", axis: "performance", severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }), label: "No cache headers — browsers use heuristic caching", tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "cache_headers",
+        axis: "performance",
+        severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }),
+        label: "No cache headers — browsers use heuristic caching",
+        tradeoff: null,
+        weight: 3,
+      });
     }
   }
 
   // HTTP/2+
   if (opts.httpProtocols) {
     if (opts.httpProtocols.http3) {
-      findings.push({ signal: "http3", axis: "performance", severity: "good", label: "HTTP/3 supported", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "http3",
+        axis: "performance",
+        severity: "good",
+        label: "HTTP/3 supported",
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (opts.httpProtocols.http2) {
-      findings.push({ signal: "http2", axis: "performance", severity: "info", label: "HTTP/2 supported", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "http2",
+        axis: "performance",
+        severity: "info",
+        label: "HTTP/2 supported",
+        tradeoff: null,
+        weight: 2,
+      });
     } else {
-      findings.push({ signal: "http1_only", axis: "performance", severity: "medium", label: "HTTP/1.1 only", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "http1_only",
+        axis: "performance",
+        severity: "medium",
+        label: "HTTP/1.1 only",
+        tradeoff: null,
+        weight: 2,
+      });
     }
   }
 
   // CDN
   if (opts.hosting?.cdn) {
-    findings.push({ signal: "cdn", axis: "performance", severity: "good", label: `CDN: ${opts.hosting.cdn}`, tradeoff: null, weight: 2 });
+    findings.push({
+      signal: "cdn",
+      axis: "performance",
+      severity: "good",
+      label: `CDN: ${opts.hosting.cdn}`,
+      tradeoff: null,
+      weight: 2,
+    });
   }
 
   // ─── NEW: Redirect Chain Length ──────────────────────────────────
@@ -1329,17 +2063,21 @@ export function calculateDomainScore(opts: {
     const hops = opts.redirects.length;
     if (hops >= 4) {
       findings.push({
-        signal: "redirect_chain_length", axis: "performance",
+        signal: "redirect_chain_length",
+        axis: "performance",
         severity: "medium",
         label: `${hops} redirect hops — excessive latency`,
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     } else if (hops >= 2) {
       findings.push({
-        signal: "redirect_chain_length", axis: "performance",
+        signal: "redirect_chain_length",
+        axis: "performance",
         severity: "info",
         label: `${hops} redirect hops`,
-        tradeoff: null, weight: 1,
+        tradeoff: null,
+        weight: 1,
       });
     }
   }
@@ -1349,56 +2087,72 @@ export function calculateDomainScore(opts: {
   const dns = opts.dnsRecords;
 
   // NS count (informational only — 2 is the registrar-enforced minimum per RFC 1035)
-  const nsCount = dns.filter(r => r.type === "NS").length;
+  const nsCount = dns.filter((r) => r.type === "NS").length;
   findings.push({
-    signal: "ns_redundancy", axis: "reliability",
+    signal: "ns_redundancy",
+    axis: "reliability",
     severity: "good",
     label: `${nsCount} nameserver${nsCount !== 1 ? "s" : ""}`,
-    tradeoff: null, weight: 0,
+    tradeoff: null,
+    weight: 0,
   });
 
   // MX records
-  const mxCount = dns.filter(r => r.type === "MX").length;
+  const mxCount = dns.filter((r) => r.type === "MX").length;
   if (mxCount > 0) {
     findings.push({
-      signal: "mx_redundancy", axis: "reliability",
+      signal: "mx_redundancy",
+      axis: "reliability",
       severity: mxCount >= 2 ? "good" : "info",
       label: `${mxCount} MX record${mxCount !== 1 ? "s" : ""}`,
-      tradeoff: null, weight: 2,
+      tradeoff: null,
+      weight: 2,
     });
   }
 
   // IPv6 — informational only, IPv4-only sites are fully reachable
-  const hasIpv6 = dns.some(r => r.type === "AAAA");
+  const hasIpv6 = dns.some((r) => r.type === "AAAA");
   findings.push({
-    signal: "ipv6", axis: "reliability",
+    signal: "ipv6",
+    axis: "reliability",
     severity: hasIpv6 ? "good" : "info",
     label: hasIpv6 ? "IPv6 supported" : "No IPv6 (AAAA) records",
-    tradeoff: null, weight: 1,
+    tradeoff: null,
+    weight: 1,
   });
 
   // Multiple A records (load balancing)
-  const aCount = dns.filter(r => r.type === "A").length;
+  const aCount = dns.filter((r) => r.type === "A").length;
   if (aCount >= 2) {
-    findings.push({ signal: "lb", axis: "reliability", severity: "good", label: `${aCount} A records (load balanced)`, tradeoff: null, weight: 1 });
+    findings.push({
+      signal: "lb",
+      axis: "reliability",
+      severity: "good",
+      label: `${aCount} A records (load balanced)`,
+      tradeoff: null,
+      weight: 1,
+    });
   }
 
   // CAA records
-  const hasCaa = dns.some(r => r.type === "CAA");
+  const hasCaa = dns.some((r) => r.type === "CAA");
   findings.push({
-    signal: "caa", axis: "reliability",
+    signal: "caa",
+    axis: "reliability",
     severity: hasCaa ? "good" : "info",
     label: hasCaa ? "CAA records present" : "No CAA records",
-    tradeoff: null, weight: 1,
+    tradeoff: null,
+    weight: 1,
   });
 
   // DNS TTL health — very low TTLs may indicate instability or aggressive failover
-  const aRecords = dns.filter(r => r.type === "A" || r.type === "AAAA");
+  const aRecords = dns.filter((r) => r.type === "A" || r.type === "AAAA");
   if (aRecords.length > 0) {
-    const minTtl = Math.min(...aRecords.map(r => r.ttl));
+    const minTtl = Math.min(...aRecords.map((r) => r.ttl));
     if (minTtl < 60) {
       findings.push({
-        signal: "low_ttl", axis: "reliability",
+        signal: "low_ttl",
+        axis: "reliability",
         severity: "info",
         label: `Low DNS TTL (${minTtl}s) — enables fast failover`,
         tradeoff: "Low TTLs enable fast failover and traffic management but increase DNS query volume.",
@@ -1415,13 +2169,41 @@ export function calculateDomainScore(opts: {
   if (opts.networkHealth?.connection_timing) {
     const tcpMs = opts.networkHealth.connection_timing.tcp_ms;
     if (tcpMs < 300) {
-      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "good", label: `TCP connect: ${Math.round(tcpMs)}ms`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "tcp_connection_time",
+        axis: "reliability",
+        severity: "good",
+        label: `TCP connect: ${Math.round(tcpMs)}ms`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (tcpMs < 500) {
-      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "info", label: `TCP connect: ${Math.round(tcpMs)}ms`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "tcp_connection_time",
+        axis: "reliability",
+        severity: "info",
+        label: `TCP connect: ${Math.round(tcpMs)}ms`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (tcpMs < 1000) {
-      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "low", label: `TCP connect: ${Math.round(tcpMs)}ms — above average`, tradeoff: "Connection timing depends on server location relative to probe.", weight: 2 });
+      findings.push({
+        signal: "tcp_connection_time",
+        axis: "reliability",
+        severity: "low",
+        label: `TCP connect: ${Math.round(tcpMs)}ms — above average`,
+        tradeoff: "Connection timing depends on server location relative to probe.",
+        weight: 2,
+      });
     } else {
-      findings.push({ signal: "tcp_connection_time", axis: "reliability", severity: "medium", label: `TCP connect: ${Math.round(tcpMs)}ms — very slow`, tradeoff: "Connection timing depends on server location relative to probe.", weight: 2 });
+      findings.push({
+        signal: "tcp_connection_time",
+        axis: "reliability",
+        severity: "medium",
+        label: `TCP connect: ${Math.round(tcpMs)}ms — very slow`,
+        tradeoff: "Connection timing depends on server location relative to probe.",
+        weight: 2,
+      });
     }
   }
 
@@ -1430,27 +2212,57 @@ export function calculateDomainScore(opts: {
   if (opts.networkHealth?.connection_timing) {
     const dnsMs = opts.networkHealth.connection_timing.dns_ms;
     if (dnsMs < 100) {
-      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "good", label: `DNS resolution: ${Math.round(dnsMs)}ms`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "dns_resolution_time",
+        axis: "reliability",
+        severity: "good",
+        label: `DNS resolution: ${Math.round(dnsMs)}ms`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (dnsMs < 200) {
-      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "info", label: `DNS resolution: ${Math.round(dnsMs)}ms`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "dns_resolution_time",
+        axis: "reliability",
+        severity: "info",
+        label: `DNS resolution: ${Math.round(dnsMs)}ms`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (dnsMs < 500) {
-      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "low", label: `DNS resolution: ${Math.round(dnsMs)}ms — slow`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "dns_resolution_time",
+        axis: "reliability",
+        severity: "low",
+        label: `DNS resolution: ${Math.round(dnsMs)}ms — slow`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else {
-      findings.push({ signal: "dns_resolution_time", axis: "reliability", severity: "medium", label: `DNS resolution: ${Math.round(dnsMs)}ms — very slow`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "dns_resolution_time",
+        axis: "reliability",
+        severity: "medium",
+        label: `DNS resolution: ${Math.round(dnsMs)}ms — very slow`,
+        tradeoff: null,
+        weight: 2,
+      });
     }
   }
 
   // ─── NS Provider Diversity ──────────────────────────────────────
   {
-    const nsRecords = dns.filter(r => r.type === "NS").map(r => r.data);
+    const nsRecords = dns.filter((r) => r.type === "NS").map((r) => r.data);
     if (nsRecords.length >= 2) {
       const nsDiversity = analyzeNsDiversity(nsRecords);
       if (nsDiversity.isMultiProvider) {
         findings.push({
-          signal: "ns_provider_diversity", axis: "reliability",
+          signal: "ns_provider_diversity",
+          axis: "reliability",
           severity: "good",
           label: `Multi-provider DNS (${nsDiversity.providers.join(", ")})`,
-          tradeoff: null, weight: 1,
+          tradeoff: null,
+          weight: 1,
         });
       }
       // Single provider = no finding. Major providers (Cloudflare, Google, AWS Route53)
@@ -1461,37 +2273,44 @@ export function calculateDomainScore(opts: {
 
   // ─── NEW: Site Unreachable ───────────────────────────────────────
   // DNS resolves but no HTTP server responds — fundamentally broken
-  const dnsResolves = dns.some(r => r.type === "A" || r.type === "AAAA");
+  const dnsResolves = dns.some((r) => r.type === "A" || r.type === "AAAA");
   if (opts.statusResult) {
     if (!opts.statusResult.is_up && dnsResolves && !opts.statusResult.http_blocked) {
       findings.push({
-        signal: "site_unreachable", axis: "reliability",
+        signal: "site_unreachable",
+        axis: "reliability",
         severity: "high",
         label: "Site unreachable — DNS resolves but no HTTP response",
-        tradeoff: null, weight: 5,
+        tradeoff: null,
+        weight: 5,
       });
       // Also tank Visibility — an unreachable site has zero web visibility
       findings.push({
-        signal: "site_unreachable_visibility", axis: "visibility",
+        signal: "site_unreachable_visibility",
+        axis: "visibility",
         severity: "critical",
         label: "Site unreachable — zero web visibility",
-        tradeoff: null, weight: 5,
+        tradeoff: null,
+        weight: 5,
       });
       // Also tank Performance — cannot measure performance of an unreachable site
       findings.push({
-        signal: "site_unreachable_performance", axis: "performance",
+        signal: "site_unreachable_performance",
+        axis: "performance",
         severity: "critical",
         label: "Site unreachable — cannot measure performance",
-        tradeoff: null, weight: 5,
+        tradeoff: null,
+        weight: 5,
       });
     }
   }
 
   // ─── HTTP Blocked (RESTRICTED) — analysis is incomplete ──────────
   // The site is up but blocked our probe, so we can't assess headers, content, etc.
-  if (opts.statusResult && opts.statusResult.http_blocked) {
+  if (opts.statusResult?.http_blocked) {
     findings.push({
-      signal: "http_blocked_reliability", axis: "reliability",
+      signal: "http_blocked_reliability",
+      axis: "reliability",
       severity: "medium",
       label: "HTTP probe blocked — analysis is limited",
       tradeoff: "Site may be blocking automated requests. Scoring is based on DNS/WHOIS/SSL data only.",
@@ -1500,15 +2319,18 @@ export function calculateDomainScore(opts: {
     // Can't trust performance data if we couldn't fetch the page
     if (!opts.performance) {
       findings.push({
-        signal: "http_blocked_performance", axis: "performance",
+        signal: "http_blocked_performance",
+        axis: "performance",
         severity: "medium",
         label: "Cannot measure performance — HTTP blocked",
-        tradeoff: null, weight: 4,
+        tradeoff: null,
+        weight: 4,
       });
     }
     // Security headers are unknown
     findings.push({
-      signal: "http_blocked_security", axis: "security",
+      signal: "http_blocked_security",
+      axis: "security",
       severity: "medium",
       label: "Security headers unknown — HTTP blocked",
       tradeoff: "Cannot audit CSP, HSTS, or other headers without HTTP access.",
@@ -1524,14 +2346,17 @@ export function calculateDomainScore(opts: {
     if (!isWafBlock) {
       if (code >= 500) {
         findings.push({
-          signal: "http_error_response", axis: "reliability",
+          signal: "http_error_response",
+          axis: "reliability",
           severity: "high",
           label: `Server error (HTTP ${code})`,
-          tradeoff: null, weight: 4,
+          tradeoff: null,
+          weight: 4,
         });
       } else {
         findings.push({
-          signal: "http_error_response", axis: "reliability",
+          signal: "http_error_response",
+          axis: "reliability",
           severity: "medium",
           label: `Client error response (HTTP ${code})`,
           tradeoff: "Some sites return 4xx to automated probes while working fine in browsers.",
@@ -1547,21 +2372,37 @@ export function calculateDomainScore(opts: {
   // Palo Alto: ≤32d = NRD; CF Email: 7d malicious, 30-45d suspicious; NextDNS: 30d block
   const ageDays = opts.rdap?.domain_age_days;
   if (ageDays != null) {
-    const severity = ageDays > 365 * 5 ? "good"
-      : ageDays > 365 * 3 ? "info"
-      : ageDays > 365 ? "low"
-      : ageDays > 90 ? "medium"
-      : ageDays > 30 ? "high"
-      : "critical";
-    const label = ageDays > 365 * 5 ? `Established domain (${Math.floor(ageDays / 365)}+ years)`
-      : ageDays > 365 * 3 ? `Mature domain (${Math.floor(ageDays / 365)}+ years)`
-      : ageDays > 365 ? `Domain age: ${Math.floor(ageDays / 365)}+ years`
-      : ageDays > 90 ? `Young domain (${ageDays} days)`
-      : ageDays > 30 ? `Recently registered (${ageDays} days)`
-      : `Newly registered domain (${ageDays} days) — high risk NRD`;
+    const severity =
+      ageDays > 365 * 5
+        ? "good"
+        : ageDays > 365 * 3
+          ? "info"
+          : ageDays > 365
+            ? "low"
+            : ageDays > 90
+              ? "medium"
+              : ageDays > 30
+                ? "high"
+                : "critical";
+    const label =
+      ageDays > 365 * 5
+        ? `Established domain (${Math.floor(ageDays / 365)}+ years)`
+        : ageDays > 365 * 3
+          ? `Mature domain (${Math.floor(ageDays / 365)}+ years)`
+          : ageDays > 365
+            ? `Domain age: ${Math.floor(ageDays / 365)}+ years`
+            : ageDays > 90
+              ? `Young domain (${ageDays} days)`
+              : ageDays > 30
+                ? `Recently registered (${ageDays} days)`
+                : `Newly registered domain (${ageDays} days) — high risk NRD`;
     findings.push({
-      signal: "domain_age_trust", axis: "trust",
-      severity, label, tradeoff: null, weight: 3,
+      signal: "domain_age_trust",
+      axis: "trust",
+      severity,
+      label,
+      tradeoff: null,
+      weight: 3,
     });
   }
 
@@ -1570,27 +2411,38 @@ export function calculateDomainScore(opts: {
   if (expiryDays != null) {
     const years = Math.floor(expiryDays / 365);
     findings.push({
-      signal: "registration_length", axis: "trust",
+      signal: "registration_length",
+      axis: "trust",
       severity: expiryDays > 730 ? "good" : expiryDays > 30 ? "info" : expiryDays > 7 ? "low" : "medium",
-      label: expiryDays > 730 ? `Registration good for ${years}+ years` : expiryDays > 30 ? `Expires in ${expiryDays} days` : `Expiring soon (${expiryDays} days)`,
-      tradeoff: null, weight: 2,
+      label:
+        expiryDays > 730
+          ? `Registration good for ${years}+ years`
+          : expiryDays > 30
+            ? `Expires in ${expiryDays} days`
+            : `Expiring soon (${expiryDays} days)`,
+      tradeoff: null,
+      weight: 2,
     });
   }
 
   // Blocklist clean (also trust) — clean record is a positive; listed is critical
   if (listedCount === 0) {
     findings.push({
-      signal: "blocklist_trust", axis: "trust",
+      signal: "blocklist_trust",
+      axis: "trust",
       severity: "good",
       label: "Clean blocklist record",
-      tradeoff: null, weight: 2,
+      tradeoff: null,
+      weight: 2,
     });
   } else {
     findings.push({
-      signal: "blocklist_trust", axis: "trust",
+      signal: "blocklist_trust",
+      axis: "trust",
       severity: listedCount >= 2 ? "critical" : "high",
       label: `On ${listedCount} blocklist(s)`,
-      tradeoff: null, weight: 3,
+      tradeoff: null,
+      weight: 3,
     });
   }
 
@@ -1598,21 +2450,42 @@ export function calculateDomainScore(opts: {
   if (opts.greynoise) {
     const isBehindCdn = !!opts.hosting?.cdn;
     if (opts.greynoise.noise && !isBehindCdn) {
-      findings.push({ signal: "greynoise_noise", axis: "trust", severity: "medium", label: "IP flagged as internet noise by GreyNoise", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "greynoise_noise",
+        axis: "trust",
+        severity: "medium",
+        label: "IP flagged as internet noise by GreyNoise",
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (opts.greynoise.noise && isBehindCdn) {
       // CDN IP noise is about the shared infrastructure, not this domain
-      findings.push({ signal: "greynoise_noise", axis: "trust", severity: "info", label: `IP flagged as noise by GreyNoise (shared CDN IP: ${opts.hosting!.cdn})`, tradeoff: "GreyNoise noise on CDN IPs reflects shared infrastructure, not this domain.", weight: 1 });
+      findings.push({
+        signal: "greynoise_noise",
+        axis: "trust",
+        severity: "info",
+        label: `IP flagged as noise by GreyNoise (shared CDN IP: ${opts.hosting?.cdn})`,
+        tradeoff: "GreyNoise noise on CDN IPs reflects shared infrastructure, not this domain.",
+        weight: 1,
+      });
     } else if (opts.greynoise.riot && !isBehindCdn) {
-      findings.push({ signal: "greynoise_riot", axis: "trust", severity: "good", label: "IP is a known service (GreyNoise RIOT)", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "greynoise_riot",
+        axis: "trust",
+        severity: "good",
+        label: "IP is a known service (GreyNoise RIOT)",
+        tradeoff: null,
+        weight: 2,
+      });
     }
     // RIOT on CDN = skip (every Cloudflare domain would get a free trust bonus)
   }
 
   // Data breaches (HIBP) — major trust signal with time decay
   // Breaches lose relevance over time as organizations remediate and rebuild.
-  if (opts.breaches && opts.breaches.found && !opts.breaches.check_failed) {
+  if (opts.breaches?.found && !opts.breaches.check_failed) {
     const bc = opts.breaches.count;
-    const hasVerified = opts.breaches.items.some(b => b.is_verified);
+    const hasVerified = opts.breaches.items.some((b) => b.is_verified);
 
     // Apply time decay based on breach age
     // < 1 year: 1.0×, 1-3 years: 0.75×, 3-5 years: 0.50×, 5-10 years: 0.25×, > 10 years: 0.10×
@@ -1623,30 +2496,46 @@ export function calculateDomainScore(opts: {
       const breachDate = breach.breach_date ? new Date(breach.breach_date) : null;
       const ageYears = breachDate ? (now.getTime() - breachDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000) : null;
       // Unknown-date breaches get 0.5× — most missing dates are older breaches; 0.5 balances uncertainty.
-      const decay = ageYears == null ? 0.50 : ageYears > 10 ? 0.10 : ageYears > 5 ? 0.25 : ageYears > 3 ? 0.50 : ageYears > 1 ? 0.75 : 1.0;
+      const decay =
+        ageYears == null
+          ? 0.5
+          : ageYears > 10
+            ? 0.1
+            : ageYears > 5
+              ? 0.25
+              : ageYears > 3
+                ? 0.5
+                : ageYears > 1
+                  ? 0.75
+                  : 1.0;
       weightedPwned += (breach.pwn_count ?? 0) * decay;
       if (ageYears != null && ageYears < 3) recentBreachCount++;
     }
 
     if (weightedPwned > 10_000_000) {
       findings.push({
-        signal: "breaches", axis: "trust",
+        signal: "breaches",
+        axis: "trust",
         severity: "high",
         label: `${bc} data breach${bc !== 1 ? "es" : ""} (~${(weightedPwned / 1_000_000).toFixed(0)}M weighted accounts)`,
-        tradeoff: "Historical breaches reflect past security incidents, not necessarily current posture. Older breaches are weighted lower.",
+        tradeoff:
+          "Historical breaches reflect past security incidents, not necessarily current posture. Older breaches are weighted lower.",
         weight: 4,
       });
     } else if (weightedPwned > 1_000_000 || (bc >= 3 && hasVerified)) {
       findings.push({
-        signal: "breaches", axis: "trust",
+        signal: "breaches",
+        axis: "trust",
         severity: "medium",
         label: `${bc} data breach${bc !== 1 ? "es" : ""} (~${Math.round(weightedPwned).toLocaleString()} weighted accounts)`,
-        tradeoff: "Historical breaches reflect past security incidents, not necessarily current posture. Older breaches are weighted lower.",
+        tradeoff:
+          "Historical breaches reflect past security incidents, not necessarily current posture. Older breaches are weighted lower.",
         weight: 3,
       });
     } else if (bc >= 1 && hasVerified) {
       findings.push({
-        signal: "breaches", axis: "trust",
+        signal: "breaches",
+        axis: "trust",
         severity: "low",
         label: `${bc} verified data breach${bc !== 1 ? "es" : ""}`,
         tradeoff: "Historical breaches reflect past security incidents, not necessarily current posture.",
@@ -1654,7 +2543,8 @@ export function calculateDomainScore(opts: {
       });
     } else if (bc >= 1) {
       findings.push({
-        signal: "breaches", axis: "trust",
+        signal: "breaches",
+        axis: "trust",
         severity: "info",
         label: `${bc} unverified data breach report${bc !== 1 ? "s" : ""}`,
         tradeoff: null,
@@ -1670,11 +2560,32 @@ export function calculateDomainScore(opts: {
   // Tranco web ranking — popularity/reputation signal
   if (opts.trancoRank != null) {
     if (opts.trancoRank <= 1000) {
-      findings.push({ signal: "tranco_rank", axis: "trust", severity: "good", label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "tranco_rank",
+        axis: "trust",
+        severity: "good",
+        label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()})`,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (opts.trancoRank <= 10000) {
-      findings.push({ signal: "tranco_rank", axis: "trust", severity: "good", label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "tranco_rank",
+        axis: "trust",
+        severity: "good",
+        label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()})`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (opts.trancoRank <= 100000) {
-      findings.push({ signal: "tranco_rank", axis: "trust", severity: "info", label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "tranco_rank",
+        axis: "trust",
+        severity: "info",
+        label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`,
+        tradeoff: null,
+        weight: 1,
+      });
     }
     // Unranked = no finding (neutral, no penalty)
   } else {
@@ -1689,17 +2600,21 @@ export function calculateDomainScore(opts: {
     const complete = hasSpf && hasDmarc && hasDkim;
     if (complete) {
       findings.push({
-        signal: "email_trust", axis: "trust",
+        signal: "email_trust",
+        axis: "trust",
         severity: "good",
         label: "Complete email authentication",
-        tradeoff: null, weight: 3,
+        tradeoff: null,
+        weight: 3,
       });
     } else if (!hasSpf && !hasDmarc && !hasDkim) {
       findings.push({
-        signal: "email_trust", axis: "trust",
+        signal: "email_trust",
+        axis: "trust",
         severity: "high",
         label: "No email authentication (missing SPF, DKIM, DMARC)",
-        tradeoff: null, weight: 3,
+        tradeoff: null,
+        weight: 3,
       });
     } else {
       const missing: string[] = [];
@@ -1709,18 +2624,22 @@ export function calculateDomainScore(opts: {
       if (!hasDmarc) missing.push("DMARC");
       if (missing.length > 0) {
         findings.push({
-          signal: "email_trust", axis: "trust",
+          signal: "email_trust",
+          axis: "trust",
           severity: "medium",
           label: `Incomplete email auth (missing ${missing.join(", ")})`,
-          tradeoff: null, weight: 2,
+          tradeoff: null,
+          weight: 2,
         });
       } else {
         // Only DKIM missing — treat as mostly complete
         findings.push({
-          signal: "email_trust", axis: "trust",
+          signal: "email_trust",
+          axis: "trust",
           severity: "info",
           label: "Email auth present (SPF + DMARC) — DKIM not externally detected",
-          tradeoff: null, weight: 2,
+          tradeoff: null,
+          weight: 2,
         });
       }
     }
@@ -1729,25 +2648,53 @@ export function calculateDomainScore(opts: {
   // ─── NEW: security.txt Trust Signal ──────────────────────────────
   if (opts.securityTxt) {
     if (opts.securityTxt.found && opts.securityTxt.has_bug_bounty) {
-      findings.push({ signal: "security_txt", axis: "trust", severity: "good", label: `security.txt with bug bounty${opts.securityTxt.bug_bounty_platform ? ` (${opts.securityTxt.bug_bounty_platform})` : ""}`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "security_txt",
+        axis: "trust",
+        severity: "good",
+        label: `security.txt with bug bounty${opts.securityTxt.bug_bounty_platform ? ` (${opts.securityTxt.bug_bounty_platform})` : ""}`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (opts.securityTxt.found) {
-      findings.push({ signal: "security_txt", axis: "trust", severity: "good", label: "security.txt present (responsible disclosure)", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "security_txt",
+        axis: "trust",
+        severity: "good",
+        label: "security.txt present (responsible disclosure)",
+        tradeoff: null,
+        weight: 1,
+      });
     }
     // Absent = no finding (don't penalize for absence of nice-to-have)
   }
 
   // ─── Phase 3: BIMI Record (email brand identity) ────────────────
   if (opts.emailAuth?.bimi?.found) {
-    findings.push({ signal: "bimi_record", axis: "trust", severity: "good", label: "BIMI record present — email brand verification", tradeoff: null, weight: 1 });
+    findings.push({
+      signal: "bimi_record",
+      axis: "trust",
+      severity: "good",
+      label: "BIMI record present — email brand verification",
+      tradeoff: null,
+      weight: 1,
+    });
   }
 
   // dmarc_policy_strength removed — now handled by bidirectional dmarc_reject signal above
 
   // ─── Phase 3: ads.txt (publisher transparency) ──────────────────
   if (opts.wellKnown && arch === "content") {
-    const hasAdsTxt = opts.wellKnown.endpoints.some(e => e.path.includes("ads.txt") && e.found);
+    const hasAdsTxt = opts.wellKnown.endpoints.some((e) => e.path.includes("ads.txt") && e.found);
     if (hasAdsTxt) {
-      findings.push({ signal: "ads_txt", axis: "trust", severity: "good", label: "ads.txt present — authorized ad sellers declared", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "ads_txt",
+        axis: "trust",
+        severity: "good",
+        label: "ads.txt present — authorized ad sellers declared",
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -1757,15 +2704,40 @@ export function calculateDomainScore(opts: {
   if (opts.ssl?.subject) {
     const sslSubject = opts.ssl.subject;
     const hasOrg = /,?\s*O\s*=/.test(sslSubject);
-    const isEV = hasOrg && (/SERIALNUMBER\s*=/.test(sslSubject) || /2\.5\.4\.15/.test(sslSubject) || /1\.3\.6\.1\.4\.1\.311\.60\.2\.1/.test(sslSubject));
+    const isEV =
+      hasOrg &&
+      (/SERIALNUMBER\s*=/.test(sslSubject) ||
+        /2\.5\.4\.15/.test(sslSubject) ||
+        /1\.3\.6\.1\.4\.1\.311\.60\.2\.1/.test(sslSubject));
     const orgMatch = sslSubject.match(/,?\s*O\s*=\s*([^,]+)/);
     const orgName = orgMatch ? orgMatch[1].replace(/\\\\/g, "").trim() : null;
     if (isEV && orgName) {
-      findings.push({ signal: "cert_validation_type", axis: "trust", severity: "good", label: `Extended Validation (EV) certificate — ${orgName}`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "cert_validation_type",
+        axis: "trust",
+        severity: "good",
+        label: `Extended Validation (EV) certificate — ${orgName}`,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (hasOrg && orgName) {
-      findings.push({ signal: "cert_validation_type", axis: "trust", severity: "good", label: `Organization Validated (OV) certificate — ${orgName}`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "cert_validation_type",
+        axis: "trust",
+        severity: "good",
+        label: `Organization Validated (OV) certificate — ${orgName}`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else {
-      findings.push({ signal: "cert_validation_type", axis: "trust", severity: "info", label: "Domain Validated (DV) certificate only", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "cert_validation_type",
+        axis: "trust",
+        severity: "info",
+        label: "Domain Validated (DV) certificate only",
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -1777,15 +2749,36 @@ export function calculateDomainScore(opts: {
     const hasAbout = pages.some((p: any) => /about|company|team/i.test(p.name ?? p));
     const orgCount = [hasPrivacy, hasTerms, hasAbout].filter(Boolean).length;
     if (orgCount >= 3) {
-      findings.push({ signal: "organizational_identity", axis: "trust", severity: "good", label: "Privacy policy, terms, and about page found", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "organizational_identity",
+        axis: "trust",
+        severity: "good",
+        label: "Privacy policy, terms, and about page found",
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (orgCount >= 1) {
       const missing: string[] = [];
       if (!hasPrivacy) missing.push("privacy policy");
       if (!hasTerms) missing.push("terms of service");
       if (!hasAbout) missing.push("about page");
-      findings.push({ signal: "organizational_identity", axis: "trust", severity: "info", label: `${orgCount}/3 organizational pages found (missing: ${missing.join(", ")})`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "organizational_identity",
+        axis: "trust",
+        severity: "info",
+        label: `${orgCount}/3 organizational pages found (missing: ${missing.join(", ")})`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else {
-      findings.push({ signal: "organizational_identity", axis: "trust", severity: "low", label: "No organizational identity pages (privacy, terms, about)", tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "organizational_identity",
+        axis: "trust",
+        severity: "low",
+        label: "No organizational identity pages (privacy, terms, about)",
+        tradeoff: null,
+        weight: 2,
+      });
     }
   }
 
@@ -1794,10 +2787,12 @@ export function calculateDomainScore(opts: {
     if (!opts.cookieConsent.cmp_detected && opts.cookieSecurity && opts.cookieSecurity.cookies.length > 0) {
       // Has cookies but no consent management = mild trust concern
       findings.push({
-        signal: "cookie_consent_missing", axis: "trust",
+        signal: "cookie_consent_missing",
+        axis: "trust",
         severity: "low",
         label: `${opts.cookieSecurity.cookies.length} cookies set without consent management`,
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
     // CMP detected is already scored as cookie_consent_cmp above
@@ -1808,28 +2803,72 @@ export function calculateDomainScore(opts: {
   // Domain popularity (Tranco rank) — direct visibility measure
   if (opts.trancoRank != null) {
     if (opts.trancoRank <= 1000) {
-      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "good", label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()}) — elite web presence`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "domain_popularity",
+        axis: "visibility",
+        severity: "good",
+        label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()}) — elite web presence`,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (opts.trancoRank <= 10000) {
-      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "good", label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()}) — high traffic`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "domain_popularity",
+        axis: "visibility",
+        severity: "good",
+        label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()}) — high traffic`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (opts.trancoRank <= 100000) {
-      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "info", label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "domain_popularity",
+        axis: "visibility",
+        severity: "info",
+        label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else {
-      findings.push({ signal: "domain_popularity", axis: "visibility", severity: "low", label: `Tranco rank #${opts.trancoRank.toLocaleString()} — low traffic`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "domain_popularity",
+        axis: "visibility",
+        severity: "low",
+        label: `Tranco rank #${opts.trancoRank.toLocaleString()} — low traffic`,
+        tradeoff: null,
+        weight: 1,
+      });
     }
   } else {
-    findings.push({ signal: "domain_popularity", axis: "visibility", severity: "info", label: "Not ranked in Tranco top 1M", tradeoff: null, weight: 1 });
+    findings.push({
+      signal: "domain_popularity",
+      axis: "visibility",
+      severity: "info",
+      label: "Not ranked in Tranco top 1M",
+      tradeoff: null,
+      weight: 1,
+    });
   }
 
   // Structured data
-  const jsonLdTypes = (opts.jsonLd ?? []).map(j => j.type);
+  const jsonLdTypes = (opts.jsonLd ?? []).map((j) => j.type);
   if (jsonLdTypes.length > 0) {
-    findings.push({ signal: "structured_data", axis: "visibility", severity: "good", label: `Structured data: ${jsonLdTypes.slice(0, 3).join(", ")}`, tradeoff: null, weight: 2 });
+    findings.push({
+      signal: "structured_data",
+      axis: "visibility",
+      severity: "good",
+      label: `Structured data: ${jsonLdTypes.slice(0, 3).join(", ")}`,
+      tradeoff: null,
+      weight: 2,
+    });
   } else if (!opts.httpBlocked) {
     findings.push({
-      signal: "no_structured_data", axis: "visibility",
+      signal: "no_structured_data",
+      axis: "visibility",
       severity: contextualSeverity("info", arch, { content: "low", commerce: "low" }),
       label: "No structured data (JSON-LD) found",
-      tradeoff: null, weight: 2,
+      tradeoff: null,
+      weight: 2,
     });
   }
 
@@ -1837,30 +2876,36 @@ export function calculateDomainScore(opts: {
   if (opts.socialMeta && !opts.httpBlocked) {
     const score = opts.socialMeta.score;
     findings.push({
-      signal: "social_meta", axis: "visibility",
+      signal: "social_meta",
+      axis: "visibility",
       severity: score >= 80 ? "good" : score >= 50 ? "info" : score >= 30 ? "low" : "medium",
       label: score >= 80 ? "Complete social meta (OG + Twitter)" : `Social meta score: ${score}/100`,
-      tradeoff: null, weight: 3,
+      tradeoff: null,
+      weight: 3,
     });
   }
 
   // Robots.txt
   if (opts.meta) {
     findings.push({
-      signal: "robots_txt", axis: "visibility",
+      signal: "robots_txt",
+      axis: "visibility",
       severity: opts.meta.robots_txt_exists ? "good" : "info",
       label: opts.meta.robots_txt_exists ? "robots.txt present" : "No robots.txt",
-      tradeoff: null, weight: 2,
+      tradeoff: null,
+      weight: 2,
     });
   }
 
   // Sitemap
   if (opts.meta) {
     findings.push({
-      signal: "sitemap", axis: "visibility",
+      signal: "sitemap",
+      axis: "visibility",
       severity: opts.meta.sitemap_detected ? "good" : contextualSeverity("low", arch, { content: "medium" }),
       label: opts.meta.sitemap_detected ? "Sitemap detected" : "No sitemap found",
-      tradeoff: null, weight: 2,
+      tradeoff: null,
+      weight: 2,
     });
   }
 
@@ -1868,43 +2913,74 @@ export function calculateDomainScore(opts: {
   if (opts.legal && !opts.httpBlocked) {
     const pageCount = opts.legal.pages_found.length;
     findings.push({
-      signal: "legal_pages", axis: "visibility",
+      signal: "legal_pages",
+      axis: "visibility",
       severity: pageCount >= 2 ? "good" : pageCount >= 1 ? "info" : "low",
-      label: pageCount >= 2 ? `Legal pages found (${pageCount})` : pageCount === 1 ? "1 legal page found" : "No legal pages detected",
-      tradeoff: null, weight: 1,
+      label:
+        pageCount >= 2
+          ? `Legal pages found (${pageCount})`
+          : pageCount === 1
+            ? "1 legal page found"
+            : "No legal pages detected",
+      tradeoff: null,
+      weight: 1,
     });
   }
 
   // Social account presence — visibility signal
   if (opts.socialAccounts) {
     const accts = opts.socialAccounts.accounts;
-    const verifiedCount = accts.filter(a => a.found_via === "rel-me").length;
-    const linkedCount = accts.filter(a => a.found_via === "homepage").length;
+    const verifiedCount = accts.filter((a) => a.found_via === "rel-me").length;
+    const linkedCount = accts.filter((a) => a.found_via === "homepage").length;
     const totalCount = accts.length;
 
     if (verifiedCount >= 2) {
-      findings.push({ signal: "social_accounts", axis: "visibility", severity: "good", label: `${verifiedCount} verified social accounts (rel=me)`, tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "social_accounts",
+        axis: "visibility",
+        severity: "good",
+        label: `${verifiedCount} verified social accounts (rel=me)`,
+        tradeoff: null,
+        weight: 3,
+      });
     } else if (verifiedCount >= 1 || linkedCount >= 2) {
-      findings.push({ signal: "social_accounts", axis: "visibility", severity: "good", label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "social_accounts",
+        axis: "visibility",
+        severity: "good",
+        label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (totalCount >= 1) {
-      findings.push({ signal: "social_accounts", axis: "visibility", severity: "info", label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "social_accounts",
+        axis: "visibility",
+        severity: "info",
+        label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`,
+        tradeoff: null,
+        weight: 1,
+      });
     }
     // social_not_verified removed — 341/341 = info, 93% of domains, zero discrimination
     if (!opts.httpBlocked && totalCount === 0) {
       // No social presence — mild visibility concern for content/corporate sites
       findings.push({
-        signal: "no_social_accounts", axis: "visibility",
+        signal: "no_social_accounts",
+        axis: "visibility",
         severity: contextualSeverity("info", arch, { content: "low", corporate: "low" }),
         label: "No social accounts detected",
-        tradeoff: null, weight: 1,
+        tradeoff: null,
+        weight: 1,
       });
     }
   }
 
   // ─── NEW: Restrictive robots.txt ─────────────────────────────────
-  if (opts.robotsParsed && opts.robotsParsed.is_restrictive) {
+  if (opts.robotsParsed?.is_restrictive) {
     findings.push({
-      signal: "restrictive_robots", axis: "visibility",
+      signal: "restrictive_robots",
+      axis: "visibility",
       severity: contextualSeverity("low", arch, { infrastructure: "info", application: "info" }),
       label: "robots.txt blocks all crawlers — site won't appear in search results",
       tradeoff: "May be intentional for private/internal sites.",
@@ -1915,44 +2991,80 @@ export function calculateDomainScore(opts: {
   // ─── NEW: PWA Ready ──────────────────────────────────────────────
   if (opts.wellKnown?.pwa_ready) {
     findings.push({
-      signal: "pwa_ready", axis: "visibility",
+      signal: "pwa_ready",
+      axis: "visibility",
       severity: "good",
       label: "Progressive Web App ready (manifest + service worker)",
       tradeoff: null,
-      weight: (arch === "application" || arch === "commerce") ? 2 : 1,
+      weight: arch === "application" || arch === "commerce" ? 2 : 1,
     });
   }
 
   // ─── Phase 2: Canonical URL ──────────────────────────────────────
   if (opts.html && !opts.httpBlocked) {
-    const canonicalMatch = opts.html.match(/<link[^>]+rel\s*=\s*["']canonical["'][^>]+href\s*=\s*["']([^"']+)["']/i)
-      ?? opts.html.match(/<link[^>]+href\s*=\s*["']([^"']+)["'][^>]+rel\s*=\s*["']canonical["']/i);
+    const canonicalMatch =
+      opts.html.match(/<link[^>]+rel\s*=\s*["']canonical["'][^>]+href\s*=\s*["']([^"']+)["']/i) ??
+      opts.html.match(/<link[^>]+href\s*=\s*["']([^"']+)["'][^>]+rel\s*=\s*["']canonical["']/i);
     if (canonicalMatch) {
       const canonicalUrl = canonicalMatch[1];
       try {
         const canonicalHost = new URL(canonicalUrl).hostname.toLowerCase();
         const domainLowerCan = opts.domain.toLowerCase();
-        if (canonicalHost === domainLowerCan || canonicalHost.endsWith(`.${domainLowerCan}`) || domainLowerCan.endsWith(`.${canonicalHost}`)) {
-          findings.push({ signal: "canonical_url", axis: "visibility", severity: "good", label: "Canonical URL set correctly", tradeoff: null, weight: 2 });
+        if (
+          canonicalHost === domainLowerCan ||
+          canonicalHost.endsWith(`.${domainLowerCan}`) ||
+          domainLowerCan.endsWith(`.${canonicalHost}`)
+        ) {
+          findings.push({
+            signal: "canonical_url",
+            axis: "visibility",
+            severity: "good",
+            label: "Canonical URL set correctly",
+            tradeoff: null,
+            weight: 2,
+          });
         } else {
-          findings.push({ signal: "canonical_url", axis: "visibility", severity: "info", label: `Canonical URL points to different domain (${canonicalHost})`, tradeoff: "May be intentional for cross-domain canonical consolidation.", weight: 1 });
+          findings.push({
+            signal: "canonical_url",
+            axis: "visibility",
+            severity: "info",
+            label: `Canonical URL points to different domain (${canonicalHost})`,
+            tradeoff: "May be intentional for cross-domain canonical consolidation.",
+            weight: 1,
+          });
         }
       } catch {
-        findings.push({ signal: "canonical_url", axis: "visibility", severity: "info", label: "Canonical URL present but malformed", tradeoff: null, weight: 1 });
+        findings.push({
+          signal: "canonical_url",
+          axis: "visibility",
+          severity: "info",
+          label: "Canonical URL present but malformed",
+          tradeoff: null,
+          weight: 1,
+        });
       }
     } else {
       findings.push({
-        signal: "canonical_url_missing", axis: "visibility",
+        signal: "canonical_url_missing",
+        axis: "visibility",
         severity: contextualSeverity("info", arch, { content: "low", corporate: "low" }),
         label: "No canonical URL — risk of duplicate content in search results",
-        tradeoff: null, weight: 1,
+        tradeoff: null,
+        weight: 1,
       });
     }
   }
 
   // ─── Phase 3: Mobile App Links ───────────────────────────────────
   if (opts.wellKnown?.has_mobile_apps) {
-    findings.push({ signal: "mobile_app_links", axis: "visibility", severity: "good", label: "Mobile app deep links configured", tradeoff: null, weight: 1 });
+    findings.push({
+      signal: "mobile_app_links",
+      axis: "visibility",
+      severity: "good",
+      label: "Mobile app deep links configured",
+      tradeoff: null,
+      weight: 1,
+    });
   }
 
   // ─── Phase 3: RSS/Atom Feed ──────────────────────────────────────
@@ -1960,11 +3072,12 @@ export function calculateDomainScore(opts: {
     const hasRss = /type\s*=\s*["']application\/(rss|atom)\+xml["']/i.test(opts.html);
     if (hasRss) {
       findings.push({
-        signal: "rss_feed", axis: "visibility",
+        signal: "rss_feed",
+        axis: "visibility",
         severity: "good",
         label: "RSS/Atom feed available",
         tradeoff: null,
-        weight: (arch === "content") ? 2 : 1,
+        weight: arch === "content" ? 2 : 1,
       });
     }
   }
@@ -1973,7 +3086,14 @@ export function calculateDomainScore(opts: {
   if (opts.html && !opts.httpBlocked) {
     const hasHreflang = /hreflang\s*=\s*["'][^"']+["']/i.test(opts.html);
     if (hasHreflang) {
-      findings.push({ signal: "hreflang", axis: "visibility", severity: "good", label: "Hreflang tags present — international targeting configured", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "hreflang",
+        axis: "visibility",
+        severity: "good",
+        label: "Hreflang tags present — international targeting configured",
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -1981,7 +3101,14 @@ export function calculateDomainScore(opts: {
   if (opts.meta && !opts.httpBlocked) {
     if (!opts.meta.favicon_url) {
       if (arch === "content" || arch === "corporate") {
-        findings.push({ signal: "favicon_missing", axis: "visibility", severity: "low", label: "No favicon detected", tradeoff: null, weight: 1 });
+        findings.push({
+          signal: "favicon_missing",
+          axis: "visibility",
+          severity: "low",
+          label: "No favicon detected",
+          tradeoff: null,
+          weight: 1,
+        });
       }
     }
   }
@@ -1991,9 +3118,23 @@ export function calculateDomainScore(opts: {
     const titleMatch = opts.html.match(/<title[^>]*>([^<]*)<\/title>/i);
     const titleText = titleMatch ? titleMatch[1].trim() : "";
     if (!titleText) {
-      findings.push({ signal: "title_tag_missing", axis: "visibility", severity: "low", label: "Missing page title", tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "title_tag_missing",
+        axis: "visibility",
+        severity: "low",
+        label: "Missing page title",
+        tradeoff: null,
+        weight: 1,
+      });
     } else if (titleText.length < 5 || /^(untitled|home|welcome|index)$/i.test(titleText)) {
-      findings.push({ signal: "title_tag_generic", axis: "visibility", severity: "info", label: `Generic page title: "${titleText}"`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "title_tag_generic",
+        axis: "visibility",
+        severity: "info",
+        label: `Generic page title: "${titleText}"`,
+        tradeoff: null,
+        weight: 1,
+      });
     }
   }
 
@@ -2003,31 +3144,50 @@ export function calculateDomainScore(opts: {
     const hasOgDesc = !!opts.socialMeta?.og?.description;
     if (!hasMetaDesc && !hasOgDesc) {
       findings.push({
-        signal: "meta_description_missing", axis: "visibility",
+        signal: "meta_description_missing",
+        axis: "visibility",
         severity: contextualSeverity("info", arch, { content: "low" }),
         label: "No meta description — search engines will generate their own snippet",
-        tradeoff: null, weight: 1,
+        tradeoff: null,
+        weight: 1,
       });
     }
   }
 
   // ─── Mobile Friendly ───────────────────────────────────────────
   if (opts.html && !opts.httpBlocked) {
-    const viewportMatch = opts.html.match(/<meta[^>]+name\s*=\s*["']viewport["'][^>]+content\s*=\s*["']([^"']+)["']/i)
-      ?? opts.html.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+name\s*=\s*["']viewport["']/i);
+    const viewportMatch =
+      opts.html.match(/<meta[^>]+name\s*=\s*["']viewport["'][^>]+content\s*=\s*["']([^"']+)["']/i) ??
+      opts.html.match(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+name\s*=\s*["']viewport["']/i);
     if (viewportMatch) {
       const viewportContent = viewportMatch[1].toLowerCase();
       if (viewportContent.includes("width=device-width")) {
-        findings.push({ signal: "mobile_friendly", axis: "visibility", severity: "good", label: "Mobile-friendly viewport configured", tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "mobile_friendly",
+          axis: "visibility",
+          severity: "good",
+          label: "Mobile-friendly viewport configured",
+          tradeoff: null,
+          weight: 2,
+        });
       } else {
-        findings.push({ signal: "mobile_friendly", axis: "visibility", severity: "low", label: "Viewport set but not responsive (missing width=device-width)", tradeoff: null, weight: 2 });
+        findings.push({
+          signal: "mobile_friendly",
+          axis: "visibility",
+          severity: "low",
+          label: "Viewport set but not responsive (missing width=device-width)",
+          tradeoff: null,
+          weight: 2,
+        });
       }
     } else {
       findings.push({
-        signal: "mobile_friendly", axis: "visibility",
+        signal: "mobile_friendly",
+        axis: "visibility",
         severity: contextualSeverity("medium", arch, { infrastructure: "info", application: "low" }),
         label: "No viewport meta tag — not mobile-friendly",
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
   }
@@ -2040,41 +3200,74 @@ export function calculateDomainScore(opts: {
     const hasTwitterCard = !!opts.socialMeta.twitter?.card;
     if (ogPresent >= 5) {
       findings.push({
-        signal: "og_completeness", axis: "visibility",
+        signal: "og_completeness",
+        axis: "visibility",
         severity: "good",
         label: `Complete OG tags (${ogPresent}/5)${hasTwitterCard ? " + Twitter Card" : ""}`,
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     } else if (ogPresent >= 3) {
-      findings.push({ signal: "og_completeness", axis: "visibility", severity: "info", label: `${ogPresent}/5 OG tags present`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "og_completeness",
+        axis: "visibility",
+        severity: "info",
+        label: `${ogPresent}/5 OG tags present`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else if (ogPresent >= 1) {
-      findings.push({ signal: "og_completeness", axis: "visibility", severity: "low", label: `Only ${ogPresent}/5 OG tags — social sharing will look incomplete`, tradeoff: null, weight: 2 });
+      findings.push({
+        signal: "og_completeness",
+        axis: "visibility",
+        severity: "low",
+        label: `Only ${ogPresent}/5 OG tags — social sharing will look incomplete`,
+        tradeoff: null,
+        weight: 2,
+      });
     } else {
       findings.push({
-        signal: "og_completeness", axis: "visibility",
-        severity: contextualSeverity("medium", arch, { infrastructure: "info", application: "info", institutional: "info" }),
+        signal: "og_completeness",
+        axis: "visibility",
+        severity: contextualSeverity("medium", arch, {
+          infrastructure: "info",
+          application: "info",
+          institutional: "info",
+        }),
         label: "No Open Graph tags — social sharing will use browser defaults",
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
   }
   if (opts.accessibility) {
     const a11yScore = opts.accessibility.score;
     if (a11yScore >= 80) {
-      findings.push({ signal: "accessibility", axis: "visibility", severity: "good", label: `Accessibility score ${a11yScore}/100`, tradeoff: null, weight: 1 });
+      findings.push({
+        signal: "accessibility",
+        axis: "visibility",
+        severity: "good",
+        label: `Accessibility score ${a11yScore}/100`,
+        tradeoff: null,
+        weight: 1,
+      });
     } else if (a11yScore >= 50) {
       findings.push({
-        signal: "accessibility", axis: "visibility",
+        signal: "accessibility",
+        axis: "visibility",
         severity: contextualSeverity("low", arch, { institutional: "medium", corporate: "medium" }),
         label: `Accessibility score ${a11yScore}/100 — improvements needed`,
-        tradeoff: null, weight: 1,
+        tradeoff: null,
+        weight: 1,
       });
     } else {
       findings.push({
-        signal: "accessibility", axis: "visibility",
+        signal: "accessibility",
+        axis: "visibility",
         severity: contextualSeverity("medium", arch, { institutional: "high", corporate: "medium" }),
         label: `Low accessibility score ${a11yScore}/100`,
-        tradeoff: null, weight: 1,
+        tradeoff: null,
+        weight: 1,
       });
     }
   }
@@ -2085,40 +3278,54 @@ export function calculateDomainScore(opts: {
     // Render-blocking scripts impact
     if (tps.render_blocking > 0) {
       findings.push({
-        signal: "render_blocking_scripts", axis: "performance",
+        signal: "render_blocking_scripts",
+        axis: "performance",
         severity: tps.render_blocking > 5 ? "high" : tps.render_blocking > 2 ? "medium" : "low",
         label: `${tps.render_blocking} render-blocking script${tps.render_blocking !== 1 ? "s" : ""}`,
         tradeoff: "Adding async/defer may cause timing issues for scripts that depend on load order.",
         weight: 3,
       });
     } else if (tps.third_party > 0) {
-      findings.push({ signal: "render_blocking_scripts", axis: "performance", severity: "good", label: "No render-blocking third-party scripts", tradeoff: null, weight: 3 });
+      findings.push({
+        signal: "render_blocking_scripts",
+        axis: "performance",
+        severity: "good",
+        label: "No render-blocking third-party scripts",
+        tradeoff: null,
+        weight: 3,
+      });
     }
 
     // High third-party script count impacts performance
     if (tps.third_party > 15) {
       findings.push({
-        signal: "third_party_count", axis: "performance",
+        signal: "third_party_count",
+        axis: "performance",
         severity: "high",
         label: `${tps.third_party} third-party scripts — significant performance overhead`,
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     } else if (tps.third_party > 8) {
       findings.push({
-        signal: "third_party_count", axis: "performance",
+        signal: "third_party_count",
+        axis: "performance",
         severity: "medium",
         label: `${tps.third_party} third-party scripts loaded`,
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
 
     // Privacy concerns → Security axis
     if (tps.privacy_concerns.length > 0) {
       findings.push({
-        signal: "script_privacy", axis: "security",
+        signal: "script_privacy",
+        axis: "security",
         severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
         label: `${tps.privacy_concerns.length} privacy concern(s) from third-party scripts`,
-        tradeoff: null, weight: 3,
+        tradeoff: null,
+        weight: 3,
       });
     }
   }
@@ -2130,30 +3337,36 @@ export function calculateDomainScore(opts: {
     // CMP presence — important for trust
     if (cc.cmp_detected) {
       findings.push({
-        signal: "cookie_consent_cmp", axis: "trust",
+        signal: "cookie_consent_cmp",
+        axis: "trust",
         severity: cc.cmp_detected.confidence >= 0.5 ? "good" : "info",
         label: `Consent platform: ${cc.cmp_detected.name}`,
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
 
     // Pre-consent tracking cookies — security concern
     if (cc.pre_consent_cookies > 0) {
       findings.push({
-        signal: "pre_consent_cookies", axis: "security",
+        signal: "pre_consent_cookies",
+        axis: "security",
         severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "critical" }),
         label: `${cc.pre_consent_cookies} potential tracking cookie(s) set before consent`,
-        tradeoff: null, weight: 3,
+        tradeoff: null,
+        weight: 3,
       });
     }
 
     // Compliance flags count → trust
     if (cc.compliance_flags.length > 0) {
       findings.push({
-        signal: "cookie_compliance", axis: "trust",
+        signal: "cookie_compliance",
+        axis: "trust",
         severity: cc.compliance_flags.length >= 3 ? "medium" : "low",
         label: `${cc.compliance_flags.length} cookie compliance flag(s)`,
-        tradeoff: null, weight: 2,
+        tradeoff: null,
+        weight: 2,
       });
     }
   }
@@ -2165,7 +3378,8 @@ export function calculateDomainScore(opts: {
     // DNS inconsistency
     if (nh.dns_propagation && !nh.dns_propagation.consistent) {
       findings.push({
-        signal: "dns_inconsistent", axis: "reliability",
+        signal: "dns_inconsistent",
+        axis: "reliability",
         severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
         label: "DNS records inconsistent across resolvers",
         tradeoff: "DNS propagation may still be in progress, or you're using geo-DNS.",
@@ -2173,9 +3387,12 @@ export function calculateDomainScore(opts: {
       });
     } else if (nh.dns_propagation?.consistent) {
       findings.push({
-        signal: "dns_consistent", axis: "reliability",
-        severity: "good", label: "DNS records consistent across all resolvers",
-        tradeoff: null, weight: 1,
+        signal: "dns_consistent",
+        axis: "reliability",
+        severity: "good",
+        label: "DNS records consistent across all resolvers",
+        tradeoff: null,
+        weight: 1,
       });
     }
 
@@ -2184,12 +3401,14 @@ export function calculateDomainScore(opts: {
     if (nh.ripe_routing?.routing_stability === "unstable") {
       const siteIsUp = opts.statusResult?.is_up === true;
       findings.push({
-        signal: "bgp_unstable", axis: "reliability",
+        signal: "bgp_unstable",
+        axis: "reliability",
         severity: siteIsUp ? "info" : contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
         label: siteIsUp
           ? `BGP route churn (${nh.ripe_routing.bgp_updates_24h} updates in 24h — site responding normally)`
           : `BGP route unstable (${nh.ripe_routing.bgp_updates_24h} updates in 24h)`,
-        tradeoff: null, weight: siteIsUp ? 1 : 3,
+        tradeoff: null,
+        weight: siteIsUp ? 1 : 3,
       });
     }
     // bgp_stable removed — only 3 domains ever, unreliable data asymmetry
@@ -2199,10 +3418,12 @@ export function calculateDomainScore(opts: {
       const vis = nh.ripe_routing.visibility.percentage;
       if (vis < 70) {
         findings.push({
-          signal: "low_visibility", axis: "reliability",
+          signal: "low_visibility",
+          axis: "reliability",
           severity: contextualSeverity("low", arch, { commerce: "medium" }),
           label: `Low route visibility (${vis}% of peers)`,
-          tradeoff: "Route visibility is measured from RIPE RIS vantage points, which are concentrated in Europe/US. APAC/LATAM-hosted sites may appear to have lower visibility.",
+          tradeoff:
+            "Route visibility is measured from RIPE RIS vantage points, which are concentrated in Europe/US. APAC/LATAM-hosted sites may appear to have lower visibility.",
           weight: 2,
         });
       }
@@ -2211,10 +3432,12 @@ export function calculateDomainScore(opts: {
     // Slow connection
     if (nh.connection_timing && nh.connection_timing.total_ms > 1000) {
       findings.push({
-        signal: "slow_connection", axis: "performance",
+        signal: "slow_connection",
+        axis: "performance",
         severity: "info",
         label: `Slow connection setup (${Math.round(nh.connection_timing.total_ms)}ms total)`,
-        tradeoff: "Connection timing depends on server location relative to the probe. A single probe location cannot reflect global latency.",
+        tradeoff:
+          "Connection timing depends on server location relative to the probe. A single probe location cannot reflect global latency.",
         weight: 2,
       });
     }
@@ -2229,7 +3452,14 @@ export function calculateDomainScore(opts: {
     if (rh.prefetch.length > 0) parts.push(`${rh.prefetch.length} prefetch`);
     if (rh.dns_prefetch.length > 0) parts.push(`${rh.dns_prefetch.length} dns-prefetch`);
     if (rh.modulepreload.length > 0) parts.push(`${rh.modulepreload.length} modulepreload`);
-    findings.push({ signal: "resource_hints", axis: "performance", severity: "good", label: `Resource hints detected: ${parts.join(", ")}`, tradeoff: null, weight: 1 });
+    findings.push({
+      signal: "resource_hints",
+      axis: "performance",
+      severity: "good",
+      label: `Resource hints detected: ${parts.join(", ")}`,
+      tradeoff: null,
+      weight: 1,
+    });
   }
 
   // ─── Compute Axis Scores ─────────────────────────────────────────
@@ -2238,7 +3468,7 @@ export function calculateDomainScore(opts: {
   const axisScores: Record<Axis, AxisScore> = {} as Record<Axis, AxisScore>;
 
   for (const axis of axes) {
-    const axisFindings = findings.filter(f => f.axis === axis);
+    const axisFindings = findings.filter((f) => f.axis === axis);
     if (axisFindings.length === 0) {
       // Unmeasured axis gets score 50 (not null) — lack of data is not a pass
       axisScores[axis] = { score: 50, weight: AXIS_WEIGHTS[axis], findings: [], not_measured: true };
@@ -2269,9 +3499,7 @@ export function calculateDomainScore(opts: {
 
   // ─── Floor Penalty ───────────────────────────────────────────────
   // Prevent domains with one catastrophically bad axis from still scoring well overall
-  const measuredScores = axes
-    .filter(a => !axisScores[a].not_measured)
-    .map(a => axisScores[a].score!);
+  const measuredScores = axes.filter((a) => !axisScores[a].not_measured).map((a) => axisScores[a].score!);
   if (measuredScores.length > 0) {
     const minScore = Math.min(...measuredScores);
     if (minScore < 30) {
@@ -2290,7 +3518,7 @@ export function calculateDomainScore(opts: {
   // ─── Breach grade cap ────────────────────────────────────────────
   // Domains with catastrophic RECENT data breaches should not earn top grades.
   // Breaches > 3 years old no longer trigger the cap (time decay).
-  if (opts.breaches && opts.breaches.found && !opts.breaches.check_failed) {
+  if (opts.breaches?.found && !opts.breaches.check_failed) {
     const recentBreachCount = (opts as any)._recentBreachCount ?? 0;
     const weightedPwned = (opts as any)._weightedPwned ?? 0;
     if (recentBreachCount > 0) {

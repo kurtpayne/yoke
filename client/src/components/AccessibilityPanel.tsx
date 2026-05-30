@@ -1,7 +1,7 @@
+import { Accessibility, AlertTriangle, Check, ChevronDown, ChevronRight, XCircle } from "lucide-react";
 import { useState } from "react";
-import { Accessibility, Check, AlertTriangle, XCircle, ChevronDown, ChevronRight } from "lucide-react";
+import type { AccessibilityCheck, AnalysisResult } from "../utils/types";
 import { Panel, StatusBadge } from "./Panel";
-import type { AnalysisResult, AccessibilityCheck } from "../utils/types";
 
 // ─── Impact badge ────────────────────────────────────────────────────
 
@@ -36,9 +36,12 @@ function ImpactBadge({ impact }: { impact: AccessibilityCheck["impact"] }) {
 
 function StatusIcon({ status }: { status: AccessibilityCheck["status"] }) {
   switch (status) {
-    case "pass": return <Check size={12} style={{ color: "var(--success)", flexShrink: 0 }} />;
-    case "warn": return <AlertTriangle size={12} style={{ color: "var(--warning)", flexShrink: 0 }} />;
-    case "fail": return <XCircle size={12} style={{ color: "var(--danger)", flexShrink: 0 }} />;
+    case "pass":
+      return <Check size={12} style={{ color: "var(--success)", flexShrink: 0 }} />;
+    case "warn":
+      return <AlertTriangle size={12} style={{ color: "var(--warning)", flexShrink: 0 }} />;
+    case "fail":
+      return <XCircle size={12} style={{ color: "var(--danger)", flexShrink: 0 }} />;
   }
 }
 
@@ -56,12 +59,24 @@ function ScoreRing({ score }: { score: number }) {
     <svg width={size} height={size} style={{ flexShrink: 0 }}>
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
       <circle
-        cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-        strokeDasharray={circumference} strokeDashoffset={offset}
-        strokeLinecap="round" transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={stroke}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
-      <text x={size / 2} y={size / 2} textAnchor="middle" dominantBaseline="central"
-        style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, fill: color }}>
+      <text
+        x={size / 2}
+        y={size / 2}
+        textAnchor="middle"
+        dominantBaseline="central"
+        style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700, fill: color }}
+      >
         {score}
       </text>
     </svg>
@@ -91,17 +106,23 @@ function CheckRow({ check }: { check: AccessibilityCheck }) {
         <StatusIcon status={check.status} />
         <span style={{ fontWeight: 500, flex: 1, minWidth: 0 }}>{check.name}</span>
         <ImpactBadge impact={check.impact} />
-        {expanded ? <ChevronDown size={11} style={{ color: "var(--dim)", flexShrink: 0 }} /> : <ChevronRight size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />}
+        {expanded ? (
+          <ChevronDown size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />
+        ) : (
+          <ChevronRight size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />
+        )}
       </button>
       {expanded && (
         <div className="px-4 pb-2.5" style={{ paddingLeft: "2.25rem" }}>
-          <p style={{
-            fontFamily: "var(--font-ui)",
-            fontSize: "11px",
-            color: "var(--dim)",
-            lineHeight: "17px",
-            margin: 0,
-          }}>
+          <p
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "11px",
+              color: "var(--dim)",
+              lineHeight: "17px",
+              margin: 0,
+            }}
+          >
             {check.detail}
           </p>
         </div>
@@ -158,9 +179,17 @@ export function AccessibilityPanel({ data }: { data: AnalysisResult }) {
           <div style={{ fontFamily: "var(--font-ui)", fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>
             WCAG Quick Scan
           </div>
-          <div style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", lineHeight: "17px", marginTop: 2 }}>
-            Static HTML analysis — checks page structure, semantics, and common accessibility patterns.
-            Color contrast and focus indicators require browser rendering.
+          <div
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "11px",
+              color: "var(--dim)",
+              lineHeight: "17px",
+              marginTop: 2,
+            }}
+          >
+            Static HTML analysis — checks page structure, semantics, and common accessibility patterns. Color contrast
+            and focus indicators require browser rendering.
           </div>
         </div>
       </div>
@@ -172,15 +201,17 @@ export function AccessibilityPanel({ data }: { data: AnalysisResult }) {
 
       {/* Regulation note */}
       <div className="px-4 py-2.5" style={{ background: "var(--surface-hover)" }}>
-        <p style={{
-          fontFamily: "var(--font-ui)",
-          fontSize: "10px",
-          color: "var(--dim)",
-          lineHeight: "15px",
-          margin: 0,
-        }}>
-          ℹ European Accessibility Act (2025) &amp; ADA compliance require ongoing accessibility efforts.
-          This scan covers structural checks only — consider full audits with axe, Lighthouse, or WAVE.
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "10px",
+            color: "var(--dim)",
+            lineHeight: "15px",
+            margin: 0,
+          }}
+        >
+          ℹ European Accessibility Act (2025) &amp; ADA compliance require ongoing accessibility efforts. This scan
+          covers structural checks only — consider full audits with axe, Lighthouse, or WAVE.
         </p>
       </div>
     </Panel>

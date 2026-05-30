@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Building2, TrendingUp, TrendingDown, ExternalLink, Globe } from "lucide-react";
+import { Building2, ExternalLink, Globe, TrendingDown, TrendingUp } from "lucide-react";
 import { api } from "../api";
-import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
-import { Tooltip } from "./Tooltip";
 import type { CompanyInfoResult } from "../utils/types";
+import { DataRow, ErrorState, Panel, StatusBadge } from "./Panel";
+import { Tooltip } from "./Tooltip";
 
 function formatMarketCap(mc: number | null): string {
   if (mc == null) return "—";
@@ -16,19 +16,33 @@ function formatMarketCap(mc: number | null): string {
 function formatRevenue(r: string | null): string {
   if (!r) return "—";
   const n = parseFloat(r);
-  if (isNaN(n)) return r;
+  if (Number.isNaN(n)) return r;
   if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
   if (n >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
   if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
   return `$${n.toLocaleString()}`;
 }
 
-function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyInfoResult["company"]>; crunchbaseUrl: string | null }) {
-  const sourceBadge = company.source === "wikidata" && company.wikidata_id
-    ? <a href={`https://www.wikidata.org/wiki/${company.wikidata_id}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}><StatusBadge status="info" label="Wikidata" /></a>
-    : company.source === "brandfetch"
-    ? <StatusBadge status="info" label="Brandfetch" />
-    : null;
+function CompanyCard({
+  company,
+  crunchbaseUrl,
+}: {
+  company: NonNullable<CompanyInfoResult["company"]>;
+  crunchbaseUrl: string | null;
+}) {
+  const sourceBadge =
+    company.source === "wikidata" && company.wikidata_id ? (
+      <a
+        href={`https://www.wikidata.org/wiki/${company.wikidata_id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ textDecoration: "none" }}
+      >
+        <StatusBadge status="info" label="Wikidata" />
+      </a>
+    ) : company.source === "brandfetch" ? (
+      <StatusBadge status="info" label="Brandfetch" />
+    ) : null;
 
   return (
     <Panel
@@ -44,12 +58,15 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
               rel="noopener noreferrer"
               className="flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors"
               style={{
-                fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600,
-                color: "var(--accent)", textDecoration: "none",
+                fontFamily: "var(--font-ui)",
+                fontSize: "10px",
+                fontWeight: 600,
+                color: "var(--accent)",
+                textDecoration: "none",
                 border: "1px solid var(--border-muted)",
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-subtle)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-subtle)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <ExternalLink size={9} />
               Crunchbase
@@ -66,10 +83,26 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
               src={company.logo_url}
               alt={company.name ?? "Company logo"}
               style={{ width: 36, height: 36, borderRadius: 6, objectFit: "contain", background: "var(--bg)" }}
-              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
             />
           ) : (
-            <div style={{ width: 36, height: 36, borderRadius: 6, background: "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-ui)", fontSize: "16px", fontWeight: 700, color: "var(--accent)" }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 6,
+                background: "var(--surface)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "var(--font-ui)",
+                fontSize: "16px",
+                fontWeight: 700,
+                color: "var(--accent)",
+              }}
+            >
               {company.name.charAt(0).toUpperCase()}
             </div>
           )}
@@ -81,7 +114,14 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
         </div>
       )}
 
-      {company.description && <DataRow label="Description" value={<span style={{ fontSize: "11px" }}>{company.description}</span>} mono={false} copyValue={company.description} />}
+      {company.description && (
+        <DataRow
+          label="Description"
+          value={<span style={{ fontSize: "11px" }}>{company.description}</span>}
+          mono={false}
+          copyValue={company.description}
+        />
+      )}
       {company.founded && <DataRow label="Founded" value={company.founded} />}
       {company.ceo && <DataRow label="CEO" value={company.ceo} mono={false} />}
       {company.hq && <DataRow label="Headquarters" value={company.hq} mono={false} />}
@@ -105,12 +145,14 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 rounded px-2 py-1 transition-colors"
                 style={{
-                  fontFamily: "var(--font-ui)", fontSize: "11px",
-                  color: "var(--accent)", textDecoration: "none",
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "11px",
+                  color: "var(--accent)",
+                  textDecoration: "none",
                   border: "1px solid var(--border-muted)",
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--accent-subtle)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent-subtle)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <Globe size={10} style={{ opacity: 0.6 }} />
                 {link.platform}
@@ -124,21 +166,30 @@ function CompanyCard({ company, crunchbaseUrl }: { company: NonNullable<CompanyI
 }
 
 function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
-  const w = 200, h = 40, pad = 2;
+  const w = 200,
+    h = 40,
+    pad = 2;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
-  const points = data.map((v, i) => {
-    const x = pad + (i / (data.length - 1)) * (w - pad * 2);
-    const y = pad + (1 - (v - min) / range) * (h - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
+  const points = data
+    .map((v, i) => {
+      const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+      const y = pad + (1 - (v - min) / range) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
   const color = positive ? "var(--success)" : "var(--danger)";
   // Build fill polygon: line points + bottom-right + bottom-left
-  const firstX = pad, lastX = pad + (w - pad * 2);
+  const firstX = pad,
+    lastX = pad + (w - pad * 2);
   const fillPoints = `${points} ${lastX.toFixed(1)},${h} ${firstX.toFixed(1)},${h}`;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", maxWidth: 200, height: 40, display: "block" }} preserveAspectRatio="none">
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      style={{ width: "100%", maxWidth: 200, height: 40, display: "block" }}
+      preserveAspectRatio="none"
+    >
       <defs>
         <linearGradient id={`spark-fill-${positive ? "up" : "dn"}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.15" />
@@ -146,7 +197,14 @@ function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
         </linearGradient>
       </defs>
       <polygon points={fillPoints} fill={`url(#spark-fill-${positive ? "up" : "dn"})`} />
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -156,17 +214,43 @@ function StockCard({ stock, ticker }: { stock: NonNullable<CompanyInfoResult["st
   const Icon = isPositive ? TrendingUp : TrendingDown;
 
   return (
-    <Panel title={`${ticker} Stock`} icon={<Icon size={14} />} badge={<span style={{ fontSize: "10px", color: "var(--dim)", fontStyle: "italic" }}>via Yahoo Finance</span>}>
+    <Panel
+      title={`${ticker} Stock`}
+      icon={<Icon size={14} />}
+      badge={<span style={{ fontSize: "10px", color: "var(--dim)", fontStyle: "italic" }}>via Yahoo Finance</span>}
+    >
       <div className="p-4">
         <div className="flex items-baseline gap-3 mb-4">
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "32px", fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>
-            {stock.currency === "USD" ? "$" : ""}{stock.price?.toFixed(2) ?? "—"}
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "32px",
+              fontWeight: 700,
+              color: "var(--text)",
+              lineHeight: 1,
+            }}
+          >
+            {stock.currency === "USD" ? "$" : ""}
+            {stock.price?.toFixed(2) ?? "—"}
           </span>
           {stock.change != null && (
             <div className="flex items-center gap-1.5">
-              <Icon size={14} className={isPositive ? "stock-positive" : "stock-negative"} style={{ color: isPositive ? "var(--success)" : "var(--danger)" }} />
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 600, color: isPositive ? "var(--success)" : "var(--danger)" }}>
-                {isPositive ? "+" : ""}{stock.change.toFixed(2)} ({isPositive ? "+" : ""}{stock.change_percent?.toFixed(2)}%)
+              <Icon
+                size={14}
+                className={isPositive ? "stock-positive" : "stock-negative"}
+                style={{ color: isPositive ? "var(--success)" : "var(--danger)" }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: isPositive ? "var(--success)" : "var(--danger)",
+                }}
+              >
+                {isPositive ? "+" : ""}
+                {stock.change.toFixed(2)} ({isPositive ? "+" : ""}
+                {stock.change_percent?.toFixed(2)}%)
               </span>
             </div>
           )}
@@ -174,31 +258,61 @@ function StockCard({ stock, ticker }: { stock: NonNullable<CompanyInfoResult["st
         {stock.sparkline && stock.sparkline.length >= 2 && (
           <div className="mb-3">
             <Sparkline data={stock.sparkline} positive={isPositive} />
-            <span style={{ fontFamily: "var(--font-ui)", fontSize: "9px", color: "var(--dim)", marginTop: 2, display: "block" }}>5-day</span>
+            <span
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "9px",
+                color: "var(--dim)",
+                marginTop: 2,
+                display: "block",
+              }}
+            >
+              5-day
+            </span>
           </div>
         )}
         <div className="space-y-0">
           {stock.market_cap != null && (
             <DataRow
-              label={<span className="flex items-center gap-1">Market Cap <Tooltip text="Total value of all outstanding shares. Calculated as share price × total shares." help /></span>}
+              label={
+                <span className="flex items-center gap-1">
+                  Market Cap{" "}
+                  <Tooltip
+                    text="Total value of all outstanding shares. Calculated as share price × total shares."
+                    help
+                  />
+                </span>
+              }
               value={formatMarketCap(stock.market_cap)}
             />
           )}
           {stock.volume != null && (
             <DataRow
-              label={<span className="flex items-center gap-1">Volume <Tooltip text="Number of shares traded today" help /></span>}
+              label={
+                <span className="flex items-center gap-1">
+                  Volume <Tooltip text="Number of shares traded today" help />
+                </span>
+              }
               value={stock.volume.toLocaleString()}
             />
           )}
           {stock.high_52w != null && (
             <DataRow
-              label={<span className="flex items-center gap-1">52W High <Tooltip text="Highest price in the last 52 weeks" help /></span>}
+              label={
+                <span className="flex items-center gap-1">
+                  52W High <Tooltip text="Highest price in the last 52 weeks" help />
+                </span>
+              }
               value={`$${stock.high_52w.toFixed(2)}`}
             />
           )}
           {stock.low_52w != null && (
             <DataRow
-              label={<span className="flex items-center gap-1">52W Low <Tooltip text="Lowest price in the last 52 weeks" help /></span>}
+              label={
+                <span className="flex items-center gap-1">
+                  52W Low <Tooltip text="Lowest price in the last 52 weeks" help />
+                </span>
+              }
               value={`$${stock.low_52w.toFixed(2)}`}
             />
           )}
@@ -216,11 +330,14 @@ export function BusinessTab({ domain }: { domain: string }) {
     enabled: !!domain,
   });
 
-  if (isPending) return (
-    <div className="space-y-3">
-      <div className="panel p-6 text-center"><span style={{ color: "var(--dim)", fontSize: "13px" }}>Loading company data...</span></div>
-    </div>
-  );
+  if (isPending)
+    return (
+      <div className="space-y-3">
+        <div className="panel p-6 text-center">
+          <span style={{ color: "var(--dim)", fontSize: "13px" }}>Loading company data...</span>
+        </div>
+      </div>
+    );
   if (error) return <ErrorState message={`Failed to load company info: ${String(error)}`} />;
 
   const hasCompany = !!data?.company?.name;
@@ -233,7 +350,15 @@ export function BusinessTab({ domain }: { domain: string }) {
         <p style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--dim)" }}>
           No company information found for this domain.
         </p>
-        <p style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--dim)", marginTop: "6px", opacity: 0.7 }}>
+        <p
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "11px",
+            color: "var(--dim)",
+            marginTop: "6px",
+            opacity: 0.7,
+          }}
+        >
           Company data is sourced from Wikidata and Brandfetch.
         </p>
         {data?.crunchbase_url && (
@@ -243,8 +368,10 @@ export function BusinessTab({ domain }: { domain: string }) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 mt-3 rounded px-3 py-1.5 transition-colors"
             style={{
-              fontFamily: "var(--font-ui)", fontSize: "12px",
-              color: "var(--accent)", textDecoration: "none",
+              fontFamily: "var(--font-ui)",
+              fontSize: "12px",
+              color: "var(--accent)",
+              textDecoration: "none",
               border: "1px solid var(--border-muted)",
             }}
           >
@@ -262,7 +389,16 @@ export function BusinessTab({ domain }: { domain: string }) {
         {data?.company && <CompanyCard company={data.company} crunchbaseUrl={data?.crunchbase_url ?? null} />}
         {data?.stock && data.company?.ticker && <StockCard stock={data.stock} ticker={data.company.ticker} />}
       </div>
-      <p style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", textAlign: "center", marginTop: "12px", opacity: 0.7 }}>
+      <p
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "10px",
+          color: "var(--dim)",
+          textAlign: "center",
+          marginTop: "12px",
+          opacity: 0.7,
+        }}
+      >
         Company data sourced from public databases and may not reflect current information.
       </p>
     </div>

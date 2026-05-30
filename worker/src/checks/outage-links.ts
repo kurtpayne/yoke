@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkOutagePages } from "../actions/analyze/network-health";
+import type { Check } from "./types";
 
 export const outageLinksCheck: Check = {
   key: "outage_links",

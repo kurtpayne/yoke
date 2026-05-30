@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkTranco } from "../actions/analyze/content";
+import type { Check } from "./types";
 
 export const trancoCheck: Check = {
   key: "tranco_rank",

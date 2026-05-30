@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkIpInfo } from "../actions/analyze/network";
+import type { Check } from "./types";
 
 export const ipInfoCheck: Check = {
   key: "ip_info",

@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkGreenHosting } from "../actions/analyze/tier1";
+import type { Check } from "./types";
 
 export const greenHostingCheck: Check = {
   key: "green_hosting",

@@ -3,10 +3,10 @@
 // Table auto-creates on first write. Pruned probabilistically.
 
 export interface ApiError {
-  api: string;       // e.g. "hibp", "ssllabs", "hackertarget", "pagespeed"
-  status: number;    // HTTP status or 0 for network/timeout errors
-  message: string;   // Brief error description
-  domain?: string;   // Domain being analyzed when error occurred
+  api: string; // e.g. "hibp", "ssllabs", "hackertarget", "pagespeed"
+  status: number; // HTTP status or 0 for network/timeout errors
+  message: string; // Brief error description
+  domain?: string; // Domain being analyzed when error occurred
 }
 
 const TABLE_SQL = `CREATE TABLE IF NOT EXISTS api_errors (
@@ -30,16 +30,21 @@ async function ensureTable(db: D1Database): Promise<void> {
     await db.prepare(INDEX_SQL).run();
     await db.prepare(INDEX_API_SQL).run();
     tableEnsured = true;
-  } catch { /* first-write failure is non-critical */ }
+  } catch {
+    /* first-write failure is non-critical */
+  }
 }
 
 export async function logApiError(db: D1Database, err: ApiError): Promise<void> {
   try {
     await ensureTable(db);
-    await db.prepare(
-      "INSERT INTO api_errors (api, status, message, domain, ts) VALUES (?, ?, ?, ?, ?)"
-    ).bind(err.api, err.status, err.message.slice(0, 200), err.domain ?? null, Date.now()).run();
-  } catch { /* non-critical — don't break analysis over logging */ }
+    await db
+      .prepare("INSERT INTO api_errors (api, status, message, domain, ts) VALUES (?, ?, ?, ?, ?)")
+      .bind(err.api, err.status, err.message.slice(0, 200), err.domain ?? null, Date.now())
+      .run();
+  } catch {
+    /* non-critical — don't break analysis over logging */
+  }
 }
 
 // ─── Health summary for /api/health ──────────────────────────────────
@@ -54,17 +59,23 @@ export async function getApiHealth(db: D1Database): Promise<{
     const day = now - 24 * 60 * 60 * 1000;
     const week = now - 7 * 24 * 60 * 60 * 1000;
 
-    const recent = await db.prepare(`
+    const recent = await db
+      .prepare(`
       SELECT api, COUNT(*) as errors,
         (SELECT status FROM api_errors e2 WHERE e2.api = api_errors.api AND e2.ts >= ? ORDER BY ts DESC LIMIT 1) as last_status,
         (SELECT message FROM api_errors e3 WHERE e3.api = api_errors.api AND e3.ts >= ? ORDER BY ts DESC LIMIT 1) as last_message,
         MAX(ts) as last_ts
       FROM api_errors WHERE ts >= ? GROUP BY api ORDER BY errors DESC
-    `).bind(day, day, day).all<{ api: string; errors: number; last_status: number; last_message: string; last_ts: number }>();
+    `)
+      .bind(day, day, day)
+      .all<{ api: string; errors: number; last_status: number; last_message: string; last_ts: number }>();
 
-    const weekly = await db.prepare(`
+    const weekly = await db
+      .prepare(`
       SELECT api, COUNT(*) as errors FROM api_errors WHERE ts >= ? GROUP BY api ORDER BY errors DESC
-    `).bind(week).all<{ api: string; errors: number }>();
+    `)
+      .bind(week)
+      .all<{ api: string; errors: number }>();
 
     return {
       last_24h: recent.results ?? [],
@@ -78,8 +89,8 @@ export async function getApiHealth(db: D1Database): Promise<{
 // ─── Hourly buckets for status page ──────────────────────────────────
 
 export interface HourlyBucket {
-  hour: string;   // ISO hour label e.g. "2026-05-24T14:00"
-  ts: number;     // epoch ms start of hour
+  hour: string; // ISO hour label e.g. "2026-05-24T14:00"
+  ts: number; // epoch ms start of hour
   errors: number;
 }
 
@@ -129,9 +140,10 @@ export async function getStatusPageData(db: D1Database): Promise<{ apis: ApiStat
   const week = now - 7 * 24 * 60 * 60 * 1000;
 
   // Get all errors from last 7 days in one query
-  const allErrors = await db.prepare(
-    "SELECT api, status, message, ts FROM api_errors WHERE ts >= ? ORDER BY ts DESC"
-  ).bind(week).all<{ api: string; status: number; message: string; ts: number }>();
+  const allErrors = await db
+    .prepare("SELECT api, status, message, ts FROM api_errors WHERE ts >= ? ORDER BY ts DESC")
+    .bind(week)
+    .all<{ api: string; status: number; message: string; ts: number }>();
 
   const errors = allErrors.results ?? [];
 
@@ -152,22 +164,24 @@ export async function getStatusPageData(db: D1Database): Promise<{ apis: ApiStat
 
   const apis: ApiStatusRow[] = API_REGISTRY.map(({ api, label, url }) => {
     const apiErrors = byApi.get(api) ?? [];
-    const errors24h = apiErrors.filter(e => e.ts >= day);
+    const errors24h = apiErrors.filter((e) => e.ts >= day);
     const lastError = apiErrors[0] ?? null; // already sorted DESC
 
-    const hourly: HourlyBucket[] = hours.map(h => {
+    const hourly: HourlyBucket[] = hours.map((h) => {
       const hEnd = h + 60 * 60 * 1000;
-      const count = errors24h.filter(e => e.ts >= h && e.ts < hEnd).length;
+      const count = errors24h.filter((e) => e.ts >= h && e.ts < hEnd).length;
       const d = new Date(h);
       return {
-        hour: `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}T${String(d.getUTCHours()).padStart(2,'0')}:00`,
+        hour: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}T${String(d.getUTCHours()).padStart(2, "0")}:00`,
         ts: h,
         errors: count,
       };
     });
 
     return {
-      api, label, url,
+      api,
+      label,
+      url,
       errors_24h: errors24h.length,
       errors_7d: apiErrors.length,
       last_error_ts: lastError?.ts ?? null,
@@ -186,5 +200,7 @@ export async function pruneApiErrors(db: D1Database): Promise<void> {
   try {
     const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
     await db.prepare("DELETE FROM api_errors WHERE ts < ?").bind(cutoff).run();
-  } catch { /* non-critical */ }
+  } catch {
+    /* non-critical */
+  }
 }

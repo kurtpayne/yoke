@@ -33,7 +33,9 @@ export interface Env {
 
 // Re-export from centralized config for backward compatibility
 import { ANALYSIS_CACHE_TTL_MS, getAnalysisCacheTtlMs } from "./config/cache";
-const CACHE_TTL_MS = ANALYSIS_CACHE_TTL_MS;
+
+const _CACHE_TTL_MS = ANALYSIS_CACHE_TTL_MS;
+
 export { getAnalysisCacheTtlMs };
 
 // ─── Domain Validation ───────────────────────────────────────────────
@@ -63,16 +65,15 @@ export function normalizeDomain(input: string): string {
   try {
     const url = new URL(`http://${d}`);
     d = url.hostname;
-  } catch { /* not a valid URL, keep as-is for downstream validation */ }
+  } catch {
+    /* not a valid URL, keep as-is for downstream validation */
+  }
   // Strip www. again in case the URL constructor re-added it
   d = d.replace(/^www\./, "");
   return d;
 }
 
-export async function fetchWithTimeout(
-  url: string,
-  opts: RequestInit & { timeout?: number } = {},
-): Promise<Response> {
+export async function fetchWithTimeout(url: string, opts: RequestInit & { timeout?: number } = {}): Promise<Response> {
   const { timeout = 8000, ...fetchOpts } = opts;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -121,7 +122,7 @@ export function getFlyProbeUrl(env: Env): string {
 /** Get auth headers for Fly probe requests from env, without module-level mutation. */
 export function getFlyAuthHeaders(env: Env): Record<string, string> {
   if (env.FLY_AUTH_SECRET) {
-    return { "Authorization": `Bearer ${env.FLY_AUTH_SECRET}` };
+    return { Authorization: `Bearer ${env.FLY_AUTH_SECRET}` };
   }
   return {};
 }
@@ -133,9 +134,13 @@ export function getBaseUrl(request: Request, env?: Env): string {
 }
 
 /** Get the instance hostname (e.g. "yoke.lol") from request or env. */
-function getInstanceHost(request: Request, env?: Env): string {
+function _getInstanceHost(request: Request, env?: Env): string {
   if (env?.BASE_URL) {
-    try { return new URL(env.BASE_URL).hostname; } catch { /* fall through */ }
+    try {
+      return new URL(env.BASE_URL).hostname;
+    } catch {
+      /* fall through */
+    }
   }
   return new URL(request.url).hostname;
 }
@@ -145,19 +150,19 @@ function getInstanceHost(request: Request, env?: Env): string {
 // The Fly probe has its own Go-level IP check; this protects Worker-side fetches.
 
 const PRIVATE_IP_PATTERNS = [
-  /^127\./,                     // loopback
-  /^10\./,                      // RFC1918
-  /^172\.(1[6-9]|2\d|3[01])\./,// RFC1918
-  /^192\.168\./,                // RFC1918
-  /^169\.254\./,                // link-local
-  /^0\./,                       // unspecified
+  /^127\./, // loopback
+  /^10\./, // RFC1918
+  /^172\.(1[6-9]|2\d|3[01])\./, // RFC1918
+  /^192\.168\./, // RFC1918
+  /^169\.254\./, // link-local
+  /^0\./, // unspecified
   /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, // carrier-grade NAT
-  /^192\.0\.0\./,               // IETF protocol
-  /^192\.0\.2\./,               // documentation (TEST-NET-1)
-  /^198\.51\.100\./,            // documentation (TEST-NET-2)
-  /^203\.0\.113\./,             // documentation (TEST-NET-3)
-  /^198\.1[89]\./,              // benchmarking
-  /^2[45]\d\./,                 // multicast + reserved (240-255)
+  /^192\.0\.0\./, // IETF protocol
+  /^192\.0\.2\./, // documentation (TEST-NET-1)
+  /^198\.51\.100\./, // documentation (TEST-NET-2)
+  /^203\.0\.113\./, // documentation (TEST-NET-3)
+  /^198\.1[89]\./, // benchmarking
+  /^2[45]\d\./, // multicast + reserved (240-255)
 ];
 
 /** Check if a URL points to a private/reserved IP or localhost. */
@@ -232,7 +237,7 @@ export async function boundedText(response: Response, maxBytes: number = 2 * 102
     // Read error — return what we have
   }
   const decoder = new TextDecoder();
-  return chunks.map(c => decoder.decode(c, { stream: true })).join("") + decoder.decode();
+  return chunks.map((c) => decoder.decode(c, { stream: true })).join("") + decoder.decode();
 }
 
 // ─── KV Cache Helpers ────────────────────────────────────────────────
@@ -247,7 +252,12 @@ function ttlSeconds(ttlMs: number): number {
   return Math.max(60, Math.ceil(ttlMs / 1000));
 }
 
-export async function getFromCache(kv: KVNamespace, domain: string, cacheType: string, ttlMs: number): Promise<unknown | null> {
+export async function getFromCache(
+  kv: KVNamespace,
+  domain: string,
+  cacheType: string,
+  ttlMs: number,
+): Promise<unknown | null> {
   try {
     const raw = await kv.get(cacheKey(domain, cacheType), "text");
     if (!raw) return null;
@@ -255,15 +265,25 @@ export async function getFromCache(kv: KVNamespace, domain: string, cacheType: s
     // Double-check TTL in case KV expiry is lagging (eventual consistency)
     if (Date.now() - envelope.cached_at > ttlMs) return null;
     return envelope.data;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-export async function setCache(kv: KVNamespace, domain: string, cacheType: string, data: unknown, ttlMs?: number): Promise<void> {
+export async function setCache(
+  kv: KVNamespace,
+  domain: string,
+  cacheType: string,
+  data: unknown,
+  ttlMs?: number,
+): Promise<void> {
   const envelope = { data, cached_at: Date.now() };
   const expirationTtl = ttlMs ? ttlSeconds(ttlMs) : 86400; // default 24h
   try {
     await kv.put(cacheKey(domain, cacheType), JSON.stringify(envelope), { expirationTtl });
-  } catch (e) { console.warn(`[yoke:cache] KV write failed for ${cacheType}:${domain}:`, e instanceof Error ? e.message : e); }
+  } catch (e) {
+    console.warn(`[yoke:cache] KV write failed for ${cacheType}:${domain}:`, e instanceof Error ? e.message : e);
+  }
 }
 
 // ─── Background Work Helper ──────────────────────────────────────────

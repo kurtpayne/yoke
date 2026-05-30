@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkSsl } from "../actions/analyze/network";
+import type { Check } from "./types";
 
 export const sslCheck: Check = {
   key: "ssl",

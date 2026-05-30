@@ -1,44 +1,43 @@
-import { describe, it, expect } from 'vitest';
-
 // ─── Import production code (single source of truth) ─────────────────
-import { RDAP_ENDPOINTS, extractRegistrar, parseIanaBootstrap } from '@worker/actions/analyze/dns';
+import { extractRegistrar, parseIanaBootstrap, RDAP_ENDPOINTS } from "@worker/actions/analyze/dns";
+import { describe, expect, it } from "vitest";
 
 // ─── Static RDAP Endpoint Map ────────────────────────────────────────
 
-describe('Static RDAP Endpoint Map', () => {
-  it('should have an endpoint for .lol (our own domain!)', () => {
+describe("Static RDAP Endpoint Map", () => {
+  it("should have an endpoint for .lol (our own domain!)", () => {
     expect(RDAP_ENDPOINTS.lol).toBeDefined();
     expect(RDAP_ENDPOINTS.lol).toContain("centralnic");
   });
 
-  it('should have an endpoint for .ai', () => {
+  it("should have an endpoint for .ai", () => {
     expect(RDAP_ENDPOINTS.ai).toBeDefined();
   });
 
-  it('should have endpoints for .cc, .tv, .fm', () => {
+  it("should have endpoints for .cc, .tv, .fm", () => {
     expect(RDAP_ENDPOINTS.cc).toBeDefined();
     expect(RDAP_ENDPOINTS.tv).toBeDefined();
     expect(RDAP_ENDPOINTS.fm).toBeDefined();
   });
 
-  it('should have endpoints for Google TLDs', () => {
+  it("should have endpoints for Google TLDs", () => {
     expect(RDAP_ENDPOINTS.dev).toBeDefined();
     expect(RDAP_ENDPOINTS.app).toBeDefined();
   });
 
-  it('should not have endpoints for ccTLDs without RDAP', () => {
+  it("should not have endpoints for ccTLDs without RDAP", () => {
     // These need WhoisFreaks fallback
-    expect(RDAP_ENDPOINTS["it"]).toBeUndefined();
-    expect(RDAP_ENDPOINTS["ru"]).toBeUndefined();
-    expect(RDAP_ENDPOINTS["es"]).toBeUndefined();
-    expect(RDAP_ENDPOINTS["cn"]).toBeUndefined();
+    expect(RDAP_ENDPOINTS.it).toBeUndefined();
+    expect(RDAP_ENDPOINTS.ru).toBeUndefined();
+    expect(RDAP_ENDPOINTS.es).toBeUndefined();
+    expect(RDAP_ENDPOINTS.cn).toBeUndefined();
   });
 });
 
 // ─── IANA Bootstrap Parsing ──────────────────────────────────────────
 
-describe('IANA Bootstrap Parsing', () => {
-  it('should parse a valid bootstrap response', () => {
+describe("IANA Bootstrap Parsing", () => {
+  it("should parse a valid bootstrap response", () => {
     const data = {
       services: [
         [["com", "net"], ["https://rdap.verisign.com/com/v1/"]],
@@ -53,30 +52,30 @@ describe('IANA Bootstrap Parsing', () => {
     expect(map.size).toBe(4); // com, net, org, lol
   });
 
-  it('should handle empty services', () => {
+  it("should handle empty services", () => {
     const map = parseIanaBootstrap({ services: [] });
     expect(map.size).toBe(0);
   });
 
-  it('should handle null/undefined input', () => {
+  it("should handle null/undefined input", () => {
     const map = parseIanaBootstrap(null as any);
     expect(map.size).toBe(0);
   });
 
-  it('should lowercase TLD names', () => {
+  it("should lowercase TLD names", () => {
     const data = { services: [[["COM"], ["https://rdap.example.com/"]]] };
     const map = parseIanaBootstrap(data);
     expect(map.get("com")).toBeDefined();
     expect(map.get("COM")).toBeUndefined();
   });
 
-  it('should strip trailing slashes from URLs', () => {
+  it("should strip trailing slashes from URLs", () => {
     const data = { services: [[["test"], ["https://rdap.example.com/test/"]]] };
     const map = parseIanaBootstrap(data);
     expect(map.get("test")).toBe("https://rdap.example.com/test");
   });
 
-  it('should skip entries with no URLs', () => {
+  it("should skip entries with no URLs", () => {
     const data = { services: [[["orphan"], []]] };
     const map = parseIanaBootstrap(data);
     expect(map.has("orphan")).toBe(false);
@@ -85,73 +84,83 @@ describe('IANA Bootstrap Parsing', () => {
 
 // ─── Registrar Name Extraction (3-tier fallback) ─────────────────────
 
-describe('Registrar Name Extraction', () => {
-  it('should extract from vcardArray (tier 1)', () => {
-    const entities = [{
-      roles: ["registrar"],
-      vcardArray: ["vcard", [["fn", {}, "text", "GoDaddy.com, LLC"]]] as any,
-    }];
+describe("Registrar Name Extraction", () => {
+  it("should extract from vcardArray (tier 1)", () => {
+    const entities = [
+      {
+        roles: ["registrar"],
+        vcardArray: ["vcard", [["fn", {}, "text", "GoDaddy.com, LLC"]]] as any,
+      },
+    ];
     expect(extractRegistrar(entities)).toBe("GoDaddy.com, LLC");
   });
 
-  it('should fall back to publicIds (tier 2)', () => {
-    const entities = [{
-      roles: ["registrar"],
-      publicIds: [{ type: "IANA Registrar ID", identifier: "146" }],
-    }];
+  it("should fall back to publicIds (tier 2)", () => {
+    const entities = [
+      {
+        roles: ["registrar"],
+        publicIds: [{ type: "IANA Registrar ID", identifier: "146" }],
+      },
+    ];
     expect(extractRegistrar(entities)).toBe("Registrar ID: 146");
   });
 
-  it('should fall back to handle (tier 3)', () => {
-    const entities = [{
-      roles: ["registrar"],
-      handle: "MARKMONITOR-REG",
-    }];
+  it("should fall back to handle (tier 3)", () => {
+    const entities = [
+      {
+        roles: ["registrar"],
+        handle: "MARKMONITOR-REG",
+      },
+    ];
     expect(extractRegistrar(entities)).toBe("MARKMONITOR-REG");
   });
 
-  it('should prefer vcardArray over publicIds', () => {
-    const entities = [{
-      roles: ["registrar"],
-      vcardArray: ["vcard", [["fn", {}, "text", "Preferred Registrar"]]] as any,
-      publicIds: [{ type: "IANA Registrar ID", identifier: "999" }],
-      handle: "FALLBACK",
-    }];
+  it("should prefer vcardArray over publicIds", () => {
+    const entities = [
+      {
+        roles: ["registrar"],
+        vcardArray: ["vcard", [["fn", {}, "text", "Preferred Registrar"]]] as any,
+        publicIds: [{ type: "IANA Registrar ID", identifier: "999" }],
+        handle: "FALLBACK",
+      },
+    ];
     expect(extractRegistrar(entities)).toBe("Preferred Registrar");
   });
 
-  it('should return null when no registrar entity exists', () => {
-    const entities = [{
-      roles: ["abuse"],
-      handle: "ABUSE-HANDLER",
-    }];
+  it("should return null when no registrar entity exists", () => {
+    const entities = [
+      {
+        roles: ["abuse"],
+        handle: "ABUSE-HANDLER",
+      },
+    ];
     expect(extractRegistrar(entities)).toBeNull();
   });
 
-  it('should return null for empty entities array', () => {
+  it("should return null for empty entities array", () => {
     expect(extractRegistrar([])).toBeNull();
   });
 });
 
 // ─── TLD Extraction ──────────────────────────────────────────────────
 
-describe('TLD Extraction', () => {
+describe("TLD Extraction", () => {
   function extractTld(domain: string): string {
     return domain.split(".").pop()?.toLowerCase() ?? "";
   }
 
-  it('should extract simple TLDs', () => {
+  it("should extract simple TLDs", () => {
     expect(extractTld("example.com")).toBe("com");
     expect(extractTld("example.org")).toBe("org");
     expect(extractTld("yoke.lol")).toBe("lol");
   });
 
-  it('should extract TLD from subdomains', () => {
+  it("should extract TLD from subdomains", () => {
     expect(extractTld("www.example.com")).toBe("com");
     expect(extractTld("api.v2.example.ai")).toBe("ai");
   });
 
-  it('should handle ccTLD domains', () => {
+  it("should handle ccTLD domains", () => {
     expect(extractTld("google.it")).toBe("it");
     expect(extractTld("yandex.ru")).toBe("ru");
   });
@@ -159,8 +168,8 @@ describe('TLD Extraction', () => {
 
 // ─── Retry Logic ─────────────────────────────────────────────────────
 
-describe('Retry Logic', () => {
-  it('should attempt exactly 2 tries (initial + 1 retry)', () => {
+describe("Retry Logic", () => {
+  it("should attempt exactly 2 tries (initial + 1 retry)", () => {
     let attempts = 0;
     const maxRetries = 2;
 
@@ -174,7 +183,7 @@ describe('Retry Logic', () => {
     expect(attempts).toBe(2);
   });
 
-  it('should stop on first success', () => {
+  it("should stop on first success", () => {
     let attempts = 0;
     const maxRetries = 2;
 
@@ -190,17 +199,17 @@ describe('Retry Logic', () => {
 
 // ─── RDAP URL Construction ───────────────────────────────────────────
 
-describe('RDAP URL Construction', () => {
+describe("RDAP URL Construction", () => {
   function buildRdapUrl(endpoint: string, domain: string): string {
     return `${endpoint}/domain/${encodeURIComponent(domain)}`;
   }
 
-  it('should construct valid RDAP URL', () => {
+  it("should construct valid RDAP URL", () => {
     const url = buildRdapUrl("https://rdap.verisign.com/com/v1", "example.com");
     expect(url).toBe("https://rdap.verisign.com/com/v1/domain/example.com");
   });
 
-  it('should encode special characters in domain', () => {
+  it("should encode special characters in domain", () => {
     const url = buildRdapUrl("https://rdap.example.com", "münchen.de");
     expect(url).toContain("domain/m%C3%BCnchen.de");
   });
@@ -208,7 +217,7 @@ describe('RDAP URL Construction', () => {
 
 // ─── WhoisFreaks Response Parsing ────────────────────────────────────
 
-describe('WhoisFreaks Response Parsing', () => {
+describe("WhoisFreaks Response Parsing", () => {
   interface WhoisFreaksResponse {
     create_date?: string;
     update_date?: string;
@@ -235,7 +244,7 @@ describe('WhoisFreaks Response Parsing', () => {
     return { registrar, domainAgeDays, daysUntilExpiry, nameservers: data.name_servers ?? [] };
   }
 
-  it('should parse structured registrar name', () => {
+  it("should parse structured registrar name", () => {
     const result = parseWhoisFreaks({
       domain_registrar: { registrar_name: "MarkMonitor Inc." },
       create_date: "1997-09-15",
@@ -248,19 +257,19 @@ describe('WhoisFreaks Response Parsing', () => {
     expect(result.daysUntilExpiry).toBeGreaterThan(0);
   });
 
-  it('should fall back to raw WHOIS parsing for registrar', () => {
+  it("should fall back to raw WHOIS parsing for registrar", () => {
     const result = parseWhoisFreaks({
       whois_raw_domain: "domain: example.it\nRegistrar: MARKMONITOR-REG\nstatus: active",
     });
     expect(result.registrar).toBe("MARKMONITOR-REG");
   });
 
-  it('should return null registrar when both methods fail', () => {
+  it("should return null registrar when both methods fail", () => {
     const result = parseWhoisFreaks({});
     expect(result.registrar).toBeNull();
   });
 
-  it('should return empty nameservers when missing', () => {
+  it("should return empty nameservers when missing", () => {
     const result = parseWhoisFreaks({});
     expect(result.nameservers).toEqual([]);
   });

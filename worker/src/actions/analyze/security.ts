@@ -1,4 +1,4 @@
-import type { DnsRecord, IpInfo, HostingResult, CookieAudit, CookieSecurityResult } from "./types";
+import type { CookieAudit, CookieSecurityResult, DnsRecord, HostingResult, IpInfo } from "./types";
 
 // ─── Cloudflare Worker Header Sanitization ──────────────────────────
 // CF Workers inject their own headers (server: cloudflare, cf-ray, cf-cache-status, etc.)
@@ -20,9 +20,7 @@ export const CF_INJECTED_HEADERS = [
 export function isActuallyCloudflare(dnsRecords: DnsRecord[], ipInfo: IpInfo | null): boolean {
   // Check 1: NS records point to Cloudflare nameservers
   const nsRecords = dnsRecords.filter((r) => r.type === "NS");
-  const hasCfNameservers = nsRecords.some((r) =>
-    /\.ns\.cloudflare\.com\.?$/i.test(r.data)
-  );
+  const hasCfNameservers = nsRecords.some((r) => /\.ns\.cloudflare\.com\.?$/i.test(r.data));
   if (hasCfNameservers) return true;
 
   // Check 2: IP belongs to Cloudflare ASN (AS13335)
@@ -41,28 +39,48 @@ export function sanitizeCfHeaders(headers: Record<string, string>): Record<strin
     delete cleaned[key];
   }
   // Remove the injected `server: cloudflare` header — restore original if possible
-  if (cleaned["server"] && /^cloudflare$/i.test(cleaned["server"])) {
-    delete cleaned["server"];
+  if (cleaned.server && /^cloudflare$/i.test(cleaned.server)) {
+    delete cleaned.server;
   }
   return cleaned;
 }
 
 // ─── NEW: Hosting Provider / WAF / CDN Detection ────────────────────
 
-export const HOSTING_PATTERNS: Array<{ name: string; type: "provider" | "cdn" | "waf"; patterns: { org?: RegExp[]; rdns?: RegExp[]; headers?: Record<string, RegExp> } }> = [
+export const HOSTING_PATTERNS: Array<{
+  name: string;
+  type: "provider" | "cdn" | "waf";
+  patterns: { org?: RegExp[]; rdns?: RegExp[]; headers?: Record<string, RegExp> };
+}> = [
   // CDN / WAF (check first as they front the real host)
   // NOTE: Cloudflare detection is handled separately via isActuallyCloudflare() + nameserver/ASN check.
   // The header-only pattern is kept but will only match when headers haven't been sanitized (i.e., site IS behind CF).
   { name: "Cloudflare", type: "cdn", patterns: { headers: { server: /cloudflare/i } } },
-  { name: "AWS CloudFront", type: "cdn", patterns: { headers: { "x-amz-cf-id": /./, via: /CloudFront/i }, rdns: [/cloudfront\.net$/] } },
+  {
+    name: "AWS CloudFront",
+    type: "cdn",
+    patterns: { headers: { "x-amz-cf-id": /./, via: /CloudFront/i }, rdns: [/cloudfront\.net$/] },
+  },
   { name: "Akamai", type: "cdn", patterns: { headers: { "x-akamai-transformed": /./ }, rdns: [/akamai/i] } },
-  { name: "Fastly", type: "cdn", patterns: { headers: { "x-served-by": /cache/, via: /varnish/i }, rdns: [/fastly/i] } },
+  {
+    name: "Fastly",
+    type: "cdn",
+    patterns: { headers: { "x-served-by": /cache/, via: /varnish/i }, rdns: [/fastly/i] },
+  },
   { name: "Sucuri WAF", type: "waf", patterns: { headers: { "x-sucuri-id": /./, server: /sucuri/i } } },
   { name: "Imperva/Incapsula", type: "waf", patterns: { headers: { "x-iinfo": /./, "x-cdn": /incapsula/i } } },
   // Hosting providers
   { name: "AWS", type: "provider", patterns: { org: [/amazon|aws/i], rdns: [/amazonaws\.com$/, /\.aws\./i] } },
-  { name: "Google Cloud", type: "provider", patterns: { org: [/google cloud/i], rdns: [/googleusercontent\.com$/, /1e100\.net$/] } },
-  { name: "Microsoft Azure", type: "provider", patterns: { org: [/microsoft/i], rdns: [/azure/i, /\.microsoft\.com$/] } },
+  {
+    name: "Google Cloud",
+    type: "provider",
+    patterns: { org: [/google cloud/i], rdns: [/googleusercontent\.com$/, /1e100\.net$/] },
+  },
+  {
+    name: "Microsoft Azure",
+    type: "provider",
+    patterns: { org: [/microsoft/i], rdns: [/azure/i, /\.microsoft\.com$/] },
+  },
   { name: "Vercel", type: "provider", patterns: { headers: { "x-vercel-id": /./, server: /vercel/i } } },
   { name: "Netlify", type: "provider", patterns: { headers: { server: /netlify/i, "x-nf-request-id": /./ } } },
   { name: "DigitalOcean", type: "provider", patterns: { org: [/digitalocean/i], rdns: [/digitalocean/i] } },
@@ -71,7 +89,11 @@ export const HOSTING_PATTERNS: Array<{ name: string; type: "provider" | "cdn" | 
   { name: "GoDaddy", type: "provider", patterns: { org: [/godaddy/i], rdns: [/secureserver\.net$/] } },
   { name: "Shopify", type: "provider", patterns: { headers: { "x-shopify-stage": /./ }, rdns: [/shopify/i] } },
   { name: "WP Engine", type: "provider", patterns: { headers: { "x-powered-by": /WP Engine/i }, rdns: [/wpengine/i] } },
-  { name: "Squarespace", type: "provider", patterns: { headers: { "x-servedby": /squarespace/i }, rdns: [/squarespace/i] } },
+  {
+    name: "Squarespace",
+    type: "provider",
+    patterns: { headers: { "x-servedby": /squarespace/i }, rdns: [/squarespace/i] },
+  },
   { name: "Wix", type: "provider", patterns: { headers: { "x-wix-request-id": /./ } } },
   { name: "Fly.io", type: "provider", patterns: { headers: { "fly-request-id": /./ }, rdns: [/fly\.dev$/] } },
   { name: "Railway", type: "provider", patterns: { rdns: [/railway\.app$/] } },
@@ -89,17 +111,26 @@ export function detectHosting(ipInfo: IpInfo | null, headers: Record<string, str
 
     if (hp.patterns.headers && headers) {
       for (const [key, regex] of Object.entries(hp.patterns.headers)) {
-        if (headers[key] && regex.test(headers[key])) { matched = true; break; }
+        if (headers[key] && regex.test(headers[key])) {
+          matched = true;
+          break;
+        }
       }
     }
     if (!matched && hp.patterns.rdns && ipInfo?.reverse_dns) {
       for (const regex of hp.patterns.rdns) {
-        if (regex.test(ipInfo.reverse_dns)) { matched = true; break; }
+        if (regex.test(ipInfo.reverse_dns)) {
+          matched = true;
+          break;
+        }
       }
     }
     if (!matched && hp.patterns.org && ipInfo?.org) {
       for (const regex of hp.patterns.org) {
-        if (regex.test(ipInfo.org)) { matched = true; break; }
+        if (regex.test(ipInfo.org)) {
+          matched = true;
+          break;
+        }
       }
     }
 
@@ -112,7 +143,6 @@ export function detectHosting(ipInfo: IpInfo | null, headers: Record<string, str
 
   return result;
 }
-
 
 // ─── NEW: Cookie Security Audit ─────────────────────────────────────
 
@@ -167,4 +197,3 @@ export function auditCookies(headers: Record<string, string> | null): CookieSecu
   if (cookies.length === 0) return null;
   return { cookies, issues };
 }
-

@@ -2,21 +2,19 @@
 // Ensures the signal registry stays in sync with the scoring engine,
 // and derived constants (NON_ACTIONABLE, EFFORT_MAP, etc.) are correct.
 
-import { describe, it, expect } from "vitest";
+import { calculateDomainScore } from "@worker/actions/analyze/contextual-scoring";
 import {
-  SIGNAL_REGISTRY,
-  NON_ACTIONABLE_SIGNALS,
+  AXIS_WEIGHTS,
   EFFORT_MAP,
   FIX_DESC_MAP,
-  SIGNAL_IDS,
   GRADE_THRESHOLDS,
-  SEVERITY_SCORES,
-  AXIS_WEIGHTS,
   gradeFromComposite,
+  NON_ACTIONABLE_SIGNALS,
+  SEVERITY_SCORES,
+  SIGNAL_IDS,
+  SIGNAL_REGISTRY,
 } from "@worker/config/signal-registry";
-import {
-  calculateDomainScore,
-} from "@worker/actions/analyze/contextual-scoring";
+import { describe, expect, it } from "vitest";
 
 // ─── Helper: default null opts for calculateDomainScore ──────────────
 
@@ -68,7 +66,6 @@ function baseOpts(): Parameters<typeof calculateDomainScore>[0] {
 }
 
 describe("Signal Registry", () => {
-
   it("every signal emitted by scoring with null inputs exists in the registry", () => {
     const result = calculateDomainScore(baseOpts());
     const emittedSignals = new Set<string>();
@@ -111,7 +108,14 @@ describe("Signal Registry", () => {
     ] as any;
     opts.emailAuth = {
       spf: { found: true, record: "v=spf1 include:_spf.google.com ~all", mechanisms: [], all_qualifier: "~all" },
-      dmarc: { found: true, record: "v=DMARC1; p=reject", policy: "reject", subdomain_policy: null, rua: null, ruf: null },
+      dmarc: {
+        found: true,
+        record: "v=DMARC1; p=reject",
+        policy: "reject",
+        subdomain_policy: null,
+        rua: null,
+        ruf: null,
+      },
       dkim_selectors_found: ["google"],
       bimi: { found: false, record: null, logo_url: null },
       mta_sts: { found: false, mode: null, mx: [], max_age: null },

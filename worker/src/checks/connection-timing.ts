@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkConnectionTiming } from "../actions/analyze/network-health";
+import type { Check } from "./types";
 
 export const connectionTimingCheck: Check = {
   key: "connection_timing",

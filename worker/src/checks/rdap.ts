@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkRdap } from "../actions/analyze/dns";
+import type { Check } from "./types";
 
 export const rdapCheck: Check = {
   key: "rdap",

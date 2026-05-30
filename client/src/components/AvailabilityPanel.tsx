@@ -1,9 +1,9 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import { api } from "../api";
-import { Panel, StatusBadge, ErrorState } from "./Panel";
-import { CliButton, availabilityCliCommands } from "./CliModal";
+import { availabilityCliCommands, CliButton } from "./CliModal";
+import { ErrorState, Panel, StatusBadge } from "./Panel";
 
 export function AvailabilityPanel({ domain }: { domain: string }) {
   const [enabled, setEnabled] = useState(false);
@@ -17,7 +17,11 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
 
   if (!enabled) {
     return (
-      <Panel title="Global Availability" icon={<Globe size={14} />} badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}>
+      <Panel
+        title="Global Availability"
+        icon={<Globe size={14} />}
+        badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}
+      >
         <div className="p-4 flex flex-col items-center gap-3">
           <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", textAlign: "center" }}>
             HTTP connectivity checks + DNS resolution from multiple providers
@@ -27,9 +31,13 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
             onClick={() => setEnabled(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-md transition-all"
             style={{
-              background: "var(--accent)", color: "var(--accent-fg)",
-              fontFamily: "var(--font-ui)", fontSize: "12px", fontWeight: 600,
-              border: "none", cursor: "pointer",
+              background: "var(--accent)",
+              color: "var(--accent-fg)",
+              fontFamily: "var(--font-ui)",
+              fontSize: "12px",
+              fontWeight: 600,
+              border: "none",
+              cursor: "pointer",
             }}
           >
             <Globe size={12} /> Run Availability Check
@@ -41,7 +49,11 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
 
   if (isPending) {
     return (
-      <Panel title="Global Availability" icon={<Globe size={14} />} badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}>
+      <Panel
+        title="Global Availability"
+        icon={<Globe size={14} />}
+        badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}
+      >
         <div className="p-4 text-center">
           <div className="inline-flex items-center gap-2">
             <RefreshCw size={14} className="animate-spin" style={{ color: "var(--accent)" }} />
@@ -57,7 +69,11 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
   if (error) return <ErrorState message={`Availability check failed: ${String(error)}`} />;
   if (!data?.results?.length) {
     return (
-      <Panel title="Global Availability" icon={<Globe size={14} />} badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}>
+      <Panel
+        title="Global Availability"
+        icon={<Globe size={14} />}
+        badge={<CliButton commands={availabilityCliCommands(domain)} domain={domain} />}
+      >
         <div className="p-4 flex flex-col items-center gap-2">
           <StatusBadge status="warn" label="Check returned no results" />
           <button
@@ -65,8 +81,11 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
             onClick={() => refetch()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all"
             style={{
-              background: "var(--surface-raised)", border: "1px solid var(--border-muted)",
-              fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--text)",
+              background: "var(--surface-raised)",
+              border: "1px solid var(--border-muted)",
+              fontFamily: "var(--font-ui)",
+              fontSize: "11px",
+              color: "var(--text)",
               cursor: "pointer",
             }}
           >
@@ -92,8 +111,12 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
 
   const thStyle = {
     padding: "5px 12px",
-    fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600,
-    color: "var(--dim)", textTransform: "uppercase" as const, letterSpacing: "0.06em",
+    fontFamily: "var(--font-ui)",
+    fontSize: "10px",
+    fontWeight: 600,
+    color: "var(--dim)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.06em",
   };
 
   return (
@@ -120,13 +143,26 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
     >
       <div style={{ maxHeight: "500px", overflowY: "auto", overflowX: "auto" }}>
         {/* HTTP Probes Section Header */}
-        <div style={{
-          padding: "6px 12px",
-          background: "var(--surface-raised)",
-          borderBottom: "1px solid var(--border-muted)",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
-          <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+        <div
+          style={{
+            padding: "6px 12px",
+            background: "var(--surface-raised)",
+            borderBottom: "1px solid var(--border-muted)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "10px",
+              fontWeight: 700,
+              color: "var(--text)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
             HTTP Probes
           </span>
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
@@ -170,16 +206,33 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
                 <td style={{ padding: "5px 12px", textAlign: "center" }}>
                   <StatusDot status={r.status} />
                 </td>
-                <td style={{
-                  padding: "5px 12px", textAlign: "right",
-                  fontFamily: "var(--font-mono)", fontSize: "11px",
-                  color: r.response_time_ms != null
-                    ? (r.response_time_ms < 300 ? "var(--success)" : r.response_time_ms < 1000 ? "var(--warning)" : "var(--danger)")
-                    : "var(--dim)",
-                }}>
+                <td
+                  style={{
+                    padding: "5px 12px",
+                    textAlign: "right",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "11px",
+                    color:
+                      r.response_time_ms != null
+                        ? r.response_time_ms < 300
+                          ? "var(--success)"
+                          : r.response_time_ms < 1000
+                            ? "var(--warning)"
+                            : "var(--danger)"
+                        : "var(--dim)",
+                  }}
+                >
                   {r.response_time_ms != null ? `${r.response_time_ms}ms` : "—"}
                 </td>
-                <td style={{ padding: "5px 12px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>
+                <td
+                  style={{
+                    padding: "5px 12px",
+                    textAlign: "right",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "11px",
+                    color: "var(--dim)",
+                  }}
+                >
                   {r.status_code ?? "—"}
                 </td>
               </tr>
@@ -190,14 +243,27 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
         {/* DNS Resolution Section */}
         {dnsResults.length > 0 && (
           <>
-            <div style={{
-              padding: "6px 12px",
-              background: "var(--surface-raised)",
-              borderTop: "1px solid var(--border-muted)",
-              borderBottom: "1px solid var(--border-muted)",
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-            }}>
-              <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            <div
+              style={{
+                padding: "6px 12px",
+                background: "var(--surface-raised)",
+                borderTop: "1px solid var(--border-muted)",
+                borderBottom: "1px solid var(--border-muted)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  color: "var(--text)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                }}
+              >
                 DNS Resolution
               </span>
               <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>
@@ -224,11 +290,20 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
                     <td style={{ padding: "5px 12px", textAlign: "center" }}>
                       <StatusDot status={r.status} label={r.status === "up" ? "RESOLVES" : "FAIL"} />
                     </td>
-                    <td colSpan={2} style={{
-                      padding: "5px 12px", textAlign: "right",
-                      fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)",
-                      maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
+                    <td
+                      colSpan={2}
+                      style={{
+                        padding: "5px 12px",
+                        textAlign: "right",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        color: "var(--dim)",
+                        maxWidth: "200px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {r.message ?? "—"}
                     </td>
                   </tr>
@@ -242,8 +317,12 @@ export function AvailabilityPanel({ domain }: { domain: string }) {
       {/* Footer: link to check-host.net results or edge info */}
       {data.permanent_link ? (
         <div className="px-4 py-2" style={{ borderTop: "1px solid var(--border-muted)" }}>
-          <a href={data.permanent_link} target="_blank" rel="noopener noreferrer"
-            style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--accent)", textDecoration: "none" }}>
+          <a
+            href={data.permanent_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--accent)", textDecoration: "none" }}
+          >
             View full results on check-host.net →
           </a>
         </div>
@@ -272,17 +351,18 @@ function StatusDot({ status, label }: { status: string; label?: string }) {
       ) : (
         <div className="w-2 h-2 rounded-full" style={{ background: color }} />
       )}
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color, fontWeight: 600 }}>
-        {text}
-      </span>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color, fontWeight: 600 }}>{text}</span>
     </div>
   );
 }
 
 function countryFlag(code: string): string {
-  if (!code || code.length !== 2) return "🌐";
+  if (code?.length !== 2) return "🌐";
   try {
-    const codePoints = code.toUpperCase().split("").map((c) => 0x1f1e6 + c.charCodeAt(0) - 65);
+    const codePoints = code
+      .toUpperCase()
+      .split("")
+      .map((c) => 0x1f1e6 + c.charCodeAt(0) - 65);
     return String.fromCodePoint(...codePoints);
   } catch {
     return "🌐";

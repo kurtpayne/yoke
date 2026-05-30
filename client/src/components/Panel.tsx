@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, type ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { usePanelContext } from "./PanelLayout";
 
 interface PanelProps {
@@ -27,10 +27,21 @@ export function Panel({ title, icon, children, badge }: PanelProps) {
     );
   }
 
-  return <CollapsiblePanel title={title} icon={icon} badge={badge} collapsed={ctx.collapsed} onToggle={ctx.toggle}>{children}</CollapsiblePanel>;
+  return (
+    <CollapsiblePanel title={title} icon={icon} badge={badge} collapsed={ctx.collapsed} onToggle={ctx.toggle}>
+      {children}
+    </CollapsiblePanel>
+  );
 }
 
-function CollapsiblePanel({ title, icon, badge, collapsed, onToggle, children }: PanelProps & { collapsed: boolean; onToggle: () => void }) {
+function CollapsiblePanel({
+  title,
+  icon,
+  badge,
+  collapsed,
+  onToggle,
+  children,
+}: PanelProps & { collapsed: boolean; onToggle: () => void }) {
   const ctx = usePanelContext();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [animHeight, setAnimHeight] = useState<number | "auto">(collapsed ? 0 : "auto");
@@ -68,25 +79,37 @@ function CollapsiblePanel({ title, icon, badge, collapsed, onToggle, children }:
           {/* Drag handle */}
           <span
             className="yoke-grip"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             onMouseDown={() => ctx?.onGripMouseDown?.()}
             onMouseUp={() => ctx?.onGripMouseUp?.()}
             title="Drag to reorder"
           >
             <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
-              <circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/>
-              <circle cx="2" cy="7" r="1.1"/><circle cx="6" cy="7" r="1.1"/>
-              <circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/>
+              <circle cx="2" cy="2" r="1.1" />
+              <circle cx="6" cy="2" r="1.1" />
+              <circle cx="2" cy="7" r="1.1" />
+              <circle cx="6" cy="7" r="1.1" />
+              <circle cx="2" cy="12" r="1.1" />
+              <circle cx="6" cy="12" r="1.1" />
             </svg>
           </span>
           <span className="opacity-60">{icon}</span>
           <span>{title}</span>
         </div>
-        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {!collapsed && badge}
           <span className="yoke-chevron" style={{ transform: collapsed ? "rotate(-90deg)" : "rotate(0)" }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9"/>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
             </svg>
           </span>
         </div>
@@ -105,7 +128,17 @@ function CollapsiblePanel({ title, icon, badge, collapsed, onToggle, children }:
   );
 }
 
-export function DataRow({ label, value, mono = true, copyValue }: { label: ReactNode; value: ReactNode; mono?: boolean; copyValue?: string }) {
+export function DataRow({
+  label,
+  value,
+  mono = true,
+  copyValue,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  mono?: boolean;
+  copyValue?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -114,32 +147,65 @@ export function DataRow({ label, value, mono = true, copyValue }: { label: React
   const handleCopy = useCallback(() => {
     const text = copyValue ?? (typeof value === "string" ? value : typeof value === "number" ? String(value) : "");
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
   }, [value, copyValue]);
 
   useEffect(() => {
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, []);
 
   return (
     <div
-      className={"data-row" + (isCopiable ? " data-row-copiable" : "")}
+      className={`data-row${isCopiable ? " data-row-copiable" : ""}`}
       onClick={isCopiable ? handleCopy : undefined}
       title={isCopiable ? "Click to copy" : undefined}
     >
       <span className="data-label">{label}</span>
       <span className="data-value-wrap">
-        <span className={mono ? "data-value" : "data-value"} style={mono ? undefined : { fontFamily: "var(--font-ui)" }}>{value}</span>
+        <span
+          className={mono ? "data-value" : "data-value"}
+          style={mono ? undefined : { fontFamily: "var(--font-ui)" }}
+        >
+          {value}
+        </span>
         {isCopiable && (
           <span className="data-copy-icon">
             {copied ? (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--success)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
             ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
             )}
           </span>
         )}
@@ -148,7 +214,13 @@ export function DataRow({ label, value, mono = true, copyValue }: { label: React
   );
 }
 
-export function StatusBadge({ status, label }: { status: "pass" | "fail" | "warn" | "info" | "neutral"; label: string }) {
+export function StatusBadge({
+  status,
+  label,
+}: {
+  status: "pass" | "fail" | "warn" | "info" | "neutral";
+  label: string;
+}) {
   return <span className={`badge badge-${status}`}>{label}</span>;
 }
 

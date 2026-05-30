@@ -1,6 +1,6 @@
-import { fetchWithTimeout, getFlyProbeUrl, getFlyAuthHeaders, type Env } from "../../helpers";
-import type { DnsRecord, IpInfo, BlocklistResult, SslResult, ShodanResult, DnssecResult } from "./types";
 import { logApiError } from "../../api-errors";
+import { type Env, fetchWithTimeout, getFlyAuthHeaders, getFlyProbeUrl } from "../../helpers";
+import type { BlocklistResult, DnsRecord, DnssecResult, IpInfo, ShodanResult, SslResult } from "./types";
 
 // ─── IP Geolocation ──────────────────────────────────────────────────
 
@@ -11,39 +11,97 @@ export async function checkIpInfo(_domain: string, dnsRecords: DnsRecord[], env:
 
   // Try Fly probe first (MaxMind local DB + API fallbacks, no rate limits)
   try {
-    const probeRes = await fetchWithTimeout(
-      `${getFlyProbeUrl(env)}/probe-geo?ip=${encodeURIComponent(ip)}`,
-      { timeout: 8000, headers: getFlyAuthHeaders(env) }
-    );
+    const probeRes = await fetchWithTimeout(`${getFlyProbeUrl(env)}/probe-geo?ip=${encodeURIComponent(ip)}`, {
+      timeout: 8000,
+      headers: getFlyAuthHeaders(env),
+    });
     if (probeRes.ok) {
-      const data = await probeRes.json() as { ip: string; city?: string | null; country?: string | null; country_code?: string | null; lat?: number | null; lon?: number | null; isp?: string | null; org?: string | null; asn?: string | null; source?: string; error?: string | null };
+      const data = (await probeRes.json()) as {
+        ip: string;
+        city?: string | null;
+        country?: string | null;
+        country_code?: string | null;
+        lat?: number | null;
+        lon?: number | null;
+        isp?: string | null;
+        org?: string | null;
+        asn?: string | null;
+        source?: string;
+        error?: string | null;
+      };
       if (!data.error) {
         const aaaaRecord = dnsRecords.find((r) => r.type === "AAAA");
         let reverseDns: string | null = null;
         try {
-          const revRes = await fetchWithTimeout(`https://dns.google/resolve?name=${ip.split(".").reverse().join(".")}.in-addr.arpa&type=PTR`, { timeout: 3000 });
-          const revData = await revRes.json() as { Answer?: Array<{ data: string }> };
+          const revRes = await fetchWithTimeout(
+            `https://dns.google/resolve?name=${ip.split(".").reverse().join(".")}.in-addr.arpa&type=PTR`,
+            { timeout: 3000 },
+          );
+          const revData = (await revRes.json()) as { Answer?: Array<{ data: string }> };
           if (revData.Answer?.[0]) reverseDns = revData.Answer[0].data.replace(/\.$/, "");
-        } catch { /* ignore */ }
-        return { ip, isp: data.isp ?? null, org: data.org ?? null, asn: data.asn ?? null, city: data.city ?? null, country: data.country ?? null, country_code: data.country_code ?? null, lat: data.lat ?? null, lon: data.lon ?? null, reverse_dns: reverseDns, ipv6: aaaaRecord?.data ?? null };
+        } catch {
+          /* ignore */
+        }
+        return {
+          ip,
+          isp: data.isp ?? null,
+          org: data.org ?? null,
+          asn: data.asn ?? null,
+          city: data.city ?? null,
+          country: data.country ?? null,
+          country_code: data.country_code ?? null,
+          lat: data.lat ?? null,
+          lon: data.lon ?? null,
+          reverse_dns: reverseDns,
+          ipv6: aaaaRecord?.data ?? null,
+        };
       }
     }
-  } catch { /* probe unreachable */ }
+  } catch {
+    /* probe unreachable */
+  }
 
   // Fallback: direct ipwho.is from Worker
   try {
     const res = await fetchWithTimeout(`https://ipwho.is/${ip}`, { timeout: 5000 });
-    const data = await res.json() as { success: boolean; country?: string; country_code?: string; city?: string; connection?: { isp?: string; org?: string; asn?: number; }; latitude?: number; longitude?: number; };
+    const data = (await res.json()) as {
+      success: boolean;
+      country?: string;
+      country_code?: string;
+      city?: string;
+      connection?: { isp?: string; org?: string; asn?: number };
+      latitude?: number;
+      longitude?: number;
+    };
     if (!data.success) return null;
     const aaaaRecord = dnsRecords.find((r) => r.type === "AAAA");
     let reverseDns: string | null = null;
     try {
-      const revRes = await fetchWithTimeout(`https://dns.google/resolve?name=${ip.split(".").reverse().join(".")}.in-addr.arpa&type=PTR`, { timeout: 3000 });
-      const revData = await revRes.json() as { Answer?: Array<{ data: string }> };
+      const revRes = await fetchWithTimeout(
+        `https://dns.google/resolve?name=${ip.split(".").reverse().join(".")}.in-addr.arpa&type=PTR`,
+        { timeout: 3000 },
+      );
+      const revData = (await revRes.json()) as { Answer?: Array<{ data: string }> };
       if (revData.Answer?.[0]) reverseDns = revData.Answer[0].data.replace(/\.$/, "");
-    } catch { /* ignore */ }
-    return { ip, isp: data.connection?.isp ?? null, org: data.connection?.org ?? null, asn: data.connection?.asn ? `AS${data.connection.asn}` : null, city: data.city ?? null, country: data.country ?? null, country_code: data.country_code ?? null, lat: data.latitude ?? null, lon: data.longitude ?? null, reverse_dns: reverseDns, ipv6: aaaaRecord?.data ?? null };
-  } catch { return null; }
+    } catch {
+      /* ignore */
+    }
+    return {
+      ip,
+      isp: data.connection?.isp ?? null,
+      org: data.connection?.org ?? null,
+      asn: data.connection?.asn ? `AS${data.connection.asn}` : null,
+      city: data.city ?? null,
+      country: data.country ?? null,
+      country_code: data.country_code ?? null,
+      lat: data.latitude ?? null,
+      lon: data.longitude ?? null,
+      reverse_dns: reverseDns,
+      ipv6: aaaaRecord?.data ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Blocklist Checks ────────────────────────────────────────────────
@@ -95,8 +153,10 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
     const reversed = aRecord.data.split(".").reverse().join(".");
     const checks = BLOCKLISTS.map(async (bl) => {
       try {
-        const res = await fetchWithTimeout(`https://dns.google/resolve?name=${reversed}.${bl.zone}&type=A`, { timeout: 4000 });
-        const data = await res.json() as { Status: number; Answer?: Array<{ data: string }> };
+        const res = await fetchWithTimeout(`https://dns.google/resolve?name=${reversed}.${bl.zone}&type=A`, {
+          timeout: 4000,
+        });
+        const data = (await res.json()) as { Status: number; Answer?: Array<{ data: string }> };
         const returnIp = data.Answer?.[0]?.data ?? null;
 
         // Filter out DNSBL error responses — these are NOT real listings.
@@ -116,9 +176,9 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
 
         // Dedup across A records: keep the most significant result per blocklist.
         // If this IP is listed and we previously recorded not-listed, upgrade the entry.
-        const existingIdx = results.findIndex(r => r.name === bl.name);
+        const existingIdx = results.findIndex((r) => r.name === bl.name);
         if (existingIdx >= 0) {
-          if ((listed && !isPbl) && !results[existingIdx].listed) {
+          if (listed && !isPbl && !results[existingIdx].listed) {
             // Upgrade: previous entry was not-listed, this IP is truly listed
             results[existingIdx] = { name: bl.name, zone: bl.zone, listed: true, detail };
           }
@@ -132,7 +192,7 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
           });
         }
       } catch {
-        if (!results.some(r => r.name === bl.name)) {
+        if (!results.some((r) => r.name === bl.name)) {
           results.push({ name: bl.name, zone: bl.zone, listed: false, detail: "check failed" });
         }
       }
@@ -148,42 +208,60 @@ export async function checkBlocklists(dnsRecords: DnsRecord[]): Promise<Blocklis
 export async function checkSsl(domain: string, env: Env): Promise<SslResult | null> {
   // Priority 1: Fly probe — direct TLS handshake, most reliable, works for any domain
   const probeResult = await tryFlyProbe(domain, env);
-  if (probeResult && probeResult.grade) return probeResult;
+  if (probeResult?.grade) return probeResult;
 
   // Priority 2: SSL Labs — enrichment with grade/protocols when cached results exist
   const labsResult = await trySslLabs(domain);
-  if (labsResult && labsResult.grade) return labsResult;
+  if (labsResult?.grade) return labsResult;
 
   // Priority 3: HTTPS connectivity + crt.sh cert lookup
   const httpsResult = await tryHttpsCrtsh(domain, env.STATS_DB);
-  if (httpsResult && httpsResult.grade) return httpsResult;
+  if (httpsResult?.grade) return httpsResult;
 
   // If all 3 fail, return what we got (prefer probe error > labs error > generic)
-  return probeResult ?? labsResult ?? httpsResult ?? {
-    grade: null, issuer: null, subject: null, valid_from: null, valid_to: null,
-    protocols: [], key_exchange: null, error: "SSL check unavailable — all providers failed",
-  };
+  return (
+    probeResult ??
+    labsResult ??
+    httpsResult ?? {
+      grade: null,
+      issuer: null,
+      subject: null,
+      valid_from: null,
+      valid_to: null,
+      protocols: [],
+      key_exchange: null,
+      error: "SSL check unavailable — all providers failed",
+    }
+  );
 }
 
 // ─── SSL: Fly Probe (direct TLS handshake) ──────────────────────────
 
 async function tryFlyProbe(domain: string, env: Env): Promise<SslResult | null> {
   try {
-    const probeRes = await fetchWithTimeout(
-      `${getFlyProbeUrl(env)}/probe-ssl?domain=${encodeURIComponent(domain)}`,
-      { timeout: 12000, headers: getFlyAuthHeaders(env) }
-    );
+    const probeRes = await fetchWithTimeout(`${getFlyProbeUrl(env)}/probe-ssl?domain=${encodeURIComponent(domain)}`, {
+      timeout: 12000,
+      headers: getFlyAuthHeaders(env),
+    });
     if (!probeRes.ok) {
       logApiError(env.STATS_DB, { api: "fly-probe", status: probeRes.status, message: "SSL probe failed", domain });
       return null;
     }
 
-    const data = await probeRes.json() as {
-      grade: string; issuer: string; subject: string;
-      valid_from: string; valid_to: string;
-      key_alg: string; key_size: number;
-      protocols: string[]; chain_depth: number; chain_valid: boolean;
-      sans: string[]; serial: string; error: string | null;
+    const data = (await probeRes.json()) as {
+      grade: string;
+      issuer: string;
+      subject: string;
+      valid_from: string;
+      valid_to: string;
+      key_alg: string;
+      key_size: number;
+      protocols: string[];
+      chain_depth: number;
+      chain_valid: boolean;
+      sans: string[];
+      serial: string;
+      error: string | null;
     };
 
     if (!data.grade) return null;
@@ -196,10 +274,15 @@ async function tryFlyProbe(domain: string, env: Env): Promise<SslResult | null> 
       valid_to: data.valid_to || null,
       protocols: data.protocols || [],
       key_exchange: data.key_alg ? `${data.key_alg} ${data.key_size || ""}`.trim() : null,
-      error: data.grade === "T" ? (data.error || "Certificate trust issue") : null,
+      error: data.grade === "T" ? data.error || "Certificate trust issue" : null,
     };
   } catch (e) {
-    logApiError(env.STATS_DB, { api: "fly-probe", status: 0, message: `SSL probe: ${String(e).slice(0, 150)}`, domain });
+    logApiError(env.STATS_DB, {
+      api: "fly-probe",
+      status: 0,
+      message: `SSL probe: ${String(e).slice(0, 150)}`,
+      domain,
+    });
     return null;
   }
 }
@@ -222,9 +305,14 @@ async function trySslLabs(domain: string): Promise<SslResult | null> {
         };
       }>;
       certs?: Array<{
-        id: string; subject?: string; issuerSubject?: string;
-        notBefore?: number; notAfter?: number;
-        keyAlg?: string; keySize?: number; commonNames?: string[];
+        id: string;
+        subject?: string;
+        issuerSubject?: string;
+        notBefore?: number;
+        notAfter?: number;
+        keyAlg?: string;
+        keySize?: number;
+        commonNames?: string[];
       }>;
     };
 
@@ -252,8 +340,19 @@ async function trySslLabs(domain: string): Promise<SslResult | null> {
       keyExchange = leafCert.keyAlg ? `${leafCert.keyAlg} ${leafCert.keySize ?? ""}`.trim() : null;
     }
 
-    return { grade: ep.grade ?? null, issuer, subject: null, valid_from: validFrom, valid_to: validTo, protocols, key_exchange: keyExchange, error: null };
-  } catch { return null; }
+    return {
+      grade: ep.grade ?? null,
+      issuer,
+      subject: null,
+      valid_from: validFrom,
+      valid_to: validTo,
+      protocols,
+      key_exchange: keyExchange,
+      error: null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ─── SSL: HTTPS fetch + crt.sh cert lookup ──────────────────────────
@@ -272,14 +371,16 @@ async function tryHttpsCrtsh(domain: string, statsDb?: D1Database): Promise<SslR
     let validTo: string | null = null;
 
     try {
-      const crtRes = await fetchWithTimeout(
-        `https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`,
-        { timeout: 6000 }
-      );
+      const crtRes = await fetchWithTimeout(`https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`, {
+        timeout: 6000,
+      });
       if (crtRes.ok) {
         const certs = (await crtRes.json()) as Array<{
-          issuer_name?: string; not_before?: string; not_after?: string;
-          common_name?: string; name_value?: string;
+          issuer_name?: string;
+          not_before?: string;
+          not_after?: string;
+          common_name?: string;
+          name_value?: string;
         }>;
         const matching = certs
           .filter((c) => c.common_name === domain || c.name_value?.split("\n").includes(domain))
@@ -292,24 +393,64 @@ async function tryHttpsCrtsh(domain: string, statsDb?: D1Database): Promise<SslR
         }
       }
     } catch (e) {
-      if (statsDb) logApiError(statsDb, { api: "crt.sh", status: 0, message: `SSL cert lookup: ${String(e).slice(0, 150)}`, domain });
+      if (statsDb)
+        logApiError(statsDb, {
+          api: "crt.sh",
+          status: 0,
+          message: `SSL cert lookup: ${String(e).slice(0, 150)}`,
+          domain,
+        });
     }
 
-    return { grade: "Valid", issuer, subject: null, valid_from: validFrom, valid_to: validTo, protocols: [], key_exchange: null, error: null };
-  } catch { return null; }
+    return {
+      grade: "Valid",
+      issuer,
+      subject: null,
+      valid_from: validFrom,
+      valid_to: validTo,
+      protocols: [],
+      key_exchange: null,
+      error: null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ─── Live Status Check ───────────────────────────────────────────────
 
-export async function checkStatus(domain: string, env: Env): Promise<{ is_up: boolean; status_code: number | null; response_time_ms: number | null; error: string | null; status_label: string; http_blocked: boolean; http2?: boolean; http3?: boolean; alt_svc?: string | null }> {
+export async function checkStatus(
+  domain: string,
+  env: Env,
+): Promise<{
+  is_up: boolean;
+  status_code: number | null;
+  response_time_ms: number | null;
+  error: string | null;
+  status_label: string;
+  http_blocked: boolean;
+  http2?: boolean;
+  http3?: boolean;
+  alt_svc?: string | null;
+}> {
   // Try Fly.io proxy first (avoids CF Worker IP blocks for sites like meta.com)
   try {
     const probeRes = await fetchWithTimeout(
       `${getFlyProbeUrl(env)}/probe-status?domain=${encodeURIComponent(domain)}`,
-      { timeout: 15000, headers: getFlyAuthHeaders(env) }
+      { timeout: 15000, headers: getFlyAuthHeaders(env) },
     );
     if (probeRes.ok) {
-      const data = await probeRes.json() as { is_up: boolean; status_code: number | null; response_time_ms: number; error: string | null; status_label: string; http_blocked: boolean; http2?: boolean; http3?: boolean; alt_svc?: string | null };
+      const data = (await probeRes.json()) as {
+        is_up: boolean;
+        status_code: number | null;
+        response_time_ms: number;
+        error: string | null;
+        status_label: string;
+        http_blocked: boolean;
+        http2?: boolean;
+        http3?: boolean;
+        alt_svc?: string | null;
+      };
       return {
         is_up: data.is_up,
         status_code: data.status_code ?? null,
@@ -325,7 +466,12 @@ export async function checkStatus(domain: string, env: Env): Promise<{ is_up: bo
       logApiError(env.STATS_DB, { api: "fly-probe", status: probeRes.status, message: "Status probe failed", domain });
     }
   } catch (e) {
-    logApiError(env.STATS_DB, { api: "fly-probe", status: 0, message: `Status probe: ${String(e).slice(0, 150)}`, domain });
+    logApiError(env.STATS_DB, {
+      api: "fly-probe",
+      status: 0,
+      message: `Status probe: ${String(e).slice(0, 150)}`,
+      domain,
+    });
   }
 
   // Fallback: direct probe from CF Worker
@@ -338,7 +484,10 @@ export async function checkStatus(domain: string, env: Env): Promise<{ is_up: bo
       const res = await fetchWithTimeout(currentUrl, {
         timeout: 10000,
         redirect: "manual",
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
       });
       finalStatus = res.status;
       if (res.status >= 300 && res.status < 400) {
@@ -363,7 +512,14 @@ export async function checkStatus(domain: string, env: Env): Promise<{ is_up: bo
     };
   } catch (err) {
     const elapsed = Date.now() - start;
-    return { is_up: false, status_code: null, response_time_ms: elapsed > 100 ? elapsed : null, error: err instanceof Error ? err.message : "Connection failed", status_label: "DOWN", http_blocked: false };
+    return {
+      is_up: false,
+      status_code: null,
+      response_time_ms: elapsed > 100 ? elapsed : null,
+      error: err instanceof Error ? err.message : "Connection failed",
+      status_label: "DOWN",
+      http_blocked: false,
+    };
   }
 }
 
@@ -373,10 +529,18 @@ export async function checkShodan(ip: string, statsDb?: D1Database): Promise<Sho
   try {
     const res = await fetchWithTimeout(`https://internetdb.shodan.io/${ip}`, { timeout: 6000 });
     if (!res.ok) {
-      if (statsDb) logApiError(statsDb, { api: "shodan", status: res.status, message: "InternetDB lookup failed", domain: ip });
+      if (statsDb)
+        logApiError(statsDb, { api: "shodan", status: res.status, message: "InternetDB lookup failed", domain: ip });
       return null;
     }
-    const data = await res.json() as { cpes?: string[]; hostnames?: string[]; ip?: string; ports?: number[]; tags?: string[]; vulns?: string[] };
+    const data = (await res.json()) as {
+      cpes?: string[];
+      hostnames?: string[];
+      ip?: string;
+      ports?: number[];
+      tags?: string[];
+      vulns?: string[];
+    };
     return {
       ports: data.ports ?? [],
       cpes: data.cpes ?? [],
@@ -397,31 +561,38 @@ export async function checkDnssec(domain: string): Promise<DnssecResult> {
   const [dnskeyRes, dsRes, adRes] = await Promise.allSettled([
     fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=DNSKEY`, { timeout: 5000 }),
     fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=DS`, { timeout: 5000 }),
-    fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A&cd=false`, { timeout: 5000 }),
+    fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A&cd=false`, {
+      timeout: 5000,
+    }),
   ]);
 
   if (dnskeyRes.status === "fulfilled" && dnskeyRes.value.ok) {
     try {
-      const data = await dnskeyRes.value.json() as { Status: number; Answer?: Array<{ data: string }> };
+      const data = (await dnskeyRes.value.json()) as { Status: number; Answer?: Array<{ data: string }> };
       if (data.Status === 0 && data.Answer?.length) result.has_dnskey = true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   if (dsRes.status === "fulfilled" && dsRes.value.ok) {
     try {
-      const data = await dsRes.value.json() as { Status: number; Answer?: Array<{ data: string }> };
+      const data = (await dsRes.value.json()) as { Status: number; Answer?: Array<{ data: string }> };
       if (data.Status === 0 && data.Answer?.length) result.has_ds = true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   if (adRes.status === "fulfilled" && adRes.value.ok) {
     try {
-      const data = await adRes.value.json() as { AD?: boolean };
+      const data = (await adRes.value.json()) as { AD?: boolean };
       if (data.AD === true) result.validated = true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   result.enabled = result.has_dnskey || result.has_ds || result.validated;
   return result;
 }
-

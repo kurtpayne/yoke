@@ -77,11 +77,20 @@ async function cfSearch(query: string, env: Env, limit = 15): Promise<DomainSugg
   try {
     const res = await fetchWithTimeout(
       `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/registrar/domain-search?q=${encodeURIComponent(query)}&limit=${limit}`,
-      { timeout: 8000, headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` } }
+      { timeout: 8000, headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` } },
     );
     if (!res.ok) return [];
     // CF Search API response shape (external API — type narrowly)
-    const data = (await res.json()) as { success: boolean; result?: { domains?: Array<{ name: string; registrable: boolean; pricing?: { registration_cost: string; renewal_cost: string; currency: string } }> } };
+    const data = (await res.json()) as {
+      success: boolean;
+      result?: {
+        domains?: Array<{
+          name: string;
+          registrable: boolean;
+          pricing?: { registration_cost: string; renewal_cost: string; currency: string };
+        }>;
+      };
+    };
     if (!data.success) return [];
     return (data.result?.domains ?? []).map((d) => ({
       domain: d.name,
@@ -92,7 +101,8 @@ async function cfSearch(query: string, env: Env, limit = 15): Promise<DomainSugg
         : null,
       source: "cf_search" as const,
     }));
-  } catch { /* search failed */
+  } catch {
+    /* search failed */
     return [];
   }
 }
@@ -117,14 +127,24 @@ async function cfCheck(domains: string[], env: Env): Promise<Map<string, DomainS
           timeout: 8000,
           headers: { Authorization: `Bearer ${env.CF_API_TOKEN}`, "Content-Type": "application/json" },
           body: JSON.stringify({ domains: chunk }),
-        }
+        },
       );
       if (!res.ok) return [];
       // CF Check API response shape (external API)
-      const data = (await res.json()) as { success: boolean; result?: { domains?: Array<{ name: string; registrable: boolean; reason?: string; pricing?: { registration_cost: string; renewal_cost: string; currency: string } }> } };
+      const data = (await res.json()) as {
+        success: boolean;
+        result?: {
+          domains?: Array<{
+            name: string;
+            registrable: boolean;
+            reason?: string;
+            pricing?: { registration_cost: string; renewal_cost: string; currency: string };
+          }>;
+        };
+      };
       if (!data.success) return [];
       return data.result?.domains ?? [];
-    })
+    }),
   );
 
   for (const result of results) {
@@ -149,7 +169,7 @@ async function dohCheck(domain: string): Promise<boolean | null> {
   try {
     const res = await fetchWithTimeout(
       `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=NS`,
-      { timeout: 8000, headers: { Accept: "application/dns-json" } }
+      { timeout: 8000, headers: { Accept: "application/dns-json" } },
     );
     if (!res.ok) return null;
     // DoH JSON response shape
@@ -162,7 +182,7 @@ async function dohCheck(domain: string): Promise<boolean | null> {
     if (data.Status === 0) {
       const aRes = await fetchWithTimeout(
         `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`,
-        { timeout: 8000, headers: { Accept: "application/dns-json" } }
+        { timeout: 8000, headers: { Accept: "application/dns-json" } },
       );
       if (aRes.ok) {
         // DoH JSON response shape
@@ -173,7 +193,8 @@ async function dohCheck(domain: string): Promise<boolean | null> {
       return true;
     }
     return null;
-  } catch { /* enrichment failed */
+  } catch {
+    /* enrichment failed */
     return null;
   }
 }
@@ -225,7 +246,7 @@ export async function getDomainSuggestions(domain: string, env: Env): Promise<{ 
     dohBatch.map(async (s) => {
       const available = await dohCheck(s.domain);
       return { domain: s.domain, available };
-    })
+    }),
   );
 
   for (const result of dohResults) {

@@ -95,7 +95,16 @@ const SCHEMA_SPECS: Record<string, SchemaSpec> = {
   },
   Recipe: {
     required: ["name"],
-    recommended: ["image", "description", "recipeIngredient", "recipeInstructions", "cookTime", "prepTime", "nutrition", "recipeYield"],
+    recommended: [
+      "image",
+      "description",
+      "recipeIngredient",
+      "recipeInstructions",
+      "cookTime",
+      "prepTime",
+      "nutrition",
+      "recipeYield",
+    ],
   },
   VideoObject: {
     required: ["name", "description", "thumbnailUrl", "uploadDate"],
@@ -138,7 +147,7 @@ function hasField(raw: Record<string, unknown>, field: string): boolean {
 }
 
 function fieldPreview(val: unknown): string | undefined {
-  if (typeof val === "string") return val.length > 80 ? val.slice(0, 80) + "…" : val;
+  if (typeof val === "string") return val.length > 80 ? `${val.slice(0, 80)}…` : val;
   if (typeof val === "number" || typeof val === "boolean") return String(val);
   if (Array.isArray(val)) return `[${val.length} items]`;
   if (typeof val === "object" && val !== null) return "{…}";
@@ -152,7 +161,7 @@ function validateItem(item: JsonLdItem): SchemaValidation {
 
   if (!spec) {
     // Unknown type — just list what fields exist
-    const fields = Object.keys(raw).filter(k => !k.startsWith("@"));
+    const fields = Object.keys(raw).filter((k) => !k.startsWith("@"));
     return {
       type,
       name: item.name,
@@ -163,28 +172,33 @@ function validateItem(item: JsonLdItem): SchemaValidation {
     };
   }
 
-  const requiredFields: FieldValidation[] = spec.required.map(field => ({
+  const requiredFields: FieldValidation[] = spec.required.map((field) => ({
     field,
     status: hasField(raw, field) ? "present" : "missing",
     value: hasField(raw, field) ? fieldPreview(getFieldValue(raw, field)) : undefined,
   }));
 
-  const recommendedFields: FieldValidation[] = spec.recommended.map(field => ({
+  const recommendedFields: FieldValidation[] = spec.recommended.map((field) => ({
     field,
     status: hasField(raw, field) ? "present" : "recommended",
     value: hasField(raw, field) ? fieldPreview(getFieldValue(raw, field)) : undefined,
   }));
 
   const knownFields = new Set([...spec.required, ...spec.recommended, "@context", "@type", "@id", "@graph"]);
-  const extra = Object.keys(raw).filter(k => !knownFields.has(k));
+  const extra = Object.keys(raw).filter((k) => !knownFields.has(k));
 
-  const missingRequired = requiredFields.filter(f => f.status === "missing").length;
+  const missingRequired = requiredFields.filter((f) => f.status === "missing").length;
   const status: SchemaValidation["status"] =
-    missingRequired === 0 ? "complete" :
-    missingRequired < spec.required.length ? "partial" :
-    "missing_required";
+    missingRequired === 0 ? "complete" : missingRequired < spec.required.length ? "partial" : "missing_required";
 
-  return { type, name: item.name, status, required_fields: requiredFields, recommended_fields: recommendedFields, extra_fields: extra };
+  return {
+    type,
+    name: item.name,
+    status,
+    required_fields: requiredFields,
+    recommended_fields: recommendedFields,
+    extra_fields: extra,
+  };
 }
 
 // ─── Main Export ─────────────────────────────────────────────────────
@@ -195,8 +209,8 @@ export function validateStructuredData(jsonLdItems: JsonLdItem[]): StructuredDat
   }
 
   const validations = jsonLdItems.map(validateItem);
-  const typesFound = [...new Set(validations.map(v => v.type))];
-  const hasIssues = validations.some(v => v.status !== "complete");
+  const typesFound = [...new Set(validations.map((v) => v.type))];
+  const hasIssues = validations.some((v) => v.status !== "complete");
 
   return {
     types_found: typesFound,

@@ -2,49 +2,84 @@
 // Single source of truth for all analysis logic.
 // Both the JSON endpoint and the SSE streaming endpoint use this.
 
-import { type Env, normalizeDomain, backgroundWork } from "../../helpers";
-import { getAnalysisCacheTtlMs } from "../../config/cache";
-import { analyzeWordPress } from "../wordpress";
-import { type BreachResult } from "../breaches";
 import { logApiError, pruneApiErrors } from "../../api-errors";
 import { registry } from "../../checks/registry";
 import type { CheckContext } from "../../checks/types";
-
-import type {
-  DnsRecord, HttpAnalysis, MetaResult, IpInfo, BlocklistResult, SslResult,
-  PerformanceResult, RdapResult, LlmsTxtResult, ShodanResult, DnssecResult,
-  HostingResult, CookieSecurityResult,
-  CompressionResult, CertTransparencyResult, SecurityTxtResult, GreenHostingResult,
-  WellKnownResult, GreynoiseResult, EmailAuthResult, CacheAnalysis,
-  WafDetection, TrustSignals, CruxResult,
-} from "./types";
-
-import { checkDns, isSubdomain, dohQuery } from "./dns";
-import { auditSecurityHeaders, detectTechStack, analyzeHttp } from "./http";
-import { detectCompression } from "./performance";
+import { getAnalysisCacheTtlMs } from "../../config/cache";
+import { backgroundWork, type Env, normalizeDomain } from "../../helpers";
+import { type BreachResult } from "../breaches";
+import { analyzeWordPress } from "../wordpress";
+import { analyzeAccessibility } from "./accessibility";
 import { checkCacheHeaders } from "./cache";
-import { checkWaf } from "./waf";
-import { checkTrustSignals } from "./trust";
-import { isActuallyCloudflare, sanitizeCfHeaders, detectHosting, auditCookies } from "./security";
 import {
-  parseRobotsDeep, detectHttpProtocols, probeHttpProtocols, extractJsonLd,
-  extractSocialMeta, detectLegalPages, detectResourceHints, calculateAiReadiness,
   type AnsResult,
+  calculateAiReadiness,
+  detectHttpProtocols,
+  detectLegalPages,
+  detectResourceHints,
+  extractJsonLd,
+  extractSocialMeta,
+  parseRobotsDeep,
+  probeHttpProtocols,
 } from "./content";
 import { calculateDomainScore } from "./contextual-scoring";
-import { type NetworkHealth } from "./network-health";
-import { validateStructuredData } from "./structured-data";
-import { analyzeAccessibility } from "./accessibility";
-import { analyzeThirdPartyScripts } from "./third-party-scripts";
 import { analyzeCookieConsent } from "./cookie-consent";
+import { checkDns, dohQuery, isSubdomain } from "./dns";
+import { analyzeHttp, auditSecurityHeaders, detectTechStack } from "./http";
+import { type NetworkHealth } from "./network-health";
+import { detectCompression } from "./performance";
+import { auditCookies, detectHosting, isActuallyCloudflare, sanitizeCfHeaders } from "./security";
+import { validateStructuredData } from "./structured-data";
+import { analyzeThirdPartyScripts } from "./third-party-scripts";
 import { analyzeCaaRecords } from "./tier1";
+import { checkTrustSignals } from "./trust";
+import type {
+  BlocklistResult,
+  CacheAnalysis,
+  CertTransparencyResult,
+  CompressionResult,
+  CookieSecurityResult,
+  CruxResult,
+  DnsRecord,
+  DnssecResult,
+  EmailAuthResult,
+  GreenHostingResult,
+  GreynoiseResult,
+  HostingResult,
+  HttpAnalysis,
+  IpInfo,
+  LlmsTxtResult,
+  MetaResult,
+  PerformanceResult,
+  RdapResult,
+  SecurityTxtResult,
+  ShodanResult,
+  SslResult,
+  TrustSignals,
+  WafDetection,
+  WellKnownResult,
+} from "./types";
+import { checkWaf } from "./waf";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
 /** Callbacks for streaming progress. All optional — non-streaming callers pass nothing. */
 export interface AnalysisCallbacks {
-  onPhase?: (phase: string, status: string, label: string, total?: number, checks?: Array<{ key: string; label: string }>) => Promise<void>;
-  onResult?: (key: string, value: unknown, completed?: number, total?: number, label?: string, error?: boolean) => Promise<void>;
+  onPhase?: (
+    phase: string,
+    status: string,
+    label: string,
+    total?: number,
+    checks?: Array<{ key: string; label: string }>,
+  ) => Promise<void>;
+  onResult?: (
+    key: string,
+    value: unknown,
+    completed?: number,
+    total?: number,
+    label?: string,
+    error?: boolean,
+  ) => Promise<void>;
 }
 
 /** Shape of the status sub-object in results. */
@@ -122,7 +157,9 @@ export interface AnalysisResult {
   accessibility: unknown;
   third_party_scripts: unknown;
   cookie_consent: unknown;
-  social_accounts: { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> } | null;
+  social_accounts: {
+    accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }>;
+  } | null;
   [key: string]: unknown;
 }
 
@@ -156,13 +193,29 @@ function makeNxdomainResult(domain: string): AnalysisResult {
     not_registered: true,
     http_probe_blocked: true,
     is_subdomain: false,
-    status: { is_up: false, status_code: null, response_time_ms: null, error: "Domain not registered (NXDOMAIN)", status_label: "NOT REGISTERED" },
+    status: {
+      is_up: false,
+      status_code: null,
+      response_time_ms: null,
+      error: "Domain not registered (NXDOMAIN)",
+      status_label: "NOT REGISTERED",
+    },
     dns: { records: [] },
     rdap: null,
     redirects: [],
     headers: null,
     tech_stack: null,
-    meta: { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null, og_title: null, og_description: null, og_image: null, favicon_url: null },
+    meta: {
+      robots_txt: null,
+      robots_txt_exists: false,
+      sitemap_detected: false,
+      sitemap_url: null,
+      sitemap_page_count: null,
+      og_title: null,
+      og_description: null,
+      og_image: null,
+      favicon_url: null,
+    },
     ip_info: null,
     blocklists: [],
     ssl: null,
@@ -243,16 +296,72 @@ const HOSTING_ISPS = [
 
 // ─── Default fallback values for Phase 2 checks ─────────────────────
 
-const DEFAULT_PERFORMANCE: PerformanceResult = { score: null, fcp: null, lcp: null, tbt: null, cls: null, si: null, ttfb: null, strategy: "mobile", error: null, screenshot: null };
-const DEFAULT_STATUS: StatusShape = { is_up: false, status_code: null, response_time_ms: null, error: "Phase 2 promise rejected", status_label: "error", http_blocked: false };
+const DEFAULT_PERFORMANCE: PerformanceResult = {
+  score: null,
+  fcp: null,
+  lcp: null,
+  tbt: null,
+  cls: null,
+  si: null,
+  ttfb: null,
+  strategy: "mobile",
+  error: null,
+  screenshot: null,
+};
+const DEFAULT_STATUS: StatusShape = {
+  is_up: false,
+  status_code: null,
+  response_time_ms: null,
+  error: "Phase 2 promise rejected",
+  status_label: "error",
+  http_blocked: false,
+};
 const DEFAULT_LLMS_TXT: LlmsTxtResult = { found: false, content: null, full_found: false, full_content: null };
-const DEFAULT_EMAIL_AUTH: EmailAuthResult = { spf: { found: false, record: null, mechanisms: [], all_qualifier: null }, dmarc: { found: false, record: null, policy: null, subdomain_policy: null, rua: null, ruf: null }, dkim_selectors_found: [], bimi: { found: false, record: null, logo_url: null, authority_url: null }, mta_sts: { dns_found: false, policy_found: false, mode: null }, tls_rpt: { found: false, record: null, rua: null } };
+const DEFAULT_EMAIL_AUTH: EmailAuthResult = {
+  spf: { found: false, record: null, mechanisms: [], all_qualifier: null },
+  dmarc: { found: false, record: null, policy: null, subdomain_policy: null, rua: null, ruf: null },
+  dkim_selectors_found: [],
+  bimi: { found: false, record: null, logo_url: null, authority_url: null },
+  mta_sts: { dns_found: false, policy_found: false, mode: null },
+  tls_rpt: { found: false, record: null, rua: null },
+};
 const DEFAULT_DNSSEC: DnssecResult = { enabled: false, has_dnskey: false, has_ds: false, validated: false };
 const DEFAULT_BREACH: BreachResult = { found: false, count: 0, total_pwned: 0, items: [] };
-const DEFAULT_CERT_TRANSPARENCY: CertTransparencyResult = { subdomains: [], total_certs: 0, has_wildcard: false, issuers: [], certs: [], error: null };
-const DEFAULT_SECURITY_TXT: SecurityTxtResult = { found: false, contact: [], encryption: null, acknowledgments: null, policy: null, hiring: null, canonical: null, preferred_languages: null, expires: null, is_expired: false, has_bug_bounty: false, bug_bounty_platform: null, raw: null };
-const DEFAULT_GREEN_HOSTING: GreenHostingResult = { green: false, hosted_by: null, hosted_by_website: null, error: null };
-const DEFAULT_WELL_KNOWN: WellKnownResult = { endpoints: [], pwa_ready: false, has_mobile_apps: false, ads_partner_count: null };
+const DEFAULT_CERT_TRANSPARENCY: CertTransparencyResult = {
+  subdomains: [],
+  total_certs: 0,
+  has_wildcard: false,
+  issuers: [],
+  certs: [],
+  error: null,
+};
+const DEFAULT_SECURITY_TXT: SecurityTxtResult = {
+  found: false,
+  contact: [],
+  encryption: null,
+  acknowledgments: null,
+  policy: null,
+  hiring: null,
+  canonical: null,
+  preferred_languages: null,
+  expires: null,
+  is_expired: false,
+  has_bug_bounty: false,
+  bug_bounty_platform: null,
+  raw: null,
+};
+const DEFAULT_GREEN_HOSTING: GreenHostingResult = {
+  green: false,
+  hosted_by: null,
+  hosted_by_website: null,
+  error: null,
+};
+const DEFAULT_WELL_KNOWN: WellKnownResult = {
+  endpoints: [],
+  pwa_ready: false,
+  has_mobile_apps: false,
+  ads_partner_count: null,
+};
 
 // ─── Core Analysis Pipeline ─────────────────────────────────────────
 
@@ -272,13 +381,17 @@ export async function runAnalysis(
   callbacks?: AnalysisCallbacks,
 ): Promise<CoreResult> {
   domain = normalizeDomain(domain);
-  if (!domain || !domain.includes(".")) {
+  if (!domain?.includes(".")) {
     throw new Error("Invalid domain");
   }
 
   // Derive instance hostname for self-analysis bypass (CF Workers can't fetch themselves)
   let instanceHost: string | undefined;
-  try { instanceHost = env.BASE_URL ? new URL(env.BASE_URL).hostname : undefined; } catch { /* ignore */ }
+  try {
+    instanceHost = env.BASE_URL ? new URL(env.BASE_URL).hostname : undefined;
+  } catch {
+    /* ignore */
+  }
 
   const onPhase = callbacks?.onPhase ?? (async () => {});
   const onResult = callbacks?.onResult ?? (async () => {});
@@ -294,7 +407,9 @@ export async function runAnalysis(
           return { kind: "cached", data: { ...parsed, cached: true, cached_at: envelope.cached_at } };
         }
       }
-    } catch (e) { console.warn(`[yoke:cache] KV read failed for ${domain}:`, e instanceof Error ? e.message : e); }
+    } catch (e) {
+      console.warn(`[yoke:cache] KV read failed for ${domain}:`, e instanceof Error ? e.message : e);
+    }
   }
 
   // ── Phase 0: Quick NXDOMAIN check ────────────────────────────────
@@ -305,12 +420,18 @@ export async function runAnalysis(
       if (env.REFERENCE_DATA) {
         try {
           const envelope = { data: nxResult, cached_at: Date.now() };
-          await env.REFERENCE_DATA.put(`cache:analysis:${domain}`, JSON.stringify(envelope), { expirationTtl: Math.max(60, Math.ceil(getAnalysisCacheTtlMs(env) / 1000)) });
-        } catch { /* ignore */ }
+          await env.REFERENCE_DATA.put(`cache:analysis:${domain}`, JSON.stringify(envelope), {
+            expirationTtl: Math.max(60, Math.ceil(getAnalysisCacheTtlMs(env) / 1000)),
+          });
+        } catch {
+          /* ignore */
+        }
       }
       return { kind: "nxdomain", data: nxResult };
     }
-  } catch { /* DNS check failed, proceed with full analysis */ }
+  } catch {
+    /* DNS check failed, proceed with full analysis */
+  }
 
   // ── Phase 1: DNS + HTTP ──────────────────────────────────────────
   await onPhase("dns", "running", "Resolving DNS…");
@@ -355,7 +476,15 @@ export async function runAnalysis(
   const domainIsSubdomain = isSubdomain(domain);
 
   // Build check context from Phase 1 results for the registry
-  const checkCtx: CheckContext = { domain, env, instanceHost, dnsRecords, ip, httpResponseTimeMs: httpAnalysis?.response_time_ms ?? null, skipCache };
+  const checkCtx: CheckContext = {
+    domain,
+    env,
+    instanceHost,
+    dnsRecords,
+    ip,
+    httpResponseTimeMs: httpAnalysis?.response_time_ms ?? null,
+    skipCache,
+  };
 
   // Per-check timeout: individual checks that exceed this limit fall back to defaults.
   // This prevents a single slow API from blocking the entire analysis pipeline.
@@ -369,7 +498,7 @@ export async function runAnalysis(
       promise: Promise.race([
         check.run(checkCtx),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Check ${check.key} timed out after ${timeoutMs}ms`)), timeoutMs)
+          setTimeout(() => reject(new Error(`Check ${check.key} timed out after ${timeoutMs}ms`)), timeoutMs),
         ),
       ]),
       label: check.label,
@@ -377,7 +506,13 @@ export async function runAnalysis(
     };
   });
 
-  await onPhase("phase2", "running", `Running ${checks.length} checks…`, checks.length, checks.map(c => ({ key: c.key, label: c.label })));
+  await onPhase(
+    "phase2",
+    "running",
+    `Running ${checks.length} checks…`,
+    checks.length,
+    checks.map((c) => ({ key: c.key, label: c.label })),
+  );
 
   // Collect results as they arrive, streaming each via onResult
   const results: Record<string, unknown> = {};
@@ -393,18 +528,43 @@ export async function runAnalysis(
         // When _status arrives, compute and send early enhanced status
         if (key === "_status") {
           const sr = value as StatusShape | null;
-          const statusVal: StatusShape = sr ?? { is_up: false, status_code: null, response_time_ms: null, error: "Check failed", status_label: "DOWN", http_blocked: false };
+          const statusVal: StatusShape = sr ?? {
+            is_up: false,
+            status_code: null,
+            response_time_ms: null,
+            error: "Check failed",
+            status_label: "DOWN",
+            http_blocked: false,
+          };
           const dnsOk = dnsRecords.some((r) => r.type === "A" || r.type === "AAAA");
           let earlyStatus: StatusShape = { ...statusVal };
           if (httpProbeSucceeded && httpAnalysis) {
             const fc = httpAnalysis.redirects?.[httpAnalysis.redirects.length - 1]?.status_code;
             if (fc && fc >= 200 && fc < 400) {
-              earlyStatus = { ...statusVal, is_up: true, status_code: fc, status_label: "UP", http_blocked: false, error: null };
+              earlyStatus = {
+                ...statusVal,
+                is_up: true,
+                status_code: fc,
+                status_label: "UP",
+                http_blocked: false,
+                error: null,
+              };
             }
           } else if (!statusVal.is_up && dnsOk) {
-            earlyStatus = { ...statusVal, is_up: true, status_label: "RESTRICTED", http_blocked: true, error: "Site is online (DNS resolves) but blocked our HTTP probe" };
+            earlyStatus = {
+              ...statusVal,
+              is_up: true,
+              status_label: "RESTRICTED",
+              http_blocked: true,
+              error: "Site is online (DNS resolves) but blocked our HTTP probe",
+            };
           } else if (statusVal.http_blocked && dnsOk) {
-            earlyStatus = { ...statusVal, is_up: true, status_label: "RESTRICTED", error: `Site returned HTTP ${statusVal.status_code} — blocking automated requests` };
+            earlyStatus = {
+              ...statusVal,
+              is_up: true,
+              status_label: "RESTRICTED",
+              error: `Site returned HTTP ${statusVal.status_code} — blocking automated requests`,
+            };
           }
           return sendPromise.then(() => onResult("status", earlyStatus));
         }
@@ -414,10 +574,15 @@ export async function runAnalysis(
         results[key] = defaultValue;
         completed++;
         // Log API error for observability
-        logApiError(env.STATS_DB, { api: key.replace(/^_/, ""), status: 0, message: String(err).slice(0, 200), domain });
+        logApiError(env.STATS_DB, {
+          api: key.replace(/^_/, ""),
+          status: 0,
+          message: String(err).slice(0, 200),
+          domain,
+        });
         return onResult(key, defaultValue, completed, checks.length, label, true);
       },
-    )
+    ),
   );
 
   // Overall Phase 2 deadline: if checks collectively exceed this limit, proceed
@@ -441,7 +606,16 @@ export async function runAnalysis(
   // ── Assemble final result ────────────────────────────────────────
 
   const rdapResult = (results.rdap ?? null) as RdapResult | null;
-  const robotsSitemap = (results._robots_sitemap ?? { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null }) as Pick<MetaResult, "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count">;
+  const robotsSitemap = (results._robots_sitemap ?? {
+    robots_txt: null,
+    robots_txt_exists: false,
+    sitemap_detected: false,
+    sitemap_url: null,
+    sitemap_page_count: null,
+  }) as Pick<
+    MetaResult,
+    "robots_txt" | "robots_txt_exists" | "sitemap_detected" | "sitemap_url" | "sitemap_page_count"
+  >;
   const ipInfo = (results.ip_info ?? null) as IpInfo | null;
   const blocklists = (results.blocklists ?? []) as BlocklistResult[];
   const sslResult = (results.ssl ?? null) as SslResult | null;
@@ -450,7 +624,12 @@ export async function runAnalysis(
   const cruxResult = (results.crux ?? null) as CruxResult | null;
   const statusResult = (results._status ?? DEFAULT_STATUS) as StatusShape;
   const llmsTxt = (results.llms_txt ?? DEFAULT_LLMS_TXT) as LlmsTxtResult;
-  const wayback = (results.wayback ?? null) as { first_snapshot: string | null; last_snapshot: string | null; total_snapshots: number | null; archive_url: string } | null;
+  const wayback = (results.wayback ?? null) as {
+    first_snapshot: string | null;
+    last_snapshot: string | null;
+    total_snapshots: number | null;
+    archive_url: string;
+  } | null;
   const tranco = (results.tranco_rank ?? null) as number | null;
   const observatory = results.observatory ?? null;
   const emailAuth = (results.email_auth ?? DEFAULT_EMAIL_AUTH) as EmailAuthResult;
@@ -467,12 +646,22 @@ export async function runAnalysis(
   const dnsPropagation = (results.dns_propagation ?? null) as import("./network-health").DnsPropagation | null;
   const ripeRouting = (results.ripe_routing ?? null) as import("./network-health").RipeRouting | null;
   const outageLinks = (results.outage_links ?? null) as import("./network-health").OutageLinks | null;
-  const connectionTimingResult = (results.connection_timing ?? null) as import("./network-health").ConnectionTiming | null;
-  const socialAccountsResult = (results.social_accounts ?? { accounts: [] }) as { accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }> };
+  const connectionTimingResult = (results.connection_timing ?? null) as
+    | import("./network-health").ConnectionTiming
+    | null;
+  const socialAccountsResult = (results.social_accounts ?? { accounts: [] }) as {
+    accounts: Array<{ platform: string; url: string; username: string | null; found_via: string }>;
+  };
 
   // Build merged meta
   const meta: MetaResult = {
-    ...(robotsSitemap ?? { robots_txt: null, robots_txt_exists: false, sitemap_detected: false, sitemap_url: null, sitemap_page_count: null }),
+    ...(robotsSitemap ?? {
+      robots_txt: null,
+      robots_txt_exists: false,
+      sitemap_detected: false,
+      sitemap_url: null,
+      sitemap_page_count: null,
+    }),
     og_title: httpProbeSucceeded ? (httpAnalysis?.meta?.og_title ?? null) : null,
     og_description: httpProbeSucceeded ? (httpAnalysis?.meta?.og_description ?? null) : null,
     og_image: httpProbeSucceeded ? (httpAnalysis?.meta?.og_image ?? null) : null,
@@ -486,26 +675,48 @@ export async function runAnalysis(
   if (httpProbeSucceeded && httpAnalysis) {
     const finalCode = httpAnalysis.redirects?.[httpAnalysis.redirects.length - 1]?.status_code;
     if (finalCode && finalCode >= 200 && finalCode < 400) {
-      enhancedStatus = { ...statusResult, is_up: true, status_code: finalCode, status_label: "UP", http_blocked: false, error: null };
+      enhancedStatus = {
+        ...statusResult,
+        is_up: true,
+        status_code: finalCode,
+        status_label: "UP",
+        http_blocked: false,
+        error: null,
+      };
     }
   } else if (!statusResult.is_up && dnsResolves) {
     // Distinguish between "timed out with no response" and "actively blocked"
     // A full timeout (response_time >= 10s, no status code) means the site is effectively down
     // even if DNS resolves — don't upgrade to RESTRICTED just because DNS works
-    const fullTimeout = statusResult.response_time_ms != null && statusResult.response_time_ms >= 10000 && statusResult.status_code == null;
+    const fullTimeout =
+      statusResult.response_time_ms != null &&
+      statusResult.response_time_ms >= 10000 &&
+      statusResult.status_code == null;
     if (fullTimeout) {
       // Leave as DOWN — DNS alone doesn't mean the site is serving content
-      enhancedStatus = { ...statusResult, is_up: false, status_label: "DOWN", http_blocked: false,
-        error: "Site timed out — DNS resolves but no HTTP response" };
+      enhancedStatus = {
+        ...statusResult,
+        is_up: false,
+        status_label: "DOWN",
+        http_blocked: false,
+        error: "Site timed out — DNS resolves but no HTTP response",
+      };
     } else {
       enhancedStatus = {
-        ...statusResult, is_up: true, status_label: "RESTRICTED", http_blocked: true,
-        error: sslValid ? "Site is online (DNS resolves, SSL valid) but blocked our HTTP probe" : "Site is online (DNS resolves) but blocked our HTTP probe",
+        ...statusResult,
+        is_up: true,
+        status_label: "RESTRICTED",
+        http_blocked: true,
+        error: sslValid
+          ? "Site is online (DNS resolves, SSL valid) but blocked our HTTP probe"
+          : "Site is online (DNS resolves) but blocked our HTTP probe",
       };
     }
   } else if (statusResult.http_blocked && dnsResolves) {
     enhancedStatus = {
-      ...statusResult, is_up: true, status_label: "RESTRICTED",
+      ...statusResult,
+      is_up: true,
+      status_label: "RESTRICTED",
       error: `Site returned HTTP ${statusResult.status_code} — blocking automated requests`,
     };
   }
@@ -518,8 +729,8 @@ export async function runAnalysis(
   const jsonLd = extractJsonLd(html);
 
   const siteIsCloudflareRefined = isActuallyCloudflare(dnsRecords, ipInfo);
-  const effectiveHeaders = (rawHeadersOriginal && !siteIsCloudflareRefined)
-    ? sanitizeCfHeaders(rawHeadersOriginal) : rawHeadersOriginal;
+  const effectiveHeaders =
+    rawHeadersOriginal && !siteIsCloudflareRefined ? sanitizeCfHeaders(rawHeadersOriginal) : rawHeadersOriginal;
 
   // Detect HTTP protocols — prefer Fly probe data from status check, then header detection, then dedicated probe
   const statusAny = statusResult as unknown as Record<string, unknown>;
@@ -532,7 +743,9 @@ export async function runAnalysis(
     try {
       const probed = await probeHttpProtocols(domain, env);
       if (probed.http2 || probed.http3) httpProtocols = probed;
-    } catch { /* subrequest limit or network error — accept false */ }
+    } catch {
+      /* subrequest limit or network error — accept false */
+    }
   }
 
   // Re-run security audit + tech stack with cleaned headers if we sanitized
@@ -576,7 +789,14 @@ export async function runAnalysis(
   const setCookieHeaders = setCookieRaw ? setCookieRaw.split(/\n/) : [];
   const wafDetection = httpProbeSucceeded ? checkWaf(effectiveHeaders, html, setCookieHeaders) : null;
 
-  const aiReadiness = calculateAiReadiness(llmsTxt, robotsParsed, jsonLd, html, socialMeta, ansResult as AnsResult | null);
+  const aiReadiness = calculateAiReadiness(
+    llmsTxt,
+    robotsParsed,
+    jsonLd,
+    html,
+    socialMeta,
+    ansResult as AnsResult | null,
+  );
   const structuredDataValidation = validateStructuredData(jsonLd);
 
   const accessibilityResult = httpProbeSucceeded ? analyzeAccessibility(html) : null;
@@ -585,27 +805,33 @@ export async function runAnalysis(
 
   // Trust signal aggregation
   const caaAnalysis = analyzeCaaRecords(dnsRecords);
-  const caaRecordsForTrust = (caaAnalysis as { records?: Array<{ tag: string; value: string }> } | null)?.records ?? null;
-  const trustSignals = httpProbeSucceeded ? checkTrustSignals({
-    headers: effectiveHeaders,
-    securityTxt: securityTxt,
-    emailAuth,
-    dnssec: dnssecResult,
-    ssl: sslResult,
-    caaRecords: caaRecordsForTrust,
-    wellKnown: wellKnown,
-    waf: wafDetection,
-    html,
-    hosting,
-  }) : null;
+  const caaRecordsForTrust =
+    (caaAnalysis as { records?: Array<{ tag: string; value: string }> } | null)?.records ?? null;
+  const trustSignals = httpProbeSucceeded
+    ? checkTrustSignals({
+        headers: effectiveHeaders,
+        securityTxt: securityTxt,
+        emailAuth,
+        dnssec: dnssecResult,
+        ssl: sslResult,
+        caaRecords: caaRecordsForTrust,
+        wellKnown: wellKnown,
+        waf: wafDetection,
+        html,
+        hosting,
+      })
+    : null;
 
   // Network health aggregation
-  const networkHealth: NetworkHealth | null = (dnsPropagation || ripeRouting || connectionTimingResult || outageLinks) ? {
-    dns_propagation: dnsPropagation,
-    ripe_routing: ripeRouting,
-    connection_timing: connectionTimingResult,
-    outage_links: outageLinks,
-  } : null;
+  const networkHealth: NetworkHealth | null =
+    dnsPropagation || ripeRouting || connectionTimingResult || outageLinks
+      ? {
+          dns_propagation: dnsPropagation,
+          ripe_routing: ripeRouting,
+          connection_timing: connectionTimingResult,
+          outage_links: outageLinks,
+        }
+      : null;
 
   // Contextual domain score
   const domainScore = calculateDomainScore({
@@ -631,7 +857,11 @@ export async function runAnalysis(
     wayback,
     certTransparency,
     greynoise: greynoiseResult,
-    techStack: httpProbeSucceeded ? (finalTechStack.length > 0 ? finalTechStack : (httpAnalysis?.tech_stack ?? null)) : null,
+    techStack: httpProbeSucceeded
+      ? finalTechStack.length > 0
+        ? finalTechStack
+        : (httpAnalysis?.tech_stack ?? null)
+      : null,
     headers: httpProbeSucceeded ? effectiveHeaders : null,
     domain,
     html,
@@ -666,12 +896,19 @@ export async function runAnalysis(
     rdap: rdapResult,
     status: enhancedStatus,
     redirects: httpProbeSucceeded ? (httpAnalysis?.redirects ?? []) : [],
-    headers: httpProbeSucceeded && httpAnalysis ? {
-      raw: effectiveHeaders ?? {},
-      security_audit: finalSecurityAudit,
-      security_grade: finalSecurityGrade,
-    } : null,
-    tech_stack: httpProbeSucceeded ? (finalTechStack.length > 0 ? finalTechStack : (httpAnalysis?.tech_stack ?? null)) : null,
+    headers:
+      httpProbeSucceeded && httpAnalysis
+        ? {
+            raw: effectiveHeaders ?? {},
+            security_audit: finalSecurityAudit,
+            security_grade: finalSecurityGrade,
+          }
+        : null,
+    tech_stack: httpProbeSucceeded
+      ? finalTechStack.length > 0
+        ? finalTechStack
+        : (httpAnalysis?.tech_stack ?? null)
+      : null,
     meta,
     ip_info: ipInfo,
     blocklists,
@@ -723,30 +960,45 @@ export async function runAnalysis(
 
   // Historical score logging (non-critical)
   if (domainScore) {
-    backgroundWork(env, (async () => {
-      const scoredAt = new Date().toISOString();
-      const scoreDate = scoredAt.slice(0, 10); // YYYY-MM-DD for daily dedup
+    backgroundWork(
+      env,
+      (async () => {
+        const scoredAt = new Date().toISOString();
+        const scoreDate = scoredAt.slice(0, 10); // YYYY-MM-DD for daily dedup
 
-      // Collect top findings for longitudinal diffing (compact: signal keys only)
-      const findingsSummary = Object.entries(domainScore.axes).flatMap(([axis, axisData]) =>
-        (axisData as { findings?: Array<{ signal: string; severity: string }> }).findings?.map(f => `${axis}:${f.severity}:${f.signal}`) ?? []
-      ).sort().join("|");
+        // Collect top findings for longitudinal diffing (compact: signal keys only)
+        const findingsSummary = Object.entries(domainScore.axes)
+          .flatMap(
+            ([axis, axisData]) =>
+              (axisData as { findings?: Array<{ signal: string; severity: string }> }).findings?.map(
+                (f) => `${axis}:${f.severity}:${f.signal}`,
+              ) ?? [],
+          )
+          .sort()
+          .join("|");
 
-      try {
-        await env.STATS_DB.prepare(
-          `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-          domain, domainScore.composite, domainScore.axes.security.score,
-          domainScore.axes.performance.score, domainScore.axes.reliability.score,
-          domainScore.axes.trust.score, domainScore.axes.visibility.score,
-          domainScore.archetype.detected, domainScore.archetype.confidence,
-          scoredAt,
-        ).run();
-      } catch {
         try {
           await env.STATS_DB.prepare(
-            `CREATE TABLE IF NOT EXISTS domain_scores (
+            `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+            .bind(
+              domain,
+              domainScore.composite,
+              domainScore.axes.security.score,
+              domainScore.axes.performance.score,
+              domainScore.axes.reliability.score,
+              domainScore.axes.trust.score,
+              domainScore.axes.visibility.score,
+              domainScore.archetype.detected,
+              domainScore.archetype.confidence,
+              scoredAt,
+            )
+            .run();
+        } catch {
+          try {
+            await env.STATS_DB.prepare(
+              `CREATE TABLE IF NOT EXISTS domain_scores (
               id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
               composite_score INTEGER NOT NULL, security_score INTEGER NOT NULL,
               performance_score INTEGER NOT NULL, reliability_score INTEGER NOT NULL,
@@ -754,38 +1006,60 @@ export async function runAnalysis(
               archetype TEXT NOT NULL, archetype_confidence REAL NOT NULL,
               scored_at TEXT NOT NULL DEFAULT (datetime('now')),
               UNIQUE(domain, scored_at)
-            )`
-          ).run();
-          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`).run();
-          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`).run();
-          await env.STATS_DB.prepare(
-            `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(
-            domain, domainScore.composite, domainScore.axes.security.score,
-            domainScore.axes.performance.score, domainScore.axes.reliability.score,
-            domainScore.axes.trust.score, domainScore.axes.visibility.score,
-            domainScore.archetype.detected, domainScore.archetype.confidence,
-            scoredAt,
-          ).run();
-        } catch { /* auto-migration + retry failed — non-critical */ }
-      }
+            )`,
+            ).run();
+            await env.STATS_DB.prepare(
+              `CREATE INDEX IF NOT EXISTS idx_domain_scores_domain ON domain_scores(domain)`,
+            ).run();
+            await env.STATS_DB.prepare(
+              `CREATE INDEX IF NOT EXISTS idx_domain_scores_scored_at ON domain_scores(scored_at)`,
+            ).run();
+            await env.STATS_DB.prepare(
+              `INSERT OR REPLACE INTO domain_scores (domain, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, archetype_confidence, scored_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+              .bind(
+                domain,
+                domainScore.composite,
+                domainScore.axes.security.score,
+                domainScore.axes.performance.score,
+                domainScore.axes.reliability.score,
+                domainScore.axes.trust.score,
+                domainScore.axes.visibility.score,
+                domainScore.archetype.detected,
+                domainScore.archetype.confidence,
+                scoredAt,
+              )
+              .run();
+          } catch {
+            /* auto-migration + retry failed — non-critical */
+          }
+        }
 
-      // Daily snapshot: one row per domain per day, overwrites with latest score + findings
-      try {
-        await env.STATS_DB.prepare(
-          `INSERT OR REPLACE INTO daily_snapshots (domain, score_date, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, findings_summary, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-          domain, scoreDate, domainScore.composite, domainScore.axes.security.score,
-          domainScore.axes.performance.score, domainScore.axes.reliability.score,
-          domainScore.axes.trust.score, domainScore.axes.visibility.score,
-          domainScore.archetype.detected, findingsSummary, scoredAt,
-        ).run();
-      } catch {
+        // Daily snapshot: one row per domain per day, overwrites with latest score + findings
         try {
           await env.STATS_DB.prepare(
-            `CREATE TABLE IF NOT EXISTS daily_snapshots (
+            `INSERT OR REPLACE INTO daily_snapshots (domain, score_date, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, findings_summary, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+            .bind(
+              domain,
+              scoreDate,
+              domainScore.composite,
+              domainScore.axes.security.score,
+              domainScore.axes.performance.score,
+              domainScore.axes.reliability.score,
+              domainScore.axes.trust.score,
+              domainScore.axes.visibility.score,
+              domainScore.archetype.detected,
+              findingsSummary,
+              scoredAt,
+            )
+            .run();
+        } catch {
+          try {
+            await env.STATS_DB.prepare(
+              `CREATE TABLE IF NOT EXISTS daily_snapshots (
               id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT NOT NULL,
               score_date TEXT NOT NULL, composite_score INTEGER NOT NULL,
               security_score INTEGER NOT NULL, performance_score INTEGER NOT NULL,
@@ -793,60 +1067,85 @@ export async function runAnalysis(
               visibility_score INTEGER NOT NULL, archetype TEXT NOT NULL,
               findings_summary TEXT, updated_at TEXT NOT NULL,
               UNIQUE(domain, score_date)
-            )`
-          ).run();
-          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_daily_snapshots_domain ON daily_snapshots(domain)`).run();
-          await env.STATS_DB.prepare(`CREATE INDEX IF NOT EXISTS idx_daily_snapshots_date ON daily_snapshots(score_date)`).run();
-          await env.STATS_DB.prepare(
-            `INSERT OR REPLACE INTO daily_snapshots (domain, score_date, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, findings_summary, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ).bind(
-            domain, scoreDate, domainScore.composite, domainScore.axes.security.score,
-            domainScore.axes.performance.score, domainScore.axes.reliability.score,
-            domainScore.axes.trust.score, domainScore.axes.visibility.score,
-            domainScore.archetype.detected, findingsSummary, scoredAt,
-          ).run();
-        } catch { /* daily snapshot migration failed — non-critical */ }
-      }
-    })());
+            )`,
+            ).run();
+            await env.STATS_DB.prepare(
+              `CREATE INDEX IF NOT EXISTS idx_daily_snapshots_domain ON daily_snapshots(domain)`,
+            ).run();
+            await env.STATS_DB.prepare(
+              `CREATE INDEX IF NOT EXISTS idx_daily_snapshots_date ON daily_snapshots(score_date)`,
+            ).run();
+            await env.STATS_DB.prepare(
+              `INSERT OR REPLACE INTO daily_snapshots (domain, score_date, composite_score, security_score, performance_score, reliability_score, trust_score, visibility_score, archetype, findings_summary, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+              .bind(
+                domain,
+                scoreDate,
+                domainScore.composite,
+                domainScore.axes.security.score,
+                domainScore.axes.performance.score,
+                domainScore.axes.reliability.score,
+                domainScore.axes.trust.score,
+                domainScore.axes.visibility.score,
+                domainScore.archetype.detected,
+                findingsSummary,
+                scoredAt,
+              )
+              .run();
+          } catch {
+            /* daily snapshot migration failed — non-critical */
+          }
+        }
+      })(),
+    );
   }
 
   // Cache result + recent lookup (non-blocking)
   // Skip caching when the site is unreachable — transient failures (deploys, blips)
   // shouldn't poison the cache for 24h
   const siteIsUp = result.status?.is_up !== false;
-  backgroundWork(env, (async () => {
-    if (!env.REFERENCE_DATA) return;
-    const cacheTtlSec = Math.max(60, Math.ceil(getAnalysisCacheTtlMs(env) / 1000));
+  backgroundWork(
+    env,
+    (async () => {
+      if (!env.REFERENCE_DATA) return;
+      const cacheTtlSec = Math.max(60, Math.ceil(getAnalysisCacheTtlMs(env) / 1000));
 
-    if (siteIsUp) {
+      if (siteIsUp) {
+        try {
+          const envelope = { data: result, cached_at: Date.now() };
+          await env.REFERENCE_DATA.put(`cache:analysis:${domain}`, JSON.stringify(envelope), {
+            expirationTtl: cacheTtlSec,
+          });
+        } catch (e) {
+          console.warn(`[yoke:cache] KV write failed for ${domain}:`, e instanceof Error ? e.message : e);
+        }
+      } else {
+        console.log(`[yoke:cache] Skipping cache write for ${domain} — site unreachable`);
+      }
+
+      // Recent lookups: maintain a JSON array in KV, prepend new entry, trim to 500
       try {
-        const envelope = { data: result, cached_at: Date.now() };
-        await env.REFERENCE_DATA.put(`cache:analysis:${domain}`, JSON.stringify(envelope), { expirationTtl: cacheTtlSec });
-      } catch (e) { console.warn(`[yoke:cache] KV write failed for ${domain}:`, e instanceof Error ? e.message : e); }
-    } else {
-      console.log(`[yoke:cache] Skipping cache write for ${domain} — site unreachable`);
-    }
-
-    // Recent lookups: maintain a JSON array in KV, prepend new entry, trim to 500
-    try {
-      const summaryJson = {
-        domain,
-        analyzed_at: new Date().toISOString(),
-        is_up: result.status?.is_up ?? null,
-        ssl_grade: result.ssl?.grade ?? null,
-        score: domainScore?.composite ?? null,
-        grade: domainScore?.grade ?? null,
-        archetype: domainScore?.archetype?.detected ?? null,
-      };
-      const existingRaw = await env.REFERENCE_DATA.get("recent:index", "text");
-      const existing: unknown[] = existingRaw ? JSON.parse(existingRaw) : [];
-      existing.unshift(summaryJson);
-      // Trim to 500 entries
-      if (existing.length > 500) existing.length = 500;
-      await env.REFERENCE_DATA.put("recent:index", JSON.stringify(existing));
-    } catch (e) { console.warn(`[yoke:lookups] KV write failed for ${domain}:`, e instanceof Error ? e.message : e); }
-  })());
+        const summaryJson = {
+          domain,
+          analyzed_at: new Date().toISOString(),
+          is_up: result.status?.is_up ?? null,
+          ssl_grade: result.ssl?.grade ?? null,
+          score: domainScore?.composite ?? null,
+          grade: domainScore?.grade ?? null,
+          archetype: domainScore?.archetype?.detected ?? null,
+        };
+        const existingRaw = await env.REFERENCE_DATA.get("recent:index", "text");
+        const existing: unknown[] = existingRaw ? JSON.parse(existingRaw) : [];
+        existing.unshift(summaryJson);
+        // Trim to 500 entries
+        if (existing.length > 500) existing.length = 500;
+        await env.REFERENCE_DATA.put("recent:index", JSON.stringify(existing));
+      } catch (e) {
+        console.warn(`[yoke:lookups] KV write failed for ${domain}:`, e instanceof Error ? e.message : e);
+      }
+    })(),
+  );
 
   return { kind: "complete", data: result };
 }

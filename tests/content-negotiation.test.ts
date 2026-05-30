@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
 import { wantsJSON } from "@worker/spa";
+import { describe, expect, it } from "vitest";
 
 function req(accept: string, ua: string = ""): Request {
   const headers: Record<string, string> = {};
-  if (accept) headers["Accept"] = accept;
+  if (accept) headers.Accept = accept;
   if (ua) headers["User-Agent"] = ua;
   return new Request("https://yoke.lol/stripe.com", { headers });
 }
@@ -68,7 +68,14 @@ describe("wantsJSON – content negotiation", () => {
     expect(wantsJSON(req("*/*", "Mozilla/5.0 (compatible; Instagrambot/1.0)"))).toBe(false);
   });
   it("returns false for Instagram in-app browser (FBAN)", () => {
-    expect(wantsJSON(req("*/*", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) Mobile/20G75 [FBAN/FBIOS;FBAV/428.0.0.38.109]"))).toBe(false);
+    expect(
+      wantsJSON(
+        req(
+          "*/*",
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) Mobile/20G75 [FBAN/FBIOS;FBAV/428.0.0.38.109]",
+        ),
+      ),
+    ).toBe(false);
   });
   it("returns false for Googlebot", () => {
     expect(wantsJSON(req("*/*", "Mozilla/5.0 (compatible; Googlebot/2.1)"))).toBe(false);

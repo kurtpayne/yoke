@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { gradeColor, severityColor, severityIcon } from "../utils/severity";
+import type { AnalysisResult, ArchetypeName, Axis, AxisScoreData } from "../utils/types";
 import { Tooltip } from "./Tooltip";
-import type { AnalysisResult, Axis, AxisScoreData, ArchetypeName } from "../utils/types";
-import { severityColor, severityIcon, gradeColor } from "../utils/severity";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -46,7 +46,13 @@ const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
 
 // Fixed axis weights — all archetypes use the same weights now.
 // SYNC: must match server AXIS_WEIGHTS in contextual-scoring.ts
-const FIXED_WEIGHTS: Record<Axis, number> = { security: 0.28, reliability: 0.25, performance: 0.20, visibility: 0.15, trust: 0.12 };
+const FIXED_WEIGHTS: Record<Axis, number> = {
+  security: 0.28,
+  reliability: 0.25,
+  performance: 0.2,
+  visibility: 0.15,
+  trust: 0.12,
+};
 
 // ─── Radar Plot SVG ──────────────────────────────────────────────────
 
@@ -56,10 +62,7 @@ const RADIUS = 75;
 const ANGLE_OFFSET = -Math.PI / 2; // start from top
 
 function polarToCartesian(angle: number, r: number): [number, number] {
-  return [
-    CENTER + r * Math.cos(angle + ANGLE_OFFSET),
-    CENTER + r * Math.sin(angle + ANGLE_OFFSET),
-  ];
+  return [CENTER + r * Math.cos(angle + ANGLE_OFFSET), CENTER + r * Math.sin(angle + ANGLE_OFFSET)];
 }
 
 function polygonPoints(values: number[], maxVal = 100): string {
@@ -123,7 +126,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
       // ease-out cubic
-      const eased = 1 - Math.pow(1 - t, 3);
+      const eased = 1 - (1 - t) ** 3;
       setAnimProgress(eased);
       if (t < 1) rafRef.current = requestAnimationFrame(animate);
     };
@@ -131,8 +134,8 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  const values = AXES.map(a => (axes[a].not_measured || axes[a].score == null) ? 0 : axes[a].score! * animProgress);
-  const rawScores = AXES.map(a => (axes[a].not_measured || axes[a].score == null) ? 0 : axes[a].score!);
+  const values = AXES.map((a) => (axes[a].not_measured || axes[a].score == null ? 0 : axes[a].score! * animProgress));
+  const rawScores = AXES.map((a) => (axes[a].not_measured || axes[a].score == null ? 0 : axes[a].score!));
   const dataPoints = polygonPoints(values);
 
   // Animated vertex positions for edge gradients
@@ -212,7 +215,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
         </defs>
 
         {/* Grid lines — accent-tinted with subtle glow */}
-        {[25, 50, 75, 100].map(level => {
+        {[25, 50, 75, 100].map((level) => {
           const op = level === 100 ? 0.22 : level === 75 ? 0.14 : level === 50 ? 0.09 : 0.05;
           return (
             <polygon
@@ -381,7 +384,8 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
           }}
         >
           <span style={{ fontWeight: 600, color: "var(--text)" }}>
-            {AXIS_LABELS[hoveredAxis]}: {axes[hoveredAxis].not_measured ? "Not measured" : `${axes[hoveredAxis].score}/100`}
+            {AXIS_LABELS[hoveredAxis]}:{" "}
+            {axes[hoveredAxis].not_measured ? "Not measured" : `${axes[hoveredAxis].score}/100`}
           </span>
           {!axes[hoveredAxis].not_measured && (
             <span style={{ color: "var(--dim)", marginLeft: 6 }}>
@@ -423,7 +427,16 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
       <div className="panel-header flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className="opacity-60">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           </span>
@@ -499,18 +512,39 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
 
             {/* Axis breakdown bars */}
             <div className="space-y-1.5">
-              {AXES.map(axis => {
+              {AXES.map((axis) => {
                 const a = ds.axes[axis];
                 const nm = a.not_measured || a.score == null;
                 return (
-                  <div key={axis} className="flex items-center gap-2" style={{ fontSize: "11px", opacity: nm ? 0.5 : 1 }}>
-                    <span style={{ fontFamily: "var(--font-ui)", color: "var(--dim)", width: 80, flexShrink: 0, fontWeight: 500 }}>
+                  <div
+                    key={axis}
+                    className="flex items-center gap-2"
+                    style={{ fontSize: "11px", opacity: nm ? 0.5 : 1 }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        color: "var(--dim)",
+                        width: 80,
+                        flexShrink: 0,
+                        fontWeight: 500,
+                      }}
+                    >
                       {AXIS_LABELS[axis]}
                     </span>
                     {nm ? (
                       <>
                         <div className="flex-1 h-1.5 rounded-full" style={{ background: "var(--border)" }} />
-                        <span style={{ fontFamily: "var(--font-ui)", fontSize: "9px", fontStyle: "italic", color: "var(--dim)", minWidth: 60, textAlign: "right" }}>
+                        <span
+                          style={{
+                            fontFamily: "var(--font-ui)",
+                            fontSize: "9px",
+                            fontStyle: "italic",
+                            color: "var(--dim)",
+                            minWidth: 60,
+                            textAlign: "right",
+                          }}
+                        >
                           Not measured
                         </span>
                       </>
@@ -521,12 +555,21 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
                             className="h-full rounded-full"
                             style={{
                               width: `${a.score}%`,
-                              background: a.score! >= 80 ? "var(--success)" : a.score! >= 60 ? "var(--warning)" : "var(--danger)",
+                              background:
+                                a.score! >= 80 ? "var(--success)" : a.score! >= 60 ? "var(--warning)" : "var(--danger)",
                               transition: "width 0.6s ease-out",
                             }}
                           />
                         </div>
-                        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--text)", minWidth: 24, textAlign: "right" }}>
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontWeight: 600,
+                            color: "var(--text)",
+                            minWidth: 24,
+                            textAlign: "right",
+                          }}
+                        >
                           {a.score}
                         </span>
                       </>
@@ -558,8 +601,8 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
 function TopFindings({ axes }: { axes: Record<Axis, AxisScoreData> }) {
   // Collect non-good findings across all axes, sorted by severity
   const severityOrder = ["critical", "high", "medium", "low", "info", "good"];
-  const allFindings = AXES.flatMap(a => axes[a].findings)
-    .filter(f => f.severity !== "good")
+  const allFindings = AXES.flatMap((a) => axes[a].findings)
+    .filter((f) => f.severity !== "good")
     .sort((a, b) => severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity))
     .slice(0, 6);
 
@@ -567,20 +610,32 @@ function TopFindings({ axes }: { axes: Record<Axis, AxisScoreData> }) {
 
   return (
     <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
-      <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+      <div
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "10px",
+          fontWeight: 600,
+          color: "var(--dim)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 6,
+        }}
+      >
         Key Findings
       </div>
       <div className="space-y-1">
         {allFindings.map((f, i) => (
-          <div key={`${f.signal}-${i}`} className="flex items-start gap-2" style={{ fontSize: "11px", lineHeight: "16px" }}>
+          <div
+            key={`${f.signal}-${i}`}
+            className="flex items-start gap-2"
+            style={{ fontSize: "11px", lineHeight: "16px" }}
+          >
             <span style={{ fontSize: "10px", flexShrink: 0, marginTop: 1 }}>{severityIcon(f.severity)}</span>
             <span style={{ fontFamily: "var(--font-ui)", color: severityColor(f.severity) }}>
               {f.label}
               {f.source && <Tooltip text={f.source} help />}
               {f.tradeoff && (
-                <span style={{ color: "var(--dim)", fontSize: "10px", marginLeft: 4 }}>
-                  — {f.tradeoff}
-                </span>
+                <span style={{ color: "var(--dim)", fontSize: "10px", marginLeft: 4 }}>— {f.tradeoff}</span>
               )}
             </span>
           </div>
@@ -602,7 +657,16 @@ export function AxisScoreBadge({ data, axis }: { data: AnalysisResult; axis: Axi
     return (
       <div className="flex items-center gap-2 px-1 mb-2">
         <div className="vital-pill" style={{ padding: "4px 10px", opacity: 0.5 }}>
-          <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <span
+            style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: "10px",
+              fontWeight: 600,
+              color: "var(--dim)",
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
             {AXIS_LABELS[axis]}
           </span>
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontStyle: "italic", color: "var(--dim)" }}>
@@ -619,12 +683,19 @@ export function AxisScoreBadge({ data, axis }: { data: AnalysisResult; axis: Axi
   return (
     <div className="flex items-center gap-2 px-1 mb-2">
       <div className="vital-pill" style={{ padding: "4px 10px" }}>
-        <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <span
+          style={{
+            fontFamily: "var(--font-ui)",
+            fontSize: "10px",
+            fontWeight: 600,
+            color: "var(--dim)",
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+          }}
+        >
           {AXIS_LABELS[axis]}
         </span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 700, color }}>
-          {score}
-        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 700, color }}>{score}</span>
         <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>/100</span>
       </div>
     </div>

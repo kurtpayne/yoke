@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Search, Loader2, Globe, Server, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Globe, Loader2, Search } from "lucide-react";
+import { useState } from "react";
 import { api } from "../api";
-import { Panel } from "./Panel";
+import type { ResolvedSubdomain, SubdomainScanResult } from "../utils/types";
 import { CliButton, subdomainCliCommands } from "./CliModal";
-import type { SubdomainScanResult, ResolvedSubdomain } from "../utils/types";
+import { Panel } from "./Panel";
 
 const CATEGORY_ICONS: Record<string, string> = {
   "Web & App": "🌐",
@@ -14,19 +14,27 @@ const CATEGORY_ICONS: Record<string, string> = {
   "Infrastructure & CDN": "🏗️",
   "Admin & Internal": "🔒",
   "Monitoring & Ops": "📊",
-  "Commerce": "🛒",
+  Commerce: "🛒",
   "Documentation & Support": "📚",
   "Marketing & Analytics": "📈",
-  "Security": "🛡️",
+  Security: "🛡️",
   "Cloud & DNS": "☁️",
 };
 
 // Category order for display
 const CATEGORY_ORDER = [
-  "Web & App", "API & Services", "Mail & Communication", "Commerce",
-  "Development & Staging", "Infrastructure & CDN", "Admin & Internal",
-  "Monitoring & Ops", "Documentation & Support", "Marketing & Analytics",
-  "Security", "Cloud & DNS",
+  "Web & App",
+  "API & Services",
+  "Mail & Communication",
+  "Commerce",
+  "Development & Staging",
+  "Infrastructure & CDN",
+  "Admin & Internal",
+  "Monitoring & Ops",
+  "Documentation & Support",
+  "Marketing & Analytics",
+  "Security",
+  "Cloud & DNS",
 ];
 
 function CategoryGroup({ category, subdomains }: { category: string; subdomains: ResolvedSubdomain[] }) {
@@ -50,7 +58,9 @@ function CategoryGroup({ category, subdomains }: { category: string; subdomains:
         }}
       >
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        <span>{CATEGORY_ICONS[category] || "📁"} {category}</span>
+        <span>
+          {CATEGORY_ICONS[category] || "📁"} {category}
+        </span>
         <span className="badge badge-info" style={{ fontSize: "9px", padding: "1px 6px" }}>
           {subdomains.length}
         </span>
@@ -58,7 +68,7 @@ function CategoryGroup({ category, subdomains }: { category: string; subdomains:
 
       {expanded && (
         <div className="ml-2">
-          {subdomains.map(sub => (
+          {subdomains.map((sub) => (
             <div
               key={sub.hostname}
               className="flex items-center gap-2 py-1 px-3"
@@ -69,7 +79,16 @@ function CategoryGroup({ category, subdomains }: { category: string; subdomains:
               }}
             >
               <Globe size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />
-              <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--text)",
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {sub.hostname}
               </span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)", flexShrink: 0 }}>
@@ -143,9 +162,7 @@ export function SubdomainScanPanel({ domain }: { domain: string }) {
       {scan.isPending && (
         <div className="p-4 flex flex-col items-center gap-2">
           <Loader2 size={18} className="animate-spin" style={{ color: "var(--accent)" }} />
-          <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)" }}>
-            Scanning subdomains…
-          </p>
+          <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)" }}>Scanning subdomains…</p>
         </div>
       )}
 
@@ -174,8 +191,13 @@ export function SubdomainScanPanel({ domain }: { domain: string }) {
       {data && (
         <div className="p-2">
           {/* Summary bar */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 mb-2" style={{ fontSize: "11px", fontFamily: "var(--font-ui)", color: "var(--dim)" }}>
-            <span><strong style={{ color: "var(--text)" }}>{data.total_found}</strong> subdomains found</span>
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 mb-2"
+            style={{ fontSize: "11px", fontFamily: "var(--font-ui)", color: "var(--dim)" }}
+          >
+            <span>
+              <strong style={{ color: "var(--text)" }}>{data.total_found}</strong> subdomains found
+            </span>
             <span style={{ color: "var(--border)" }}>|</span>
             <span>{data.total_scanned} prefixes scanned</span>
             {data.apex_ips.length > 0 && (
@@ -185,26 +207,25 @@ export function SubdomainScanPanel({ domain }: { domain: string }) {
               </>
             )}
             {data.cached && (
-              <span className="badge badge-neutral" style={{ fontSize: "9px", padding: "1px 5px" }}>cached</span>
+              <span className="badge badge-neutral" style={{ fontSize: "9px", padding: "1px 5px" }}>
+                cached
+              </span>
             )}
           </div>
 
           {/* Categories */}
           {data.total_found === 0 ? (
-            <div className="px-2 py-3" style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", textAlign: "center" }}>
+            <div
+              className="px-2 py-3"
+              style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", textAlign: "center" }}
+            >
               No subdomains found from the scanned prefixes.
             </div>
           ) : (
             <div className="space-y-1">
-              {CATEGORY_ORDER
-                .filter(cat => data.categories[cat]?.length > 0)
-                .map(cat => (
-                  <CategoryGroup
-                    key={cat}
-                    category={cat}
-                    subdomains={data.categories[cat]}
-                  />
-                ))}
+              {CATEGORY_ORDER.filter((cat) => data.categories[cat]?.length > 0).map((cat) => (
+                <CategoryGroup key={cat} category={cat} subdomains={data.categories[cat]} />
+              ))}
             </div>
           )}
         </div>

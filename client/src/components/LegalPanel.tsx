@@ -1,6 +1,6 @@
-import { Scale, Cookie, ExternalLink, CheckCircle, XCircle } from "lucide-react";
-import { Panel, DataRow, StatusBadge } from "./Panel";
+import { CheckCircle, Cookie, ExternalLink, Scale, XCircle } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
+import { DataRow, Panel, StatusBadge } from "./Panel";
 
 export function LegalPanel({ data }: { data: AnalysisResult }) {
   const legal = data.legal;
@@ -15,14 +15,17 @@ export function LegalPanel({ data }: { data: AnalysisResult }) {
       icon={<Scale size={14} />}
       badge={
         <div className="flex items-center gap-1.5">
-          <StatusBadge status={legal.pages_found.length >= 2 ? "pass" : legal.pages_found.length > 0 ? "warn" : "fail"} label={`${legal.pages_found.length} found`} />
+          <StatusBadge
+            status={legal.pages_found.length >= 2 ? "pass" : legal.pages_found.length > 0 ? "warn" : "fail"}
+            label={`${legal.pages_found.length} found`}
+          />
           {legal.cookie_consent_detected && <StatusBadge status="pass" label="Consent ✓" />}
         </div>
       }
     >
       {/* Page checklist */}
       <div className="sub-section">Legal Pages</div>
-      {expectedPages.map((name, i) => {
+      {expectedPages.map((name, _i) => {
         const found = foundNames.has(name);
         const page = legal.pages_found.find((p) => p.name === name);
         return (
@@ -33,10 +36,13 @@ export function LegalPanel({ data }: { data: AnalysisResult }) {
               ) : (
                 <XCircle size={12} style={{ color: "var(--dim)", flexShrink: 0 }} />
               )}
-              <span style={{
-                fontFamily: "var(--font-ui)", fontSize: "12px",
-                color: found ? "var(--text)" : "var(--dim)",
-              }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "12px",
+                  color: found ? "var(--text)" : "var(--dim)",
+                }}
+              >
                 {name}
               </span>
             </div>
@@ -60,18 +66,24 @@ export function LegalPanel({ data }: { data: AnalysisResult }) {
       <DataRow
         label="Consent Banner"
         value={
-          legal.cookie_consent_detected
-            ? <StatusBadge status="pass" label="Detected" />
-            : <StatusBadge status="neutral" label="Not detected" />
+          legal.cookie_consent_detected ? (
+            <StatusBadge status="pass" label="Detected" />
+          ) : (
+            <StatusBadge status="neutral" label="Not detected" />
+          )
         }
       />
       {legal.consent_provider && (
-        <DataRow label="Provider" value={
-          <div className="flex items-center gap-1.5">
-            <Cookie size={11} style={{ color: "var(--accent)" }} />
-            <span>{legal.consent_provider}</span>
-          </div>
-        } copyValue={legal.consent_provider} />
+        <DataRow
+          label="Provider"
+          value={
+            <div className="flex items-center gap-1.5">
+              <Cookie size={11} style={{ color: "var(--accent)" }} />
+              <span>{legal.consent_provider}</span>
+            </div>
+          }
+          copyValue={legal.consent_provider}
+        />
       )}
     </Panel>
   );

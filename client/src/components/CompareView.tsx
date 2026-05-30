@@ -1,7 +1,14 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { ArrowLeftRight, CheckCircle2, Circle, Link2, Loader2, Share2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { analyzeStream, type StreamEvent } from "../api";
-import { Search, Loader2, ArrowLeftRight, X, CheckCircle2, Circle, Link2, Share2 } from "lucide-react";
-import type { CompareResult, AnalysisResult, Axis, AxisScoreData, DomainScoreData, ArchetypeName } from "../utils/types";
+import type {
+  AnalysisResult,
+  ArchetypeName,
+  Axis,
+  AxisScoreData,
+  CompareResult,
+  DomainScoreData,
+} from "../utils/types";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -15,14 +22,23 @@ const AXIS_LABELS: Record<Axis, string> = {
 };
 
 const ARCHETYPE_ICONS: Record<string, string> = {
-  commerce: "🛒", content: "📝", application: "⚙️", corporate: "🏢",
-  infrastructure: "🔧", institutional: "🏛️", general: "🌐",
+  commerce: "🛒",
+  content: "📝",
+  application: "⚙️",
+  corporate: "🏢",
+  infrastructure: "🔧",
+  institutional: "🏛️",
+  general: "🌐",
 };
 
 const ARCHETYPE_LABELS: Record<string, string> = {
-  commerce: "Commerce", content: "Content", application: "Application",
-  corporate: "Corporate", infrastructure: "Infrastructure",
-  institutional: "Institutional", general: "General",
+  commerce: "Commerce",
+  content: "Content",
+  application: "Application",
+  corporate: "Corporate",
+  infrastructure: "Infrastructure",
+  institutional: "Institutional",
+  general: "General",
 };
 
 // ─── Streaming Compare Hook ──────────────────────────────────────────
@@ -43,7 +59,7 @@ function buildCompareResult(d1: AnalysisResult, d2: AnalysisResult): CompareResu
   const score1 = d1.domain_score as DomainScoreData | undefined;
   const score2 = d2.domain_score as DomainScoreData | undefined;
 
-  const axes: CompareResult["comparison"]["axes"] = AXES.map(axis => {
+  const axes: CompareResult["comparison"]["axes"] = AXES.map((axis) => {
     const s1 = score1?.axes?.[axis]?.score ?? 0;
     const s2 = score2?.axes?.[axis]?.score ?? 0;
     return { axis, score1: s1, score2: s2, delta: s1 - s2, absDelta: Math.abs(s1 - s2) };
@@ -83,8 +99,18 @@ function useStreamingCompare() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const d1 = domain1.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
-    const d2 = domain2.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+    const d1 = domain1
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "")
+      .replace(/^www\./, "");
+    const d2 = domain2
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/.*$/, "")
+      .replace(/^www\./, "");
     setDom1(d1);
     setDom2(d2);
     setIsPending(true);
@@ -103,13 +129,18 @@ function useStreamingCompare() {
       }
     };
 
-    const makeHandler = (setProgress: typeof setProgress1, setResult: (r: AnalysisResult) => void) =>
-      (evt: StreamEvent) => {
+    const makeHandler =
+      (setProgress: typeof setProgress1, setResult: (r: AnalysisResult) => void) => (evt: StreamEvent) => {
         if (controller.signal.aborted) return;
         switch (evt.type) {
           case "phase": {
-            const d = evt.data as { phase: string; label: string; total?: number; checks?: Array<{ key: string; label: string }> };
-            setProgress(prev => {
+            const d = evt.data as {
+              phase: string;
+              label: string;
+              total?: number;
+              checks?: Array<{ key: string; label: string }>;
+            };
+            setProgress((prev) => {
               const checks = new Map(prev.checks);
               if (d.phase === "phase2" && d.checks) {
                 for (const c of d.checks) {
@@ -124,7 +155,7 @@ function useStreamingCompare() {
           }
           case "result": {
             const d = evt.data as { key: string; label?: string; completed?: number; total?: number };
-            setProgress(prev => {
+            setProgress((prev) => {
               const checks = new Map(prev.checks);
               if (d.label && d.key) checks.set(d.key, { label: d.label, done: true });
               const completed = d.completed ?? prev.completed;
@@ -136,7 +167,7 @@ function useStreamingCompare() {
           case "done": {
             const result = evt.data as AnalysisResult;
             setResult(result);
-            setProgress(prev => ({ ...prev, done: true, label: "Done" }));
+            setProgress((prev) => ({ ...prev, done: true, label: "Done" }));
             break;
           }
           case "error": {
@@ -148,17 +179,22 @@ function useStreamingCompare() {
         }
       };
 
-    const handler1 = makeHandler(setProgress1, (r) => { result1 = r; checkBothDone(); });
-    const handler2 = makeHandler(setProgress2, (r) => { result2 = r; checkBothDone(); });
-
-    Promise.all([
-      analyzeStream(d1, handler1, controller.signal),
-      analyzeStream(d2, handler2, controller.signal),
-    ]).catch((err) => {
-      if (controller.signal.aborted) return;
-      setError(err instanceof Error ? err : new Error(String(err)));
-      setIsPending(false);
+    const handler1 = makeHandler(setProgress1, (r) => {
+      result1 = r;
+      checkBothDone();
     });
+    const handler2 = makeHandler(setProgress2, (r) => {
+      result2 = r;
+      checkBothDone();
+    });
+
+    Promise.all([analyzeStream(d1, handler1, controller.signal), analyzeStream(d2, handler2, controller.signal)]).catch(
+      (err) => {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setIsPending(false);
+      },
+    );
   }, []);
 
   const reset = useCallback(() => {
@@ -183,14 +219,22 @@ function CompareProgress({ domain, progress }: { domain: string; progress: Domai
     <div className="flex-1 min-w-0">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 min-w-0">
-          {progress.done
-            ? <CheckCircle2 size={13} style={{ color: "var(--success)", flexShrink: 0 }} />
-            : <Loader2 size={13} className="animate-spin" style={{ color: "var(--accent)", flexShrink: 0 }} />}
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: "12px", fontWeight: 600,
-            color: progress.done ? "var(--success)" : "var(--text)",
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
+          {progress.done ? (
+            <CheckCircle2 size={13} style={{ color: "var(--success)", flexShrink: 0 }} />
+          ) : (
+            <Loader2 size={13} className="animate-spin" style={{ color: "var(--accent)", flexShrink: 0 }} />
+          )}
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: progress.done ? "var(--success)" : "var(--text)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
             {domain}
           </span>
         </div>
@@ -209,17 +253,27 @@ function CompareProgress({ domain, progress }: { domain: string; progress: Domai
         />
       </div>
       {sortedChecks.length > 0 && (
-        <div className="mt-2" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "2px 8px" }}>
+        <div
+          className="mt-2"
+          style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: "2px 8px" }}
+        >
           {sortedChecks.map(([key, { label, done }]) => (
             <div key={key} className="flex items-center gap-1" style={{ opacity: done ? 1 : 0.4 }}>
-              {done
-                ? <CheckCircle2 size={9} style={{ color: "var(--success)", flexShrink: 0 }} />
-                : <Circle size={9} style={{ color: "var(--dim)", flexShrink: 0 }} />}
-              <span style={{
-                fontFamily: "var(--font-ui)", fontSize: "9px",
-                color: done ? "var(--text)" : "var(--dim)",
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>
+              {done ? (
+                <CheckCircle2 size={9} style={{ color: "var(--success)", flexShrink: 0 }} />
+              ) : (
+                <Circle size={9} style={{ color: "var(--dim)", flexShrink: 0 }} />
+              )}
+              <span
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "9px",
+                  color: done ? "var(--text)" : "var(--dim)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {label}
               </span>
             </div>
@@ -238,10 +292,7 @@ const RADIUS = 90;
 const ANGLE_OFFSET = -Math.PI / 2;
 
 function polarToCartesian(angle: number, r: number): [number, number] {
-  return [
-    CENTER + r * Math.cos(angle + ANGLE_OFFSET),
-    CENTER + r * Math.sin(angle + ANGLE_OFFSET),
-  ];
+  return [CENTER + r * Math.cos(angle + ANGLE_OFFSET), CENTER + r * Math.sin(angle + ANGLE_OFFSET)];
 }
 
 function polygonPoints(values: number[], maxVal = 100): string {
@@ -304,18 +355,18 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
     const animate = (now: number) => {
       const elapsed = now - start;
       const t = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
+      const eased = 1 - (1 - t) ** 3;
       setAnimProgress(eased);
       if (t < 1) rafRef.current = requestAnimationFrame(animate);
     };
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [axes1, axes2]);
+  }, []);
 
-  const vals1 = AXES.map(a => (axes1[a].score ?? 0) * animProgress);
-  const vals2 = AXES.map(a => (axes2[a].score ?? 0) * animProgress);
-  const rawScores1 = AXES.map(a => axes1[a].score ?? 0);
-  const rawScores2 = AXES.map(a => axes2[a].score ?? 0);
+  const vals1 = AXES.map((a) => (axes1[a].score ?? 0) * animProgress);
+  const vals2 = AXES.map((a) => (axes2[a].score ?? 0) * animProgress);
+  const rawScores1 = AXES.map((a) => axes1[a].score ?? 0);
+  const rawScores2 = AXES.map((a) => axes2[a].score ?? 0);
 
   // Animated vertex positions for edge gradients
   const vertices1 = AXES.map((_, i) => {
@@ -338,13 +389,28 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
   return (
     <div className="compare-radar-container">
       {/* Legend */}
-      <div className="flex items-center justify-center gap-4 mb-2" style={{ fontSize: "11px", fontFamily: "var(--font-ui)" }}>
+      <div
+        className="flex items-center justify-center gap-4 mb-2"
+        style={{ fontSize: "11px", fontFamily: "var(--font-ui)" }}
+      >
         <span className="flex items-center gap-1.5">
-          <span style={{ width: 12, height: 3, background: "var(--accent)", display: "inline-block", borderRadius: 2 }} />
+          <span
+            style={{ width: 12, height: 3, background: "var(--accent)", display: "inline-block", borderRadius: 2 }}
+          />
           <span style={{ color: "var(--text)", fontWeight: 600 }}>{domain1}</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span style={{ width: 12, height: 3, background: d2Color, display: "inline-block", borderRadius: 2, backgroundImage: "repeating-linear-gradient(90deg, transparent, transparent 4px, var(--bg) 4px, var(--bg) 6px)" }} />
+          <span
+            style={{
+              width: 12,
+              height: 3,
+              background: d2Color,
+              display: "inline-block",
+              borderRadius: 2,
+              backgroundImage:
+                "repeating-linear-gradient(90deg, transparent, transparent 4px, var(--bg) 4px, var(--bg) 6px)",
+            }}
+          />
           <span style={{ color: "var(--text)", fontWeight: 600 }}>{domain2}</span>
         </span>
       </div>
@@ -395,11 +461,25 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
               const op1 = radarEdgeOpacity(rawScores1[j]);
               return (
                 <g key={`d1-eg-defs-${i}`}>
-                  <linearGradient id={`${crUid}-eg1-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                  <linearGradient
+                    id={`${crUid}-eg1-${i}`}
+                    gradientUnits="userSpaceOnUse"
+                    x1={x0}
+                    y1={y0}
+                    x2={x1}
+                    y2={y1}
+                  >
                     <stop offset="0%" stopColor="var(--accent)" stopOpacity={op0} />
                     <stop offset="100%" stopColor="var(--accent)" stopOpacity={op1} />
                   </linearGradient>
-                  <linearGradient id={`${crUid}-eglg1-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                  <linearGradient
+                    id={`${crUid}-eglg1-${i}`}
+                    gradientUnits="userSpaceOnUse"
+                    x1={x0}
+                    y1={y0}
+                    x2={x1}
+                    y2={y1}
+                  >
                     <stop offset="0%" stopColor="var(--accent)" stopOpacity={op0 * 0.35} />
                     <stop offset="100%" stopColor="var(--accent)" stopOpacity={op1 * 0.35} />
                   </linearGradient>
@@ -412,11 +492,11 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
               <stop offset="0%" stopColor={coreColor} stopOpacity={coreOpacity * 0.6} />
               <stop offset="5%" stopColor={d2Color} stopOpacity={0.03} />
               <stop offset="12%" stopColor={d2Color} stopOpacity={0.06} />
-              <stop offset="25%" stopColor={d2Color} stopOpacity={0.10} />
+              <stop offset="25%" stopColor={d2Color} stopOpacity={0.1} />
               <stop offset="40%" stopColor={d2Color} stopOpacity={0.18} />
               <stop offset="55%" stopColor={d2Color} stopOpacity={0.28} />
               <stop offset="70%" stopColor={d2Color} stopOpacity={0.38} />
-              <stop offset="85%" stopColor={d2Color} stopOpacity={0.50} />
+              <stop offset="85%" stopColor={d2Color} stopOpacity={0.5} />
               <stop offset="100%" stopColor={d2Color} stopOpacity={edgeSaturation * 0.7} />
             </radialGradient>
             <clipPath id={`${crUid}-clip2`}>
@@ -435,11 +515,25 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
               const op1 = radarEdgeOpacity(rawScores2[j]);
               return (
                 <g key={`d2-eg-defs-${i}`}>
-                  <linearGradient id={`${crUid}-eg2-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                  <linearGradient
+                    id={`${crUid}-eg2-${i}`}
+                    gradientUnits="userSpaceOnUse"
+                    x1={x0}
+                    y1={y0}
+                    x2={x1}
+                    y2={y1}
+                  >
                     <stop offset="0%" stopColor={d2Color} stopOpacity={op0 * 0.9} />
                     <stop offset="100%" stopColor={d2Color} stopOpacity={op1 * 0.9} />
                   </linearGradient>
-                  <linearGradient id={`${crUid}-eglg2-${i}`} gradientUnits="userSpaceOnUse" x1={x0} y1={y0} x2={x1} y2={y1}>
+                  <linearGradient
+                    id={`${crUid}-eglg2-${i}`}
+                    gradientUnits="userSpaceOnUse"
+                    x1={x0}
+                    y1={y0}
+                    x2={x1}
+                    y2={y1}
+                  >
                     <stop offset="0%" stopColor={d2Color} stopOpacity={op0 * 0.25} />
                     <stop offset="100%" stopColor={d2Color} stopOpacity={op1 * 0.25} />
                   </linearGradient>
@@ -449,7 +543,7 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
           </defs>
 
           {/* Grid lines — accent-tinted with subtle glow */}
-          {[25, 50, 75, 100].map(level => {
+          {[25, 50, 75, 100].map((level) => {
             const op = level === 100 ? 0.22 : level === 75 ? 0.14 : level === 50 ? 0.09 : 0.05;
             return (
               <polygon
@@ -469,8 +563,16 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             const angle = (2 * Math.PI * i) / AXES.length;
             const [x, y] = polarToCartesian(angle, RADIUS);
             return (
-              <line key={i} x1={CENTER} y1={CENTER} x2={x} y2={y}
-                stroke="var(--accent)" strokeWidth={0.4} opacity={0.12} />
+              <line
+                key={i}
+                x1={CENTER}
+                y1={CENTER}
+                x2={x}
+                y2={y}
+                stroke="var(--accent)"
+                strokeWidth={0.4}
+                opacity={0.12}
+              />
             );
           })}
 
@@ -485,9 +587,17 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             const [x0, y0] = vertices1[i];
             const [x1, y1] = vertices1[j];
             return (
-              <line key={`glow1-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
-                stroke={`url(#${crUid}-eglg1-${i})`} strokeWidth={5}
-                strokeLinecap="round" filter={`url(#${crUid}-egl1)`} />
+              <line
+                key={`glow1-${i}`}
+                x1={x0}
+                y1={y0}
+                x2={x1}
+                y2={y1}
+                stroke={`url(#${crUid}-eglg1-${i})`}
+                strokeWidth={5}
+                strokeLinecap="round"
+                filter={`url(#${crUid}-egl1)`}
+              />
             );
           })}
 
@@ -497,9 +607,16 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             const [x0, y0] = vertices1[i];
             const [x1, y1] = vertices1[j];
             return (
-              <line key={`edge1-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
-                stroke={`url(#${crUid}-eg1-${i})`} strokeWidth={1.5}
-                strokeLinecap="round" />
+              <line
+                key={`edge1-${i}`}
+                x1={x0}
+                y1={y0}
+                x2={x1}
+                y2={y1}
+                stroke={`url(#${crUid}-eg1-${i})`}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+              />
             );
           })}
 
@@ -514,9 +631,17 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             const [x0, y0] = vertices2[i];
             const [x1, y1] = vertices2[j];
             return (
-              <line key={`glow2-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
-                stroke={`url(#${crUid}-eglg2-${i})`} strokeWidth={4}
-                strokeLinecap="round" filter={`url(#${crUid}-egl2)`} />
+              <line
+                key={`glow2-${i}`}
+                x1={x0}
+                y1={y0}
+                x2={x1}
+                y2={y1}
+                stroke={`url(#${crUid}-eglg2-${i})`}
+                strokeWidth={4}
+                strokeLinecap="round"
+                filter={`url(#${crUid}-egl2)`}
+              />
             );
           })}
 
@@ -526,9 +651,17 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             const [x0, y0] = vertices2[i];
             const [x1, y1] = vertices2[j];
             return (
-              <line key={`edge2-${i}`} x1={x0} y1={y0} x2={x1} y2={y1}
-                stroke={`url(#${crUid}-eg2-${i})`} strokeWidth={1.5}
-                strokeLinecap="round" strokeDasharray="6 3" />
+              <line
+                key={`edge2-${i}`}
+                x1={x0}
+                y1={y0}
+                x2={x1}
+                y2={y1}
+                stroke={`url(#${crUid}-eg2-${i})`}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeDasharray="6 3"
+              />
             );
           })}
 
@@ -543,13 +676,18 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             const isHovered = hoveredAxis === axis;
             return (
               <g key={axis}>
-                <text x={x} y={y}
-                  textAnchor="middle" dominantBaseline="central"
+                <text
+                  x={x}
+                  y={y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
                   style={{
-                    fontFamily: "var(--font-ui)", fontSize: "10px",
+                    fontFamily: "var(--font-ui)",
+                    fontSize: "10px",
                     fontWeight: isHovered ? 600 : 500,
                     fill: isHovered ? "var(--text)" : "var(--dim)",
-                    cursor: "default", transition: "fill 0.15s",
+                    cursor: "default",
+                    transition: "fill 0.15s",
                   }}
                   onMouseEnter={() => setHoveredAxis(axis)}
                   onMouseLeave={() => setHoveredAxis(null)}
@@ -557,10 +695,15 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
                   {AXIS_LABELS[axis]}
                 </text>
                 {/* Score pair under label */}
-                <text x={x} y={y + 12}
-                  textAnchor="middle" dominantBaseline="central"
+                <text
+                  x={x}
+                  y={y + 12}
+                  textAnchor="middle"
+                  dominantBaseline="central"
                   style={{
-                    fontFamily: "var(--font-mono)", fontSize: "9px", fontWeight: 600,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "9px",
+                    fontWeight: 600,
                     opacity: isHovered ? 1 : 0.6,
                   }}
                 >
@@ -577,23 +720,36 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
             const angle = (2 * Math.PI * i) / AXES.length;
             const [x, y] = polarToCartesian(angle, RADIUS * 0.6);
             return (
-              <circle key={`zone-${axis}`} cx={x} cy={y} r={26}
-                fill="transparent" style={{ cursor: "default" }}
+              <circle
+                key={`zone-${axis}`}
+                cx={x}
+                cy={y}
+                r={26}
+                fill="transparent"
+                style={{ cursor: "default" }}
                 onMouseEnter={() => setHoveredAxis(axis)}
-                onMouseLeave={() => setHoveredAxis(null)} />
+                onMouseLeave={() => setHoveredAxis(null)}
+              />
             );
           })}
         </svg>
 
         {/* Hover tooltip */}
         {hoveredAxis && (
-          <div className="absolute z-10 p-2 rounded-md"
+          <div
+            className="absolute z-10 p-2 rounded-md"
             style={{
-              background: "var(--surface-raised)", border: "1px solid var(--border)",
-              fontSize: "11px", fontFamily: "var(--font-ui)",
-              left: "50%", bottom: -8, transform: "translateX(-50%)",
-              whiteSpace: "nowrap", pointerEvents: "none",
-            }}>
+              background: "var(--surface-raised)",
+              border: "1px solid var(--border)",
+              fontSize: "11px",
+              fontFamily: "var(--font-ui)",
+              left: "50%",
+              bottom: -8,
+              transform: "translateX(-50%)",
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+            }}
+          >
             <span style={{ color: "var(--accent)", fontWeight: 600 }}>{axes1[hoveredAxis].score ?? "N/M"}</span>
             <span style={{ color: "var(--dim)", margin: "0 4px" }}>vs</span>
             <span style={{ color: d2Color, fontWeight: 600 }}>{axes2[hoveredAxis].score ?? "N/M"}</span>
@@ -633,10 +789,10 @@ const SHARE_AXIS_ORDER: Axis[] = ["security", "reliability", "trust", "performan
 
 function buildComparePayload(data: CompareResult): string {
   // Build axis arrays in the canonical share order from comparison axes
-  const axisMap1 = new Map(data.comparison.axes.map(a => [a.axis, a.score1]));
-  const axisMap2 = new Map(data.comparison.axes.map(a => [a.axis, a.score2]));
-  const a1 = SHARE_AXIS_ORDER.map(a => axisMap1.get(a) ?? 0);
-  const a2 = SHARE_AXIS_ORDER.map(a => axisMap2.get(a) ?? 0);
+  const axisMap1 = new Map(data.comparison.axes.map((a) => [a.axis, a.score1]));
+  const axisMap2 = new Map(data.comparison.axes.map((a) => [a.axis, a.score2]));
+  const a1 = SHARE_AXIS_ORDER.map((a) => axisMap1.get(a) ?? 0);
+  const a2 = SHARE_AXIS_ORDER.map((a) => axisMap2.get(a) ?? 0);
   const obj = {
     d1: data.domain1.domain,
     d2: data.domain2.domain,
@@ -644,7 +800,8 @@ function buildComparePayload(data: CompareResult): string {
     s2: data.comparison.composite.score2 ?? 0,
     g1: data.comparison.composite.grade1 ?? "?",
     g2: data.comparison.composite.grade2 ?? "?",
-    a1, a2,
+    a1,
+    a2,
     t: Math.floor(Date.now() / 1000),
   };
   return base64urlEncode(new TextEncoder().encode(JSON.stringify(obj)));
@@ -657,7 +814,7 @@ async function getCompareSignedUrl(payload: string, origin: string): Promise<str
     body: JSON.stringify({ payload }),
   });
   if (!resp.ok) throw new Error("Failed to sign compare share payload");
-  const result = await resp.json() as { signature: string };
+  const result = (await resp.json()) as { signature: string };
   return `${origin}/c/${payload}.${result.signature}`;
 }
 
@@ -673,14 +830,16 @@ function CompareShareBar({ data }: { data: CompareResult }) {
     const payload = buildComparePayload(data);
     const promise = getCompareSignedUrl(payload, window.location.origin);
     signingRef.current = promise;
-    promise.then(url => {
-      if (signingRef.current === promise) setShareUrl(url);
-    }).catch(() => {
-      // Fallback to plain compare URL
-      if (signingRef.current === promise) {
-        setShareUrl(`${window.location.origin}/compare/${data.domain1.domain}/${data.domain2.domain}`);
-      }
-    });
+    promise
+      .then((url) => {
+        if (signingRef.current === promise) setShareUrl(url);
+      })
+      .catch(() => {
+        // Fallback to plain compare URL
+        if (signingRef.current === promise) {
+          setShareUrl(`${window.location.origin}/compare/${data.domain1.domain}/${data.domain2.domain}`);
+        }
+      });
   }, [data]);
 
   const currentUrl = shareUrl ?? `${window.location.origin}/compare/${data.domain1.domain}/${data.domain2.domain}`;
@@ -706,21 +865,24 @@ function CompareShareBar({ data }: { data: CompareResult }) {
   const shareToX = useCallback(() => {
     window.open(
       `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(currentUrl)}`,
-      "_blank", "noopener,noreferrer,width=550,height=420"
+      "_blank",
+      "noopener,noreferrer,width=550,height=420",
     );
   }, [currentUrl, shareText]);
 
   const shareToLinkedIn = useCallback(() => {
     window.open(
       `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(currentUrl)}`,
-      "_blank", "noopener,noreferrer,width=600,height=500"
+      "_blank",
+      "noopener,noreferrer,width=600,height=500",
     );
   }, [currentUrl]);
 
   const shareToReddit = useCallback(() => {
     window.open(
       `https://reddit.com/submit?url=${encodeURIComponent(currentUrl)}&title=${encodeURIComponent(shareText)}`,
-      "_blank", "noopener,noreferrer"
+      "_blank",
+      "noopener,noreferrer",
     );
   }, [currentUrl, shareText]);
 
@@ -728,7 +890,9 @@ function CompareShareBar({ data }: { data: CompareResult }) {
     if (navigator.share) {
       try {
         await navigator.share({ title: shareText, text: shareText, url: currentUrl });
-      } catch { /* cancelled */ }
+      } catch {
+        /* cancelled */
+      }
     }
   }, [currentUrl, shareText]);
 
@@ -812,37 +976,66 @@ function deltaDisplay(delta: number): { text: string; color: string } {
 
 // ─── Compact Score Card ──────────────────────────────────────────────
 
-function ScoreCard({ domain, score, grade, archetype, color }: {
-  domain: string; score: number; grade: string; archetype: string | null; color: string;
+function ScoreCard({
+  domain,
+  score,
+  grade,
+  archetype,
+  color,
+}: {
+  domain: string;
+  score: number;
+  grade: string;
+  archetype: string | null;
+  color: string;
 }) {
   return (
     <div className="flex items-center gap-3 min-w-0">
       <div style={{ textAlign: "center", flexShrink: 0 }}>
-        <div style={{
-          fontFamily: "var(--font-mono)", fontSize: "32px", fontWeight: 700,
-          lineHeight: "1", color: scoreColor(score),
-        }}>
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "32px",
+            fontWeight: 700,
+            lineHeight: "1",
+            color: scoreColor(score),
+          }}
+        >
           {score}
         </div>
-        <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", marginTop: 1 }}>
-          /100
-        </div>
+        <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", marginTop: 1 }}>/100</div>
       </div>
-      <div style={{
-        width: 36, height: 36, borderRadius: "var(--radius)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "var(--font-mono)", fontSize: "18px", fontWeight: 700,
-        color: gradeColor(grade), flexShrink: 0,
-        background: `color-mix(in srgb, ${gradeColor(grade)} 10%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${gradeColor(grade)} 20%, transparent)`,
-      }}>
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: "var(--radius)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "var(--font-mono)",
+          fontSize: "18px",
+          fontWeight: 700,
+          color: gradeColor(grade),
+          flexShrink: 0,
+          background: `color-mix(in srgb, ${gradeColor(grade)} 10%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${gradeColor(grade)} 20%, transparent)`,
+        }}
+      >
         {grade}
       </div>
       <div className="min-w-0">
-        <div style={{
-          fontFamily: "var(--font-mono)", fontSize: "13px", fontWeight: 600,
-          color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "13px",
+            fontWeight: 600,
+            color,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {domain}
         </div>
         {archetype && (
@@ -860,7 +1053,7 @@ function ScoreCard({ domain, score, grade, archetype, color }: {
 export function CompareView({ initialDomain }: { initialDomain?: string }) {
   const [domain1, setDomain1] = useState(initialDomain ?? "");
   const [domain2, setDomain2] = useState("");
-  const [narrow, setNarrow] = useState(false);
+  const [_narrow, setNarrow] = useState(false);
 
   useEffect(() => {
     const check = () => setNarrow(window.innerWidth < 500);
@@ -906,7 +1099,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
     if (match && !compare.data && !compare.isPending) {
       compare.mutate({ domain1: match[1], domain2: match[2] });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [compare.mutate, compare.isPending, compare.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const swap = () => {
     setDomain1(domain2);
@@ -925,13 +1118,18 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
           <input
             type="text"
             value={domain1}
-            onChange={e => setDomain1(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") doCompare(); }}
+            onChange={(e) => setDomain1(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") doCompare();
+            }}
             placeholder="domain1.com"
             className="flex-1 bg-transparent px-3 py-2 rounded-md outline-none"
             style={{
-              fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--accent)",
-              border: "1px solid var(--border)", background: "var(--surface)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "13px",
+              color: "var(--accent)",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
             }}
             disabled={compare.isPending}
           />
@@ -941,8 +1139,11 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
             onClick={swap}
             className="flex items-center justify-center px-2 py-1 rounded-md self-center"
             style={{
-              border: "1px solid var(--border)", background: "var(--surface)",
-              color: "var(--dim)", cursor: "pointer", flexShrink: 0,
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              color: "var(--dim)",
+              cursor: "pointer",
+              flexShrink: 0,
             }}
             title="Swap domains"
           >
@@ -952,13 +1153,18 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
           <input
             type="text"
             value={domain2}
-            onChange={e => setDomain2(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") doCompare(); }}
+            onChange={(e) => setDomain2(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") doCompare();
+            }}
             placeholder="domain2.com"
             className="flex-1 bg-transparent px-3 py-2 rounded-md outline-none"
             style={{
-              fontFamily: "var(--font-mono)", fontSize: "13px", color: "#f97316",
-              border: "1px solid var(--border)", background: "var(--surface)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "13px",
+              color: "#f97316",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
             }}
             disabled={compare.isPending}
           />
@@ -969,9 +1175,13 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
             disabled={compare.isPending || !domain1.trim() || !domain2.trim()}
             className="flex items-center gap-2 px-4 py-2 rounded-md transition-all disabled:opacity-30"
             style={{
-              background: "var(--accent)", color: "var(--accent-fg)",
-              fontFamily: "var(--font-ui)", fontSize: "13px", fontWeight: 600,
-              cursor: compare.isPending ? "default" : "pointer", border: "none",
+              background: "var(--accent)",
+              color: "var(--accent-fg)",
+              fontFamily: "var(--font-ui)",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: compare.isPending ? "default" : "pointer",
+              border: "none",
               flexShrink: 0,
             }}
           >
@@ -1021,14 +1231,30 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                 color="var(--accent)"
               />
               <div className="hidden sm:flex flex-col items-center" style={{ flexShrink: 0 }}>
-                <div style={{
-                  fontFamily: "var(--font-mono)", fontSize: "14px", fontWeight: 700,
-                  color: data.comparison.composite.delta > 0 ? "var(--success)"
-                    : data.comparison.composite.delta < 0 ? "var(--danger)" : "var(--dim)",
-                }}>
-                  {data.comparison.composite.delta > 0 ? "+" : ""}{data.comparison.composite.delta}
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color:
+                      data.comparison.composite.delta > 0
+                        ? "var(--success)"
+                        : data.comparison.composite.delta < 0
+                          ? "var(--danger)"
+                          : "var(--dim)",
+                  }}
+                >
+                  {data.comparison.composite.delta > 0 ? "+" : ""}
+                  {data.comparison.composite.delta}
                 </div>
-                <div style={{ fontFamily: "var(--font-ui)", fontSize: "9px", color: "var(--dim)", textTransform: "uppercase" }}>
+                <div
+                  style={{
+                    fontFamily: "var(--font-ui)",
+                    fontSize: "9px",
+                    color: "var(--dim)",
+                    textTransform: "uppercase",
+                  }}
+                >
                   delta
                 </div>
               </div>
@@ -1050,7 +1276,16 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
             <div className="panel-header mb-3" style={{ padding: 0, border: "none" }}>
               <span className="flex items-center gap-2">
                 <span className="opacity-60">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </span>
@@ -1070,51 +1305,97 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
 
           {/* Axis comparison bars */}
           <div className="panel p-4">
-            <div style={{
-              fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600,
-              color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.06em",
-              marginBottom: 10,
-            }}>
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "10px",
+                fontWeight: 600,
+                color: "var(--dim)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                marginBottom: 10,
+              }}
+            >
               Per-Axis Breakdown
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {data.comparison.axes.map(ax => {
+              {data.comparison.axes.map((ax) => {
                 const d = deltaDisplay(ax.delta);
                 const isBigDiff = ax.absDelta >= 15;
                 return (
                   <div key={ax.axis} className="flex items-center gap-2" style={{ minHeight: 20 }}>
                     {/* Axis label + delta */}
-                    <div style={{
-                      fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 600,
-                      color: isBigDiff ? "var(--text)" : "var(--dim)",
-                      minWidth: 82, flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
-                    }}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-ui)",
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: isBigDiff ? "var(--text)" : "var(--dim)",
+                        minWidth: 82,
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
                       {AXIS_LABELS[ax.axis]}
                       {isBigDiff && <span style={{ fontSize: "9px", color: "var(--warning)" }}>★</span>}
                       {d.text && (
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: d.color }}>
+                        <span
+                          style={{ fontFamily: "var(--font-mono)", fontSize: "10px", fontWeight: 700, color: d.color }}
+                        >
                           {d.text}
                         </span>
                       )}
                     </div>
                     {/* Score 1 */}
-                    <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600, fontSize: "11px", minWidth: 22, textAlign: "right", flexShrink: 0 }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        color: "var(--accent)",
+                        fontWeight: 600,
+                        fontSize: "11px",
+                        minWidth: 22,
+                        textAlign: "right",
+                        flexShrink: 0,
+                      }}
+                    >
                       {ax.score1}
                     </span>
                     {/* Bars */}
                     <div className="flex-1 relative" style={{ height: 8, borderRadius: 4 }}>
                       <div className="absolute inset-0 rounded" style={{ background: "var(--border)", opacity: 0.5 }} />
-                      <div className="absolute top-0 left-0 rounded" style={{
-                        height: 4, width: `${ax.score1}%`,
-                        background: "var(--accent)", transition: "width 0.6s ease-out",
-                      }} />
-                      <div className="absolute bottom-0 left-0 rounded" style={{
-                        height: 4, width: `${ax.score2}%`,
-                        background: "#f97316", transition: "width 0.6s ease-out",
-                      }} />
+                      <div
+                        className="absolute top-0 left-0 rounded"
+                        style={{
+                          height: 4,
+                          width: `${ax.score1}%`,
+                          background: "var(--accent)",
+                          transition: "width 0.6s ease-out",
+                        }}
+                      />
+                      <div
+                        className="absolute bottom-0 left-0 rounded"
+                        style={{
+                          height: 4,
+                          width: `${ax.score2}%`,
+                          background: "#f97316",
+                          transition: "width 0.6s ease-out",
+                        }}
+                      />
                     </div>
                     {/* Score 2 */}
-                    <span style={{ fontFamily: "var(--font-mono)", color: "#f97316", fontWeight: 600, fontSize: "11px", minWidth: 22, textAlign: "left", flexShrink: 0 }}>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        color: "#f97316",
+                        fontWeight: 600,
+                        fontSize: "11px",
+                        minWidth: 22,
+                        textAlign: "left",
+                        flexShrink: 0,
+                      }}
+                    >
                       {ax.score2}
                     </span>
                   </div>
@@ -1157,7 +1438,11 @@ function KeyDifferences({ data }: { data: CompareResult }) {
 
   // Security headers grade
   if (d1.headers?.security_grade !== d2.headers?.security_grade) {
-    diffs.push({ label: "Security Headers", domain1: d1.headers?.security_grade ?? "N/A", domain2: d2.headers?.security_grade ?? "N/A" });
+    diffs.push({
+      label: "Security Headers",
+      domain1: d1.headers?.security_grade ?? "N/A",
+      domain2: d2.headers?.security_grade ?? "N/A",
+    });
   }
 
   // HTTP/2 vs HTTP/3
@@ -1169,7 +1454,11 @@ function KeyDifferences({ data }: { data: CompareResult }) {
 
   // DNSSEC
   if (d1.dnssec?.enabled !== d2.dnssec?.enabled) {
-    diffs.push({ label: "DNSSEC", domain1: d1.dnssec?.enabled ? "Enabled" : "Off", domain2: d2.dnssec?.enabled ? "Enabled" : "Off" });
+    diffs.push({
+      label: "DNSSEC",
+      domain1: d1.dnssec?.enabled ? "Enabled" : "Off",
+      domain2: d2.dnssec?.enabled ? "Enabled" : "Off",
+    });
   }
 
   // CDN
@@ -1204,14 +1493,22 @@ function KeyDifferences({ data }: { data: CompareResult }) {
   const tr1 = d1.tranco_rank;
   const tr2 = d2.tranco_rank;
   if ((tr1 ?? 0) !== (tr2 ?? 0)) {
-    diffs.push({ label: "Tranco Rank", domain1: tr1 ? `#${tr1.toLocaleString()}` : "Unranked", domain2: tr2 ? `#${tr2.toLocaleString()}` : "Unranked" });
+    diffs.push({
+      label: "Tranco Rank",
+      domain1: tr1 ? `#${tr1.toLocaleString()}` : "Unranked",
+      domain2: tr2 ? `#${tr2.toLocaleString()}` : "Unranked",
+    });
   }
 
   // Connection timing
   const ct1 = d1.network_health?.connection_timing;
   const ct2 = d2.network_health?.connection_timing;
   if (ct1 && ct2 && Math.abs(ct1.total_ms - ct2.total_ms) >= 50) {
-    diffs.push({ label: "Connection Time", domain1: `${Math.round(ct1.total_ms)}ms`, domain2: `${Math.round(ct2.total_ms)}ms` });
+    diffs.push({
+      label: "Connection Time",
+      domain1: `${Math.round(ct1.total_ms)}ms`,
+      domain2: `${Math.round(ct2.total_ms)}ms`,
+    });
   }
 
   // Routing stability
@@ -1226,35 +1523,93 @@ function KeyDifferences({ data }: { data: CompareResult }) {
   const dc1 = d1.network_health?.dns_propagation?.consistent;
   const dc2 = d2.network_health?.dns_propagation?.consistent;
   if (dc1 != null && dc2 != null && dc1 !== dc2) {
-    diffs.push({ label: "DNS Consistency", domain1: dc1 ? "Consistent" : "Inconsistent", domain2: dc2 ? "Consistent" : "Inconsistent" });
+    diffs.push({
+      label: "DNS Consistency",
+      domain1: dc1 ? "Consistent" : "Inconsistent",
+      domain2: dc2 ? "Consistent" : "Inconsistent",
+    });
   }
 
   if (diffs.length === 0) return null;
 
   return (
     <div className="panel p-4">
-      <div style={{
-        fontFamily: "var(--font-ui)", fontSize: "10px", fontWeight: 600,
-        color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.06em",
-        marginBottom: 8,
-      }}>
+      <div
+        style={{
+          fontFamily: "var(--font-ui)",
+          fontSize: "10px",
+          fontWeight: 600,
+          color: "var(--dim)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 8,
+        }}
+      >
         Key Differences
       </div>
       <div className="overflow-x-auto">
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", fontFamily: "var(--font-ui)" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              <th style={{ textAlign: "left", padding: "4px 8px 4px 0", color: "var(--dim)", fontWeight: 500, fontSize: "10px" }}>Signal</th>
-              <th style={{ textAlign: "center", padding: "4px 8px", color: "var(--accent)", fontWeight: 600, fontSize: "10px" }}>{data.domain1.domain}</th>
-              <th style={{ textAlign: "center", padding: "4px 0 4px 8px", color: "#f97316", fontWeight: 600, fontSize: "10px" }}>{data.domain2.domain}</th>
+              <th
+                style={{
+                  textAlign: "left",
+                  padding: "4px 8px 4px 0",
+                  color: "var(--dim)",
+                  fontWeight: 500,
+                  fontSize: "10px",
+                }}
+              >
+                Signal
+              </th>
+              <th
+                style={{
+                  textAlign: "center",
+                  padding: "4px 8px",
+                  color: "var(--accent)",
+                  fontWeight: 600,
+                  fontSize: "10px",
+                }}
+              >
+                {data.domain1.domain}
+              </th>
+              <th
+                style={{
+                  textAlign: "center",
+                  padding: "4px 0 4px 8px",
+                  color: "#f97316",
+                  fontWeight: 600,
+                  fontSize: "10px",
+                }}
+              >
+                {data.domain2.domain}
+              </th>
             </tr>
           </thead>
           <tbody>
             {diffs.map((d, i) => (
               <tr key={d.label} style={{ borderBottom: i < diffs.length - 1 ? "1px solid var(--border)" : "none" }}>
                 <td style={{ padding: "5px 8px 5px 0", color: "var(--text)", fontWeight: 500 }}>{d.label}</td>
-                <td style={{ padding: "5px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--text)" }}>{d.domain1}</td>
-                <td style={{ padding: "5px 0 5px 8px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--text)" }}>{d.domain2}</td>
+                <td
+                  style={{
+                    padding: "5px 8px",
+                    textAlign: "center",
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--text)",
+                  }}
+                >
+                  {d.domain1}
+                </td>
+                <td
+                  style={{
+                    padding: "5px 0 5px 8px",
+                    textAlign: "center",
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--text)",
+                  }}
+                >
+                  {d.domain2}
+                </td>
               </tr>
             ))}
           </tbody>

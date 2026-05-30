@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkDnssec } from "../actions/analyze/network";
+import type { Check } from "./types";
 
 export const dnssecCheck: Check = {
   key: "dnssec",

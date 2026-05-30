@@ -1,17 +1,14 @@
-import { fetchWithTimeout, MULTI_PART_TLDS } from "../../helpers";
-import type { Env } from "../../helpers";
-import type { DnsRecord, RdapResult } from "./types";
 import { logApiError } from "../../api-errors";
+import type { Env } from "../../helpers";
+import { fetchWithTimeout, MULTI_PART_TLDS } from "../../helpers";
+import type { DnsRecord, RdapResult } from "./types";
 
 // ─── DNS ─────────────────────────────────────────────────────────────
 
 export const DNS_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "CAA"] as const;
 
 // DoH resolvers — try Google first, fall back to Cloudflare
-const DOH_RESOLVERS = [
-  "https://dns.google/resolve",
-  "https://cloudflare-dns.com/dns-query",
-] as const;
+const DOH_RESOLVERS = ["https://dns.google/resolve", "https://cloudflare-dns.com/dns-query"] as const;
 
 /** Query a DoH resolver with fallback. Returns parsed JSON response or null. */
 async function dohQuery(
@@ -21,14 +18,19 @@ async function dohQuery(
 ): Promise<{ Status: number; Answer?: Array<{ name: string; type: number; TTL: number; data: string }> } | null> {
   for (const resolver of DOH_RESOLVERS) {
     try {
-      const res = await fetchWithTimeout(
-        `${resolver}?name=${encodeURIComponent(name)}&type=${type}`,
-        { timeout, headers: resolver.includes("cloudflare") ? { Accept: "application/dns-json" } : undefined },
-      );
+      const res = await fetchWithTimeout(`${resolver}?name=${encodeURIComponent(name)}&type=${type}`, {
+        timeout,
+        headers: resolver.includes("cloudflare") ? { Accept: "application/dns-json" } : undefined,
+      });
       if (res.ok) {
-        return (await res.json()) as { Status: number; Answer?: Array<{ name: string; type: number; TTL: number; data: string }> };
+        return (await res.json()) as {
+          Status: number;
+          Answer?: Array<{ name: string; type: number; TTL: number; data: string }>;
+        };
       }
-    } catch { /* resolver failed, try next */ }
+    } catch {
+      /* resolver failed, try next */
+    }
   }
   return null;
 }
@@ -37,7 +39,7 @@ export { dohQuery };
 
 export async function checkDns(domain: string): Promise<DnsRecord[]> {
   const results: DnsRecord[] = [];
-  
+
   // Standard record types for the root domain
   const queries = DNS_TYPES.map(async (type) => {
     try {
@@ -47,7 +49,9 @@ export async function checkDns(domain: string): Promise<DnsRecord[]> {
           results.push({ type, name: ans.name.replace(/\.$/, ""), ttl: ans.TTL, data: ans.data });
         }
       }
-    } catch { /* individual type failure is fine */ }
+    } catch {
+      /* individual type failure is fine */
+    }
   });
 
   await Promise.allSettled(queries);
@@ -61,7 +65,9 @@ export async function checkDns(domain: string): Promise<DnsRecord[]> {
     if (probe && probe.Status === 0 && probe.Answer?.length) {
       hasWildcardDns = true;
     }
-  } catch { /* probe failure = no wildcard */ }
+  } catch {
+    /* probe failure = no wildcard */
+  }
 
   // Agent discovery records (ANS + DNS-AID subdomains) — skip if wildcard DNS detected
   if (!hasWildcardDns) {
@@ -76,7 +82,9 @@ export async function checkDns(domain: string): Promise<DnsRecord[]> {
             results.push({ type: label, name: ans.name.replace(/\.$/, ""), ttl: ans.TTL, data: ans.data });
           }
         }
-      } catch { /* agent record lookup failure is fine */ }
+      } catch {
+        /* agent record lookup failure is fine */
+      }
     });
     await Promise.allSettled(agentQueries);
   }
@@ -91,7 +99,7 @@ export function getParentDomain(domain: string): string | null {
   const multiPartTlds = MULTI_PART_TLDS;
   const domainLower = domain.toLowerCase();
   for (const mpt of multiPartTlds) {
-    if (domainLower.endsWith("." + mpt)) {
+    if (domainLower.endsWith(`.${mpt}`)) {
       // e.g. blog.example.co.uk → parts = [blog, example, co, uk] → need 4+ parts
       if (parts.length > mpt.split(".").length + 1) {
         return parts.slice(1).join(".");
@@ -113,74 +121,74 @@ export function isSubdomain(domain: string): boolean {
 // Known RDAP endpoints — curated for TLDs NOT reliably in the IANA bootstrap
 export const RDAP_ENDPOINTS: Record<string, string> = {
   // === Generic TLDs ===
-  "com": "https://rdap.verisign.com/com/v1",
-  "net": "https://rdap.verisign.com/net/v1",
-  "org": "https://rdap.publicinterestregistry.org/rdap",
-  "info": "https://rdap.identitydigital.services/rdap",
-  "biz": "https://rdap.identitydigital.services/rdap",
-  "xyz": "https://rdap.centralnic.com/xyz",
-  "lol": "https://rdap.centralnic.com/lol",
+  com: "https://rdap.verisign.com/com/v1",
+  net: "https://rdap.verisign.com/net/v1",
+  org: "https://rdap.publicinterestregistry.org/rdap",
+  info: "https://rdap.identitydigital.services/rdap",
+  biz: "https://rdap.identitydigital.services/rdap",
+  xyz: "https://rdap.centralnic.com/xyz",
+  lol: "https://rdap.centralnic.com/lol",
 
   // === Google TLDs (single endpoint) ===
-  "app": "https://pubapi.registry.google/rdap",
-  "dev": "https://pubapi.registry.google/rdap",
-  "page": "https://pubapi.registry.google/rdap",
-  "day": "https://pubapi.registry.google/rdap",
+  app: "https://pubapi.registry.google/rdap",
+  dev: "https://pubapi.registry.google/rdap",
+  page: "https://pubapi.registry.google/rdap",
+  day: "https://pubapi.registry.google/rdap",
   "new": "https://pubapi.registry.google/rdap",
-  "how": "https://pubapi.registry.google/rdap",
-  "soy": "https://pubapi.registry.google/rdap",
-  "meme": "https://pubapi.registry.google/rdap",
-  "mov": "https://pubapi.registry.google/rdap",
-  "zip": "https://pubapi.registry.google/rdap",
-  "foo": "https://pubapi.registry.google/rdap",
+  how: "https://pubapi.registry.google/rdap",
+  soy: "https://pubapi.registry.google/rdap",
+  meme: "https://pubapi.registry.google/rdap",
+  mov: "https://pubapi.registry.google/rdap",
+  zip: "https://pubapi.registry.google/rdap",
+  foo: "https://pubapi.registry.google/rdap",
 
   // === Verisign-operated ccTLDs ===
-  "cc": "https://tld-rdap.verisign.com/cc/v1",
-  "tv": "https://rdap.nic.tv",
+  cc: "https://tld-rdap.verisign.com/cc/v1",
+  tv: "https://rdap.nic.tv",
 
   // === Identity Digital (formerly Donuts/Afilias) ===
-  "ai": "https://rdap.identitydigital.services/rdap",
-  "mu": "https://rdap.identitydigital.services/rdap",
+  ai: "https://rdap.identitydigital.services/rdap",
+  mu: "https://rdap.identitydigital.services/rdap",
 
   // === CentralNic ===
-  "fm": "https://rdap.centralnic.com/fm",
+  fm: "https://rdap.centralnic.com/fm",
 
   // === ccTLDs NOT in IANA bootstrap (curated) ===
-  "io": "https://rdap.nic.io",
-  "co": "https://rdap.nic.co",
-  "me": "https://rdap.nic.me",
-  "us": "https://rdap.nic.us",
-  "so": "https://rdap.nic.so",
-  "de": "https://rdap.denic.de",
-  "uk": "https://rdap.nominet.uk/uk",
-  "fr": "https://rdap.nic.fr",
-  "nl": "https://rdap.sidn.nl",
-  "au": "https://rdap.auda.org.au",
-  "ca": "https://rdap.ca.fury.ca/rdap",
-  "eu": "https://rdap.eurid.eu",
-  "be": "https://rdap.dns.be",
-  "se": "https://rdap.iis.se",
-  "ch": "https://rdap.nic.ch",
-  "at": "https://rdap.nic.at",
-  "nz": "https://rdap.nzrs.net.nz",
-  "jp": "https://rdap.jprs.jp/rdap",
-  "gov": "https://rdap.nic.gov/rdap",
+  io: "https://rdap.nic.io",
+  co: "https://rdap.nic.co",
+  me: "https://rdap.nic.me",
+  us: "https://rdap.nic.us",
+  so: "https://rdap.nic.so",
+  de: "https://rdap.denic.de",
+  uk: "https://rdap.nominet.uk/uk",
+  fr: "https://rdap.nic.fr",
+  nl: "https://rdap.sidn.nl",
+  au: "https://rdap.auda.org.au",
+  ca: "https://rdap.ca.fury.ca/rdap",
+  eu: "https://rdap.eurid.eu",
+  be: "https://rdap.dns.be",
+  se: "https://rdap.iis.se",
+  ch: "https://rdap.nic.ch",
+  at: "https://rdap.nic.at",
+  nz: "https://rdap.nzrs.net.nz",
+  jp: "https://rdap.jprs.jp/rdap",
+  gov: "https://rdap.nic.gov/rdap",
 
   // === ccTLDs in IANA bootstrap (recently added) ===
-  "ly": "https://rdap.nic.ly",
-  "in": "https://rdap.nixiregistry.in/rdap",
-  "pl": "https://rdap.dns.pl",
-  "id": "https://rdap.id",
-  "is": "https://rdap.isnic.is/rdap",
-  "no": "https://rdap.norid.no",
-  "br": "https://rdap.registro.br",
-  "ar": "https://rdap.nic.ar",
-  "cz": "https://rdap.nic.cz",
-  "si": "https://rdap.register.si",
-  "fi": "https://rdap.fi/rdap/rdap",
-  "ua": "https://rdap.hostmaster.ua",
-  "th": "https://rdap.thains.co.th",
-  "tw": "https://ccrdap.twnic.tw/tw",
+  ly: "https://rdap.nic.ly",
+  in: "https://rdap.nixiregistry.in/rdap",
+  pl: "https://rdap.dns.pl",
+  id: "https://rdap.id",
+  is: "https://rdap.isnic.is/rdap",
+  no: "https://rdap.norid.no",
+  br: "https://rdap.registro.br",
+  ar: "https://rdap.nic.ar",
+  cz: "https://rdap.nic.cz",
+  si: "https://rdap.register.si",
+  fi: "https://rdap.fi/rdap/rdap",
+  ua: "https://rdap.hostmaster.ua",
+  th: "https://rdap.thains.co.th",
+  tw: "https://ccrdap.twnic.tw/tw",
 };
 
 // ─── IANA Bootstrap (Dynamic TLD→RDAP map, cached in-memory) ─────────
@@ -206,11 +214,11 @@ export function parseIanaBootstrap(data: { services: [string[], string[]][] }): 
 
 async function getBootstrapEndpoint(tld: string): Promise<string | null> {
   const now = Date.now();
-  if (!bootstrapCache || (now - bootstrapFetchedAt) > BOOTSTRAP_TTL) {
+  if (!bootstrapCache || now - bootstrapFetchedAt > BOOTSTRAP_TTL) {
     try {
       const res = await fetchWithTimeout(IANA_BOOTSTRAP_URL, { timeout: 8000 });
       if (res.ok) {
-        const data = await res.json() as { services: [string[], string[]][] };
+        const data = (await res.json()) as { services: [string[], string[]][] };
         bootstrapCache = parseIanaBootstrap(data);
         bootstrapFetchedAt = now;
       }
@@ -223,12 +231,14 @@ async function getBootstrapEndpoint(tld: string): Promise<string | null> {
 
 // ─── Registrar Name Extraction (with fallbacks) ─────────────────────
 
-export function extractRegistrar(entities: Array<{
-  roles?: string[];
-  vcardArray?: [string, Array<[string, Record<string, unknown>, string, string]>];
-  handle?: string;
-  publicIds?: Array<{ type: string; identifier: string }>;
-}>): string | null {
+export function extractRegistrar(
+  entities: Array<{
+    roles?: string[];
+    vcardArray?: [string, Array<[string, Record<string, unknown>, string, string]>];
+    handle?: string;
+    publicIds?: Array<{ type: string; identifier: string }>;
+  }>,
+): string | null {
   for (const entity of entities) {
     if (!entity.roles?.includes("registrar")) continue;
 
@@ -240,9 +250,7 @@ export function extractRegistrar(entities: Array<{
 
     // Fallback: publicIds (IANA Registrar ID)
     if (entity.publicIds) {
-      const ianaId = entity.publicIds.find(
-        (p) => p.type === "IANA Registrar ID"
-      );
+      const ianaId = entity.publicIds.find((p) => p.type === "IANA Registrar ID");
       if (ianaId) return `Registrar ID: ${ianaId.identifier}`;
     }
 
@@ -299,13 +307,14 @@ async function whoisFreaksFallback(domain: string, env?: Env): Promise<RdapResul
   try {
     const res = await fetchWithTimeout(
       `https://api.whoisfreaks.com/v1.0/whois?apiKey=${encodeURIComponent(apiKey)}&whois=live&domainName=${encodeURIComponent(domain)}`,
-      { timeout: 10000 }
+      { timeout: 10000 },
     );
     if (!res.ok) {
-      if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "whoisfreaks", status: res.status, message: `WHOIS lookup failed`, domain });
+      if (env?.STATS_DB)
+        logApiError(env.STATS_DB, { api: "whoisfreaks", status: res.status, message: `WHOIS lookup failed`, domain });
       return null;
     }
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       create_date?: string;
       update_date?: string;
       expiry_date?: string;
@@ -339,7 +348,8 @@ async function whoisFreaksFallback(domain: string, env?: Env): Promise<RdapResul
       days_until_expiry: daysUntilExpiry,
     };
   } catch (e) {
-    if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "whoisfreaks", status: 0, message: String(e).slice(0, 200), domain });
+    if (env?.STATS_DB)
+      logApiError(env.STATS_DB, { api: "whoisfreaks", status: 0, message: String(e).slice(0, 200), domain });
     return null;
   }
 }
@@ -377,16 +387,28 @@ export async function tryRdap(domain: string, env?: Env): Promise<RdapResult | n
         if (res.status >= 500) {
           // 5xx → retry once
           if (attempt === 0) continue;
-          if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "rdap", status: res.status, message: `RDAP 5xx from ${new URL(rdapUrl).hostname}`, domain });
+          if (env?.STATS_DB)
+            logApiError(env.STATS_DB, {
+              api: "rdap",
+              status: res.status,
+              message: `RDAP 5xx from ${new URL(rdapUrl).hostname}`,
+              domain,
+            });
           break; // give up on this URL after retry
         }
         if (!res.ok) break; // 4xx → skip to next URL
-        const data = await res.json() as Parameters<typeof parseRdapResponse>[0];
+        const data = (await res.json()) as Parameters<typeof parseRdapResponse>[0];
         return parseRdapResponse(data);
       } catch (e) {
         // Timeout or network error → retry once
         if (attempt === 0) continue;
-        if (env?.STATS_DB) logApiError(env.STATS_DB, { api: "rdap", status: 0, message: `${new URL(rdapUrl).hostname}: ${String(e).slice(0, 150)}`, domain });
+        if (env?.STATS_DB)
+          logApiError(env.STATS_DB, {
+            api: "rdap",
+            status: 0,
+            message: `${new URL(rdapUrl).hostname}: ${String(e).slice(0, 150)}`,
+            domain,
+          });
         break; // give up on this URL after retry
       }
     }
@@ -402,8 +424,7 @@ export async function checkRdap(domain: string, env?: Env): Promise<RdapResult |
   if (parent) {
     return tryRdap(parent, env);
   }
-  
+
   // For base domains, try RDAP directly
   return tryRdap(domain, env);
 }
-

@@ -5,9 +5,12 @@ export async function getRecentLookups(kv: KVNamespace, limit: number = 8) {
     const raw = await kv.get("recent:index", "text");
     if (!raw) return { lookups: [] };
     const entries = JSON.parse(raw) as Array<{
-      domain: string; analyzed_at: string;
-      is_up: boolean | null; ssl_grade: string | null;
-      score: number | null; grade: string | null;
+      domain: string;
+      analyzed_at: string;
+      is_up: boolean | null;
+      ssl_grade: string | null;
+      score: number | null;
+      grade: string | null;
       archetype: string | null;
     }>;
 
@@ -22,5 +25,7 @@ export async function getRecentLookups(kv: KVNamespace, limit: number = 8) {
     }
 
     return { lookups };
-  } catch { return { lookups: [] }; }
+  } catch {
+    return { lookups: [] };
+  }
 }

@@ -1,5 +1,5 @@
-import { LayoutDashboard, Server, Shield, Layers, Gauge, Building2, Newspaper, Compass, Sparkles } from "lucide-react";
-import { useRef, useEffect, useState, type CSSProperties } from "react";
+import { Building2, Compass, Gauge, Layers, LayoutDashboard, Newspaper, Server, Shield, Sparkles } from "lucide-react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },

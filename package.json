@@ -10,9 +10,12 @@
     "dev:client": "cd client && bun run dev",
     "typecheck": "cd client && bun run typecheck && cd ../worker && bun run typecheck",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "npx @biomejs/biome check .",
+    "lint:fix": "npx @biomejs/biome check --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "typescript": "5.6.3",
     "vitest": "1.6.1"
   }

@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react";
 import L from "leaflet";
 import { MapPin } from "lucide-react";
-import { Panel } from "./Panel";
+import { useEffect, useRef } from "react";
 import type { AnalysisResult } from "../utils/types";
+import { Panel } from "./Panel";
 
 /** Detect CDN/anycast generic coordinates and return zoom + center override */
 function detectGenericLocation(lat: number, lon: number, city: string | undefined) {
@@ -57,7 +57,8 @@ export function IpMap({ data }: { data: AnalysisResult }) {
     });
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: "abcd",
       maxZoom: 19,
     }).addTo(map);
@@ -76,13 +77,14 @@ export function IpMap({ data }: { data: AnalysisResult }) {
 
       // Anycast label overlay
       const labelDiv = L.DomUtil.create("div");
-      labelDiv.style.cssText = "background:rgba(0,0,0,0.7);color:#94a3b8;font-family:var(--font-mono,monospace);font-size:11px;padding:4px 10px;border-radius:4px;pointer-events:none;white-space:nowrap;";
+      labelDiv.style.cssText =
+        "background:rgba(0,0,0,0.7);color:#94a3b8;font-family:var(--font-mono,monospace);font-size:11px;padding:4px 10px;border-radius:4px;pointer-events:none;white-space:nowrap;";
       labelDiv.textContent = "Anycast / distributed routing \u2014 approximate region";
 
       const LabelControl = L.Control.extend({
-        onAdd: function() { return labelDiv; }
+        onAdd: () => labelDiv,
       });
-      (new LabelControl({ position: "bottomleft" })).addTo(map);
+      new LabelControl({ position: "bottomleft" }).addTo(map);
     } else {
       // Precise city-level marker
       L.circleMarker([lat, lon], {
@@ -92,13 +94,15 @@ export function IpMap({ data }: { data: AnalysisResult }) {
         weight: 2,
         opacity: 0.8,
         fillOpacity: 0.3,
-      }).addTo(map).bindPopup(
-        `<div style="font-family:monospace;font-size:12px;color:#333">
+      })
+        .addTo(map)
+        .bindPopup(
+          `<div style="font-family:monospace;font-size:12px;color:#333">
           <strong>${data.ip_info?.ip ?? ""}</strong><br/>
           ${data.ip_info?.city ?? ""}, ${data.ip_info?.country ?? ""}<br/>
           ${data.ip_info?.isp ?? ""}
-        </div>`
-      );
+        </div>`,
+        );
 
       L.circleMarker([lat, lon], {
         radius: 16,
@@ -127,16 +131,20 @@ export function IpMap({ data }: { data: AnalysisResult }) {
   return (
     <Panel title="IP Geolocation Map" icon={<MapPin size={14} />}>
       <div className="p-3">
-        <div
-          ref={mapRef}
-          style={{ height: "320px", borderRadius: "var(--radius-sm)", overflow: "hidden" }}
-        />
+        <div ref={mapRef} style={{ height: "320px", borderRadius: "var(--radius-sm)", overflow: "hidden" }} />
         <div className="flex items-center gap-3 mt-2 px-1">
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>
             {lat.toFixed(4)}, {lon.toFixed(4)}
           </span>
           {generic ? (
-            <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--text-secondary)", fontStyle: "italic" }}>
+            <span
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "11px",
+                color: "var(--text-secondary)",
+                fontStyle: "italic",
+              }}
+            >
               {generic.label} &mdash; CDN / anycast IP
             </span>
           ) : data.ip_info?.city ? (

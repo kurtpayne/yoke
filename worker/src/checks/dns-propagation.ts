@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkDnsPropagation } from "../actions/analyze/network-health";
+import type { Check } from "./types";
 
 export const dnsPropagationCheck: Check = {
   key: "dns_propagation",

@@ -1,15 +1,21 @@
-import { Bot, CheckCircle, XCircle, Rss, Cpu, ExternalLink } from "lucide-react";
-import { Panel, DataRow, GradeBadge, StatusBadge } from "./Panel";
-import { Tooltip } from "./Tooltip";
+import { Bot, CheckCircle, ExternalLink, Rss, XCircle } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
+import { DataRow, GradeBadge, Panel, StatusBadge } from "./Panel";
+import { Tooltip } from "./Tooltip";
 
 /** Maps checklist item names to their specification/documentation URLs. */
 const CHECK_DOCS: Record<string, { url: string; label: string }> = {
   "llms.txt exists": { url: "https://llmstxt.org/", label: "llmstxt.org spec" },
   "llms-full.txt exists": { url: "https://llmstxt.org/", label: "llmstxt.org spec" },
   "Allows GPTBot": { url: "https://platform.openai.com/docs/bots", label: "OpenAI crawler docs" },
-  "Allows ClaudeBot": { url: "https://docs.anthropic.com/en/docs/build-with-claude/web-search#how-does-the-web-search-tool-work", label: "Anthropic crawler docs" },
-  "Allows Bingbot": { url: "https://www.bing.com/webmasters/help/which-crawlers-does-bing-use-8c184ec0", label: "Bing crawler docs" },
+  "Allows ClaudeBot": {
+    url: "https://docs.anthropic.com/en/docs/build-with-claude/web-search#how-does-the-web-search-tool-work",
+    label: "Anthropic crawler docs",
+  },
+  "Allows Bingbot": {
+    url: "https://www.bing.com/webmasters/help/which-crawlers-does-bing-use-8c184ec0",
+    label: "Bing crawler docs",
+  },
   "Structured data (JSON-LD)": { url: "https://schema.org/", label: "schema.org" },
   "Organization/WebSite schema": { url: "https://schema.org/Organization", label: "schema.org/Organization" },
   "Open Graph tags": { url: "https://ogp.me/", label: "Open Graph protocol" },
@@ -44,7 +50,14 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
             className="h-full rounded-full transition-all"
             style={{
               width: `${Math.min(100, (ai.score / ai.max_score) * 100)}%`,
-              background: ai.grade === "A" ? "var(--success)" : ai.grade === "B" ? "#7ee787" : ai.grade === "C" ? "var(--warning)" : "var(--danger)",
+              background:
+                ai.grade === "A"
+                  ? "var(--success)"
+                  : ai.grade === "B"
+                    ? "#7ee787"
+                    : ai.grade === "C"
+                      ? "var(--warning)"
+                      : "var(--danger)",
             }}
           />
         </div>
@@ -52,43 +65,52 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
 
       {/* Checklist */}
       <div className="sub-section">Checklist</div>
-      {ai.checks.map((check, i) => {
+      {ai.checks.map((check, _i) => {
         const doc = CHECK_DOCS[check.name];
         return (
-        <div key={check.name} className="data-row" style={{ alignItems: "center" }}>
-          <div className="flex items-center gap-2.5" style={{ flex: 1, minWidth: 0 }}>
-            {check.passed ? (
-              <CheckCircle size={12} style={{ color: "var(--success)", flexShrink: 0 }} />
-            ) : (
-              <XCircle size={12} style={{ color: check.points < 0 ? "var(--danger)" : "var(--dim)", flexShrink: 0 }} />
-            )}
-            <span style={{
-              fontFamily: "var(--font-ui)", fontSize: "12px",
-              color: check.passed ? "var(--text)" : check.points < 0 ? "var(--danger)" : "var(--dim)",
-            }}>
-              {check.name}
+          <div key={check.name} className="data-row" style={{ alignItems: "center" }}>
+            <div className="flex items-center gap-2.5" style={{ flex: 1, minWidth: 0 }}>
+              {check.passed ? (
+                <CheckCircle size={12} style={{ color: "var(--success)", flexShrink: 0 }} />
+              ) : (
+                <XCircle
+                  size={12}
+                  style={{ color: check.points < 0 ? "var(--danger)" : "var(--dim)", flexShrink: 0 }}
+                />
+              )}
+              <span
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "12px",
+                  color: check.passed ? "var(--text)" : check.points < 0 ? "var(--danger)" : "var(--dim)",
+                }}
+              >
+                {check.name}
+              </span>
+              {doc && (
+                <Tooltip text={doc.label}>
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink size={9} style={{ color: "var(--muted)", opacity: 0.7 }} />
+                  </a>
+                </Tooltip>
+              )}
+            </div>
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px",
+                color: check.points > 0 ? "var(--success)" : check.points < 0 ? "var(--danger)" : "var(--dim)",
+              }}
+            >
+              {check.points > 0 ? `+${check.points}` : check.points === 0 ? "0" : `${check.points}`}
             </span>
-            {doc && (
-              <Tooltip text={doc.label}>
-                <a
-                  href={doc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <ExternalLink size={9} style={{ color: "var(--muted)", opacity: 0.7 }} />
-                </a>
-              </Tooltip>
-            )}
           </div>
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: "11px",
-            color: check.points > 0 ? "var(--success)" : check.points < 0 ? "var(--danger)" : "var(--dim)",
-          }}>
-            {check.points > 0 ? `+${check.points}` : check.points === 0 ? "0" : `${check.points}`}
-          </span>
-        </div>
         );
       })}
 
@@ -103,9 +125,15 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
                 href={ai.rss_feed}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--accent)", textDecoration: "none", wordBreak: "break-all" }}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10px",
+                  color: "var(--accent)",
+                  textDecoration: "none",
+                  wordBreak: "break-all",
+                }}
               >
-                {ai.rss_feed.length > 50 ? ai.rss_feed.slice(0, 50) + "…" : ai.rss_feed}
+                {ai.rss_feed.length > 50 ? `${ai.rss_feed.slice(0, 50)}…` : ai.rss_feed}
               </a>
             </div>
           }
@@ -121,8 +149,17 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
             <DataRow
               label="ANS Record"
               value={
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text)", wordBreak: "break-all" }}>
-                  {ans.ans_records.map((r, i) => <div key={i}>{r.length > 80 ? r.slice(0, 80) + "…" : r}</div>)}
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    color: "var(--text)",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {ans.ans_records.map((r, i) => (
+                    <div key={i}>{r.length > 80 ? `${r.slice(0, 80)}…` : r}</div>
+                  ))}
                 </div>
               }
               copyValue={ans.ans_records.join("\n")}
@@ -132,8 +169,17 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
             <DataRow
               label="DNS-AID Record"
               value={
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text)", wordBreak: "break-all" }}>
-                  {ans.agents_records.map((r, i) => <div key={i}>{r.length > 80 ? r.slice(0, 80) + "…" : r}</div>)}
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    color: "var(--text)",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {ans.agents_records.map((r, i) => (
+                    <div key={i}>{r.length > 80 ? `${r.slice(0, 80)}…` : r}</div>
+                  ))}
                 </div>
               }
               copyValue={ans.agents_records.join("\n")}
@@ -147,7 +193,12 @@ export function AiReadinessPanel({ data }: { data: AnalysisResult }) {
                   href={`https://${data.domain}/.well-known/agent.json`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--accent)", textDecoration: "none" }}
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "10px",
+                    color: "var(--accent)",
+                    textDecoration: "none",
+                  }}
                 >
                   /.well-known/agent.json
                 </a>

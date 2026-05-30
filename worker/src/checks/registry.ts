@@ -12,36 +12,35 @@
 // in the results array. Append new checks at the end unless you have a
 // specific reason to reorder.
 
-import type { Check } from "./types";
-
-import { rdapCheck } from "./rdap";
-import { robotsSitemapCheck } from "./robots-sitemap";
-import { ipInfoCheck } from "./ip-info";
-import { blocklistsCheck } from "./blocklists";
-import { sslCheck } from "./ssl";
-import { performanceCheck, performanceDesktopCheck } from "./performance";
-import { cruxCheck } from "./crux";
-import { statusCheck } from "./status";
-import { llmsTxtCheck } from "./llms-txt";
-import { waybackCheck } from "./wayback";
-import { trancoCheck } from "./tranco";
-import { observatoryCheck } from "./observatory";
-import { emailAuthCheck } from "./email-auth";
-import { carbonCheck } from "./carbon";
-import { shodanCheck } from "./shodan";
-import { dnssecCheck } from "./dnssec";
-import { breachesCheck } from "./breaches";
-import { certTransparencyCheck } from "./cert-transparency";
-import { securityTxtCheck } from "./security-txt";
-import { greenHostingCheck } from "./green-hosting";
-import { wellKnownCheck } from "./well-known";
-import { greynoiseCheck } from "./greynoise";
 import { ansCheck } from "./ans";
-import { dnsPropagationCheck } from "./dns-propagation";
-import { ripeRoutingCheck } from "./ripe-routing";
-import { outageLinksCheck } from "./outage-links";
+import { blocklistsCheck } from "./blocklists";
+import { breachesCheck } from "./breaches";
+import { carbonCheck } from "./carbon";
+import { certTransparencyCheck } from "./cert-transparency";
 import { connectionTimingCheck } from "./connection-timing";
+import { cruxCheck } from "./crux";
+import { dnsPropagationCheck } from "./dns-propagation";
+import { dnssecCheck } from "./dnssec";
+import { emailAuthCheck } from "./email-auth";
+import { greenHostingCheck } from "./green-hosting";
+import { greynoiseCheck } from "./greynoise";
+import { ipInfoCheck } from "./ip-info";
+import { llmsTxtCheck } from "./llms-txt";
+import { observatoryCheck } from "./observatory";
+import { outageLinksCheck } from "./outage-links";
+import { performanceCheck, performanceDesktopCheck } from "./performance";
+import { rdapCheck } from "./rdap";
+import { ripeRoutingCheck } from "./ripe-routing";
+import { robotsSitemapCheck } from "./robots-sitemap";
+import { securityTxtCheck } from "./security-txt";
+import { shodanCheck } from "./shodan";
 import { socialAccountsCheck } from "./social-accounts";
+import { sslCheck } from "./ssl";
+import { statusCheck } from "./status";
+import { trancoCheck } from "./tranco";
+import type { Check } from "./types";
+import { waybackCheck } from "./wayback";
+import { wellKnownCheck } from "./well-known";
 
 /**
  * The canonical ordered list of Phase 2 parallel checks.

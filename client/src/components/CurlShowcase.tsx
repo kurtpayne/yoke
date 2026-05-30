@@ -1,5 +1,5 @@
+import { Check, ChevronDown, ChevronUp, Copy, Terminal } from "lucide-react";
 import { useState } from "react";
-import { Copy, Check, ChevronDown, ChevronUp, Terminal } from "lucide-react";
 import type { TabId } from "./TabBar";
 
 function CopyBtn({ text }: { text: string }) {
@@ -32,15 +32,15 @@ function CopyBtn({ text }: { text: string }) {
 // ─── Tab → jq filter mapping ───────────────────────────────────
 
 const TAB_FILTERS: Record<TabId, { label: string; filter: string } | null> = {
-  overview:       { label: "Overview",        filter: "'{status, domain_score, hosting, tranco_rank}'" },
-  infrastructure: { label: "Infrastructure",  filter: "'{dns, ip_info, ssl, rdap, shodan, redirects}'" },
-  security:       { label: "Security",        filter: "'{headers, email_auth, dnssec, blocklists, breaches}'" },
-  tech:           { label: "Tech Stack",      filter: "'{tech_stack, wordpress}'" },
-  performance:    { label: "Performance",     filter: "'{performance, compression, http_protocols}'" },
-  business:       { label: "Business",        filter: "'{rdap, tranco_rank, json_ld}'" },
-  news:           { label: "News & Social",   filter: "'{social_meta}'" },
-  explore:        null,
-  ai:             null,
+  overview: { label: "Overview", filter: "'{status, domain_score, hosting, tranco_rank}'" },
+  infrastructure: { label: "Infrastructure", filter: "'{dns, ip_info, ssl, rdap, shodan, redirects}'" },
+  security: { label: "Security", filter: "'{headers, email_auth, dnssec, blocklists, breaches}'" },
+  tech: { label: "Tech Stack", filter: "'{tech_stack, wordpress}'" },
+  performance: { label: "Performance", filter: "'{performance, compression, http_protocols}'" },
+  business: { label: "Business", filter: "'{rdap, tranco_rank, json_ld}'" },
+  news: { label: "News & Social", filter: "'{social_meta}'" },
+  explore: null,
+  ai: null,
 };
 
 // ─── Results page: contextual curl bar for current domain ──────────
@@ -50,9 +50,7 @@ export function CurlBar({ domain, activeTab = "overview" }: { domain: string; ac
 
   const tabFilter = TAB_FILTERS[activeTab];
   const host = window.location.host;
-  const mainCmd = tabFilter
-    ? `curl -s ${host}/${domain} | jq ${tabFilter.filter}`
-    : `curl ${host}/${domain} | jq`;
+  const mainCmd = tabFilter ? `curl -s ${host}/${domain} | jq ${tabFilter.filter}` : `curl ${host}/${domain} | jq`;
 
   const extraCmds = [
     { label: "Full output", cmd: `curl ${host}/${domain} | jq` },

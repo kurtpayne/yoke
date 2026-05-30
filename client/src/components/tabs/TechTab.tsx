@@ -1,13 +1,12 @@
-import { TechStackPanel } from "../TechStackPanel";
-import { WordPressPanel } from "../WordPressPanel";
-import { MetaPanel, RobotsDeepPanel, LlmsTxtPanel } from "../MetaPanel";
-import { PanelGrid, type PanelDef } from "../PanelLayout";
-import { AiReadinessPanel } from "../AiReadinessPanel";
-import { WellKnownPanel } from "../Tier1Panels";
-import { StructuredDataPanel } from "../StructuredDataPanel";
-import { AccessibilityPanel } from "../AccessibilityPanel";
-
 import type { AnalysisResult } from "../../utils/types";
+import { AccessibilityPanel } from "../AccessibilityPanel";
+import { AiReadinessPanel } from "../AiReadinessPanel";
+import { LlmsTxtPanel, MetaPanel, RobotsDeepPanel } from "../MetaPanel";
+import { type PanelDef, PanelGrid } from "../PanelLayout";
+import { StructuredDataPanel } from "../StructuredDataPanel";
+import { TechStackPanel } from "../TechStackPanel";
+import { WellKnownPanel } from "../Tier1Panels";
+import { WordPressPanel } from "../WordPressPanel";
 
 export default function TechTab({ data }: { data: AnalysisResult }) {
   const domain = data.domain;
@@ -28,9 +27,33 @@ export default function TechTab({ data }: { data: AnalysisResult }) {
     <div className="space-y-3">
       <PanelGrid tabId="tech" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
-        <a href={`https://builtwith.com/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>BuiltWith ↗</a>
-        <a href={`https://www.wappalyzer.com/lookup/${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Wappalyzer ↗</a>
-        <a href={`https://search.google.com/test/rich-results?url=https://${domain}`} target="_blank" rel="noopener noreferrer" className="badge badge-info" style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}>Rich Results Test ↗</a>
+        <a
+          href={`https://builtwith.com/${domain}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="badge badge-info"
+          style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}
+        >
+          BuiltWith ↗
+        </a>
+        <a
+          href={`https://www.wappalyzer.com/lookup/${domain}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="badge badge-info"
+          style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}
+        >
+          Wappalyzer ↗
+        </a>
+        <a
+          href={`https://search.google.com/test/rich-results?url=https://${domain}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="badge badge-info"
+          style={{ fontSize: "10px", textDecoration: "none", cursor: "pointer" }}
+        >
+          Rich Results Test ↗
+        </a>
       </div>
     </div>
   );

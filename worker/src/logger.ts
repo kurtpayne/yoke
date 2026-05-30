@@ -2,7 +2,7 @@
 // All log entries include a timestamp, level, and optional domain context
 // so they're filterable in the CF dashboard and wrangler tail.
 
-export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+export type LogLevel = "info" | "warn" | "error" | "debug";
 
 interface LogEntry {
   level: LogLevel;
@@ -21,13 +21,13 @@ export function log(level: LogLevel, msg: string, extra?: Record<string, unknown
   };
 
   switch (level) {
-    case 'error':
+    case "error":
       console.error(JSON.stringify(entry));
       break;
-    case 'warn':
+    case "warn":
       console.warn(JSON.stringify(entry));
       break;
-    case 'debug':
+    case "debug":
       console.debug(JSON.stringify(entry));
       break;
     default:
@@ -36,6 +36,6 @@ export function log(level: LogLevel, msg: string, extra?: Record<string, unknown
 }
 
 // Convenience wrappers
-export const logInfo = (msg: string, extra?: Record<string, unknown>) => log('info', msg, extra);
-export const logWarn = (msg: string, extra?: Record<string, unknown>) => log('warn', msg, extra);
-export const logError = (msg: string, extra?: Record<string, unknown>) => log('error', msg, extra);
+export const logInfo = (msg: string, extra?: Record<string, unknown>) => log("info", msg, extra);
+export const logWarn = (msg: string, extra?: Record<string, unknown>) => log("warn", msg, extra);
+export const logError = (msg: string, extra?: Record<string, unknown>) => log("error", msg, extra);

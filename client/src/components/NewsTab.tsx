@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Newspaper, MessageSquare, ExternalLink, ThumbsUp, Share2, CheckCircle2, HelpCircle } from "lucide-react";
+import { CheckCircle2, ExternalLink, HelpCircle, MessageSquare, Newspaper, Share2, ThumbsUp } from "lucide-react";
 import { api } from "../api";
-import { Panel, StatusBadge, ErrorState } from "./Panel";
-import { Tooltip } from "./Tooltip";
 import type { NewsResult } from "../utils/types";
+import { ErrorState, Panel, StatusBadge } from "./Panel";
+import { Tooltip } from "./Tooltip";
 
 function timeAgo(dateStr: string): string {
   try {
@@ -18,27 +18,60 @@ function timeAgo(dateStr: string): string {
     if (days < 30) return `${days}d ago`;
     const months = Math.floor(days / 30);
     return `${months}mo ago`;
-  } catch { return dateStr; }
+  } catch {
+    return dateStr;
+  }
 }
 
 function GoogleNewsPanel({ items }: { items: NewsResult["google_news"] }) {
-  if (items.length === 0) return (
-    <Panel title="Google News" icon={<Newspaper size={14} />}>
-      <div className="p-4"><StatusBadge status="neutral" label="No news articles found" /></div>
-    </Panel>
-  );
+  if (items.length === 0)
+    return (
+      <Panel title="Google News" icon={<Newspaper size={14} />}>
+        <div className="p-4">
+          <StatusBadge status="neutral" label="No news articles found" />
+        </div>
+      </Panel>
+    );
   return (
-    <Panel title="Google News" icon={<Newspaper size={14} />} badge={<StatusBadge status="info" label={`${items.length} articles`} />}>
-      {items.map((item, i) => (
-        <a key={item.link} href={item.link} target="_blank" rel="noopener noreferrer" className="news-item block" style={{ textDecoration: "none" }}>
+    <Panel
+      title="Google News"
+      icon={<Newspaper size={14} />}
+      badge={<StatusBadge status="info" label={`${items.length} articles`} />}
+    >
+      {items.map((item, _i) => (
+        <a
+          key={item.link}
+          href={item.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="news-item block"
+          style={{ textDecoration: "none" }}
+        >
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <p style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--text)", lineHeight: "20px", fontWeight: 500, margin: 0 }}>
+              <p
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "13px",
+                  color: "var(--text)",
+                  lineHeight: "20px",
+                  fontWeight: 500,
+                  margin: 0,
+                }}
+              >
                 {item.title}
               </p>
               <div className="flex items-center gap-2 mt-1">
-                {item.source && <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--accent)" }}>{item.source}</span>}
-                {item.pub_date && <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>{timeAgo(item.pub_date)}</span>}
+                {item.source && (
+                  <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", color: "var(--accent)" }}>
+                    {item.source}
+                  </span>
+                )}
+                {item.pub_date && (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
+                    {timeAgo(item.pub_date)}
+                  </span>
+                )}
               </div>
             </div>
             <ExternalLink size={12} style={{ color: "var(--dim)", flexShrink: 0, marginTop: "4px" }} />
@@ -50,28 +83,59 @@ function GoogleNewsPanel({ items }: { items: NewsResult["google_news"] }) {
 }
 
 function HackerNewsPanel({ items, domain }: { items: NewsResult["hacker_news"]; domain: string }) {
-  if (items.length === 0) return (
-    <Panel title="Hacker News" icon={<MessageSquare size={14} />}>
-      <div className="p-4"><StatusBadge status="neutral" label="No HN discussions found" /></div>
-    </Panel>
-  );
+  if (items.length === 0)
+    return (
+      <Panel title="Hacker News" icon={<MessageSquare size={14} />}>
+        <div className="p-4">
+          <StatusBadge status="neutral" label="No HN discussions found" />
+        </div>
+      </Panel>
+    );
   return (
-    <Panel title="Hacker News" icon={<MessageSquare size={14} />} badge={<StatusBadge status="info" label={`${items.length} stories`} />}>
+    <Panel
+      title="Hacker News"
+      icon={<MessageSquare size={14} />}
+      badge={<StatusBadge status="info" label={`${items.length} stories`} />}
+    >
       {items.map((item, i) => (
-        <a key={`hn-${i}`} href={item.url ?? `https://hn.algolia.com/?q=${encodeURIComponent(domain)}`} target="_blank" rel="noopener noreferrer" className="news-item block" style={{ textDecoration: "none" }}>
+        <a
+          key={`hn-${i}`}
+          href={item.url ?? `https://hn.algolia.com/?q=${encodeURIComponent(domain)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="news-item block"
+          style={{ textDecoration: "none" }}
+        >
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
-              <p style={{ fontFamily: "var(--font-ui)", fontSize: "13px", color: "var(--text)", lineHeight: "20px", fontWeight: 500, margin: 0 }}>
+              <p
+                style={{
+                  fontFamily: "var(--font-ui)",
+                  fontSize: "13px",
+                  color: "var(--text)",
+                  lineHeight: "20px",
+                  fontWeight: 500,
+                  margin: 0,
+                }}
+              >
                 {item.title}
               </p>
               <div className="flex items-center gap-3 mt-1">
-                <span className="flex items-center gap-1" style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--warning)" }}>
+                <span
+                  className="flex items-center gap-1"
+                  style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--warning)" }}
+                >
                   <ThumbsUp size={10} /> {item.points}
                 </span>
-                <span className="flex items-center gap-1" style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>
+                <span
+                  className="flex items-center gap-1"
+                  style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}
+                >
                   <MessageSquare size={10} /> {item.num_comments}
                 </span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>{timeAgo(item.created_at)}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
+                  {timeAgo(item.created_at)}
+                </span>
               </div>
             </div>
             <ExternalLink size={12} style={{ color: "var(--dim)", flexShrink: 0, marginTop: "4px" }} />
@@ -89,28 +153,44 @@ function SocialAccountsPanel({ domain }: { domain: string }) {
     enabled: !!domain,
   });
 
-  if (isPending) return (
-    <Panel title="Social Accounts" icon={<Share2 size={14} />}>
-      <div className="p-4"><span style={{ color: "var(--dim)", fontSize: "12px" }}>Discovering social accounts...</span></div>
-    </Panel>
-  );
+  if (isPending)
+    return (
+      <Panel title="Social Accounts" icon={<Share2 size={14} />}>
+        <div className="p-4">
+          <span style={{ color: "var(--dim)", fontSize: "12px" }}>Discovering social accounts...</span>
+        </div>
+      </Panel>
+    );
 
   const accounts = data?.accounts ?? [];
 
   return (
-    <Panel title="Social Accounts" icon={<Share2 size={14} />} badge={accounts.length > 0 ? <StatusBadge status="pass" label={`${accounts.length} found`} /> : undefined}>
+    <Panel
+      title="Social Accounts"
+      icon={<Share2 size={14} />}
+      badge={accounts.length > 0 ? <StatusBadge status="pass" label={`${accounts.length} found`} /> : undefined}
+    >
       {accounts.length === 0 ? (
-        <div className="p-4"><StatusBadge status="neutral" label="No social accounts found" /></div>
+        <div className="p-4">
+          <StatusBadge status="neutral" label="No social accounts found" />
+        </div>
       ) : (
         <div className="p-3 flex flex-wrap gap-2">
-          {accounts.map((acc, i) => {
-            const trust = acc.found_via === "rel-me" ? "verified" : acc.found_via === "homepage" ? "linked" : "probable";
-            const tooltipText = trust === "verified"
-              ? "Verified via rel=\"me\" — the site explicitly claims ownership of this social profile"
-              : trust === "linked"
-              ? "Linked from site — this social profile is referenced in the site's HTML"
-              : "Username match — discovered by probing common social URL patterns";
-            const badgeColor = trust === "verified" ? "var(--success)" : trust === "linked" ? "var(--info, var(--accent))" : "var(--warning)";
+          {accounts.map((acc, _i) => {
+            const trust =
+              acc.found_via === "rel-me" ? "verified" : acc.found_via === "homepage" ? "linked" : "probable";
+            const tooltipText =
+              trust === "verified"
+                ? 'Verified via rel="me" — the site explicitly claims ownership of this social profile'
+                : trust === "linked"
+                  ? "Linked from site — this social profile is referenced in the site's HTML"
+                  : "Username match — discovered by probing common social URL patterns";
+            const badgeColor =
+              trust === "verified"
+                ? "var(--success)"
+                : trust === "linked"
+                  ? "var(--info, var(--accent))"
+                  : "var(--warning)";
             const Icon = trust === "probable" ? HelpCircle : CheckCircle2;
             return (
               <Tooltip key={acc.url} text={tooltipText}>
@@ -118,14 +198,23 @@ function SocialAccountsPanel({ domain }: { domain: string }) {
                   <Icon size={10} style={{ color: badgeColor, flexShrink: 0 }} />
                   <span style={{ fontWeight: 600, fontSize: "11px" }}>{acc.platform}</span>
                   {acc.username && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>@{acc.username}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
+                      @{acc.username}
+                    </span>
                   )}
-                  <span style={{
-                    fontSize: "8px", fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
-                    padding: "1px 4px", borderRadius: "3px", lineHeight: 1.3,
-                    background: `color-mix(in srgb, ${badgeColor} 15%, transparent)`,
-                    color: badgeColor,
-                  }}>
+                  <span
+                    style={{
+                      fontSize: "8px",
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      padding: "1px 4px",
+                      borderRadius: "3px",
+                      lineHeight: 1.3,
+                      background: `color-mix(in srgb, ${badgeColor} 15%, transparent)`,
+                      color: badgeColor,
+                    }}
+                  >
                     {trust}
                   </span>
                 </a>

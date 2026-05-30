@@ -45,7 +45,10 @@ function parseCacheControl(raw: string): Record<string, string | true> {
     if (eqIdx === -1) {
       directives[trimmed] = true;
     } else {
-      directives[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim().replace(/^"|"$/g, "");
+      directives[trimmed.slice(0, eqIdx).trim()] = trimmed
+        .slice(eqIdx + 1)
+        .trim()
+        .replace(/^"|"$/g, "");
     }
   }
   return directives;
@@ -106,21 +109,21 @@ export function checkCacheHeaders(headers: Record<string, string> | null): Cache
   let effectiveTtl: number | null = null;
   if (directives["s-maxage"] && typeof directives["s-maxage"] === "string") {
     effectiveTtl = parseInt(directives["s-maxage"], 10);
-    if (isNaN(effectiveTtl)) effectiveTtl = null;
+    if (Number.isNaN(effectiveTtl)) effectiveTtl = null;
   }
   if (effectiveTtl === null && directives["max-age"] && typeof directives["max-age"] === "string") {
     effectiveTtl = parseInt(directives["max-age"], 10);
-    if (isNaN(effectiveTtl)) effectiveTtl = null;
+    if (Number.isNaN(effectiveTtl)) effectiveTtl = null;
   }
 
   // no-store / no-cache override TTL semantics
   const hasNoStore = directives["no-store"] === true;
   const hasNoCache = directives["no-cache"] === true;
-  const hasMustRevalidate = directives["must-revalidate"] === true;
-  const hasImmutable = directives["immutable"] === true;
-  const hasStaleWhileRevalidate = typeof directives["stale-while-revalidate"] !== "undefined";
-  const hasPublic = directives["public"] === true;
-  const hasPrivate = directives["private"] === true;
+  const _hasMustRevalidate = directives["must-revalidate"] === true;
+  const hasImmutable = directives.immutable === true;
+  const _hasStaleWhileRevalidate = typeof directives["stale-while-revalidate"] !== "undefined";
+  const hasPublic = directives.public === true;
+  const hasPrivate = directives.private === true;
 
   if (hasNoStore) {
     effectiveTtl = 0;
@@ -129,14 +132,19 @@ export function checkCacheHeaders(headers: Record<string, string> | null): Cache
 
   // ── CDN Cache ──
   const cdn = detectCdn(h);
-  const ageRaw = h["age"];
+  const ageRaw = h.age;
   const ageSeconds = ageRaw ? parseInt(ageRaw, 10) : null;
 
   // ── Conditional request support ──
-  const hasEtag = !!h["etag"];
+  const hasEtag = !!h.etag;
   const hasLastModified = !!h["last-modified"];
-  const varyRaw = h["vary"];
-  const variesOn = varyRaw ? varyRaw.split(",").map((v) => v.trim()).filter(Boolean) : [];
+  const varyRaw = h.vary;
+  const variesOn = varyRaw
+    ? varyRaw
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean)
+    : [];
 
   if (varyRaw?.trim() === "*") {
     issues.push("Vary: * disables all caching");
@@ -174,26 +182,22 @@ export function checkCacheHeaders(headers: Record<string, string> | null): Cache
     verdict = "none";
     verdictLabel = "No cache headers — browsers use heuristic caching";
   } else if (
-    effectiveTtl !== null && effectiveTtl >= 86400 &&
+    effectiveTtl !== null &&
+    effectiveTtl >= 86400 &&
     (hasEtag || hasLastModified) &&
     (cdn.status === "HIT" || cdn.status === "MISS" || hasPublic || hasImmutable)
   ) {
     verdict = "excellent";
     verdictLabel = `Well-configured caching — ${humanTtl(effectiveTtl)} TTL with conditional request support`;
-  } else if (
-    effectiveTtl !== null && effectiveTtl >= 3600
-  ) {
+  } else if (effectiveTtl !== null && effectiveTtl >= 3600) {
     verdict = "good";
     verdictLabel = `Good caching — ${humanTtl(effectiveTtl)} TTL`;
-  } else if (
-    (effectiveTtl !== null && effectiveTtl > 0) ||
-    hasNoCache ||
-    (hasEtag || hasLastModified)
-  ) {
+  } else if ((effectiveTtl !== null && effectiveTtl > 0) || hasNoCache || hasEtag || hasLastModified) {
     verdict = "fair";
-    verdictLabel = effectiveTtl && effectiveTtl > 0
-      ? `Short cache TTL — ${humanTtl(effectiveTtl)}`
-      : "Revalidation only — every request checks with the server";
+    verdictLabel =
+      effectiveTtl && effectiveTtl > 0
+        ? `Short cache TTL — ${humanTtl(effectiveTtl)}`
+        : "Revalidation only — every request checks with the server";
   } else {
     verdict = "poor";
     verdictLabel = "Cache headers present but not effectively caching";
@@ -209,7 +213,7 @@ export function checkCacheHeaders(headers: Record<string, string> | null): Cache
     cdn_cache: {
       status: cdn.status,
       provider: cdn.provider,
-      age_seconds: isNaN(ageSeconds as number) ? null : ageSeconds,
+      age_seconds: Number.isNaN(ageSeconds as number) ? null : ageSeconds,
     },
     conditional: {
       etag: hasEtag,

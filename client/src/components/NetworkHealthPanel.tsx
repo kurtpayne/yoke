@@ -1,14 +1,24 @@
-import { Activity, Globe, ExternalLink, Clock, Shield, Radio } from "lucide-react";
+import { Activity, ExternalLink, Globe } from "lucide-react";
 import type { AnalysisResult, NetworkHealthData } from "../api";
-import { Panel, DataRow, StatusBadge } from "./Panel";
 import { CliButton, networkHealthCliCommands } from "./CliModal";
+import { DataRow, Panel, StatusBadge } from "./Panel";
 
 export function NetworkHealthPanel({ data }: { data: AnalysisResult }) {
   const nh = data.network_health;
   if (!nh) return null;
 
   return (
-    <Panel title="Network Health" icon={<Activity size={14} />} badge={<CliButton commands={networkHealthCliCommands(data.domain, data.ip_info?.ip)} domain={data.domain} ip={data.ip_info?.ip} />}>
+    <Panel
+      title="Network Health"
+      icon={<Activity size={14} />}
+      badge={
+        <CliButton
+          commands={networkHealthCliCommands(data.domain, data.ip_info?.ip)}
+          domain={data.domain}
+          ip={data.ip_info?.ip}
+        />
+      }
+    >
       {nh.dns_propagation && <DnsPropagationSection data={nh.dns_propagation} />}
       {nh.connection_timing && <ConnectionTimingSection data={nh.connection_timing} />}
       {nh.ripe_routing && <RipeRoutingSection data={nh.ripe_routing} />}
@@ -84,11 +94,7 @@ function DnsPropagationSection({ data }: { data: NonNullable<NetworkHealthData["
         <tbody>
           {data.resolvers.map((r, i) => {
             const dotColor =
-              r.status === "ok"
-                ? "var(--success)"
-                : r.status === "timeout"
-                  ? "var(--warning)"
-                  : "var(--danger)";
+              r.status === "ok" ? "var(--success)" : r.status === "timeout" ? "var(--warning)" : "var(--danger)";
             return (
               <tr
                 key={r.name}
@@ -130,10 +136,7 @@ function DnsPropagationSection({ data }: { data: NonNullable<NetworkHealthData["
                 </td>
                 <td style={{ padding: "5px 12px", textAlign: "center" }}>
                   <div className="flex items-center justify-center gap-1.5">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{ background: dotColor }}
-                    />
+                    <div className="w-2 h-2 rounded-full" style={{ background: dotColor }} />
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
@@ -271,10 +274,7 @@ function ConnectionTimingSection({ data }: { data: NonNullable<NetworkHealthData
           }}
         >
           {segments.map((seg) => (
-            <div
-              key={seg.label}
-              className="flex items-center gap-1.5"
-            >
+            <div key={seg.label} className="flex items-center gap-1.5">
               <div
                 style={{
                   width: "8px",
@@ -303,9 +303,7 @@ function ConnectionTimingSection({ data }: { data: NonNullable<NetworkHealthData
         {data.tls_version && (
           <DataRow
             label="TLS Version"
-            value={
-              <StatusBadge status="info" label={data.tls_version} />
-            }
+            value={<StatusBadge status="info" label={data.tls_version} />}
             mono={false}
             copyValue={data.tls_version}
           />
@@ -332,14 +330,13 @@ function RipeRoutingSection({ data }: { data: NonNullable<NetworkHealthData["rip
     ? data.routing_stability.charAt(0).toUpperCase() + data.routing_stability.slice(1)
     : "Unknown";
 
-  const visColor =
-    data.visibility
-      ? data.visibility.percentage >= 90
-        ? "var(--success)"
-        : data.visibility.percentage >= 70
-          ? "var(--warning)"
-          : "var(--danger)"
-      : "var(--dim)";
+  const visColor = data.visibility
+    ? data.visibility.percentage >= 90
+      ? "var(--success)"
+      : data.visibility.percentage >= 70
+        ? "var(--warning)"
+        : "var(--danger)"
+    : "var(--dim)";
 
   return (
     <div style={{ borderTop: "1px solid var(--border)" }}>
@@ -457,7 +454,9 @@ function RipeRoutingSection({ data }: { data: NonNullable<NetworkHealthData["rip
               </div>
             }
             mono={false}
-            copyValue={[stabilityLabel, data.bgp_updates_24h != null ? `${data.bgp_updates_24h} updates/24h` : null].filter(Boolean).join(" · ")}
+            copyValue={[stabilityLabel, data.bgp_updates_24h != null ? `${data.bgp_updates_24h} updates/24h` : null]
+              .filter(Boolean)
+              .join(" · ")}
           />
         )}
       </div>
@@ -523,9 +522,7 @@ function OutageLinksSection({ data }: { data: NonNullable<NetworkHealthData["out
               fontWeight: 600,
               textDecoration: "none",
               cursor: link.exists ? "pointer" : "default",
-              background: link.exists
-                ? "rgba(63, 185, 80, 0.1)"
-                : "var(--surface-raised)",
+              background: link.exists ? "rgba(63, 185, 80, 0.1)" : "var(--surface-raised)",
               color: link.exists ? "var(--success)" : "var(--dim)",
               border: `1px solid ${link.exists ? "rgba(63, 185, 80, 0.25)" : "var(--border-muted)"}`,
               opacity: link.exists ? 1 : 0.5,

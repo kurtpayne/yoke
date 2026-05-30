@@ -11,7 +11,7 @@ export interface WafDetection {
 
 interface WafSignal {
   provider: string;
-  strength: number;     // 3 = definitive, 2 = strong, 1 = suggestive
+  strength: number; // 3 = definitive, 2 = strong, 1 = suggestive
   signal: string;
 }
 
@@ -61,9 +61,7 @@ const HEADER_SIGNATURES: Array<{
   },
   {
     provider: "Barracuda WAF",
-    checks: [
-      { header: "server", pattern: /barracuda/i, strength: 3, signal: "Server: Barracuda" },
-    ],
+    checks: [{ header: "server", pattern: /barracuda/i, strength: 3, signal: "Server: Barracuda" }],
   },
   {
     provider: "F5 BIG-IP",
@@ -74,9 +72,7 @@ const HEADER_SIGNATURES: Array<{
   },
   {
     provider: "DDoS-Guard",
-    checks: [
-      { header: "server", pattern: /ddos-guard/i, strength: 3, signal: "Server: DDoS-Guard" },
-    ],
+    checks: [{ header: "server", pattern: /ddos-guard/i, strength: 3, signal: "Server: DDoS-Guard" }],
   },
   {
     provider: "StackPath",
@@ -87,15 +83,11 @@ const HEADER_SIGNATURES: Array<{
   },
   {
     provider: "Edgecast/Verizon",
-    checks: [
-      { header: "server", pattern: /ecs|ecd/i, strength: 2, signal: "Server: ECS/ECD (Edgecast)" },
-    ],
+    checks: [{ header: "server", pattern: /ecs|ecd/i, strength: 2, signal: "Server: ECS/ECD (Edgecast)" }],
   },
   {
     provider: "Reblaze",
-    checks: [
-      { header: "server", pattern: /reblaze/i, strength: 3, signal: "Server: Reblaze" },
-    ],
+    checks: [{ header: "server", pattern: /reblaze/i, strength: 3, signal: "Server: Reblaze" }],
   },
 ];
 
@@ -109,23 +101,63 @@ const GENERIC_WAF_HEADERS: Array<{ header: string; pattern: RegExp; signal: stri
 // ─── Cookie-based detection ─────────────────────────────────────────
 
 const COOKIE_SIGNATURES: Array<{ provider: string; patterns: RegExp[]; strength: number; signal: string }> = [
-  { provider: "Cloudflare", patterns: [/^__cf_bm=/i, /^__cfduid=/i, /^cf_clearance=/i], strength: 1, signal: "Cloudflare bot management cookie" },
-  { provider: "Imperva/Incapsula", patterns: [/^visid_incap_/i, /^incap_ses_/i, /^nlbi_/i], strength: 2, signal: "Imperva/Incapsula session cookie" },
+  {
+    provider: "Cloudflare",
+    patterns: [/^__cf_bm=/i, /^__cfduid=/i, /^cf_clearance=/i],
+    strength: 1,
+    signal: "Cloudflare bot management cookie",
+  },
+  {
+    provider: "Imperva/Incapsula",
+    patterns: [/^visid_incap_/i, /^incap_ses_/i, /^nlbi_/i],
+    strength: 2,
+    signal: "Imperva/Incapsula session cookie",
+  },
   { provider: "Sucuri WAF", patterns: [/^sucuri_cloudproxy_/i], strength: 2, signal: "Sucuri CloudProxy cookie" },
-  { provider: "Akamai", patterns: [/^ak_bmsc=/i, /^bm_sz=/i, /^bm_sv=/i], strength: 1, signal: "Akamai Bot Manager cookie" },
+  {
+    provider: "Akamai",
+    patterns: [/^ak_bmsc=/i, /^bm_sz=/i, /^bm_sv=/i],
+    strength: 1,
+    signal: "Akamai Bot Manager cookie",
+  },
   { provider: "Reblaze", patterns: [/^rbzid=/i, /^rbzsessionid=/i], strength: 2, signal: "Reblaze session cookie" },
-  { provider: "PerimeterX", patterns: [/^_px[23]=/i, /^_pxhd=/i], strength: 2, signal: "PerimeterX bot detection cookie" },
+  {
+    provider: "PerimeterX",
+    patterns: [/^_px[23]=/i, /^_pxhd=/i],
+    strength: 2,
+    signal: "PerimeterX bot detection cookie",
+  },
   { provider: "DataDome", patterns: [/^datadome=/i], strength: 2, signal: "DataDome protection cookie" },
 ];
 
 // ─── HTML-based detection ───────────────────────────────────────────
 
 const HTML_SIGNATURES: Array<{ provider: string; patterns: RegExp[]; strength: number; signal: string }> = [
-  { provider: "Wordfence", patterns: [/wordfence/i, /wf-resolve/i], strength: 2, signal: "Wordfence signature in HTML" },
-  { provider: "ModSecurity", patterns: [/mod_security|modsecurity/i, /NOYB/], strength: 2, signal: "ModSecurity error page signature" },
-  { provider: "Cloudflare", patterns: [/cf-browser-verification|Checking your browser/i, /challenges\.cloudflare\.com/i], strength: 2, signal: "Cloudflare challenge page" },
+  {
+    provider: "Wordfence",
+    patterns: [/wordfence/i, /wf-resolve/i],
+    strength: 2,
+    signal: "Wordfence signature in HTML",
+  },
+  {
+    provider: "ModSecurity",
+    patterns: [/mod_security|modsecurity/i, /NOYB/],
+    strength: 2,
+    signal: "ModSecurity error page signature",
+  },
+  {
+    provider: "Cloudflare",
+    patterns: [/cf-browser-verification|Checking your browser/i, /challenges\.cloudflare\.com/i],
+    strength: 2,
+    signal: "Cloudflare challenge page",
+  },
   { provider: "AWS WAF", patterns: [/aws-waf-token/i], strength: 2, signal: "AWS WAF token in HTML" },
-  { provider: "Distil Networks", patterns: [/distil_r_blocked|x-distil-cs/i], strength: 2, signal: "Distil Networks block page" },
+  {
+    provider: "Distil Networks",
+    patterns: [/distil_r_blocked|x-distil-cs/i],
+    strength: 2,
+    signal: "Distil Networks block page",
+  },
 ];
 
 // ─── Main detection function ────────────────────────────────────────
@@ -208,7 +240,7 @@ export function checkWaf(
   }
 
   // Determine confidence
-  const maxStrength = Math.max(...signals.filter(s => s.provider === bestProvider).map(s => s.strength));
+  const maxStrength = Math.max(...signals.filter((s) => s.provider === bestProvider).map((s) => s.strength));
   const signalCount = providerScores.get(bestProvider)?.signals.length ?? 0;
   let confidence: "high" | "medium" | "low";
   if (maxStrength >= 3 || (signalCount >= 2 && maxStrength >= 2)) {

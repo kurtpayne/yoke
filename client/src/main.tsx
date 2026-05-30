@@ -9,7 +9,20 @@ import "./theme.css";
 (() => {
   try {
     const saved = localStorage.getItem("yoke-theme");
-    const valid = new Set(["dark", "light", "arcade", "deep-blue", "enterprise", "newsprint", "lcars", "synthwave", "botanical", "slate", "rose", "high-contrast"]);
+    const valid = new Set([
+      "dark",
+      "light",
+      "arcade",
+      "deep-blue",
+      "enterprise",
+      "newsprint",
+      "lcars",
+      "synthwave",
+      "botanical",
+      "slate",
+      "rose",
+      "high-contrast",
+    ]);
     const theme = saved && valid.has(saved) ? saved : "dark";
     document.documentElement.setAttribute("data-theme", theme);
   } catch {

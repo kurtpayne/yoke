@@ -2,8 +2,8 @@
 // Standard interface for all Phase 2 parallel analysis checks.
 // Each check is a self-contained module that describes itself and runs independently.
 
-import type { Env } from "../helpers";
 import type { DnsRecord } from "../actions/analyze/types";
+import type { Env } from "../helpers";
 
 /**
  * Context passed to every Phase 2 check.

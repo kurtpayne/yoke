@@ -1,10 +1,11 @@
-import { Activity, Clock, Globe, Lock, Server, Wifi, Zap, Hash } from "lucide-react";
-import { Tooltip } from "./Tooltip";
+import { Activity, Clock, Globe, Hash, Lock, Server, Wifi, Zap } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
+import { Tooltip } from "./Tooltip";
 
 const STATUS_TOOLTIPS: Record<string, string> = {
   UP: "Site responded with a successful HTTP status code (2xx/3xx)",
-  RESTRICTED: "DNS resolves and SSL is valid, but our automated probe received a non-success response. The site is likely up but blocks bot requests.",
+  RESTRICTED:
+    "DNS resolves and SSL is valid, but our automated probe received a non-success response. The site is likely up but blocks bot requests.",
   DOWN: "DNS resolution failed or the server refused connections on ports 80 and 443",
   "NOT REGISTERED": "This domain does not exist — DNS returned NXDOMAIN (no such domain)",
 };
@@ -25,7 +26,13 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
   const h3 = data.http_protocols?.http3;
 
   // Status color and label
-  const statusColor = isNotRegistered ? "var(--dim)" : isRestricted ? "var(--warning)" : isUp ? "var(--success)" : "var(--danger)";
+  const statusColor = isNotRegistered
+    ? "var(--dim)"
+    : isRestricted
+      ? "var(--warning)"
+      : isUp
+        ? "var(--success)"
+        : "var(--danger)";
   const statusText = isNotRegistered ? "NOT REGISTERED" : isRestricted ? "RESTRICTED" : isUp ? "UP" : "DOWN";
 
   const statusTooltip = STATUS_TOOLTIPS[statusText] ?? "";
@@ -34,12 +41,12 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
   return (
     <div className="flex flex-wrap gap-2 px-1">
       {hasStatus && (
-      <Tooltip text={statusTooltip + statusCodeNote}>
-        <div className="vital-pill" style={{ cursor: "help" }}>
-          <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: statusColor }} />
-          <span style={{ color: statusColor, fontWeight: 600 }}>{statusText}</span>
-        </div>
-      </Tooltip>
+        <Tooltip text={statusTooltip + statusCodeNote}>
+          <div className="vital-pill" style={{ cursor: "help" }}>
+            <div className="w-2 h-2 rounded-full pulse-dot" style={{ background: statusColor }} />
+            <span style={{ color: statusColor, fontWeight: 600 }}>{statusText}</span>
+          </div>
+        </Tooltip>
       )}
 
       {httpBlocked && !isNotRegistered && (
@@ -51,10 +58,16 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
       )}
 
       {responseTime != null && (
-        <Tooltip text={`Time to first byte from our probe server. Under 300ms is fast, 300-1000ms is average, over 1000ms is slow.`}>
+        <Tooltip
+          text={`Time to first byte from our probe server. Under 300ms is fast, 300-1000ms is average, over 1000ms is slow.`}
+        >
           <div className="vital-pill" style={{ cursor: "help" }}>
             <Activity size={12} style={{ color: "var(--dim)" }} />
-            <span style={{ color: responseTime < 500 ? "var(--success)" : responseTime < 2000 ? "var(--warning)" : "var(--danger)" }}>
+            <span
+              style={{
+                color: responseTime < 500 ? "var(--success)" : responseTime < 2000 ? "var(--warning)" : "var(--danger)",
+              }}
+            >
               {responseTime}ms
             </span>
           </div>
@@ -71,10 +84,29 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
       )}
 
       {sslGrade && (
-        <Tooltip text={sslGrade === "Valid" ? "SSL certificate detected via HTTPS connectivity. Full grade pending from SSL Labs." : `SSL/TLS certificate grade from Qualys SSL Labs. A+ is the highest rating (strong config + HSTS). B or below indicates legacy cipher suites or configuration weaknesses.`}>
+        <Tooltip
+          text={
+            sslGrade === "Valid"
+              ? "SSL certificate detected via HTTPS connectivity. Full grade pending from SSL Labs."
+              : `SSL/TLS certificate grade from Qualys SSL Labs. A+ is the highest rating (strong config + HSTS). B or below indicates legacy cipher suites or configuration weaknesses.`
+          }
+        >
           <div className="vital-pill" style={{ cursor: "help" }}>
             <Lock size={12} style={{ color: "var(--dim)" }} />
-            <span style={{ color: sslGrade === "Valid" ? "#7ee787" : sslGrade.startsWith("A") ? "var(--success)" : sslGrade.startsWith("B") ? "#7ee787" : sslGrade.startsWith("C") ? "var(--warning)" : "var(--danger)" }}>
+            <span
+              style={{
+                color:
+                  sslGrade === "Valid"
+                    ? "#7ee787"
+                    : sslGrade.startsWith("A")
+                      ? "var(--success)"
+                      : sslGrade.startsWith("B")
+                        ? "#7ee787"
+                        : sslGrade.startsWith("C")
+                          ? "var(--warning)"
+                          : "var(--danger)",
+              }}
+            >
               SSL {sslGrade === "Valid" ? "✓" : sslGrade}
             </span>
           </div>
@@ -85,7 +117,17 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
         <Tooltip text="Security headers grade based on the presence of protective HTTP headers like CSP, HSTS, X-Frame-Options, and others. A means most headers are present; lower grades indicate missing protections.">
           <div className="vital-pill" style={{ cursor: "help" }}>
             <Wifi size={12} style={{ color: "var(--dim)" }} />
-            <span style={{ color: secGrade.startsWith("A") ? "var(--success)" : secGrade.startsWith("B") ? "#7ee787" : secGrade.startsWith("C") ? "var(--warning)" : "var(--danger)" }}>
+            <span
+              style={{
+                color: secGrade.startsWith("A")
+                  ? "var(--success)"
+                  : secGrade.startsWith("B")
+                    ? "#7ee787"
+                    : secGrade.startsWith("C")
+                      ? "var(--warning)"
+                      : "var(--danger)",
+              }}
+            >
               HDR {secGrade}
             </span>
           </div>
@@ -106,7 +148,9 @@ export function VitalsStrip({ data }: { data: AnalysisResult }) {
           <div className="vital-pill" style={{ cursor: "help" }}>
             <Clock size={12} style={{ color: "var(--dim)" }} />
             <span style={{ color: "var(--text-secondary)" }}>
-              {domainAge > 365 ? `${Math.floor(domainAge / 365)}y ${Math.floor((domainAge % 365) / 30)}m` : `${domainAge}d`}
+              {domainAge > 365
+                ? `${Math.floor(domainAge / 365)}y ${Math.floor((domainAge % 365) / 30)}m`
+                : `${domainAge}d`}
             </span>
           </div>
         </Tooltip>

@@ -2,17 +2,22 @@
 // Streams analysis results as Server-Sent Events as each check completes.
 // Delegates all analysis logic to the shared core pipeline.
 
-import { type Env, normalizeDomain, CORS_HEADERS } from "../helpers";
-import { runAnalysis, type AnalysisCallbacks } from "./analyze/core";
+import { CORS_HEADERS, type Env, normalizeDomain } from "../helpers";
+import { type AnalysisCallbacks, runAnalysis } from "./analyze/core";
 
 // SSE helper: format an event
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export async function analyzeDomainStream(domain: string, env: Env, skipCache = false, extraHeaders?: Record<string, string>): Promise<Response> {
+export async function analyzeDomainStream(
+  domain: string,
+  env: Env,
+  skipCache = false,
+  extraHeaders?: Record<string, string>,
+): Promise<Response> {
   domain = normalizeDomain(domain);
-  if (!domain || !domain.includes(".")) {
+  if (!domain?.includes(".")) {
     return new Response(JSON.stringify({ error: "Invalid domain" }), {
       status: 400,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -24,19 +29,25 @@ export async function analyzeDomainStream(domain: string, env: Env, skipCache = 
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
 
-  const send = (event: string, data: unknown) =>
-    writer.write(encoder.encode(sseEvent(event, data)));
+  const send = (event: string, data: unknown) => writer.write(encoder.encode(sseEvent(event, data)));
 
   // Run the analysis in background, streaming results
   const doAnalysis = async () => {
     try {
       const callbacks: AnalysisCallbacks = {
         onPhase: async (phase, status, label, total, checks) => {
-          await send("phase", { phase, status, label, ...(total !== undefined ? { total } : {}), ...(checks ? { checks } : {}) });
+          await send("phase", {
+            phase,
+            status,
+            label,
+            ...(total !== undefined ? { total } : {}),
+            ...(checks ? { checks } : {}),
+          });
         },
         onResult: async (key, value, completed, total, label, error) => {
           await send("result", {
-            key, value,
+            key,
+            value,
             ...(completed !== undefined ? { completed } : {}),
             ...(total !== undefined ? { total } : {}),
             ...(label !== undefined ? { label } : {}),
@@ -57,9 +68,15 @@ export async function analyzeDomainStream(domain: string, env: Env, skipCache = 
     } catch (err) {
       try {
         await send("error", { message: err instanceof Error ? err.message : "Analysis failed" });
-      } catch { /* writer may be closed */ }
+      } catch {
+        /* writer may be closed */
+      }
     } finally {
-      try { await writer.close(); } catch { /* already closed */ }
+      try {
+        await writer.close();
+      } catch {
+        /* already closed */
+      }
     }
   };
 
@@ -70,7 +87,7 @@ export async function analyzeDomainStream(domain: string, env: Env, skipCache = 
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
+      Connection: "keep-alive",
       ...CORS_HEADERS,
       ...(extraHeaders || {}),
     },

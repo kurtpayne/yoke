@@ -1,8 +1,7 @@
-import { ShieldAlert, ShieldCheck, ExternalLink, AlertTriangle } from "lucide-react";
-import { Tooltip } from "./Tooltip";
-import { Panel } from "./Panel";
-import { CliButton, breachCliCommands } from "./CliModal";
+import { AlertTriangle, ExternalLink, ShieldAlert, ShieldCheck } from "lucide-react";
 import type { AnalysisResult, BreachItem } from "../utils/types";
+import { breachCliCommands, CliButton } from "./CliModal";
+import { Panel } from "./Panel";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
@@ -22,15 +21,30 @@ function formatDate(dateStr: string): string {
 
 // Color-code data classes by severity
 const severeClasses = new Set([
-  "Passwords", "Password hints", "Credit cards", "Bank account numbers",
-  "Social security numbers", "Government issued IDs", "Passport numbers",
-  "Credit card CVV", "PINs", "Security questions and answers",
+  "Passwords",
+  "Password hints",
+  "Credit cards",
+  "Bank account numbers",
+  "Social security numbers",
+  "Government issued IDs",
+  "Passport numbers",
+  "Credit card CVV",
+  "PINs",
+  "Security questions and answers",
   "Partial credit card data",
 ]);
 const moderateClasses = new Set([
-  "Email addresses", "Phone numbers", "Dates of birth", "Physical addresses",
-  "IP addresses", "Genders", "Employers", "Job titles",
-  "Income levels", "Family members' names", "Nationalities",
+  "Email addresses",
+  "Phone numbers",
+  "Dates of birth",
+  "Physical addresses",
+  "IP addresses",
+  "Genders",
+  "Employers",
+  "Job titles",
+  "Income levels",
+  "Family members' names",
+  "Nationalities",
 ]);
 
 function classColor(cls: string): string {
@@ -63,7 +77,9 @@ function BreachCard({ breach }: { breach: BreachItem }) {
               src={breach.logo_url}
               alt=""
               style={{ width: 24, height: 24, borderRadius: 4, objectFit: "contain", background: "#fff" }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
             />
           )}
           <div>
@@ -77,13 +93,19 @@ function BreachCard({ breach }: { breach: BreachItem }) {
         </div>
         <div className="flex items-center gap-1.5">
           {breach.is_verified && (
-            <span className="badge badge-fail" style={{ fontSize: "9px" }}>Verified</span>
+            <span className="badge badge-fail" style={{ fontSize: "9px" }}>
+              Verified
+            </span>
           )}
           {breach.is_fabricated && (
-            <span className="badge badge-warn" style={{ fontSize: "9px" }}>Fabricated</span>
+            <span className="badge badge-warn" style={{ fontSize: "9px" }}>
+              Fabricated
+            </span>
           )}
           {breach.is_sensitive && (
-            <span className="badge badge-warn" style={{ fontSize: "9px" }}>Sensitive</span>
+            <span className="badge badge-warn" style={{ fontSize: "9px" }}>
+              Sensitive
+            </span>
           )}
           <a
             href={hibpUrl}
@@ -99,7 +121,7 @@ function BreachCard({ breach }: { breach: BreachItem }) {
 
       {/* Data classes exposed */}
       <div className="flex flex-wrap gap-1">
-        {breach.data_classes.map((cls, i) => (
+        {breach.data_classes.map((cls, _i) => (
           <span
             key={cls}
             className="rounded px-1.5 py-0.5"
@@ -130,7 +152,7 @@ function BreachCard({ breach }: { breach: BreachItem }) {
             textOverflow: "ellipsis",
           }}
         >
-          {breach.description.replace(/<[^>]*>/g, '').slice(0, 300)}...
+          {breach.description.replace(/<[^>]*>/g, "").slice(0, 300)}...
         </div>
       )}
     </div>
@@ -146,7 +168,11 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
   const { found, count, total_pwned, items } = breaches;
   const check_failed = breaches.check_failed;
 
-  const icon = found ? <ShieldAlert size={14} style={{ color: "var(--danger)" }} /> : <ShieldCheck size={14} style={{ color: "var(--success)" }} />;
+  const icon = found ? (
+    <ShieldAlert size={14} style={{ color: "var(--danger)" }} />
+  ) : (
+    <ShieldCheck size={14} style={{ color: "var(--success)" }} />
+  );
 
   const badge = (
     <div className="flex items-center gap-2">
@@ -166,7 +192,16 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
   );
 
   return (
-    <Panel title="Data Breaches" icon={icon} badge={<><CliButton commands={breachCliCommands(data.domain)} domain={data.domain} />{badge}</>}>
+    <Panel
+      title="Data Breaches"
+      icon={icon}
+      badge={
+        <>
+          <CliButton commands={breachCliCommands(data.domain)} domain={data.domain} />
+          {badge}
+        </>
+      }
+    >
       <div className="p-4">
         {found ? (
           <div className="space-y-2">
@@ -179,19 +214,47 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
               }}
             >
               <AlertTriangle size={14} style={{ color: "var(--danger)", marginTop: 2, flexShrink: 0 }} />
-              <span style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--danger)", lineHeight: "1.5" }}>
-                This domain has been involved in {count} known data breach{count > 1 ? "es" : ""}, exposing approximately {formatCount(total_pwned)} accounts total.
+              <span
+                style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--danger)", lineHeight: "1.5" }}
+              >
+                This domain has been involved in {count} known data breach{count > 1 ? "es" : ""}, exposing
+                approximately {formatCount(total_pwned)} accounts total.
               </span>
             </div>
 
             {/* Individual breach cards */}
-            {items.map((breach, i) => (
+            {items.map((breach, _i) => (
               <BreachCard key={breach.name} breach={breach} />
             ))}
 
             {/* HIBP attribution (CC BY 4.0) */}
-            <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", textAlign: "center", marginTop: "8px" }}>
-              Data from <a href="https://haveibeenpwned.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Have I Been Pwned</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>CC BY 4.0</a>
+            <div
+              style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: "10px",
+                color: "var(--dim)",
+                textAlign: "center",
+                marginTop: "8px",
+              }}
+            >
+              Data from{" "}
+              <a
+                href="https://haveibeenpwned.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--accent)" }}
+              >
+                Have I Been Pwned
+              </a>{" "}
+              ·{" "}
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--accent)" }}
+              >
+                CC BY 4.0
+              </a>
             </div>
           </div>
         ) : check_failed ? (
@@ -214,7 +277,24 @@ export function BreachPanel({ data }: { data: AnalysisResult }) {
               This domain does not appear in any known breach databases
             </div>
             <div style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)", marginTop: "8px" }}>
-              Data from <a href="https://haveibeenpwned.com" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>Have I Been Pwned</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)" }}>CC BY 4.0</a>
+              Data from{" "}
+              <a
+                href="https://haveibeenpwned.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--accent)" }}
+              >
+                Have I Been Pwned
+              </a>{" "}
+              ·{" "}
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--accent)" }}
+              >
+                CC BY 4.0
+              </a>
             </div>
           </div>
         )}

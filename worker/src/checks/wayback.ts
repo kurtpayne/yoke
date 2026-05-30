@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkWayback } from "../actions/analyze/content";
+import type { Check } from "./types";
 
 export const waybackCheck: Check = {
   key: "wayback",

@@ -1,6 +1,6 @@
-import { fetchWithTimeout, getFromCache, setCache, MULTI_PART_TLDS } from "../helpers";
-import { BREACH_CATALOG_CACHE_TTL_MS, BREACH_RESULT_CACHE_TTL_MS } from "../config/cache";
 import { logApiError } from "../api-errors";
+import { BREACH_CATALOG_CACHE_TTL_MS, BREACH_RESULT_CACHE_TTL_MS } from "../config/cache";
+import { fetchWithTimeout, getFromCache, MULTI_PART_TLDS, setCache } from "../helpers";
 import { logError } from "../logger";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ async function getBreachCatalog(kv: KVNamespace, statsDb?: D1Database): Promise<
       timeout: 10000,
       headers: {
         "User-Agent": "Yoke-Domain-Intelligence",
-        "Accept": "application/json",
+        Accept: "application/json",
       },
     });
 
@@ -93,7 +93,9 @@ async function getBreachCatalog(kv: KVNamespace, statsDb?: D1Database): Promise<
     // Cache in KV
     try {
       await setCache(kv, "_global_", "hibp_breaches", data, BREACH_CATALOG_CACHE_TTL_MS);
-    } catch (e) { console.warn('[yoke:breaches] catalog cache write failed:', e instanceof Error ? e.message : e); }
+    } catch (e) {
+      console.warn("[yoke:breaches] catalog cache write failed:", e instanceof Error ? e.message : e);
+    }
 
     catalogCache = { data, fetchedAt: Date.now() };
     return data;
@@ -112,7 +114,7 @@ function extractBaseDomain(domain: string): string {
   // Handle multi-part TLDs
   const multiTlds = MULTI_PART_TLDS;
   for (const mt of multiTlds) {
-    if (domain.endsWith("." + mt) || domain === mt) {
+    if (domain.endsWith(`.${mt}`) || domain === mt) {
       const mtParts = mt.split(".").length;
       if (parts.length > mtParts + 1) {
         return parts.slice(parts.length - mtParts - 1).join(".");
@@ -144,11 +146,7 @@ export async function checkBreaches(domain: string, kv: KVNamespace, statsDb?: D
     if (!b.Domain) return false;
     const breachDomain = b.Domain.toLowerCase();
     const breachBase = extractBaseDomain(breachDomain);
-    return (
-      breachDomain === normalizedDomain ||
-      breachDomain === baseDomain ||
-      breachBase === baseDomain
-    );
+    return breachDomain === normalizedDomain || breachDomain === baseDomain || breachBase === baseDomain;
   });
 
   // Filter out retired, spam lists, and fabricated breaches for cleaner results
@@ -187,7 +185,9 @@ export async function checkBreaches(domain: string, kv: KVNamespace, statsDb?: D
   // Cache
   try {
     await setCache(kv, domain, "breaches", result, BREACH_RESULT_CACHE_TTL_MS);
-  } catch (e) { console.warn(`[yoke:breaches] result cache write failed for ${domain}:`, e instanceof Error ? e.message : e); }
+  } catch (e) {
+    console.warn(`[yoke:breaches] result cache write failed for ${domain}:`, e instanceof Error ? e.message : e);
+  }
 
   return result;
 }

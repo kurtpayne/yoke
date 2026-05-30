@@ -1,10 +1,22 @@
 #!/bin/sh
-# Pre-commit hook: verify lockfiles are fresh
-# Runs `bun install --frozen-lockfile` in each workspace root.
-# If a lockfile is stale, the commit is blocked with instructions.
+# Pre-commit hook: lint staged files + verify lockfiles are fresh
 
 set -e
 
+# ── Biome: lint & format check on staged files ──
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json)$' || true)
+if [ -n "$STAGED_FILES" ]; then
+  echo "Running Biome on staged files..."
+  npx @biomejs/biome check --no-errors-on-unmatched --staged . || {
+    echo ""
+    echo "❌ Biome found errors. Fix them before committing."
+    echo "   Run: npx @biomejs/biome check --write ."
+    echo ""
+    exit 1
+  }
+fi
+
+# ── Lockfile freshness ──
 check_lockfile() {
   dir="$1"
   if [ -f "$dir/package.json" ]; then

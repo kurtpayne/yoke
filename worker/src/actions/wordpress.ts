@@ -26,31 +26,31 @@ const KNOWN_PLUGINS: Record<string, { name: string; category: string }> = {
   "seo-by-rank-math": { name: "Rank Math SEO", category: "SEO" },
   "rank-math-seo": { name: "Rank Math SEO", category: "SEO" },
   "all-in-one-seo-pack": { name: "All in One SEO", category: "SEO" },
-  "aioseo": { name: "All in One SEO", category: "SEO" },
+  aioseo: { name: "All in One SEO", category: "SEO" },
   "the-seo-framework": { name: "The SEO Framework", category: "SEO" },
   "slim-seo": { name: "Slim SEO", category: "SEO" },
   "squirrly-seo": { name: "Squirrly SEO", category: "SEO" },
 
   // Page builders
-  "elementor": { name: "Elementor", category: "Page Builder" },
+  elementor: { name: "Elementor", category: "Page Builder" },
   "elementor-pro": { name: "Elementor Pro", category: "Page Builder" },
   "beaver-builder-lite-version": { name: "Beaver Builder", category: "Page Builder" },
   "bb-plugin": { name: "Beaver Builder", category: "Page Builder" },
-  "js_composer": { name: "WPBakery Page Builder", category: "Page Builder" },
+  js_composer: { name: "WPBakery Page Builder", category: "Page Builder" },
   "divi-builder": { name: "Divi Builder", category: "Page Builder" },
-  "oxygen": { name: "Oxygen Builder", category: "Page Builder" },
-  "bricks": { name: "Bricks Builder", category: "Page Builder" },
-  "brizy": { name: "Brizy", category: "Page Builder" },
-  "generateblocks": { name: "GenerateBlocks", category: "Page Builder" },
-  "spectra": { name: "Spectra (Ultimate Addons)", category: "Page Builder" },
+  oxygen: { name: "Oxygen Builder", category: "Page Builder" },
+  bricks: { name: "Bricks Builder", category: "Page Builder" },
+  brizy: { name: "Brizy", category: "Page Builder" },
+  generateblocks: { name: "GenerateBlocks", category: "Page Builder" },
+  spectra: { name: "Spectra (Ultimate Addons)", category: "Page Builder" },
   "stackable-ultimate-gutenberg-blocks": { name: "Stackable", category: "Page Builder" },
   "kadence-blocks": { name: "Kadence Blocks", category: "Page Builder" },
 
   // E-commerce
-  "woocommerce": { name: "WooCommerce", category: "E-commerce" },
+  woocommerce: { name: "WooCommerce", category: "E-commerce" },
   "easy-digital-downloads": { name: "Easy Digital Downloads", category: "E-commerce" },
-  "surecart": { name: "SureCart", category: "E-commerce" },
-  "wpsc": { name: "WP eCommerce", category: "E-commerce" },
+  surecart: { name: "SureCart", category: "E-commerce" },
+  wpsc: { name: "WP eCommerce", category: "E-commerce" },
   "wc-product-table-lite": { name: "WC Product Table", category: "E-commerce" },
   "woo-gutenberg-products-block": { name: "WooCommerce Blocks", category: "E-commerce" },
 
@@ -60,26 +60,26 @@ const KNOWN_PLUGINS: Record<string, { name: string; category: string }> = {
   "wp-super-cache": { name: "WP Super Cache", category: "Caching" },
   "litespeed-cache": { name: "LiteSpeed Cache", category: "Caching" },
   "wp-fastest-cache": { name: "WP Fastest Cache", category: "Caching" },
-  "autoptimize": { name: "Autoptimize", category: "Performance" },
-  "breeze": { name: "Breeze (Cloudways)", category: "Caching" },
+  autoptimize: { name: "Autoptimize", category: "Performance" },
+  breeze: { name: "Breeze (Cloudways)", category: "Caching" },
   "sg-cachepress": { name: "SiteGround Optimizer", category: "Caching" },
   "cache-enabler": { name: "Cache Enabler", category: "Caching" },
   "comet-cache": { name: "Comet Cache", category: "Caching" },
   "hummingbird-performance": { name: "Hummingbird", category: "Performance" },
   "flying-press": { name: "FlyingPress", category: "Performance" },
-  "perfmatters": { name: "Perfmatters", category: "Performance" },
-  "nitropack": { name: "NitroPack", category: "Performance" },
+  perfmatters: { name: "Perfmatters", category: "Performance" },
+  nitropack: { name: "NitroPack", category: "Performance" },
   "swift-performance-lite": { name: "Swift Performance", category: "Caching" },
 
   // Security
-  "wordfence": { name: "Wordfence", category: "Security" },
+  wordfence: { name: "Wordfence", category: "Security" },
   "sucuri-scanner": { name: "Sucuri Security", category: "Security" },
   "better-wp-security": { name: "Solid Security (iThemes)", category: "Security" },
   "ithemes-security-pro": { name: "Solid Security Pro", category: "Security" },
   "all-in-one-wp-security-and-firewall": { name: "All In One WP Security", category: "Security" },
   "defender-security": { name: "Defender Security", category: "Security" },
   "wp-cerber": { name: "WP Cerber Security", category: "Security" },
-  "jetpack": { name: "Jetpack", category: "Security / Performance" },
+  jetpack: { name: "Jetpack", category: "Security / Performance" },
   "jetpack-boost": { name: "Jetpack Boost", category: "Performance" },
   "limit-login-attempts-reloaded": { name: "Limit Login Attempts", category: "Security" },
   "really-simple-ssl": { name: "Really Simple SSL", category: "Security" },
@@ -89,28 +89,28 @@ const KNOWN_PLUGINS: Record<string, { name: string; category: string }> = {
   // Forms
   "contact-form-7": { name: "Contact Form 7", category: "Forms" },
   "wpforms-lite": { name: "WPForms", category: "Forms" },
-  "forminator": { name: "Forminator", category: "Forms" },
-  "gravityforms": { name: "Gravity Forms", category: "Forms" },
+  forminator: { name: "Forminator", category: "Forms" },
+  gravityforms: { name: "Gravity Forms", category: "Forms" },
   "ninja-forms": { name: "Ninja Forms", category: "Forms" },
-  "fluentform": { name: "Fluent Forms", category: "Forms" },
-  "formidable": { name: "Formidable Forms", category: "Forms" },
+  fluentform: { name: "Fluent Forms", category: "Forms" },
+  formidable: { name: "Formidable Forms", category: "Forms" },
   "everest-forms": { name: "Everest Forms", category: "Forms" },
 
   // Content / Media
   "advanced-custom-fields": { name: "Advanced Custom Fields", category: "Content" },
   "advanced-custom-fields-pro": { name: "ACF Pro", category: "Content" },
   "classic-editor": { name: "Classic Editor", category: "Editor" },
-  "gutenberg": { name: "Gutenberg (Beta)", category: "Editor" },
-  "tablepress": { name: "TablePress", category: "Content" },
+  gutenberg: { name: "Gutenberg (Beta)", category: "Editor" },
+  tablepress: { name: "TablePress", category: "Content" },
   "wp-smushit": { name: "Smush (Image Optimization)", category: "Media" },
   "ewww-image-optimizer": { name: "EWWW Image Optimizer", category: "Media" },
   "shortpixel-image-optimiser": { name: "ShortPixel", category: "Media" },
-  "imagify": { name: "Imagify", category: "Media" },
+  imagify: { name: "Imagify", category: "Media" },
   "regenerate-thumbnails": { name: "Regenerate Thumbnails", category: "Media" },
   "enable-media-replace": { name: "Enable Media Replace", category: "Media" },
   "wp-video-lightbox": { name: "WP Video Lightbox", category: "Media" },
   "jw-player-7-for-wp-premium": { name: "JW Player", category: "Media" },
-  "revslider": { name: "Slider Revolution", category: "Media" },
+  revslider: { name: "Slider Revolution", category: "Media" },
   "smart-slider-3": { name: "Smart Slider 3", category: "Media" },
 
   // Social / Analytics
@@ -123,26 +123,26 @@ const KNOWN_PLUGINS: Record<string, { name: string; category: string }> = {
   "mailchimp-for-woocommerce": { name: "Mailchimp for WooCommerce", category: "Email" },
 
   // Backup / Migration
-  "updraftplus": { name: "UpdraftPlus", category: "Backup" },
-  "duplicator": { name: "Duplicator", category: "Backup / Migration" },
+  updraftplus: { name: "UpdraftPlus", category: "Backup" },
+  duplicator: { name: "Duplicator", category: "Backup / Migration" },
   "all-in-one-wp-migration": { name: "All-in-One WP Migration", category: "Migration" },
-  "backwpup": { name: "BackWPup", category: "Backup" },
+  backwpup: { name: "BackWPup", category: "Backup" },
 
   // Multilingual
   "sitepress-multilingual-cms": { name: "WPML", category: "Multilingual" },
-  "polylang": { name: "Polylang", category: "Multilingual" },
+  polylang: { name: "Polylang", category: "Multilingual" },
   "translatepress-multilingual": { name: "TranslatePress", category: "Multilingual" },
-  "weglot": { name: "Weglot", category: "Multilingual" },
+  weglot: { name: "Weglot", category: "Multilingual" },
 
   // Utility
-  "redirection": { name: "Redirection", category: "Utility" },
+  redirection: { name: "Redirection", category: "Utility" },
   "wordpress-importer": { name: "WordPress Importer", category: "Utility" },
   "wp-crontrol": { name: "WP Crontrol", category: "Utility" },
   "query-monitor": { name: "Query Monitor", category: "Dev Tools" },
   "code-syntax-block": { name: "Code Syntax Block", category: "Editor" },
-  "handbook": { name: "Handbook", category: "Content" },
+  handbook: { name: "Handbook", category: "Content" },
   "custom-post-type-ui": { name: "Custom Post Type UI", category: "Content" },
-  "members": { name: "Members", category: "Users" },
+  members: { name: "Members", category: "Users" },
   "user-role-editor": { name: "User Role Editor", category: "Users" },
 
   // GTM / Analytics wrappers
@@ -157,23 +157,25 @@ const KNOWN_PLUGINS: Record<string, { name: string; category: string }> = {
 // prettifySlug handles most themes ("theme-name" → "Theme Name").
 // This map overrides only where the display name differs significantly.
 const KNOWN_THEMES: Record<string, string> = {
-  "flavor": "flavor",
+  flavor: "flavor",
   "flavor-developer-2023": "flavor.org Developer 2023",
   "flavor-parent-2021": "flavor.org Parent 2021",
 };
-
 
 // ─── Managed hosting detection via headers + CNAME ──────────────────
 function detectManagedHosting(
   headers: Record<string, string>,
   html: string,
-  dnsRecords?: Array<{ type: string; data: string }>
+  dnsRecords?: Array<{ type: string; data: string }>,
 ): string | null {
   const h = (k: string) => headers[k.toLowerCase()] ?? "";
 
   // WP Engine
-  if (h("x-powered-by").includes("WP Engine") || h("wpe-backend") || h("x-wpe-loopback-upstream-addr")) return "WP Engine";
-  for (const c of (headers["set-cookie"] ?? "").split(",")) { if (/wpe-auth/i.test(c)) return "WP Engine"; }
+  if (h("x-powered-by").includes("WP Engine") || h("wpe-backend") || h("x-wpe-loopback-upstream-addr"))
+    return "WP Engine";
+  for (const c of (headers["set-cookie"] ?? "").split(",")) {
+    if (/wpe-auth/i.test(c)) return "WP Engine";
+  }
 
   // Kinsta
   if (h("x-kinsta-cache") || h("x-edge-location")) return "Kinsta";
@@ -185,8 +187,12 @@ function detectManagedHosting(
   if (h("x-fw-hash") || h("x-fw-serve") || h("x-fw-type")) return "Flywheel";
 
   // WordPress.com / Automattic
-  if (h("x-powered-by").includes("WordPress.com") || /\.wordpress\.com/i.test(h("host"))
-    || /atomiccdn|wpcomstaging\.com|wp\.com\/wp-content/i.test(html)) return "WordPress.com (Automattic)";
+  if (
+    h("x-powered-by").includes("WordPress.com") ||
+    /\.wordpress\.com/i.test(h("host")) ||
+    /atomiccdn|wpcomstaging\.com|wp\.com\/wp-content/i.test(html)
+  )
+    return "WordPress.com (Automattic)";
 
   // Pressable
   if (h("x-pressable-cache") || /pressablecdn\.com/i.test(html)) return "Pressable";
@@ -235,7 +241,7 @@ function detectManagedHosting(
 export function analyzeWordPress(
   html: string,
   headers: Record<string, string>,
-  dnsRecords?: Array<{ type: string; data: string }>
+  dnsRecords?: Array<{ type: string; data: string }>,
 ): WordPressDetails | null {
   // Quick check: is this WordPress at all?
   const isWP =
@@ -316,7 +322,7 @@ export function analyzeWordPress(
   if (/w3 total cache/i.test(xPoweredBy)) pluginSlugs.add("w3-total-cache");
   if (headers["x-litespeed-cache"] || headers["x-lsadc-cache"]) pluginSlugs.add("litespeed-cache");
 
-  const plugins = [...pluginSlugs].map(slug => {
+  const plugins = [...pluginSlugs].map((slug) => {
     const known = KNOWN_PLUGINS[slug];
     return {
       slug,
@@ -370,15 +376,18 @@ export function analyzeWordPress(
   };
 }
 
-function findFirstByCategory(plugins: Array<{ slug: string; name: string; category: string | null }>, category: string): string | null {
-  const match = plugins.find(p => p.category === category);
+function findFirstByCategory(
+  plugins: Array<{ slug: string; name: string; category: string | null }>,
+  category: string,
+): string | null {
+  const match = plugins.find((p) => p.category === category);
   return match?.name ?? null;
 }
 
 function prettifySlug(slug: string): string {
   return slug
     .replace(/-/g, " ")
-    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/\b\w/g, (c) => c.toUpperCase())
     .replace(/\bWp\b/g, "WP")
     .replace(/\bSeo\b/g, "SEO")
     .replace(/\bGtm\b/g, "GTM")

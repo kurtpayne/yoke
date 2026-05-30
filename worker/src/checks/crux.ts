@@ -1,5 +1,5 @@
-import type { Check } from "./types";
 import { checkCrux } from "../actions/analyze/performance";
+import type { Check } from "./types";
 
 export const cruxCheck: Check = {
   key: "crux",

@@ -1,10 +1,13 @@
 // Server-rendered admin dashboard — zero client JS, admin-only
 // Shows OUR operational data, not user data. No IPs, no PII.
-import { getUsageStats } from "./usage-tracking";
-import { getRequestAnalytics } from "./request-tracking";
-import { CORS_HEADERS } from "./helpers";
 
-function n(v: number | undefined | null): string { return (v ?? 0).toLocaleString(); }
+import { CORS_HEADERS } from "./helpers";
+import { getRequestAnalytics } from "./request-tracking";
+import { getUsageStats } from "./usage-tracking";
+
+function n(v: number | undefined | null): string {
+  return (v ?? 0).toLocaleString();
+}
 
 function gradeColor(g: string): string {
   return { A: "#22c55e", B: "#84cc16", C: "#f59e0b", D: "#f97316", F: "#ef4444" }[g] || "#737373";
@@ -13,7 +16,7 @@ function gradeColor(g: string): string {
 // Country code → flag emoji
 function flag(cc: string): string {
   if (!cc || cc === "XX" || cc.length !== 2) return "🌐";
-  return String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+  return String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 }
 
 // Client type → icon
@@ -26,20 +29,25 @@ export async function renderUsagePage(db: D1Database, days = 30): Promise<Respon
 
   // Endpoint traffic
   const dayTotals: Record<string, number> = {};
-  for (const row of stats.by_day) { dayTotals[row.day] = (dayTotals[row.day] || 0) + row.hits; }
+  for (const row of stats.by_day) {
+    dayTotals[row.day] = (dayTotals[row.day] || 0) + row.hits;
+  }
   const sortedDays = Object.keys(dayTotals).sort();
   const maxDaily = Math.max(...Object.values(dayTotals), 1);
   const endpoints = Object.entries(stats.by_endpoint).sort((a, b) => b[1] - a[1]);
   const endpointDays: Record<string, Record<string, number>> = {};
-  for (const row of stats.by_day) { if (!endpointDays[row.endpoint]) endpointDays[row.endpoint] = {}; endpointDays[row.endpoint][row.day] = row.hits; }
+  for (const row of stats.by_day) {
+    if (!endpointDays[row.endpoint]) endpointDays[row.endpoint] = {};
+    endpointDays[row.endpoint][row.day] = row.hits;
+  }
   const recentDays = sortedDays.slice(-14);
   const ss = stats.score_stats;
   const es = stats.error_stats;
 
   // Request analytics charts
-  const maxVisitors = Math.max(...rq.visitors_per_day.map(d => d.count), 1);
-  const maxDomains = Math.max(...rq.domains_per_day.map(d => d.count), 1);
-  const maxRequests = Math.max(...rq.requests_per_day.map(d => d.count), 1);
+  const maxVisitors = Math.max(...rq.visitors_per_day.map((d) => d.count), 1);
+  const maxDomains = Math.max(...rq.domains_per_day.map((d) => d.count), 1);
+  const maxRequests = Math.max(...rq.requests_per_day.map((d) => d.count), 1);
   const maxHourly = Math.max(...rq.by_hour, 1);
   const totalClientType = Object.values(rq.by_client_type).reduce((a, b) => a + b, 0) || 1;
 
@@ -100,10 +108,10 @@ export async function renderUsagePage(db: D1Database, days = 30): Promise<Respon
 <p class="sub">Operational metrics · Last ${days} days · No user data · No IPs</p>
 
 <div class="nav">
-  <a href="/usage?days=7" ${days === 7 ? 'class="active"' : ''}>7d</a>
-  <a href="/usage?days=14" ${days === 14 ? 'class="active"' : ''}>14d</a>
-  <a href="/usage?days=30" ${days === 30 ? 'class="active"' : ''}>30d</a>
-  <a href="/usage?days=90" ${days === 90 ? 'class="active"' : ''}>90d</a>
+  <a href="/usage?days=7" ${days === 7 ? 'class="active"' : ""}>7d</a>
+  <a href="/usage?days=14" ${days === 14 ? 'class="active"' : ""}>14d</a>
+  <a href="/usage?days=30" ${days === 30 ? 'class="active"' : ""}>30d</a>
+  <a href="/usage?days=90" ${days === 90 ? 'class="active"' : ""}>90d</a>
 </div>
 
 <!-- ═══ HERO KPIs ═══ -->
@@ -127,7 +135,7 @@ export async function renderUsagePage(db: D1Database, days = 30): Promise<Respon
   </div>
   <div class="card">
     <div class="cl">Error Rate</div>
-    <div class="cv" style="color:${rq.error_rate_pct > 5 ? 'var(--red)' : rq.error_rate_pct > 1 ? 'var(--accent)' : 'var(--green)'}">${rq.error_rate_pct}%</div>
+    <div class="cv" style="color:${rq.error_rate_pct > 5 ? "var(--red)" : rq.error_rate_pct > 1 ? "var(--accent)" : "var(--green)"}">${rq.error_rate_pct}%</div>
   </div>
   <div class="card">
     <div class="cl">Repeat Scan %</div>
@@ -142,42 +150,51 @@ export async function renderUsagePage(db: D1Database, days = 30): Promise<Respon
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Requests / Day</div>
     <div class="chart">
-      ${rq.requests_per_day.map(d => {
-        const pct = Math.max((d.count / maxRequests) * 100, 3);
-        return `<div class="bar" style="height:${pct}%;background:var(--accent)"><span class="tip">${d.date.slice(5)} · ${n(d.count)}</span></div>`;
-      }).join("")}
+      ${rq.requests_per_day
+        .map((d) => {
+          const pct = Math.max((d.count / maxRequests) * 100, 3);
+          return `<div class="bar" style="height:${pct}%;background:var(--accent)"><span class="tip">${d.date.slice(5)} · ${n(d.count)}</span></div>`;
+        })
+        .join("")}
     </div>
   </div>
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Unique Visitors / Day</div>
     <div class="chart">
-      ${rq.visitors_per_day.map(d => {
-        const pct = Math.max((d.count / maxVisitors) * 100, 3);
-        return `<div class="bar" style="height:${pct}%;background:var(--cyan)"><span class="tip">${d.date.slice(5)} · ${n(d.count)}</span></div>`;
-      }).join("")}
+      ${rq.visitors_per_day
+        .map((d) => {
+          const pct = Math.max((d.count / maxVisitors) * 100, 3);
+          return `<div class="bar" style="height:${pct}%;background:var(--cyan)"><span class="tip">${d.date.slice(5)} · ${n(d.count)}</span></div>`;
+        })
+        .join("")}
     </div>
   </div>
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Unique Domains / Day</div>
     <div class="chart">
-      ${rq.domains_per_day.map(d => {
-        const pct = Math.max((d.count / maxDomains) * 100, 3);
-        return `<div class="bar" style="height:${pct}%;background:var(--purple)"><span class="tip">${d.date.slice(5)} · ${n(d.count)}</span></div>`;
-      }).join("")}
+      ${rq.domains_per_day
+        .map((d) => {
+          const pct = Math.max((d.count / maxDomains) * 100, 3);
+          return `<div class="bar" style="height:${pct}%;background:var(--purple)"><span class="tip">${d.date.slice(5)} · ${n(d.count)}</span></div>`;
+        })
+        .join("")}
     </div>
   </div>
 </div>
 
 <!-- ═══ TOP DOMAINS ═══ -->
-${rq.top_domains.length > 0 ? `
+${
+  rq.top_domains.length > 0
+    ? `
 <h2>🏆 Top Scanned Domains</h2>
 <table>
   <thead><tr><th>#</th><th>Domain</th><th>Scans</th><th>Unique Scanners</th><th>Avg Latency</th><th>Popularity</th></tr></thead>
   <tbody>
-    ${rq.top_domains.map((d, i) => {
-      const maxScans = rq.top_domains[0]?.scans || 1;
-      const pct = (d.scans / maxScans) * 100;
-      return `<tr>
+    ${rq.top_domains
+      .map((d, i) => {
+        const maxScans = rq.top_domains[0]?.scans || 1;
+        const pct = (d.scans / maxScans) * 100;
+        return `<tr>
         <td style="color:var(--muted)">${i + 1}</td>
         <td class="mono">${d.domain}</td>
         <td class="hits">${n(d.scans)}</td>
@@ -185,10 +202,13 @@ ${rq.top_domains.length > 0 ? `
         <td class="hits">${n(d.avg_latency)}ms</td>
         <td><span class="pct-bar" style="width:${Math.max(pct * 0.8, 2)}px;background:var(--cyan)"></span></td>
       </tr>`;
-    }).join("")}
+      })
+      .join("")}
   </tbody>
 </table>
-` : ""}
+`
+    : ""
+}
 
 <!-- ═══ TRAFFIC SOURCES + GEO + HOURLY ═══ -->
 <h2>🌍 Traffic Breakdown</h2>
@@ -196,9 +216,10 @@ ${rq.top_domains.length > 0 ? `
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">By Client Type</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem">
-      ${Object.entries(rq.by_client_type).map(([type, cnt]) => {
-        const pct = (cnt / totalClientType) * 100;
-        return `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
+      ${Object.entries(rq.by_client_type)
+        .map(([type, cnt]) => {
+          const pct = (cnt / totalClientType) * 100;
+          return `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
           <span style="font-size:14px">${clientIcon(type)}</span>
           <span style="font-size:0.75rem;min-width:55px">${type}</span>
           <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
@@ -207,16 +228,20 @@ ${rq.top_domains.length > 0 ? `
           <span style="font-size:0.7rem;color:var(--muted);min-width:42px;text-align:right">${n(cnt)}</span>
           <span style="font-size:0.65rem;color:var(--muted);min-width:32px;text-align:right">${pct.toFixed(0)}%</span>
         </div>`;
-      }).join("")}
+        })
+        .join("")}
     </div>
   </div>
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Top Countries</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem;max-height:200px;overflow-y:auto">
-      ${rq.by_country.length > 0 ? rq.by_country.map(c => {
-        const maxReq = rq.by_country[0]?.requests || 1;
-        const pct = (c.requests / maxReq) * 100;
-        return `<div style="display:flex;align-items:center;gap:0.35rem;margin-bottom:0.35rem">
+      ${
+        rq.by_country.length > 0
+          ? rq.by_country
+              .map((c) => {
+                const maxReq = rq.by_country[0]?.requests || 1;
+                const pct = (c.requests / maxReq) * 100;
+                return `<div style="display:flex;align-items:center;gap:0.35rem;margin-bottom:0.35rem">
           <span style="font-size:13px">${flag(c.country)}</span>
           <span style="font-size:0.7rem;min-width:22px">${c.country}</span>
           <div style="flex:1;height:5px;background:var(--border);border-radius:2px;overflow:hidden">
@@ -224,18 +249,32 @@ ${rq.top_domains.length > 0 ? `
           </div>
           <span style="font-size:0.65rem;color:var(--muted)">${n(c.requests)} / ${n(c.visitors)}v</span>
         </div>`;
-      }).join("") : '<span style="font-size:0.7rem;color:var(--muted)">No data yet</span>'}
+              })
+              .join("")
+          : '<span style="font-size:0.7rem;color:var(--muted)">No data yet</span>'
+      }
     </div>
   </div>
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Hourly Distribution (UTC)</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem">
       <div class="heatmap">
-        ${rq.by_hour.map((cnt, h) => {
-          const intensity = maxHourly > 0 ? cnt / maxHourly : 0;
-          const bg = intensity > 0.75 ? "var(--accent)" : intensity > 0.5 ? "#b45309" : intensity > 0.25 ? "#78350f" : intensity > 0 ? "#451a03" : "var(--border)";
-          return `<div class="hm-cell" style="background:${bg}"><span class="tip">${String(h).padStart(2, "0")}:00 · ${n(cnt)}</span>${h % 6 === 0 ? h : ""}</div>`;
-        }).join("")}
+        ${rq.by_hour
+          .map((cnt, h) => {
+            const intensity = maxHourly > 0 ? cnt / maxHourly : 0;
+            const bg =
+              intensity > 0.75
+                ? "var(--accent)"
+                : intensity > 0.5
+                  ? "#b45309"
+                  : intensity > 0.25
+                    ? "#78350f"
+                    : intensity > 0
+                      ? "#451a03"
+                      : "var(--border)";
+            return `<div class="hm-cell" style="background:${bg}"><span class="tip">${String(h).padStart(2, "0")}:00 · ${n(cnt)}</span>${h % 6 === 0 ? h : ""}</div>`;
+          })
+          .join("")}
       </div>
       <div style="display:flex;justify-content:space-between;font-size:8px;color:var(--muted);margin-top:3px;padding:0 2px">
         <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
@@ -245,26 +284,33 @@ ${rq.top_domains.length > 0 ? `
 </div>
 
 <!-- ═══ STATUS CODES ═══ -->
-${Object.keys(rq.by_status).length > 0 ? `
+${
+  Object.keys(rq.by_status).length > 0
+    ? `
 <div style="margin-top:0.75rem">
   <div class="row2">
     <div>
       <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Response Status Codes</div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem;display:flex;flex-wrap:wrap;gap:0.5rem">
-        ${Object.entries(rq.by_status).sort((a, b) => Number(a[0]) - Number(b[0])).map(([code, cnt]) => {
-          const c = Number(code);
-          const color = c < 300 ? "var(--green)" : c < 400 ? "var(--blue)" : c < 500 ? "var(--accent)" : "var(--red)";
-          return `<div style="text-align:center;min-width:50px">
+        ${Object.entries(rq.by_status)
+          .sort((a, b) => Number(a[0]) - Number(b[0]))
+          .map(([code, cnt]) => {
+            const c = Number(code);
+            const color = c < 300 ? "var(--green)" : c < 400 ? "var(--blue)" : c < 500 ? "var(--accent)" : "var(--red)";
+            return `<div style="text-align:center;min-width:50px">
             <div style="font-size:0.85rem;font-weight:700;color:${color}">${code}</div>
             <div style="font-size:0.65rem;color:var(--muted)">${n(cnt)}</div>
           </div>`;
-        }).join("")}
+          })
+          .join("")}
       </div>
     </div>
     <div></div>
   </div>
 </div>
-` : ""}
+`
+    : ""
+}
 
 <!-- ═══ API TRAFFIC (LEGACY COUNTERS) ═══ -->
 <h2>📡 Endpoint Traffic</h2>
@@ -287,26 +333,32 @@ ${Object.keys(rq.by_status).length > 0 ? `
   </div>
 </div>
 <div class="chart">
-  ${sortedDays.map(d => {
-    const h = dayTotals[d];
-    const pct = Math.max((h / maxDaily) * 100, 2);
-    return `<div class="bar" style="height:${pct}%;background:var(--accent)"><span class="tip">${d.slice(5)} · ${h}</span></div>`;
-  }).join("")}
+  ${sortedDays
+    .map((d) => {
+      const h = dayTotals[d];
+      const pct = Math.max((h / maxDaily) * 100, 2);
+      return `<div class="bar" style="height:${pct}%;background:var(--accent)"><span class="tip">${d.slice(5)} · ${h}</span></div>`;
+    })
+    .join("")}
 </div>
 <div style="margin-top:0.6rem">
 <table>
   <thead><tr><th>Endpoint</th><th>Hits</th><th>%</th><th></th></tr></thead>
   <tbody>
-    ${endpoints.map(([ep, total]) => {
-      const pct = stats.total ? ((total / stats.total) * 100) : 0;
-      return `<tr><td class="mono">${ep}</td><td class="hits">${n(total)}</td><td class="hits">${pct.toFixed(1)}%</td><td><span class="pct-bar" style="width:${Math.max(pct, 1)}px;background:var(--accent)"></span></td></tr>`;
-    }).join("")}
+    ${endpoints
+      .map(([ep, total]) => {
+        const pct = stats.total ? (total / stats.total) * 100 : 0;
+        return `<tr><td class="mono">${ep}</td><td class="hits">${n(total)}</td><td class="hits">${pct.toFixed(1)}%</td><td><span class="pct-bar" style="width:${Math.max(pct, 1)}px;background:var(--accent)"></span></td></tr>`;
+      })
+      .join("")}
   </tbody>
 </table>
 </div>
 
 <!-- ═══ SCORING INTELLIGENCE ═══ -->
-${ss ? `
+${
+  ss
+    ? `
 <h2>🎯 Scoring Intelligence</h2>
 <div class="cards">
   <div class="card">
@@ -319,7 +371,7 @@ ${ss ? `
   </div>
   <div class="card">
     <div class="cl">Avg Composite</div>
-    <div class="cv" style="color:${ss.avg_composite >= 80 ? 'var(--green)' : ss.avg_composite >= 60 ? 'var(--accent)' : 'var(--red)'}">${ss.avg_composite}/100</div>
+    <div class="cv" style="color:${ss.avg_composite >= 80 ? "var(--green)" : ss.avg_composite >= 60 ? "var(--accent)" : "var(--red)"}">${ss.avg_composite}/100</div>
   </div>
   <div class="card">
     <div class="cl">Daily Snapshots</div>
@@ -328,113 +380,164 @@ ${ss ? `
   </div>
 </div>
 
-${Object.keys(ss.grade_breakdown).length > 0 ? `
+${
+  Object.keys(ss.grade_breakdown).length > 0
+    ? `
 <div class="row2">
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.2rem">Grade Distribution</div>
     <div class="grade-bar">
-      ${["A","B","C","D","F"].map(g => {
-        const cnt = ss.grade_breakdown[g] || 0;
-        const pct = ss.total_scores ? (cnt / ss.total_scores * 100) : 0;
-        if (pct < 1) return "";
-        return `<div class="grade-seg" style="flex:${pct};background:${gradeColor(g)}">${g} ${Math.round(pct)}%</div>`;
-      }).join("")}
+      ${["A", "B", "C", "D", "F"]
+        .map((g) => {
+          const cnt = ss.grade_breakdown[g] || 0;
+          const pct = ss.total_scores ? (cnt / ss.total_scores) * 100 : 0;
+          if (pct < 1) return "";
+          return `<div class="grade-seg" style="flex:${pct};background:${gradeColor(g)}">${g} ${Math.round(pct)}%</div>`;
+        })
+        .join("")}
     </div>
   </div>
   <div>
     <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.2rem">Archetype Breakdown</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
     <table style="margin:0"><tbody>
-      ${Object.entries(ss.archetype_breakdown).map(([arch, cnt]) => {
-        const pct = ss.total_scores ? (cnt / ss.total_scores * 100) : 0;
-        return `<tr><td>${arch}</td><td class="hits">${n(cnt)}</td><td class="hits">${pct.toFixed(0)}%</td></tr>`;
-      }).join("")}
+      ${Object.entries(ss.archetype_breakdown)
+        .map(([arch, cnt]) => {
+          const pct = ss.total_scores ? (cnt / ss.total_scores) * 100 : 0;
+          return `<tr><td>${arch}</td><td class="hits">${n(cnt)}</td><td class="hits">${pct.toFixed(0)}%</td></tr>`;
+        })
+        .join("")}
     </tbody></table>
     </div>
   </div>
 </div>
-` : ""}
+`
+    : ""
+}
 
-${ss.daily_scores.length > 0 ? `
+${
+  ss.daily_scores.length > 0
+    ? `
 <div style="margin-top:0.6rem">
   <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">Scores / Day (volume + avg composite)</div>
   <div class="chart">
     ${(() => {
-      const maxCnt = Math.max(...ss.daily_scores.map(d => d.count), 1);
-      return ss.daily_scores.map(d => {
-        const pct = Math.max((d.count / maxCnt) * 100, 3);
-        return `<div class="bar" style="height:${pct}%;background:var(--cyan)"><span class="tip">${d.date.slice(5)} · ${d.count} scores · avg ${d.avg}</span></div>`;
-      }).join("");
+      const maxCnt = Math.max(...ss.daily_scores.map((d) => d.count), 1);
+      return ss.daily_scores
+        .map((d) => {
+          const pct = Math.max((d.count / maxCnt) * 100, 3);
+          return `<div class="bar" style="height:${pct}%;background:var(--cyan)"><span class="tip">${d.date.slice(5)} · ${d.count} scores · avg ${d.avg}</span></div>`;
+        })
+        .join("");
     })()}
   </div>
 </div>
-` : ""}
-` : ""}
+`
+    : ""
+}
+`
+    : ""
+}
 
 <!-- ═══ TAB ENGAGEMENT ═══ -->
-${stats.tab_views && Object.keys(stats.tab_views).length > 0 ? `
+${
+  stats.tab_views && Object.keys(stats.tab_views).length > 0
+    ? `
 <h2>📊 Tab Engagement <span style="font-size:0.65rem;color:var(--muted);font-weight:400">(7d)</span></h2>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:0.4rem">
-  ${Object.entries(stats.tab_views).map(([tab, cnt]) => `
+  ${Object.entries(stats.tab_views)
+    .map(
+      ([tab, cnt]) => `
     <div class="card" style="text-align:center;padding:0.5rem">
       <div class="cl">${tab}</div>
       <div style="font-size:1.1rem;font-weight:700;margin-top:0.1rem">${n(cnt)}</div>
     </div>
-  `).join("")}
+  `,
+    )
+    .join("")}
 </div>
-` : ""}
+`
+    : ""
+}
 
 <!-- ═══ API ERRORS ═══ -->
-${es && es.total > 0 ? `
+${
+  es && es.total > 0
+    ? `
 <h2>🔴 API Errors</h2>
 <div class="cards" style="grid-template-columns: repeat(auto-fit, minmax(100px, 1fr))">
   <div class="card">
     <div class="cl">Total Errors</div>
     <div class="cv" style="color:var(--red)">${n(es.total)}</div>
   </div>
-  ${Object.entries(es.by_api).slice(0, 4).map(([api, cnt]) => `
+  ${Object.entries(es.by_api)
+    .slice(0, 4)
+    .map(
+      ([api, cnt]) => `
   <div class="card">
     <div class="cl">${api}</div>
     <div class="cv" style="color:var(--red)">${n(cnt)}</div>
   </div>
-  `).join("")}
+  `,
+    )
+    .join("")}
 </div>
-${es.recent.length > 0 ? `
+${
+  es.recent.length > 0
+    ? `
 <table>
   <thead><tr><th>Time</th><th>API</th><th>Error</th></tr></thead>
   <tbody>
-    ${es.recent.map(r => `<tr>
-      <td class="err-time">${new Date(r.ts).toISOString().slice(0,16).replace("T"," ")}</td>
+    ${es.recent
+      .map(
+        (r) => `<tr>
+      <td class="err-time">${new Date(r.ts).toISOString().slice(0, 16).replace("T", " ")}</td>
       <td class="mono">${r.api}</td>
       <td class="err-msg">${r.error}</td>
-    </tr>`).join("")}
+    </tr>`,
+      )
+      .join("")}
   </tbody>
 </table>
-` : ""}
-` : ""}
+`
+    : ""
+}
+`
+    : ""
+}
 
 <!-- ═══ DAILY BREAKDOWN ═══ -->
-${recentDays.length > 0 ? `
+${
+  recentDays.length > 0
+    ? `
 <h2>📅 Daily Breakdown <span style="font-size:0.65rem;color:var(--muted);font-weight:400">(last ${recentDays.length}d)</span></h2>
 <div style="overflow-x:auto">
 <table>
-  <thead><tr><th>Endpoint</th>${recentDays.map(d => `<th>${d.slice(5)}</th>`).join("")}</tr></thead>
+  <thead><tr><th>Endpoint</th>${recentDays.map((d) => `<th>${d.slice(5)}</th>`).join("")}</tr></thead>
   <tbody>
-    ${endpoints.map(([ep]) => `<tr>
+    ${endpoints
+      .map(
+        ([ep]) => `<tr>
       <td class="mono">${ep}</td>
-      ${recentDays.map(d => {
-        const v = endpointDays[ep]?.[d] || 0;
-        return `<td class="hits ${v === 0 ? "zero" : ""}">${v || "·"}</td>`;
-      }).join("")}
-    </tr>`).join("")}
+      ${recentDays
+        .map((d) => {
+          const v = endpointDays[ep]?.[d] || 0;
+          return `<td class="hits ${v === 0 ? "zero" : ""}">${v || "·"}</td>`;
+        })
+        .join("")}
+    </tr>`,
+      )
+      .join("")}
     <tr style="font-weight:600">
       <td>Total</td>
-      ${recentDays.map(d => `<td class="hits">${dayTotals[d] || 0}</td>`).join("")}
+      ${recentDays.map((d) => `<td class="hits">${dayTotals[d] || 0}</td>`).join("")}
     </tr>
   </tbody>
 </table>
 </div>
-` : ""}
+`
+    : ""
+}
 
 <footer>
   <a href="/api/usage">JSON API</a> · <a href="/status">Status</a> · <a href="/api/cleanup">Run Cleanup</a> · All data aggregated — no IPs, no PII stored

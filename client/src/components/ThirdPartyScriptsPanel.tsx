@@ -1,23 +1,23 @@
+import { AlertTriangle, ChevronDown, ChevronRight, FileCode, Shield, Zap } from "lucide-react";
 import { useState } from "react";
-import { FileCode, ChevronDown, ChevronRight, AlertTriangle, Shield, Zap } from "lucide-react";
-import { Panel, StatusBadge } from "./Panel";
-import { CliButton, thirdPartyScriptsCliCommands } from "./CliModal";
 import type { AnalysisResult, ScriptCategoryData } from "../utils/types";
+import { CliButton, thirdPartyScriptsCliCommands } from "./CliModal";
+import { Panel, StatusBadge } from "./Panel";
 
 // ─── Category icons/colors ──────────────────────────────────────────
 
 const CATEGORY_META: Record<string, { emoji: string; color: string }> = {
-  "Analytics": { emoji: "📊", color: "var(--accent)" },
-  "Advertising": { emoji: "📢", color: "var(--danger)" },
-  "Social": { emoji: "👥", color: "var(--info)" },
+  Analytics: { emoji: "📊", color: "var(--accent)" },
+  Advertising: { emoji: "📢", color: "var(--danger)" },
+  Social: { emoji: "👥", color: "var(--info)" },
   "Chat / Support": { emoji: "💬", color: "var(--success)" },
   "Heatmaps / Session Recording": { emoji: "🔥", color: "var(--warning)" },
   "CDN / Libraries": { emoji: "📦", color: "var(--dim)" },
   "Performance / Monitoring": { emoji: "📈", color: "var(--accent)" },
   "Consent / Privacy": { emoji: "🔒", color: "var(--success)" },
-  "Payment": { emoji: "💳", color: "var(--success)" },
+  Payment: { emoji: "💳", color: "var(--success)" },
   "First Party": { emoji: "🏠", color: "var(--text)" },
-  "Other": { emoji: "❓", color: "var(--dim)" },
+  Other: { emoji: "❓", color: "var(--dim)" },
 };
 
 // ─── Category section ───────────────────────────────────────────────
@@ -42,42 +42,56 @@ function CategorySection({ name, data }: { name: string; data: ScriptCategoryDat
       >
         <span style={{ fontSize: "13px", flexShrink: 0 }}>{meta.emoji}</span>
         <span style={{ fontWeight: 500, flex: 1, textAlign: "left" }}>{name}</span>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "11px",
-          fontWeight: 600,
-          color: meta.color,
-          minWidth: 20,
-          textAlign: "right",
-        }}>
+        <span
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "11px",
+            fontWeight: 600,
+            color: meta.color,
+            minWidth: 20,
+            textAlign: "right",
+          }}
+        >
           {data.count}
         </span>
-        {expanded ? <ChevronDown size={11} style={{ color: "var(--dim)", flexShrink: 0 }} /> : <ChevronRight size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />}
+        {expanded ? (
+          <ChevronDown size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />
+        ) : (
+          <ChevronRight size={11} style={{ color: "var(--dim)", flexShrink: 0 }} />
+        )}
       </button>
       {expanded && (
         <div className="px-4 pb-2" style={{ paddingLeft: "2.25rem" }}>
           {data.scripts.map((script, i) => (
             <div key={`${script.url}-${i}`} className="flex items-center gap-2 py-1" style={{ fontSize: "11px" }}>
-              <span style={{
-                fontFamily: "var(--font-mono)",
-                color: "var(--text)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                flex: 1,
-                minWidth: 0,
-              }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--text)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
                 {script.domain}
               </span>
               <div className="flex gap-1" style={{ flexShrink: 0 }}>
                 {script.async && (
-                  <span className="badge badge-pass" style={{ fontSize: "9px", padding: "0 4px" }}>async</span>
+                  <span className="badge badge-pass" style={{ fontSize: "9px", padding: "0 4px" }}>
+                    async
+                  </span>
                 )}
                 {script.defer && (
-                  <span className="badge badge-pass" style={{ fontSize: "9px", padding: "0 4px" }}>defer</span>
+                  <span className="badge badge-pass" style={{ fontSize: "9px", padding: "0 4px" }}>
+                    defer
+                  </span>
                 )}
                 {!script.async && !script.defer && name !== "First Party" && (
-                  <span className="badge badge-warn" style={{ fontSize: "9px", padding: "0 4px" }}>blocking</span>
+                  <span className="badge badge-warn" style={{ fontSize: "9px", padding: "0 4px" }}>
+                    blocking
+                  </span>
                 )}
               </div>
             </div>
@@ -126,14 +140,15 @@ export function ThirdPartyScriptsPanel({ data }: { data: AnalysisResult }) {
             status={tps.third_party > 10 ? "warn" : tps.third_party > 0 ? "info" : "pass"}
             label={`${tps.third_party} third-party`}
           />
-          {tps.render_blocking > 0 && (
-            <StatusBadge status="warn" label={`${tps.render_blocking} blocking`} />
-          )}
+          {tps.render_blocking > 0 && <StatusBadge status="warn" label={`${tps.render_blocking} blocking`} />}
         </div>
       }
     >
       {/* Summary bar */}
-      <div className="px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1" style={{ borderBottom: "1px solid var(--border-muted)" }}>
+      <div
+        className="px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1"
+        style={{ borderBottom: "1px solid var(--border-muted)" }}
+      >
         <div className="flex items-center gap-1.5">
           <FileCode size={12} style={{ color: "var(--dim)" }} />
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>
@@ -148,7 +163,13 @@ export function ThirdPartyScriptsPanel({ data }: { data: AnalysisResult }) {
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>first-party</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: tps.third_party > 10 ? "var(--warning)" : "var(--text)" }}>
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px",
+              color: tps.third_party > 10 ? "var(--warning)" : "var(--text)",
+            }}
+          >
             {tps.third_party}
           </span>
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "10px", color: "var(--dim)" }}>third-party</span>
@@ -166,7 +187,10 @@ export function ThirdPartyScriptsPanel({ data }: { data: AnalysisResult }) {
 
       {/* Privacy concerns */}
       {tps.privacy_concerns.length > 0 && (
-        <div className="px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-muted)", background: "rgba(248, 81, 73, 0.04)" }}>
+        <div
+          className="px-4 py-2.5"
+          style={{ borderBottom: "1px solid var(--border-muted)", background: "rgba(248, 81, 73, 0.04)" }}
+        >
           <div className="flex items-center gap-1.5 mb-1.5">
             <Shield size={11} style={{ color: "var(--danger)" }} />
             <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontWeight: 600, color: "var(--danger)" }}>

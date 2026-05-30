@@ -1,8 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import {
-  calculateDomainScore,
-  type DomainScoreResult,
-} from '@worker/actions/analyze/contextual-scoring';
+import { calculateDomainScore } from "@worker/actions/analyze/contextual-scoring";
+import { describe, expect, it } from "vitest";
 
 // ─── Helper: default null opts for calculateDomainScore ──────────────
 
@@ -55,39 +52,72 @@ function baseOpts(): Parameters<typeof calculateDomainScore>[0] {
 
 // ─── Integration Tests ───────────────────────────────────────────────
 
-describe('calculateDomainScore integration', () => {
-
-  it('returns a valid DomainScoreResult shape with all-null inputs', () => {
+describe("calculateDomainScore integration", () => {
+  it("returns a valid DomainScoreResult shape with all-null inputs", () => {
     const result = calculateDomainScore(baseOpts());
     expect(result).toBeDefined();
-    expect(typeof result.composite).toBe('number');
-    expect(typeof result.grade).toBe('string');
+    expect(typeof result.composite).toBe("number");
+    expect(typeof result.grade).toBe("string");
     expect(result.axes).toBeDefined();
     expect(result.archetype).toBeDefined();
     // All 5 axes should be present
-    for (const axis of ['security', 'performance', 'reliability', 'trust', 'visibility'] as const) {
+    for (const axis of ["security", "performance", "reliability", "trust", "visibility"] as const) {
       expect(result.axes[axis]).toBeDefined();
       const score = result.axes[axis].score;
       // score can be number or null
       if (score !== null) {
-        expect(typeof score).toBe('number');
+        expect(typeof score).toBe("number");
         expect(score).toBeGreaterThanOrEqual(0);
         expect(score).toBeLessThanOrEqual(100);
       }
     }
   });
 
-  it('produces a high grade when all signals are positive', () => {
+  it("produces a high grade when all signals are positive", () => {
     const opts = baseOpts();
-    opts.ssl = { grade: "A+", issuer: "Let's Encrypt", subject: "example.com", valid_from: "2025-01-01", valid_to: "2026-01-01", error: null, certTransparency: true } as any;
+    opts.ssl = {
+      grade: "A+",
+      issuer: "Let's Encrypt",
+      subject: "example.com",
+      valid_from: "2025-01-01",
+      valid_to: "2026-01-01",
+      error: null,
+      certTransparency: true,
+    } as any;
     opts.securityAudit = [
-      { header: "strict-transport-security", present: true, value: "max-age=31536000; includeSubDomains", severity: "pass" as any, status: "pass" },
+      {
+        header: "strict-transport-security",
+        present: true,
+        value: "max-age=31536000; includeSubDomains",
+        severity: "pass" as any,
+        status: "pass",
+      },
       { header: "x-content-type-options", present: true, value: "nosniff", severity: "pass" as any, status: "pass" },
       { header: "x-frame-options", present: true, value: "DENY", severity: "pass" as any, status: "pass" },
-      { header: "content-security-policy", present: true, value: "default-src 'self'", severity: "pass" as any, status: "pass" },
+      {
+        header: "content-security-policy",
+        present: true,
+        value: "default-src 'self'",
+        severity: "pass" as any,
+        status: "pass",
+      },
     ];
     opts.dnssec = { enabled: true, valid: true } as any;
-    opts.emailAuth = { spf: { found: true, record: "v=spf1 -all", mechanisms: ["-all"], all_qualifier: "-all" }, dkim_selectors_found: ["default"], dmarc: { found: true, record: "v=DMARC1; p=reject", policy: "reject", subdomain_policy: null, rua: null, ruf: null }, bimi: { found: false }, mta_sts: { found: false }, tls_rpt: { found: false } } as any;
+    opts.emailAuth = {
+      spf: { found: true, record: "v=spf1 -all", mechanisms: ["-all"], all_qualifier: "-all" },
+      dkim_selectors_found: ["default"],
+      dmarc: {
+        found: true,
+        record: "v=DMARC1; p=reject",
+        policy: "reject",
+        subdomain_policy: null,
+        rua: null,
+        ruf: null,
+      },
+      bimi: { found: false },
+      mta_sts: { found: false },
+      tls_rpt: { found: false },
+    } as any;
     opts.performance = { score: 95, fcp: 800, lcp: 1200, cls: 0.02, tbt: 50, si: 1000, ttfb: 200 } as any;
     opts.compression = { encoding: "br" } as any;
     opts.httpProtocols = { http2: true, http3: true };
@@ -112,7 +142,10 @@ describe('calculateDomainScore integration', () => {
       { type: "MX", value: "10 mail.example.com", ttl: 3600 },
       { type: "MX", value: "20 mail2.example.com", ttl: 3600 },
     ] as any;
-    opts.redirects = [{ url: "http://example.com", status_code: 301 }, { url: "https://example.com", status_code: 200 }] as any;
+    opts.redirects = [
+      { url: "http://example.com", status_code: 301 },
+      { url: "https://example.com", status_code: 200 },
+    ] as any;
     opts.jsonLd = [{ type: "Organization" }] as any;
     opts.socialMeta = { score: 90, og: { title: "Example", description: "Test" } } as any;
     opts.meta = { robots_txt_exists: true, sitemap_detected: true, favicon_url: "/favicon.ico" } as any;
@@ -120,12 +153,19 @@ describe('calculateDomainScore integration', () => {
     const result = calculateDomainScore(opts);
     // Strong signals should produce at least a B grade
     expect(result.composite).toBeGreaterThanOrEqual(80);
-    expect(['A', 'B']).toContain(result.grade);
+    expect(["A", "B"]).toContain(result.grade);
   });
 
-  it('produces a mid-range grade with mixed signals', () => {
+  it("produces a mid-range grade with mixed signals", () => {
     const opts = baseOpts();
-    opts.ssl = { grade: "B", issuer: "Let's Encrypt", subject: "example.com", valid_from: "2025-01-01", valid_to: "2026-01-01", error: null } as any;
+    opts.ssl = {
+      grade: "B",
+      issuer: "Let's Encrypt",
+      subject: "example.com",
+      valid_from: "2025-01-01",
+      valid_to: "2026-01-01",
+      error: null,
+    } as any;
     opts.performance = { score: 45, fcp: 3000, lcp: 4500, cls: 0.15, tbt: 500, si: 4000, ttfb: 800 } as any;
     opts.statusResult = { is_up: true, status_code: 200 };
 
@@ -135,7 +175,7 @@ describe('calculateDomainScore integration', () => {
     expect(result.composite).toBeLessThanOrEqual(85);
   });
 
-  it('handles httpBlocked=true gracefully', () => {
+  it("handles httpBlocked=true gracefully", () => {
     const opts = baseOpts();
     opts.httpBlocked = true;
     // Even with httpBlocked, DNS records can exist
@@ -147,16 +187,23 @@ describe('calculateDomainScore integration', () => {
 
     const result = calculateDomainScore(opts);
     expect(result).toBeDefined();
-    expect(typeof result.composite).toBe('number');
-    expect(typeof result.grade).toBe('string');
+    expect(typeof result.composite).toBe("number");
+    expect(typeof result.grade).toBe("string");
     // Should still generate findings even when HTTP is blocked
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
     expect(allFindings.length).toBeGreaterThan(0);
   });
 
-  it('caps grade for domains with large breach exposure', () => {
+  it("caps grade for domains with large breach exposure", () => {
     const opts = baseOpts();
-    opts.ssl = { grade: "A+", issuer: "LE", subject: "example.com", valid_from: "2025-01-01", valid_to: "2026-01-01", error: null } as any;
+    opts.ssl = {
+      grade: "A+",
+      issuer: "LE",
+      subject: "example.com",
+      valid_from: "2025-01-01",
+      valid_to: "2026-01-01",
+      error: null,
+    } as any;
     opts.performance = { score: 95, fcp: 800, lcp: 1200, cls: 0.02, tbt: 50, si: 1000, ttfb: 200 } as any;
     opts.statusResult = { is_up: true, status_code: 200 };
     // Massive breach — over 100M records
@@ -167,10 +214,10 @@ describe('calculateDomainScore integration', () => {
 
     const result = calculateDomainScore(opts);
     // Grade should be capped — not A+ despite good other signals
-    expect(['A+', 'A']).not.toContain(result.grade);
+    expect(["A+", "A"]).not.toContain(result.grade);
   });
 
-  it('does not double-count CSP findings', () => {
+  it("does not double-count CSP findings", () => {
     const opts = baseOpts();
     opts.securityAudit = [
       { header: "content-security-policy", present: true, value: "default-src 'self'", severity: "pass" as any },
@@ -180,15 +227,15 @@ describe('calculateDomainScore integration', () => {
 
     const result = calculateDomainScore(opts);
     // Count CSP-related findings across all axes
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const cspFindings = allFindings.filter(f => f.signal.includes('csp'));
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const cspFindings = allFindings.filter((f) => f.signal.includes("csp"));
     // CSP presence (csp), CSP quality (csp_quality), and optional granular
     // sub-findings (csp_missing_object_src, csp_missing_base_uri, csp_report_only)
     // are complementary, not double-counting the same signal.
     expect(cspFindings.length).toBeLessThanOrEqual(4);
   });
 
-  it('grade boundaries are consistent', () => {
+  it("grade boundaries are consistent", () => {
     // Test that grading is monotonic — higher composite = same or better grade
     const opts = baseOpts();
     opts.statusResult = { is_up: true, status_code: 200 };
@@ -201,29 +248,36 @@ describe('calculateDomainScore integration', () => {
     expect(result.composite).toBeLessThanOrEqual(100);
   });
 
-  it('all findings have required fields', () => {
+  it("all findings have required fields", () => {
     const opts = baseOpts();
-    opts.ssl = { grade: "A", issuer: "LE", subject: "example.com", valid_from: "2025-01-01", valid_to: "2026-01-01", error: null } as any;
+    opts.ssl = {
+      grade: "A",
+      issuer: "LE",
+      subject: "example.com",
+      valid_from: "2025-01-01",
+      valid_to: "2026-01-01",
+      error: null,
+    } as any;
     opts.performance = { score: 60, fcp: 2000, lcp: 3000, cls: 0.1, tbt: 200, si: 3000, ttfb: 500 } as any;
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
     for (const f of allFindings) {
       expect(f.signal).toBeTruthy();
       expect(f.axis).toBeTruthy();
       expect(f.severity).toBeTruthy();
       expect(f.label).toBeTruthy();
-      expect(['security', 'performance', 'reliability', 'trust', 'visibility']).toContain(f.axis);
-      expect(['critical', 'high', 'medium', 'low', 'info', 'good']).toContain(f.severity);
+      expect(["security", "performance", "reliability", "trust", "visibility"]).toContain(f.axis);
+      expect(["critical", "high", "medium", "low", "info", "good"]).toContain(f.severity);
     }
   });
 });
 
 // ─── Permissions-Policy Enhanced Parsing ─────────────────────────────
 
-describe('Permissions-Policy enhanced parsing', () => {
-  it('restrictive directives produce a good finding', () => {
+describe("Permissions-Policy enhanced parsing", () => {
+  it("restrictive directives produce a good finding", () => {
     const opts = baseOpts();
     opts.headers = {
       "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
@@ -231,14 +285,14 @@ describe('Permissions-Policy enhanced parsing', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const pp = allFindings.find(f => f.signal === "permissions_policy");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const pp = allFindings.find((f) => f.signal === "permissions_policy");
     expect(pp).toBeDefined();
-    expect(pp!.severity).toBe("good");
-    expect(pp!.label).toContain("restricts 4 features");
+    expect(pp?.severity).toBe("good");
+    expect(pp?.label).toContain("restricts 4 features");
   });
 
-  it('unrestricted feature (camera=*) produces a medium finding', () => {
+  it("unrestricted feature (camera=*) produces a medium finding", () => {
     const opts = baseOpts();
     opts.headers = {
       "permissions-policy": "camera=*, microphone=()",
@@ -246,30 +300,30 @@ describe('Permissions-Policy enhanced parsing', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const ppUnrestricted = allFindings.find(f => f.signal === "permissions_policy_unrestricted");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const ppUnrestricted = allFindings.find((f) => f.signal === "permissions_policy_unrestricted");
     expect(ppUnrestricted).toBeDefined();
-    expect(ppUnrestricted!.severity).toBe("medium");
-    expect(ppUnrestricted!.label).toContain("camera");
+    expect(ppUnrestricted?.severity).toBe("medium");
+    expect(ppUnrestricted?.label).toContain("camera");
   });
 
-  it('missing permissions-policy produces a low finding', () => {
+  it("missing permissions-policy produces a low finding", () => {
     const opts = baseOpts();
     opts.headers = {};
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const ppMissing = allFindings.find(f => f.signal === "permissions_policy_missing");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const ppMissing = allFindings.find((f) => f.signal === "permissions_policy_missing");
     expect(ppMissing).toBeDefined();
-    expect(ppMissing!.severity).toBe("low");
+    expect(ppMissing?.severity).toBe("low");
   });
 });
 
 // ─── Resource Hints Scoring ──────────────────────────────────────────
 
-describe('Resource hints scoring', () => {
-  it('produces a good finding when resource hints are present', () => {
+describe("Resource hints scoring", () => {
+  it("produces a good finding when resource hints are present", () => {
     const opts = baseOpts();
     opts.resourceHints = {
       total: 3,
@@ -282,27 +336,27 @@ describe('Resource hints scoring', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const rh = allFindings.find(f => f.signal === "resource_hints");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const rh = allFindings.find((f) => f.signal === "resource_hints");
     expect(rh).toBeDefined();
-    expect(rh!.severity).toBe("good");
-    expect(rh!.axis).toBe("performance");
-    expect(rh!.label).toContain("2 preload");
-    expect(rh!.label).toContain("1 preconnect");
+    expect(rh?.severity).toBe("good");
+    expect(rh?.axis).toBe("performance");
+    expect(rh?.label).toContain("2 preload");
+    expect(rh?.label).toContain("1 preconnect");
   });
 
-  it('produces no finding when resourceHints is null', () => {
+  it("produces no finding when resourceHints is null", () => {
     const opts = baseOpts();
     opts.resourceHints = null;
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const rh = allFindings.find(f => f.signal === "resource_hints");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const rh = allFindings.find((f) => f.signal === "resource_hints");
     expect(rh).toBeUndefined();
   });
 
-  it('produces no finding when total is 0', () => {
+  it("produces no finding when total is 0", () => {
     const opts = baseOpts();
     opts.resourceHints = {
       total: 0,
@@ -315,8 +369,8 @@ describe('Resource hints scoring', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const rh = allFindings.find(f => f.signal === "resource_hints");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const rh = allFindings.find((f) => f.signal === "resource_hints");
     expect(rh).toBeUndefined();
   });
 
@@ -331,14 +385,14 @@ describe('Resource hints scoring', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const blocklist = allFindings.find(f => f.signal === "blocklist_trust");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const blocklist = allFindings.find((f) => f.signal === "blocklist_trust");
     expect(blocklist).toBeDefined();
-    expect(blocklist!.severity).toBe("good");
-    expect(blocklist!.label).toBe("Clean blocklist record");
+    expect(blocklist?.severity).toBe("good");
+    expect(blocklist?.label).toBe("Clean blocklist record");
   });
 
-  it('gives critical severity when on multiple blocklists', () => {
+  it("gives critical severity when on multiple blocklists", () => {
     const opts = baseOpts();
     opts.blocklists = [
       { source: "SpamhausDBL", listed: true },
@@ -347,13 +401,13 @@ describe('Resource hints scoring', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const blocklist = allFindings.find(f => f.signal === "blocklist_trust");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const blocklist = allFindings.find((f) => f.signal === "blocklist_trust");
     expect(blocklist).toBeDefined();
-    expect(blocklist!.severity).toBe("critical");
+    expect(blocklist?.severity).toBe("critical");
   });
 
-  it('shows which organizational pages are missing when partial', () => {
+  it("shows which organizational pages are missing when partial", () => {
     const opts = baseOpts();
     opts.legal = {
       pages_found: [{ name: "Privacy Policy", url: "/privacy" }],
@@ -364,18 +418,18 @@ describe('Resource hints scoring', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const org = allFindings.find(f => f.signal === "organizational_identity");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const org = allFindings.find((f) => f.signal === "organizational_identity");
     expect(org).toBeDefined();
-    expect(org!.severity).toBe("info");
+    expect(org?.severity).toBe("info");
     // Should list what's missing
-    expect(org!.label).toContain("missing:");
-    expect(org!.label).toContain("terms of service");
-    expect(org!.label).toContain("about page");
-    expect(org!.label).not.toContain("privacy");
+    expect(org?.label).toContain("missing:");
+    expect(org?.label).toContain("terms of service");
+    expect(org?.label).toContain("about page");
+    expect(org?.label).not.toContain("privacy");
   });
 
-  it('gives good severity when all 3 organizational pages found', () => {
+  it("gives good severity when all 3 organizational pages found", () => {
     const opts = baseOpts();
     opts.legal = {
       pages_found: [
@@ -390,9 +444,9 @@ describe('Resource hints scoring', () => {
     opts.statusResult = { is_up: true, status_code: 200 };
 
     const result = calculateDomainScore(opts);
-    const allFindings = Object.values(result.axes).flatMap(a => a.findings);
-    const org = allFindings.find(f => f.signal === "organizational_identity");
+    const allFindings = Object.values(result.axes).flatMap((a) => a.findings);
+    const org = allFindings.find((f) => f.signal === "organizational_identity");
     expect(org).toBeDefined();
-    expect(org!.severity).toBe("good");
+    expect(org?.severity).toBe("good");
   });
 });

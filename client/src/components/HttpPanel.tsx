@@ -1,22 +1,21 @@
 import { ArrowRight, FileCode } from "lucide-react";
-import { Panel, DataRow, StatusBadge, ErrorState } from "./Panel";
-import { CliButton, httpProtocolCliCommands } from "./CliModal";
 import type { AnalysisResult } from "../utils/types";
+import { CliButton, httpProtocolCliCommands } from "./CliModal";
+import { DataRow, ErrorState, Panel, StatusBadge } from "./Panel";
 
 export function RedirectPanel({ data }: { data: AnalysisResult }) {
   const redirects = data.redirects;
-  if (!redirects || redirects.length === 0) return (
-    <Panel title="Redirect Chain" icon={<ArrowRight size={14} />}>
-      <ErrorState message="No redirect data available" />
-    </Panel>
-  );
+  if (!redirects || redirects.length === 0)
+    return (
+      <Panel title="Redirect Chain" icon={<ArrowRight size={14} />}>
+        <ErrorState message="No redirect data available" />
+      </Panel>
+    );
 
-  const httpToHttps = redirects.some(
-    (r, i) => {
-      const next = redirects[i + 1];
-      return i < redirects.length - 1 && r.url.startsWith("http://") && next !== undefined && next.url.startsWith("https://");
-    }
-  );
+  const httpToHttps = redirects.some((r, i) => {
+    const next = redirects[i + 1];
+    return i < redirects.length - 1 && r.url.startsWith("http://") && next?.url.startsWith("https://");
+  });
 
   return (
     <Panel
@@ -32,11 +31,15 @@ export function RedirectPanel({ data }: { data: AnalysisResult }) {
       {redirects.map((hop, i) => (
         <div key={hop.url} className="data-row" style={{ flexDirection: "column", alignItems: "stretch", gap: "4px" }}>
           <div className="flex items-center gap-2">
-            <span className={`badge ${hop.status_code >= 300 && hop.status_code < 400 ? "badge-warn" : hop.status_code >= 200 && hop.status_code < 300 ? "badge-pass" : "badge-fail"}`}
-              style={{ fontSize: "10px", flexShrink: 0 }}>
+            <span
+              className={`badge ${hop.status_code >= 300 && hop.status_code < 400 ? "badge-warn" : hop.status_code >= 200 && hop.status_code < 300 ? "badge-pass" : "badge-fail"}`}
+              style={{ fontSize: "10px", flexShrink: 0 }}
+            >
               {hop.status_code}
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all" }}>
+            <span
+              style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all" }}
+            >
               {hop.url}
             </span>
           </div>
@@ -57,11 +60,16 @@ export function RedirectPanel({ data }: { data: AnalysisResult }) {
 
 export function HeadersPanel({ data }: { data: AnalysisResult }) {
   const headers = data.headers;
-  if (!headers) return (
-    <Panel title="HTTP Headers" icon={<FileCode size={14} />} badge={<CliButton commands={httpProtocolCliCommands(data.domain)} domain={data.domain} />}>
-      <ErrorState message="HTTP headers unavailable" />
-    </Panel>
-  );
+  if (!headers)
+    return (
+      <Panel
+        title="HTTP Headers"
+        icon={<FileCode size={14} />}
+        badge={<CliButton commands={httpProtocolCliCommands(data.domain)} domain={data.domain} />}
+      >
+        <ErrorState message="HTTP headers unavailable" />
+      </Panel>
+    );
 
   const entries = Object.entries(headers.raw);
 
@@ -72,11 +80,25 @@ export function HeadersPanel({ data }: { data: AnalysisResult }) {
       badge={<StatusBadge status="info" label={`${entries.length} headers`} />}
     >
       <div style={{ maxHeight: "280px", overflowY: "auto", overflowX: "auto" }}>
-        {entries.map(([key, value], i) => (
+        {entries.map(([key, value], _i) => (
           <DataRow
             key={key}
-            label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--accent)" }}>{key}</span>}
-            value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text)", wordBreak: "break-all", overflowWrap: "anywhere" }}>{value.length > 100 ? value.slice(0, 100) + "…" : value}</span>}
+            label={
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--accent)" }}>{key}</span>
+            }
+            value={
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  color: "var(--text)",
+                  wordBreak: "break-all",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {value.length > 100 ? `${value.slice(0, 100)}…` : value}
+              </span>
+            }
             copyValue={value}
           />
         ))}

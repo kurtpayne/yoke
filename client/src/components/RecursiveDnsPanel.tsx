@@ -1,9 +1,8 @@
-import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Globe, Loader2, Search, CheckCircle2, AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Globe, Loader2, Search } from "lucide-react";
 import { api } from "../api";
-import { Panel } from "./Panel";
 import type { RecursiveDnsResult, ResolverResult } from "../utils/types";
+import { Panel } from "./Panel";
 
 function StatusBadge({ status }: { status: ResolverResult["status"] }) {
   const colors: Record<string, { bg: string; fg: string }> = {
@@ -36,7 +35,7 @@ function RecordCell({ records, highlight }: { records: string[]; highlight?: boo
   }
   return (
     <div className="flex flex-col gap-0.5">
-      {records.map(r => (
+      {records.map((r) => (
         <span
           key={r}
           style={{
@@ -73,7 +72,7 @@ export function RecursiveDnsPanel({ domain }: { domain: string }) {
   // Determine which resolvers have non-matching records for highlighting
   function isDiscrepant(r: ResolverResult): boolean {
     if (!data || data.consensus) return false;
-    const okResolvers = data.resolvers.filter(res => res.status === "ok");
+    const okResolvers = data.resolvers.filter((res) => res.status === "ok");
     if (okResolvers.length <= 1) return false;
     const keys = okResolvers.map(getResolverAKey);
     const firstKey = keys[0];
@@ -88,11 +87,25 @@ export function RecursiveDnsPanel({ domain }: { domain: string }) {
       badge={
         data ? (
           data.consensus ? (
-            <span className="badge badge-info" style={{ fontSize: "10px", display: "flex", alignItems: "center", gap: "3px" }}>
+            <span
+              className="badge badge-info"
+              style={{ fontSize: "10px", display: "flex", alignItems: "center", gap: "3px" }}
+            >
               <CheckCircle2 size={10} /> consensus
             </span>
           ) : (
-            <span className="badge" style={{ fontSize: "10px", display: "flex", alignItems: "center", gap: "3px", background: "var(--warning-subtle, rgba(210,153,34,0.15))", color: "var(--warning, #d29922)", border: "1px solid rgba(210,153,34,0.25)" }}>
+            <span
+              className="badge"
+              style={{
+                fontSize: "10px",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+                background: "var(--warning-subtle, rgba(210,153,34,0.15))",
+                color: "var(--warning, #d29922)",
+                border: "1px solid rgba(210,153,34,0.25)",
+              }}
+            >
               <AlertTriangle size={10} /> discrepancy
             </span>
           )
@@ -127,9 +140,7 @@ export function RecursiveDnsPanel({ domain }: { domain: string }) {
       {scan.isPending && (
         <div className="p-4 flex flex-col items-center gap-2">
           <Loader2 size={18} className="animate-spin" style={{ color: "var(--accent)" }} />
-          <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)" }}>
-            Querying resolvers…
-          </p>
+          <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)" }}>Querying resolvers…</p>
         </div>
       )}
 
@@ -159,19 +170,93 @@ export function RecursiveDnsPanel({ domain }: { domain: string }) {
         <div className="p-2">
           {/* Results table */}
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: "var(--font-ui)" }}>
+            <table
+              style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", fontFamily: "var(--font-ui)" }}
+            >
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border-muted)" }}>
-                  <th style={{ textAlign: "left", padding: "6px 8px", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Resolver</th>
-                  <th style={{ textAlign: "left", padding: "6px 8px", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>A Records</th>
-                  <th style={{ textAlign: "left", padding: "6px 8px", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>AAAA Records</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>TTL</th>
-                  <th style={{ textAlign: "right", padding: "6px 8px", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Time</th>
-                  <th style={{ textAlign: "center", padding: "6px 8px", fontSize: "10px", fontWeight: 600, color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Status</th>
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: "6px 8px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--dim)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    Resolver
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: "6px 8px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--dim)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    A Records
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "left",
+                      padding: "6px 8px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--dim)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    AAAA Records
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "6px 8px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--dim)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    TTL
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "right",
+                      padding: "6px 8px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--dim)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    Time
+                  </th>
+                  <th
+                    style={{
+                      textAlign: "center",
+                      padding: "6px 8px",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      color: "var(--dim)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    Status
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {data.resolvers.map(r => (
+                {data.resolvers.map((r) => (
                   <tr key={r.name} style={{ borderBottom: "1px solid var(--border-muted)" }}>
                     <td style={{ padding: "6px 8px", whiteSpace: "nowrap" }}>
                       <div>
@@ -185,10 +270,26 @@ export function RecursiveDnsPanel({ domain }: { domain: string }) {
                     <td style={{ padding: "6px 8px" }}>
                       <RecordCell records={r.aaaa_records} />
                     </td>
-                    <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>
+                    <td
+                      style={{
+                        padding: "6px 8px",
+                        textAlign: "right",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "11px",
+                        color: "var(--dim)",
+                      }}
+                    >
                       {r.ttl != null ? `${r.ttl}s` : "—"}
                     </td>
-                    <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--dim)" }}>
+                    <td
+                      style={{
+                        padding: "6px 8px",
+                        textAlign: "right",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "11px",
+                        color: "var(--dim)",
+                      }}
+                    >
                       {r.response_time_ms}ms
                     </td>
                     <td style={{ padding: "6px 8px", textAlign: "center" }}>
@@ -213,7 +314,10 @@ export function RecursiveDnsPanel({ domain }: { domain: string }) {
               }}
             >
               <AlertTriangle size={12} />
-              <span>DNS resolvers are returning different A records — this may indicate DNS propagation in progress or geo-based load balancing.</span>
+              <span>
+                DNS resolvers are returning different A records — this may indicate DNS propagation in progress or
+                geo-based load balancing.
+              </span>
             </div>
           )}
         </div>

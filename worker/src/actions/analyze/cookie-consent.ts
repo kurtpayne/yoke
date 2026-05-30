@@ -112,9 +112,11 @@ function parseSetCookieHeaders(headers: Record<string, string>, pageDomain: stri
   if (!setCookieRaw) return cookies;
 
   // Split by actual cookie boundaries — look for name=value patterns after newlines or commas
-  // set-cookie headers joined with \n or , 
-  const cookieStrings = setCookieRaw.split(/\n|(?<=;\s*(?:path|domain|expires|max-age|samesite|secure|httponly)[^;]*),\s*/i);
-  
+  // set-cookie headers joined with \n or ,
+  const _cookieStrings = setCookieRaw.split(
+    /\n|(?<=;\s*(?:path|domain|expires|max-age|samesite|secure|httponly)[^;]*),\s*/i,
+  );
+
   // Simpler split: by newline if present, otherwise treat as one
   const lines = setCookieRaw.includes("\n") ? setCookieRaw.split("\n") : [setCookieRaw];
 
@@ -141,12 +143,12 @@ function parseSetCookieHeaders(headers: Record<string, string>, pageDomain: stri
     // Domain
     let cookieDomain = pageDomain;
     const domainMatch = lower.match(/domain\s*=\s*([^;]+)/);
-    if (domainMatch) cookieDomain = domainMatch[1]!.trim().replace(/^\./, "");
+    if (domainMatch) cookieDomain = domainMatch[1]?.trim().replace(/^\./, "");
 
     // Expires / Max-Age
     let expires: string | null = null;
     const expiresMatch = trimmed.match(/expires\s*=\s*([^;]+)/i);
-    if (expiresMatch) expires = expiresMatch[1]!.trim();
+    if (expiresMatch) expires = expiresMatch[1]?.trim();
     const maxAgeMatch = lower.match(/max-age\s*=\s*(\d+)/);
     if (maxAgeMatch) expires = `max-age=${maxAgeMatch[1]}`;
 
@@ -233,20 +235,34 @@ export function analyzeCookieConsent(
   // If CMP is detected, any tracking cookies in the initial response are
   // potentially set before the user consents
   const knownTrackingCookies = [
-    /^_ga/i, /^_gid/i, /^_gat/i, /^_fbp/i, /^_fbc/i, /^fr$/i, /^_gcl/i,
-    /^_hjid/i, /^_hjSession/i, /^_hjAbsoluteSession/i,
-    /^mp_/i, /^ajs_/i, /^__utm/i, /^IDE$/i, /^NID$/i,
-    /^_pin_unauth/i, /^li_/i, /^bcookie/i,
+    /^_ga/i,
+    /^_gid/i,
+    /^_gat/i,
+    /^_fbp/i,
+    /^_fbc/i,
+    /^fr$/i,
+    /^_gcl/i,
+    /^_hjid/i,
+    /^_hjSession/i,
+    /^_hjAbsoluteSession/i,
+    /^mp_/i,
+    /^ajs_/i,
+    /^__utm/i,
+    /^IDE$/i,
+    /^NID$/i,
+    /^_pin_unauth/i,
+    /^li_/i,
+    /^bcookie/i,
   ];
 
   let preConsentCount = 0;
   for (const cookie of cookiesSet) {
-    const isTracking = knownTrackingCookies.some(p => p.test(cookie.name));
+    const isTracking = knownTrackingCookies.some((p) => p.test(cookie.name));
     if (isTracking) preConsentCount++;
   }
 
   // ─── 4. Check for P3P header ────────────────────────────────────
-  const p3pPresent = !!headers["p3p"];
+  const p3pPresent = !!headers.p3p;
 
   // ─── 5. Check for cookie policy page ────────────────────────────
   const hasCookiePolicy =
@@ -258,7 +274,9 @@ export function analyzeCookieConsent(
 
   if (!cmpDetected) {
     // Only flag if the site appears to have tracking (not every site needs a CMP)
-    const hasTrackingScripts = /google-analytics|googletagmanager|facebook\.net|hotjar|mixpanel|segment\.com/i.test(html);
+    const hasTrackingScripts = /google-analytics|googletagmanager|facebook\.net|hotjar|mixpanel|segment\.com/i.test(
+      html,
+    );
     if (hasTrackingScripts) {
       complianceFlags.push("No consent management platform detected despite tracking scripts being present");
     }
@@ -269,17 +287,17 @@ export function analyzeCookieConsent(
   }
 
   // Check cookie security issues
-  const insecureCookies = cookiesSet.filter(c => !c.secure);
+  const insecureCookies = cookiesSet.filter((c) => !c.secure);
   if (insecureCookies.length > 0) {
     complianceFlags.push(`${insecureCookies.length} cookie(s) without Secure flag`);
   }
 
-  const noSameSite = cookiesSet.filter(c => !c.sameSite);
+  const noSameSite = cookiesSet.filter((c) => !c.sameSite);
   if (noSameSite.length > 0) {
     complianceFlags.push(`${noSameSite.length} cookie(s) without SameSite attribute`);
   }
 
-  const thirdPartyCookies = cookiesSet.filter(c => c.category === "third-party");
+  const thirdPartyCookies = cookiesSet.filter((c) => c.category === "third-party");
   if (thirdPartyCookies.length > 0) {
     complianceFlags.push(`${thirdPartyCookies.length} third-party cookie(s) set`);
   }
@@ -292,7 +310,7 @@ export function analyzeCookieConsent(
     complianceFlags.push("Legacy P3P header present — deprecated and not recognized by modern browsers");
   }
 
-  const longLivedCookies = cookiesSet.filter(c => {
+  const longLivedCookies = cookiesSet.filter((c) => {
     if (!c.expires) return false;
     const maxAgeMatch = c.expires.match(/max-age=(\d+)/);
     if (maxAgeMatch) return parseInt(maxAgeMatch[1]!, 10) > 365 * 24 * 60 * 60;

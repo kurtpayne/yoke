@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, createContext, useContext, type ReactNode } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 
 // ─── localStorage persistence ────────────────────────────────────
 
@@ -16,16 +16,26 @@ function loadLayout(): LayoutState {
       const parsed = JSON.parse(raw);
       return { collapsed: parsed.collapsed ?? {}, order: parsed.order ?? {} };
     }
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
   return { collapsed: {}, order: {} };
 }
 
 function saveLayout(state: LayoutState) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* */
+  }
 }
 
 export function resetLayout() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ }
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* */
+  }
 }
 
 // ─── Context ─────────────────────────────────────────────────────
@@ -68,11 +78,11 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
   }
 
   // Compute order
-  const defaultOrder = visible.map(p => p.id);
+  const defaultOrder = visible.map((p) => p.id);
   const saved = layout.order[tabId];
   let orderedIds: string[];
   if (saved) {
-    const a = saved.filter(id => defaultOrder.indexOf(id) >= 0);
+    const a = saved.filter((id) => defaultOrder.indexOf(id) >= 0);
     for (const id of defaultOrder) {
       if (a.indexOf(id) < 0) a.push(id);
     }
@@ -83,17 +93,17 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
 
   const ordered: PanelDef[] = [];
   for (const id of orderedIds) {
-    const p = visible.find(v => v.id === id);
+    const p = visible.find((v) => v.id === id);
     if (p) ordered.push(p);
   }
 
   function isCollapsed(pid: string): boolean {
-    return !!layout.collapsed[tabId + ":" + pid];
+    return !!layout.collapsed[`${tabId}:${pid}`];
   }
 
   function toggle(pid: string) {
-    setLayout(function(prev) {
-      const key = tabId + ":" + pid;
+    setLayout((prev) => {
+      const key = `${tabId}:${pid}`;
       const next = {
         collapsed: Object.assign({}, prev.collapsed, { [key]: !prev.collapsed[key] }),
         order: prev.order,
@@ -113,7 +123,9 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
     e.dataTransfer.setData("text/plain", pid);
     e.dataTransfer.effectAllowed = "move";
     const el = e.currentTarget;
-    requestAnimationFrame(function() { el.style.opacity = "0.35"; });
+    requestAnimationFrame(() => {
+      el.style.opacity = "0.35";
+    });
   }
 
   function onDragEnd(e: React.DragEvent<HTMLDivElement>) {
@@ -134,9 +146,9 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
     setDragOverId(null);
     const fromId = e.dataTransfer.getData("text/plain");
     if (!fromId || fromId === toId) return;
-    setLayout(function(prev) {
+    setLayout((prev) => {
       const cur = prev.order[tabId] || defaultOrder.slice();
-      const arr = cur.filter(function(id) { return defaultOrder.indexOf(id) >= 0; });
+      const arr = cur.filter((id) => defaultOrder.indexOf(id) >= 0);
       for (const id of defaultOrder) {
         if (arr.indexOf(id) < 0) arr.push(id);
       }
@@ -154,23 +166,47 @@ export function PanelGrid({ tabId, panels, grid = true }: { tabId: string; panel
     });
   }
 
-  const items = ordered.map(function(p) {
+  const items = ordered.map((p) => {
     const coll = isCollapsed(p.id);
-    const cls = "yoke-slot" +
+    const cls =
+      "yoke-slot" +
       (dragOverId === p.id ? " drop-target" : "") +
       (coll ? " slot-collapsed" : "") +
       (p.fullWidth ? " full-width" : "");
 
     return (
-      <PanelContext.Provider key={p.id} value={{ panelId: p.id, collapsed: coll, toggle: function() { toggle(p.id); }, onGripMouseDown: function() { gripActiveRef.current = p.id; }, onGripMouseUp: function() { gripActiveRef.current = null; } }}>
+      <PanelContext.Provider
+        key={p.id}
+        value={{
+          panelId: p.id,
+          collapsed: coll,
+          toggle: () => {
+            toggle(p.id);
+          },
+          onGripMouseDown: () => {
+            gripActiveRef.current = p.id;
+          },
+          onGripMouseUp: () => {
+            gripActiveRef.current = null;
+          },
+        }}
+      >
         <div
           className={cls}
           draggable={true}
-          onDragStart={function(e) { onDragStart(p.id, e); }}
+          onDragStart={(e) => {
+            onDragStart(p.id, e);
+          }}
           onDragEnd={onDragEnd}
-          onDragOver={function(e) { onDragOver(p.id, e); }}
-          onDragLeave={function() { setDragOverId(null); }}
-          onDrop={function(e) { onDrop(p.id, e); }}
+          onDragOver={(e) => {
+            onDragOver(p.id, e);
+          }}
+          onDragLeave={() => {
+            setDragOverId(null);
+          }}
+          onDrop={(e) => {
+            onDrop(p.id, e);
+          }}
         >
           {p.node}
         </div>
@@ -187,17 +223,43 @@ export function ResetLayoutButton() {
   const [confirm, setConfirm] = useState(false);
   const t = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   function click() {
-    if (confirm) { resetLayout(); window.location.reload(); }
-    else { setConfirm(true); t.current = setTimeout(function() { setConfirm(false); }, 3000); }
+    if (confirm) {
+      resetLayout();
+      window.location.reload();
+    } else {
+      setConfirm(true);
+      t.current = setTimeout(() => {
+        setConfirm(false);
+      }, 3000);
+    }
   }
-  useEffect(function() { return function() { if (t.current) clearTimeout(t.current); }; }, []);
+  useEffect(
+    () => () => {
+      if (t.current) clearTimeout(t.current);
+    },
+    [],
+  );
   return (
-    <button onClick={click} style={{
-      color: "var(--dim)", background: "none", border: "none", cursor: "pointer",
-      fontFamily: "var(--font-ui)", fontSize: "12px", padding: 0, transition: "color 0.15s",
-    }}
-    onMouseEnter={function(e) { e.currentTarget.style.color = "var(--text)"; }}
-    onMouseLeave={function(e) { e.currentTarget.style.color = "var(--dim)"; }}
-    >{confirm ? "Click again to confirm" : "Reset Layout"}</button>
+    <button
+      onClick={click}
+      style={{
+        color: "var(--dim)",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        fontFamily: "var(--font-ui)",
+        fontSize: "12px",
+        padding: 0,
+        transition: "color 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = "var(--text)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = "var(--dim)";
+      }}
+    >
+      {confirm ? "Click again to confirm" : "Reset Layout"}
+    </button>
   );
 }

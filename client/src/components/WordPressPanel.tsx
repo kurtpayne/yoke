@@ -1,29 +1,29 @@
-import { Puzzle, Shield, Paintbrush, Package, Zap, Search, ShoppingCart, Globe, Code2, Server } from "lucide-react";
-import { Panel, DataRow, StatusBadge } from "./Panel";
-import { CliButton, wordpressCliCommands } from "./CliModal";
+import { Code2, Globe, Package, Paintbrush, Puzzle, Search, Server, Shield, ShoppingCart, Zap } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
+import { CliButton, wordpressCliCommands } from "./CliModal";
+import { DataRow, Panel, StatusBadge } from "./Panel";
 
 const categoryIcons: Record<string, typeof Puzzle> = {
-  "SEO": Search,
+  SEO: Search,
   "Page Builder": Paintbrush,
   "E-commerce": ShoppingCart,
-  "Caching": Zap,
-  "Performance": Zap,
-  "Security": Shield,
+  Caching: Zap,
+  Performance: Zap,
+  Security: Shield,
   "Security / Performance": Shield,
-  "Forms": Package,
-  "Analytics": Globe,
-  "Editor": Code2,
-  "Content": Code2,
-  "Media": Package,
-  "Multilingual": Globe,
-  "Email": Package,
+  Forms: Package,
+  Analytics: Globe,
+  Editor: Code2,
+  Content: Code2,
+  Media: Package,
+  Multilingual: Globe,
+  Email: Package,
   "Email / Engagement": Package,
-  "Backup": Package,
-  "Migration": Package,
-  "Utility": Package,
+  Backup: Package,
+  Migration: Package,
+  Utility: Package,
   "Dev Tools": Code2,
-  "Users": Package,
+  Users: Package,
 };
 
 export function WordPressPanel({ data }: { data: AnalysisResult }) {
@@ -40,7 +40,22 @@ export function WordPressPanel({ data }: { data: AnalysisResult }) {
   }
 
   // Sort categories: prioritize key categories first
-  const catOrder = ["SEO", "Page Builder", "E-commerce", "Caching", "Performance", "Security", "Security / Performance", "Forms", "Analytics", "Content", "Editor", "Media", "Multilingual", "Email"];
+  const catOrder = [
+    "SEO",
+    "Page Builder",
+    "E-commerce",
+    "Caching",
+    "Performance",
+    "Security",
+    "Security / Performance",
+    "Forms",
+    "Analytics",
+    "Content",
+    "Editor",
+    "Media",
+    "Multilingual",
+    "Email",
+  ];
   const sortedCats = [...grouped.entries()].sort(([a], [b]) => {
     const ai = catOrder.indexOf(a);
     const bi = catOrder.indexOf(b);
@@ -66,7 +81,16 @@ export function WordPressPanel({ data }: { data: AnalysisResult }) {
       <div className="grid grid-cols-2 gap-2 px-4 py-2.5" style={{ borderBottom: "1px solid var(--border)" }}>
         {wp.theme && (
           <div>
-            <div style={{ fontSize: "9px", fontFamily: "var(--font-ui)", color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
+            <div
+              style={{
+                fontSize: "9px",
+                fontFamily: "var(--font-ui)",
+                color: "var(--dim)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginBottom: "2px",
+              }}
+            >
               Theme
             </div>
             <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--text)" }}>
@@ -79,7 +103,16 @@ export function WordPressPanel({ data }: { data: AnalysisResult }) {
         )}
         {wp.managed_hosting && (
           <div>
-            <div style={{ fontSize: "9px", fontFamily: "var(--font-ui)", color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
+            <div
+              style={{
+                fontSize: "9px",
+                fontFamily: "var(--font-ui)",
+                color: "var(--dim)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginBottom: "2px",
+              }}
+            >
               Managed Hosting
             </div>
             <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--accent)" }}>
@@ -93,7 +126,16 @@ export function WordPressPanel({ data }: { data: AnalysisResult }) {
       {/* Key Plugin Highlights */}
       {(wp.page_builder || wp.seo_plugin || wp.caching_plugin || wp.security_plugin || wp.ecommerce) && (
         <div className="px-4 py-2" style={{ borderBottom: "1px solid var(--border)" }}>
-          <div style={{ fontSize: "9px", fontFamily: "var(--font-ui)", color: "var(--dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
+          <div
+            style={{
+              fontSize: "9px",
+              fontFamily: "var(--font-ui)",
+              color: "var(--dim)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: "6px",
+            }}
+          >
             Key Stack
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -123,11 +165,19 @@ export function WordPressPanel({ data }: { data: AnalysisResult }) {
               {category}
               <span style={{ opacity: 0.5 }}>({plugins.length})</span>
             </div>
-            {plugins.map((p, i) => (
+            {plugins.map((p, _i) => (
               <DataRow
                 key={p.name}
-                label={<span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text)" }}>{p.name}</span>}
-                value={<span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>{p.slug}</span>}
+                label={
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text)" }}>
+                    {p.name}
+                  </span>
+                }
+                value={
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--dim)" }}>
+                    {p.slug}
+                  </span>
+                }
                 copyValue={p.slug}
               />
             ))}

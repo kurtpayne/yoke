@@ -2,7 +2,7 @@
 // Active DNS probing with curated prefix list, grouped by category.
 // On-demand only (not automatic), results cached 24h in D1.
 
-import { normalizeDomain, fetchWithTimeout, getFromCache, setCache } from "../helpers";
+import { fetchWithTimeout, getFromCache, normalizeDomain, setCache } from "../helpers";
 
 // ─── Curated Prefix List ─────────────────────────────────────────────
 
@@ -13,29 +13,173 @@ interface PrefixEntry {
 
 const SUBDOMAIN_PREFIXES: PrefixEntry[] = [
   // Web & App
-  ...["www","www2","www3","app","apps","web","portal","dashboard","my","account","login","signin","auth","sso","oauth","register","signup"].map(p => ({ prefix: p, category: "Web & App" })),
+  ...[
+    "www",
+    "www2",
+    "www3",
+    "app",
+    "apps",
+    "web",
+    "portal",
+    "dashboard",
+    "my",
+    "account",
+    "login",
+    "signin",
+    "auth",
+    "sso",
+    "oauth",
+    "register",
+    "signup",
+  ].map((p) => ({ prefix: p, category: "Web & App" })),
   // API & Services
-  ...["api","api2","api3","apis","graphql","rest","ws","wss","gateway","webhook","webhooks","rpc","grpc"].map(p => ({ prefix: p, category: "API & Services" })),
+  ...[
+    "api",
+    "api2",
+    "api3",
+    "apis",
+    "graphql",
+    "rest",
+    "ws",
+    "wss",
+    "gateway",
+    "webhook",
+    "webhooks",
+    "rpc",
+    "grpc",
+  ].map((p) => ({ prefix: p, category: "API & Services" })),
   // Mail & Communication
-  ...["mail","mail2","smtp","imap","pop","pop3","webmail","mx","mx1","mx2","email","newsletter","lists","mailman"].map(p => ({ prefix: p, category: "Mail & Communication" })),
+  ...[
+    "mail",
+    "mail2",
+    "smtp",
+    "imap",
+    "pop",
+    "pop3",
+    "webmail",
+    "mx",
+    "mx1",
+    "mx2",
+    "email",
+    "newsletter",
+    "lists",
+    "mailman",
+  ].map((p) => ({ prefix: p, category: "Mail & Communication" })),
   // Development & Staging
-  ...["dev","dev2","develop","staging","stage","stg","test","testing","qa","uat","sandbox","demo","beta","alpha","preview","canary","next","pre","preprod"].map(p => ({ prefix: p, category: "Development & Staging" })),
+  ...[
+    "dev",
+    "dev2",
+    "develop",
+    "staging",
+    "stage",
+    "stg",
+    "test",
+    "testing",
+    "qa",
+    "uat",
+    "sandbox",
+    "demo",
+    "beta",
+    "alpha",
+    "preview",
+    "canary",
+    "next",
+    "pre",
+    "preprod",
+  ].map((p) => ({ prefix: p, category: "Development & Staging" })),
   // Infrastructure & DevOps
-  ...["cdn","cdn1","cdn2","assets","static","media","img","images","files","storage","s3","upload","downloads","ftp","sftp"].map(p => ({ prefix: p, category: "Infrastructure & CDN" })),
+  ...[
+    "cdn",
+    "cdn1",
+    "cdn2",
+    "assets",
+    "static",
+    "media",
+    "img",
+    "images",
+    "files",
+    "storage",
+    "s3",
+    "upload",
+    "downloads",
+    "ftp",
+    "sftp",
+  ].map((p) => ({ prefix: p, category: "Infrastructure & CDN" })),
   // Admin & Internal
-  ...["admin","administrator","panel","manage","management","cms","cp","cpanel","whm","plesk","backoffice","internal","intranet"].map(p => ({ prefix: p, category: "Admin & Internal" })),
+  ...[
+    "admin",
+    "administrator",
+    "panel",
+    "manage",
+    "management",
+    "cms",
+    "cp",
+    "cpanel",
+    "whm",
+    "plesk",
+    "backoffice",
+    "internal",
+    "intranet",
+  ].map((p) => ({ prefix: p, category: "Admin & Internal" })),
   // Monitoring & Ops
-  ...["status","health","monitor","monitoring","metrics","grafana","kibana","logs","sentry","uptime"].map(p => ({ prefix: p, category: "Monitoring & Ops" })),
+  ...["status", "health", "monitor", "monitoring", "metrics", "grafana", "kibana", "logs", "sentry", "uptime"].map(
+    (p) => ({ prefix: p, category: "Monitoring & Ops" }),
+  ),
   // Commerce
-  ...["shop","store","cart","checkout","pay","payment","payments","billing","orders","inventory"].map(p => ({ prefix: p, category: "Commerce" })),
+  ...["shop", "store", "cart", "checkout", "pay", "payment", "payments", "billing", "orders", "inventory"].map((p) => ({
+    prefix: p,
+    category: "Commerce",
+  })),
   // Documentation & Support
-  ...["docs","doc","documentation","help","support","kb","knowledgebase","wiki","faq","community","forum"].map(p => ({ prefix: p, category: "Documentation & Support" })),
+  ...[
+    "docs",
+    "doc",
+    "documentation",
+    "help",
+    "support",
+    "kb",
+    "knowledgebase",
+    "wiki",
+    "faq",
+    "community",
+    "forum",
+  ].map((p) => ({ prefix: p, category: "Documentation & Support" })),
   // Marketing & Analytics
-  ...["blog","news","landing","promo","analytics","tracking","pixel","ads","marketing","go","links","link"].map(p => ({ prefix: p, category: "Marketing & Analytics" })),
+  ...[
+    "blog",
+    "news",
+    "landing",
+    "promo",
+    "analytics",
+    "tracking",
+    "pixel",
+    "ads",
+    "marketing",
+    "go",
+    "links",
+    "link",
+  ].map((p) => ({ prefix: p, category: "Marketing & Analytics" })),
   // Security
-  ...["security","cert","certs","vpn","proxy","waf","firewall"].map(p => ({ prefix: p, category: "Security" })),
+  ...["security", "cert", "certs", "vpn", "proxy", "waf", "firewall"].map((p) => ({ prefix: p, category: "Security" })),
   // Cloud & Hosting
-  ...["ns1","ns2","ns3","ns4","dns","dns1","dns2","relay","relay2","origin","edge","lb","lb1","node1","node2","cluster"].map(p => ({ prefix: p, category: "Cloud & DNS" })),
+  ...[
+    "ns1",
+    "ns2",
+    "ns3",
+    "ns4",
+    "dns",
+    "dns1",
+    "dns2",
+    "relay",
+    "relay2",
+    "origin",
+    "edge",
+    "lb",
+    "lb1",
+    "node1",
+    "node2",
+    "cluster",
+  ].map((p) => ({ prefix: p, category: "Cloud & DNS" })),
 ];
 
 // ─── DNS Resolution ──────────────────────────────────────────────────
@@ -59,14 +203,13 @@ interface SubdomainScanResult {
 
 async function resolveHost(hostname: string): Promise<string[]> {
   try {
-    const res = await fetchWithTimeout(
-      `https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=A`,
-      { timeout: 3000 },
-    );
+    const res = await fetchWithTimeout(`https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=A`, {
+      timeout: 3000,
+    });
     if (!res.ok) return [];
-    const data = await res.json() as { Status: number; Answer?: Array<{ type: number; data: string }> };
+    const data = (await res.json()) as { Status: number; Answer?: Array<{ type: number; data: string }> };
     if (data.Status !== 0 || !data.Answer) return [];
-    return data.Answer.filter(a => a.type === 1).map(a => a.data);
+    return data.Answer.filter((a) => a.type === 1).map((a) => a.data);
   } catch {
     return [];
   }
@@ -107,11 +250,11 @@ export async function scanSubdomains(kv: KVNamespace, rawDomain: string): Promis
         const hostname = `${prefix}.${domain}`;
         const ips = await resolveHost(hostname);
         if (ips.length > 0) {
-          const sameAsApex = ips.some(ip => apexIpSet.has(ip));
+          const sameAsApex = ips.some((ip) => apexIpSet.has(ip));
           return { prefix, hostname, category, ips, sameAsApex };
         }
         return null;
-      })
+      }),
     );
 
     for (const r of batchResults) {
@@ -122,7 +265,7 @@ export async function scanSubdomains(kv: KVNamespace, rawDomain: string): Promis
 
     // Small delay between batches
     if (batches.indexOf(batch) < batches.length - 1) {
-      await new Promise(r => setTimeout(r, BATCH_DELAY));
+      await new Promise((r) => setTimeout(r, BATCH_DELAY));
     }
   }
 
@@ -145,7 +288,9 @@ export async function scanSubdomains(kv: KVNamespace, rawDomain: string): Promis
   // Cache
   try {
     await setCache(kv, domain, "subdomain_scan", result, CACHE_TTL);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return result;
 }

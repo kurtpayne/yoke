@@ -1,12 +1,12 @@
 // ─── Domain Analysis Orchestrator ────────────────────────────────────
 // JSON endpoint — delegates all analysis logic to the shared core pipeline.
 
-import { type Env, normalizeDomain, CORS_HEADERS } from "../helpers";
+import { CORS_HEADERS, type Env, normalizeDomain } from "../helpers";
 import { runAnalysis } from "./analyze/core";
 
 export async function analyzeDomain(domain: string, env: Env, skipCache = false): Promise<Response> {
   domain = normalizeDomain(domain);
-  if (!domain || !domain.includes(".")) {
+  if (!domain?.includes(".")) {
     return new Response(JSON.stringify({ error: "Invalid domain" }), {
       status: 400,
       headers: { "Content-Type": "application/json", ...CORS_HEADERS },
