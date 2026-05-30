@@ -1,4 +1,4 @@
-import { ExternalLink, Lock, Shield, ShieldCheck } from "lucide-react";
+import { ExternalLink, Lock, ShieldCheck } from "lucide-react";
 import type { AnalysisResult } from "../utils/types";
 import { CliButton, headersCliCommands, sslCliCommands } from "./CliModal";
 import { DataRow, ErrorState, GradeBadge, Panel, StatusBadge } from "./Panel";
