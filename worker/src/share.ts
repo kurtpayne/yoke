@@ -16,7 +16,7 @@ interface SharePayload {
   d: string; // domain
   s: number; // composite score
   g: string; // grade
-  a: number[]; // axis scores [security, infrastructure, trust, performance, visibility]
+  a: number[]; // axis scores [security, foundations, reputation, speed, discoverability, email]
   t: number; // unix timestamp (seconds)
 }
 
@@ -27,7 +27,7 @@ interface CompareSharePayload {
   s2: number; // composite score 2
   g1: string; // grade 1
   g2: string; // grade 2
-  a1: number[]; // axis scores 1 [security, infrastructure, trust, performance, visibility]
+  a1: number[]; // axis scores 1 [security, foundations, reputation, speed, discoverability, email]
   a2: number[]; // axis scores 2
   t: number; // unix timestamp (seconds)
 }
@@ -206,7 +206,7 @@ function scoreColor(score: number): string {
   return "#f85149"; // red (matches --danger)
 }
 
-const AXIS_LABELS = ["Security", "Infrastructure", "Trust", "Performance", "Visibility"];
+const AXIS_LABELS = ["Security", "Foundations", "Reputation", "Speed", "Discoverability", "Email"];
 
 // ─── OG Image (SVG) ─────────────────────────────────────────────────
 
@@ -217,17 +217,17 @@ function generateOgSvg(data: SharePayload): string {
   const gc = gradeColor(grade);
   const sc = scoreColor(score);
 
-  // 1200×630 SVG
+  // 1200×630 SVG — 6 axis bars
   const bars = data.a
     .map((val, i) => {
-      const y = 230 + i * 60;
+      const y = 230 + i * 50;
       const barWidth = Math.max(4, (val / 100) * 460);
       const color = scoreColor(val);
       return `
-      <text x="660" y="${y + 4}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="16" text-anchor="end">${AXIS_LABELS[i]}</text>
-      <rect x="680" y="${y - 12}" width="460" height="24" rx="4" fill="#21262d"/>
-      <rect x="680" y="${y - 12}" width="${barWidth}" height="24" rx="4" fill="${color}" opacity="0.85"/>
-      <text x="1152" y="${y + 4}" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="15" text-anchor="end">${val}</text>
+      <text x="660" y="${y + 4}" fill="#8b949e" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="15" text-anchor="end">${AXIS_LABELS[i] ?? ""}</text>
+      <rect x="680" y="${y - 12}" width="460" height="22" rx="4" fill="#21262d"/>
+      <rect x="680" y="${y - 12}" width="${barWidth}" height="22" rx="4" fill="${color}" opacity="0.85"/>
+      <text x="1152" y="${y + 4}" fill="#e6edf3" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="14" text-anchor="end">${val}</text>
     `;
     })
     .join("");
@@ -324,10 +324,10 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>${domain} scored ${score} (${esc(grade)}) — Yoke</title>
-  <meta name="description" content="Security ${data.a[0]} · Infrastructure ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
+  <meta name="description" content="Security ${data.a[0]} · Foundations ${data.a[1]} · Reputation ${data.a[2]} · Speed ${data.a[3]} · Discoverability ${data.a[4]} · Email ${data.a[5] ?? "N/A"} — Free domain intelligence report"/>
   <meta property="og:type" content="website"/>
   <meta property="og:title" content="${domain} scored ${score} (${esc(grade)}) — Yoke"/>
-  <meta property="og:description" content="Security ${data.a[0]} · Infrastructure ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]} — Free domain intelligence report"/>
+  <meta property="og:description" content="Security ${data.a[0]} · Foundations ${data.a[1]} · Reputation ${data.a[2]} · Speed ${data.a[3]} · Discoverability ${data.a[4]} · Email ${data.a[5] ?? "N/A"} — Free domain intelligence report"/>
   <meta property="og:image" content="${ogImageUrl}"/>
   <meta property="og:image:type" content="image/png"/>
   <meta property="og:image:width" content="1200"/>
@@ -335,7 +335,7 @@ function generateReportPage(data: SharePayload, baseUrl: string, token: string):
   <meta property="og:url" content="${shareUrl}"/>
   <meta name="twitter:card" content="summary_large_image"/>
   <meta name="twitter:title" content="${domain} scored ${score} (${esc(grade)}) — Yoke"/>
-  <meta name="twitter:description" content="Security ${data.a[0]} · Infrastructure ${data.a[1]} · Trust ${data.a[2]} · Performance ${data.a[3]} · Visibility ${data.a[4]}"/>
+  <meta name="twitter:description" content="Security ${data.a[0]} · Foundations ${data.a[1]} · Reputation ${data.a[2]} · Speed ${data.a[3]} · Discoverability ${data.a[4]} · Email ${data.a[5] ?? "N/A"}"/>
   <meta name="twitter:image" content="${ogImageUrl}"/>
   <link rel="canonical" href="${shareUrl}"/>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
@@ -477,7 +477,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 <title>${domain} scored ${d.s} (${esc(d.g)}) — Yoke</title>
 <meta property="og:type" content="website"/>
 <meta property="og:title" content="${domain} scored ${d.s} (${esc(d.g)}) — Yoke"/>
-<meta property="og:description" content="Security ${d.a[0]} · Infrastructure ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]} — Free domain intelligence report"/>
+<meta property="og:description" content="Security ${d.a[0]} · Foundations ${d.a[1]} · Reputation ${d.a[2]} · Speed ${d.a[3]} · Discoverability ${d.a[4]} · Email ${d.a[5] ?? "N/A"} — Free domain intelligence report"/>
 <meta property="og:image" content="${esc(ogImageUrl)}"/>
 <meta property="og:image:type" content="image/png"/>
 <meta property="og:image:width" content="1200"/>
@@ -485,7 +485,7 @@ export async function handleSharePage(request: Request, env: Env, token: string)
 <meta property="og:url" content="${esc(shareUrl)}"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="${domain} scored ${d.s} (${esc(d.g)}) — Yoke"/>
-<meta name="twitter:description" content="Security ${d.a[0]} · Infrastructure ${d.a[1]} · Trust ${d.a[2]} · Performance ${d.a[3]} · Visibility ${d.a[4]}"/>
+<meta name="twitter:description" content="Security ${d.a[0]} · Foundations ${d.a[1]} · Reputation ${d.a[2]} · Speed ${d.a[3]} · Discoverability ${d.a[4]} · Email ${d.a[5] ?? "N/A"}"/>
 <meta name="twitter:image" content="${esc(ogImageUrl)}"/>
 <link rel="canonical" href="${esc(shareUrl)}"/>
 </head><body></body></html>`;
@@ -582,7 +582,7 @@ function generateCompareOgSvg(data: CompareSharePayload): string {
     const v2 = data.a2[i];
     const c1 = scoreColor(v1);
     const c2 = scoreColor(v2);
-    const y = 235 + i * 58;
+    const y = 235 + i * 47;
     const barMax = 400;
     const w1 = Math.max(4, (v1 / 100) * barMax);
     const w2 = Math.max(4, (v2 / 100) * barMax);
@@ -612,7 +612,7 @@ function generateCompareOgSvg(data: CompareSharePayload): string {
   };
 
   // Legend Y — right after last axis bar row
-  const legendY = 235 + 5 * 58 + 8;
+  const legendY = 235 + 6 * 47 + 8;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>

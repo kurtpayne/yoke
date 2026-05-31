@@ -461,7 +461,15 @@ export interface JsonLdItem {
 }
 
 export interface RecentLookupsResult {
-  lookups: Array<{ id: number; domain: string; analyzed_at: string; is_up: boolean | null; ssl_grade: string | null }>;
+  lookups: Array<{
+    id: number;
+    domain: string;
+    analyzed_at: string;
+    is_up: boolean | null;
+    ssl_grade: string | null;
+    score: number | null;
+    grade: string | null;
+  }>;
 }
 export interface SubdomainsResult {
   subdomains: string[];

@@ -24,6 +24,7 @@ const InfrastructureTab = lazy(() => import("./components/tabs/InfrastructureTab
 const SecurityTab = lazy(() => import("./components/tabs/SecurityTab"));
 const TechTab = lazy(() => import("./components/tabs/TechTab"));
 const PerformanceTab = lazy(() => import("./components/tabs/PerformanceTab"));
+const EmailTab = lazy(() => import("./components/tabs/EmailTab"));
 const BusinessTabWrapper = lazy(() => import("./components/tabs/BusinessTabWrapper"));
 const NewsTab = lazy(() => import("./components/NewsTab").then((m) => ({ default: m.NewsTab })));
 const ExploreTab = lazy(() => import("./components/ExploreTab").then((m) => ({ default: m.ExploreTab })));
@@ -464,6 +465,8 @@ function TabContent({
         return <TechTab data={data} />;
       case "speed":
         return <PerformanceTab data={data} />;
+      case "email":
+        return <EmailTab data={data} />;
       case "business":
         return <BusinessTabWrapper data={data} />;
       case "news":

@@ -1,4 +1,15 @@
-import { Building2, Compass, Gauge, Layers, LayoutDashboard, Newspaper, Server, Shield, Sparkles } from "lucide-react";
+import {
+  Building2,
+  Compass,
+  Gauge,
+  Layers,
+  LayoutDashboard,
+  Mail,
+  Newspaper,
+  Server,
+  Shield,
+  Sparkles,
+} from "lucide-react";
 import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const TABS = [
@@ -7,6 +18,7 @@ const TABS = [
   { id: "security", label: "Security", icon: Shield },
   { id: "tech", label: "Tech", icon: Layers },
   { id: "speed", label: "Speed", icon: Gauge },
+  { id: "email", label: "Email", icon: Mail },
   { id: "business", label: "Business", icon: Building2 },
   { id: "news", label: "News", icon: Newspaper },
   { id: "explore", label: "Explore", icon: Compass },
