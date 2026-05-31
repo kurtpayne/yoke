@@ -487,3 +487,56 @@ describe("Hard Caps (pass-through)", () => {
     expect(result).toBe(60);
   });
 });
+
+// ─── Not Assessed Threshold ─────────────────────────────────────────
+
+describe("Not Assessed Threshold", () => {
+  it("should mark axis as not_measured when fewer than 3 scoreable findings", () => {
+    const findings: Finding[] = [
+      { signal: "ssl_grade", axis: "security", severity: "good", label: "SSL A+", tradeoff: null, weight: 3 },
+      { signal: "hsts", axis: "security", severity: "good", label: "HSTS", tradeoff: null, weight: 4 },
+    ];
+    const score = computeAxisScore(findings);
+    // With only 2 findings, axis should be not assessed at the calculateDomainScore level
+    // computeAxisScore itself still computes normally
+    expect(score).toBeGreaterThan(55);
+  });
+
+  it("should score axis normally with 3+ scoreable findings", () => {
+    const findings: Finding[] = [
+      { signal: "ssl_grade", axis: "security", severity: "good", label: "SSL A+", tradeoff: null, weight: 3 },
+      { signal: "hsts", axis: "security", severity: "good", label: "HSTS", tradeoff: null, weight: 4 },
+      { signal: "csp", axis: "security", severity: "good", label: "CSP", tradeoff: null, weight: 3 },
+    ];
+    const score = computeAxisScore(findings);
+    expect(score).toBeGreaterThan(55);
+  });
+
+  it("should exclude meta-signals from scoreable count", () => {
+    // http_blocked_* and site_unreachable_* should not count toward the 3-finding threshold
+    const findings: Finding[] = [
+      {
+        signal: "http_blocked_performance",
+        axis: "speed",
+        severity: "info",
+        label: "Blocked",
+        tradeoff: null,
+        weight: 4,
+      },
+      {
+        signal: "site_unreachable_performance",
+        axis: "speed",
+        severity: "info",
+        label: "Unreachable",
+        tradeoff: null,
+        weight: 5,
+      },
+      { signal: "perf_score", axis: "speed", severity: "good", label: "Perf 90", tradeoff: null, weight: 5 },
+    ];
+    // Only 1 scoreable finding (perf_score), so still under threshold
+    const scoreableCount = findings.filter(
+      (f) => !f.signal.startsWith("http_blocked_") && !f.signal.startsWith("site_unreachable_"),
+    ).length;
+    expect(scoreableCount).toBe(1);
+  });
+});

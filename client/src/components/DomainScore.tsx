@@ -173,7 +173,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
         style={{ overflow: "visible" }}
         preserveAspectRatio="xMidYMid meet"
         role="img"
-        aria-label={`Radar chart showing domain scores: ${AXES.map((a) => `${AXIS_LABELS[a]} ${axes[a].not_measured || axes[a].score == null ? "not measured" : axes[a].score}`).join(", ")}`}
+        aria-label={`Radar chart showing domain scores: ${AXES.map((a) => `${AXIS_LABELS[a]} ${axes[a].not_measured || axes[a].score == null ? "not assessed" : axes[a].score}`).join(", ")}`}
       >
         <defs>
           {/* Radial gradient: white/bg center → saturated accent edge */}
@@ -366,7 +366,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
                 onMouseEnter={() => setHoveredAxis(axis)}
                 onMouseLeave={() => setHoveredAxis(null)}
               >
-                {notMeasured ? "N/M" : score}
+                {notMeasured ? "N/A" : score}
               </text>
             </g>
           );
@@ -410,7 +410,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
         >
           <span style={{ fontWeight: 600, color: "var(--text)" }}>
             {AXIS_LABELS[hoveredAxis]}:{" "}
-            {axes[hoveredAxis].not_measured ? "Not measured" : `${axes[hoveredAxis].score}/100`}
+            {axes[hoveredAxis].not_measured ? "Not Assessed" : `${axes[hoveredAxis].score}/100`}
           </span>
           {!axes[hoveredAxis].not_measured && (
             <span style={{ color: "var(--dim)", marginLeft: 6 }}>
@@ -562,7 +562,7 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
                     aria-valuemin={nm ? undefined : 0}
                     aria-valuemax={nm ? undefined : 100}
                     aria-label={
-                      nm ? `${AXIS_LABELS[axis]}: Not measured` : `${AXIS_LABELS[axis]}: ${a.score} out of 100`
+                      nm ? `${AXIS_LABELS[axis]}: Not Assessed` : `${AXIS_LABELS[axis]}: ${a.score} out of 100`
                     }
                   >
                     <span
@@ -589,7 +589,7 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
                             textAlign: "right",
                           }}
                         >
-                          Not measured
+                          Not Assessed
                         </span>
                       </>
                     ) : (
@@ -729,7 +729,7 @@ export function AxisScoreBadge({ data, axis }: { data: AnalysisResult; axis: Axi
             {AXIS_LABELS[axis]}
           </span>
           <span style={{ fontFamily: "var(--font-ui)", fontSize: "11px", fontStyle: "italic", color: "var(--dim)" }}>
-            Not measured
+            Not Assessed
           </span>
         </div>
       </div>

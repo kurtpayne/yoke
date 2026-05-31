@@ -751,9 +751,9 @@ function CompareRadar({ axes1, axes2, domain1, domain2 }: CompareRadarProps) {
               pointerEvents: "none",
             }}
           >
-            <span style={{ color: "var(--accent)", fontWeight: 600 }}>{axes1[hoveredAxis].score ?? "N/M"}</span>
+            <span style={{ color: "var(--accent)", fontWeight: 600 }}>{axes1[hoveredAxis].score ?? "N/A"}</span>
             <span style={{ color: "var(--dim)", margin: "0 4px" }}>vs</span>
-            <span style={{ color: d2Color, fontWeight: 600 }}>{axes2[hoveredAxis].score ?? "N/M"}</span>
+            <span style={{ color: d2Color, fontWeight: 600 }}>{axes2[hoveredAxis].score ?? "N/A"}</span>
             <span style={{ color: "var(--dim)", marginLeft: 6 }}>
               ({(axes1[hoveredAxis].score ?? 0) - (axes2[hoveredAxis].score ?? 0) > 0 ? "+" : ""}
               {(axes1[hoveredAxis].score ?? 0) - (axes2[hoveredAxis].score ?? 0)})

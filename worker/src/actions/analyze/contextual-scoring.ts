@@ -3844,9 +3844,16 @@ export function calculateDomainScore(opts: {
 
   for (const axis of axes) {
     const axisFindings = findings.filter((f) => f.axis === axis);
-    if (axisFindings.length === 0) {
-      // Unmeasured axis gets score 50 (not null) — lack of data is not a pass
-      axisScores[axis] = { score: 50, weight: AXIS_WEIGHTS[axis], findings: [], not_measured: true };
+
+    // Count scoreable findings — exclude meta-signals that just indicate checks couldn't run
+    const scoreableFindings = axisFindings.filter(
+      (f) => !f.signal.startsWith("http_blocked_") && !f.signal.startsWith("site_unreachable_"),
+    );
+
+    if (scoreableFindings.length < 3) {
+      // "Not Assessed" — too few findings to produce a meaningful score.
+      // Prevents sparse axes from inflating or deflating unfairly.
+      axisScores[axis] = { score: null, weight: AXIS_WEIGHTS[axis], findings: axisFindings, not_measured: true };
       continue;
     }
     let score = computeAxisScore(axisFindings);
@@ -3860,12 +3867,31 @@ export function calculateDomainScore(opts: {
 
   // ─── Compute Composite Score ─────────────────────────────────────
   // Weighted geometric mean — low outliers are punished more than arithmetic.
+  // Axes marked "Not Assessed" are excluded and weights are re-normalized.
 
   const rawAxisScores: Record<Axis, number> = {} as Record<Axis, number>;
+  const assessedAxes: Axis[] = [];
   for (const axis of axes) {
-    rawAxisScores[axis] = axisScores[axis].score ?? 50;
+    if (axisScores[axis].score != null) {
+      rawAxisScores[axis] = axisScores[axis].score as number;
+      assessedAxes.push(axis);
+    }
   }
-  const rawComposite = computeComposite(rawAxisScores, archetype.detected);
+
+  let rawComposite: number;
+  if (assessedAxes.length === 0) {
+    rawComposite = 0;
+  } else {
+    // Re-normalize weights for assessed axes only
+    const totalWeight = assessedAxes.reduce((sum, a) => sum + AXIS_WEIGHTS[a], 0);
+    let logSum = 0;
+    for (const axis of assessedAxes) {
+      const s = Math.max(rawAxisScores[axis], 1);
+      const normalizedWeight = AXIS_WEIGHTS[axis] / totalWeight;
+      logSum += normalizedWeight * Math.log(s);
+    }
+    rawComposite = Math.max(0, Math.min(100, Math.round(Math.exp(logSum))));
+  }
 
   // ─── Hard Caps ───────────────────────────────────────────────────
   // Apply hard caps to the composite SCORE, then derive grade from capped score.
