@@ -35,7 +35,7 @@ export default function InfrastructureTab({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="space-y-3">
-      <PanelGrid tabId="infrastructure" panels={panels} />
+      <PanelGrid tabId="foundations" panels={panels} />
       {/* Contextual external links */}
       <div className="flex flex-wrap gap-2 px-1">
         {ip && (

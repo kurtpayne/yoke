@@ -38,11 +38,12 @@ describe("Prompt Builder", () => {
 
   it("includes axis weights", () => {
     const prompt = buildSystemPrompt(makeArchetype(), Object.keys(SIGNAL_REGISTRY));
-    expect(prompt).toContain("Security (28%)");
-    expect(prompt).toContain("Infrastructure (25%)");
-    expect(prompt).toContain("Performance (20%)");
-    expect(prompt).toContain("Visibility (15%)");
-    expect(prompt).toContain("Trust (12%)");
+    expect(prompt).toContain("Security (24%)");
+    expect(prompt).toContain("Speed (18%)");
+    expect(prompt).toContain("Foundations (18%)");
+    expect(prompt).toContain("Reputation (15%)");
+    expect(prompt).toContain("Discoverability (13%)");
+    expect(prompt).toContain("Email (12%)");
   });
 
   it("includes signal calibration guidance for provided signal IDs", () => {
@@ -124,18 +125,17 @@ describe("Prompt Builder", () => {
   it("includes cross-signal examples", () => {
     const prompt = buildSystemPrompt(makeArchetype(), Object.keys(SIGNAL_REGISTRY));
     expect(prompt).toContain("CROSS-SIGNAL INSIGHT EXAMPLES");
-    expect(prompt).toContain("INFRASTRUCTURE EXAMPLES");
-    expect(prompt).toContain("PERFORMANCE EXAMPLES");
-    expect(prompt).toContain("TRUST EXAMPLES");
-    expect(prompt).toContain("VISIBILITY EXAMPLES");
+    expect(prompt).toContain("FOUNDATIONS EXAMPLES");
+    expect(prompt).toContain("SPEED EXAMPLES");
+    expect(prompt).toContain("REPUTATION EXAMPLES");
+    expect(prompt).toContain("DISCOVERABILITY EXAMPLES");
   });
 
   it("includes output schema with correct category names", () => {
     const prompt = buildSystemPrompt(makeArchetype(), Object.keys(SIGNAL_REGISTRY));
-    expect(prompt).toContain("security|infrastructure|performance|trust|visibility|accessibility");
+    expect(prompt).toContain("security|speed|foundations|reputation|discoverability|email|accessibility");
     // Should NOT contain the old "seo" category or orphan categories
     expect(prompt).not.toContain('"seo"');
-    expect(prompt).not.toContain('"email"');
     expect(prompt).not.toContain('"network"');
     expect(prompt).not.toContain('"privacy"');
   });

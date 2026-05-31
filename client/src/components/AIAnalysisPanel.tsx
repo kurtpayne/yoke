@@ -78,7 +78,7 @@ interface ActionItem {
   impact: number; // 0-100, used for sorting
 }
 
-type AxisName = "security" | "performance" | "infrastructure" | "trust" | "visibility";
+type AxisName = "security" | "speed" | "foundations" | "reputation" | "discoverability" | "email";
 
 function generateActionItems(data: AnalysisResult): ActionItem[] {
   const items: ActionItem[] = [];
@@ -90,7 +90,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       title: "Site appears to be down",
       reason: "Users and search engines can't reach your site. Everything else is secondary until this is resolved.",
       effort: "Investigate immediately",
-      axis: "infrastructure",
+      axis: "foundations",
       severity: "critical",
       impact: 100,
     });
@@ -104,7 +104,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         title: `Listed on ${listed.length} blocklist${listed.length > 1 ? "s" : ""}`,
         reason: "Blocklist presence can cause email rejection and browser warnings. Investigate and request delisting.",
         effort: "Varies — may take days",
-        axis: "trust",
+        axis: "reputation",
         severity: "critical",
         impact: 95,
       });
@@ -175,7 +175,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         title: `Renew domain — expires in ${data.rdap.days_until_expiry} day${data.rdap.days_until_expiry === 1 ? "" : "s"}`,
         reason: "If the domain expires, someone else can register it. Enable auto-renewal with your registrar.",
         effort: "~5 min at your registrar",
-        axis: "trust",
+        axis: "reputation",
         severity: "critical",
         impact: 96,
       });
@@ -184,7 +184,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         title: `Domain registration expires in ${data.rdap.days_until_expiry} days`,
         reason: "Consider renewing early and enabling auto-renewal to avoid any risk of losing the domain.",
         effort: "~5 min",
-        axis: "trust",
+        axis: "reputation",
         severity: "high",
         impact: 55,
       });
@@ -228,7 +228,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
           reason:
             "DMARC tells receiving servers what to do with unauthenticated email from your domain. Start with p=none to monitor.",
           effort: "~15 min — one DNS TXT record",
-          axis: "trust",
+          axis: "reputation",
           severity: "high",
           impact: 55,
         });
@@ -250,7 +250,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
           reason:
             "DMARC p=none only monitors — it doesn't actually protect against spoofing. Upgrade once you've verified legitimate senders.",
           effort: "~5 min DNS change, but audit senders first",
-          axis: "trust",
+          axis: "reputation",
           severity: "medium",
           impact: 35,
         });
@@ -306,7 +306,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         reason:
           "Below 50 means significant loading issues. Affects user experience, bounce rates, and search rankings.",
         effort: "Run Lighthouse for specific recommendations",
-        axis: "performance",
+        axis: "speed",
         severity: "high",
         impact: 70,
       });
@@ -315,7 +315,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         title: `Tune page performance (currently ${data.performance.score}/100)`,
         reason: "Moderate performance — optimizing images, scripts, and server response time would help.",
         effort: "Varies — check Lighthouse report",
-        axis: "performance",
+        axis: "speed",
         severity: "medium",
         impact: 35,
       });
@@ -327,7 +327,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         reason:
           "LCP above 4s means the main content takes too long to appear. Usually caused by large images, slow fonts, or server delay.",
         effort: "Image optimization + lazy loading — ~1-2 hours",
-        axis: "performance",
+        axis: "speed",
         severity: "high",
         impact: 60,
       });
@@ -341,7 +341,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       reason:
         "Each external script adds latency, privacy risk, and potential breakage. Audit and remove unused ones, lazy-load the rest.",
       effort: "~2-3 hours to audit and optimize",
-      axis: "performance",
+      axis: "speed",
       severity: "medium",
       impact: 40,
     });
@@ -354,7 +354,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       reason:
         "Uncompressed responses waste bandwidth and slow page loads. Most servers and CDNs support this with a config toggle.",
       effort: "~15 min — server/CDN config",
-      axis: "performance",
+      axis: "speed",
       severity: "medium",
       impact: 35,
     });
@@ -367,7 +367,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       reason:
         "HTTP/1.1 can't multiplex requests — browsers open 6+ connections instead. HTTP/2 is a server config change with no code impact.",
       effort: "Server/CDN config — ~30 min",
-      axis: "performance",
+      axis: "speed",
       severity: "medium",
       impact: 30,
     });
@@ -394,7 +394,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         title: "Add IPv6 (AAAA) records",
         reason: "A growing share of mobile and international users connect over IPv6. Some networks are IPv6-only.",
         effort: "DNS config — ~15 min",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "low",
         impact: 15,
       });
@@ -421,7 +421,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       reason:
         "Cookies set before user consent can violate GDPR/CCPA. Review your cookie implementation and consent flow.",
       effort: "~1-2 hours to audit",
-      axis: "trust",
+      axis: "reputation",
       severity: "medium",
       impact: 35,
     });
@@ -434,7 +434,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       reason:
         "Organization or WebSite schema helps search engines understand your site and enables rich results in search.",
       effort: "~15 min — copy-paste template",
-      axis: "visibility",
+      axis: "discoverability",
       severity: "low",
       impact: 25,
     });
@@ -447,7 +447,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         title: "Add Open Graph and Twitter Card meta tags",
         reason: "Without social meta, shared links won't show rich previews on social media — just a bare URL.",
         effort: "~10 min — a few <meta> tags",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "low",
         impact: 20,
       });
@@ -455,8 +455,8 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
   }
 
   // Social verification via rel="me"
-  if (data.domain_score?.axes?.visibility?.findings) {
-    const visFindings = data.domain_score.axes.visibility.findings as Array<{
+  if (data.domain_score?.axes?.discoverability?.findings) {
+    const visFindings = data.domain_score.axes.discoverability.findings as Array<{
       signal?: string;
       severity?: string;
       label?: string;
@@ -469,7 +469,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         reason:
           'Your social accounts are detected but not verified. Adding <link rel="me" href="..."> tags to your HTML head takes 5 minutes and proves you own those profiles — turning yellow "linked" badges green.',
         effort: "~5 min — add link tags to <head>",
-        axis: "visibility" as AxisName,
+        axis: "discoverability" as AxisName,
         severity: "low",
         impact: 15,
       });
@@ -479,7 +479,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         reason:
           'Social accounts were found by username matching but aren\'t verified. Add <link rel="me" href="..."> tags to prove ownership and strengthen your identity signals.',
         effort: "~5 min — add link tags to <head>",
-        axis: "visibility" as AxisName,
+        axis: "discoverability" as AxisName,
         severity: "low",
         impact: 12,
       });
@@ -491,7 +491,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       title: "Add a sitemap.xml",
       reason: "Sitemaps help search engines discover and index all your pages. Most frameworks can auto-generate one.",
       effort: "~15 min",
-      axis: "visibility",
+      axis: "discoverability",
       severity: "low",
       impact: 15,
     });
@@ -505,7 +505,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         reason:
           "Low accessibility limits your audience and may create legal exposure. Focus on alt text, contrast, and keyboard navigation.",
         effort: "Ongoing — start with automated fixes",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "high",
         impact: 55,
       });
@@ -515,7 +515,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
         reason:
           "Room for improvement on WCAG compliance. Common fixes: add alt text, improve contrast ratios, ensure keyboard navigation.",
         effort: "~2-4 hours for quick wins",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "medium",
         impact: 30,
       });
@@ -528,7 +528,7 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       title: `${data.breaches.items.length} known data breach${data.breaches.items.length > 1 ? "es" : ""} on record`,
       reason: "Past breaches affect user trust. Ensure affected users were notified and credentials were reset.",
       effort: "Review breach details in Security tab",
-      axis: "trust",
+      axis: "reputation",
       severity: "medium",
       impact: 30,
     });
@@ -547,17 +547,19 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
 
       const axisLabels: Record<AxisName, string> = {
         security: "Security",
-        performance: "Performance",
-        infrastructure: "Infrastructure",
-        trust: "Trust",
-        visibility: "Visibility",
+        speed: "Speed",
+        foundations: "Foundations",
+        reputation: "Reputation",
+        discoverability: "Discoverability",
+        email: "Email",
       };
       const axisAdvice: Record<AxisName, string> = {
         security: "headers, email auth, and TLS configuration",
-        performance: "page speed, compression, and script optimization",
-        infrastructure: "DNS, networking, and hosting health",
-        trust: "email authentication, domain registration, and compliance",
-        visibility: "structured data, social meta, and accessibility",
+        speed: "page speed, compression, and script optimization",
+        foundations: "DNS, networking, and hosting health",
+        reputation: "email authentication, domain registration, and compliance",
+        discoverability: "structured data, social meta, and accessibility",
+        email: "SPF, DKIM, DMARC, and email transport security",
       };
 
       if (weakest[1].score != null && strongest[1].score != null && strongest[1].score - weakest[1].score >= 15) {
@@ -572,21 +574,21 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
       }
 
       const secScore = axes.security?.score ?? 0;
-      const perfScore = axes.performance?.score ?? 0;
-      if (secScore >= 85 && perfScore < 70 && weakest[0] !== "performance") {
+      const perfScore = axes.speed?.score ?? 0;
+      if (secScore >= 85 && perfScore < 70 && weakest[0] !== "speed") {
         items.push({
           title: "Security is solid — performance is the bottleneck",
           reason: `Security scores well (${secScore}) but performance (${perfScore}) is holding back the overall grade. Optimization effort here has the best ROI.`,
           effort: "Focus on performance items above",
-          axis: "performance",
+          axis: "speed",
           severity: "medium",
           impact: 65,
         });
       }
 
-      if (axes.security?.score != null && axes.trust?.score != null) {
+      if (axes.security?.score != null && axes.reputation?.score != null) {
         const secFindings = axes.security.findings || [];
-        const trustFindings = axes.trust.findings || [];
+        const repFindings = axes.reputation.findings || [];
         const emailSecIssue = secFindings.some(
           (f) =>
             f.severity !== "good" &&
@@ -594,16 +596,16 @@ function generateActionItems(data: AnalysisResult): ActionItem[] {
               f.label?.toLowerCase().includes("dkim") ||
               f.label?.toLowerCase().includes("spf")),
         );
-        const emailTrustIssue = trustFindings.some(
+        const emailRepIssue = repFindings.some(
           (f) =>
             f.severity !== "good" &&
             (f.label?.toLowerCase().includes("email") || f.label?.toLowerCase().includes("authentication")),
         );
-        if (emailSecIssue && emailTrustIssue) {
+        if (emailSecIssue && emailRepIssue) {
           items.push({
-            title: "Email auth impacts both security and trust scores",
+            title: "Email auth impacts both security and reputation scores",
             reason:
-              "Incomplete email authentication is dragging down two axes at once. Completing SPF + DKIM + DMARC is the highest-leverage single fix.",
+              "Incomplete email authentication is dragging down two categories at once. Completing SPF + DKIM + DMARC is the highest-leverage single fix.",
             effort: "~1 hour total",
             axis: "security",
             severity: "medium",

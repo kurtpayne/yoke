@@ -4,7 +4,7 @@ Output ONLY valid JSON matching this exact schema (no markdown wrapping, no text
   "posture": "strong|fair|poor|critical",
   "key_findings": [
     {
-      "category": "security|infrastructure|performance|trust|visibility|accessibility",
+      "category": "security|speed|foundations|reputation|discoverability|email|accessibility",
       "finding": "Specific finding citing exact data points from the analysis",
       "severity": "info|low|medium|high",
       "action": "Concrete next step — not 'consider improving X' but 'Add X header with value Y'"

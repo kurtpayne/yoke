@@ -3,10 +3,10 @@ import { type CSSProperties, type KeyboardEvent, useCallback, useEffect, useRef,
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "infrastructure", label: "Infra", icon: Server },
+  { id: "foundations", label: "Foundations", icon: Server },
   { id: "security", label: "Security", icon: Shield },
   { id: "tech", label: "Tech", icon: Layers },
-  { id: "performance", label: "Perf", icon: Gauge },
+  { id: "speed", label: "Speed", icon: Gauge },
   { id: "business", label: "Business", icon: Building2 },
   { id: "news", label: "News", icon: Newspaper },
   { id: "explore", label: "Explore", icon: Compass },

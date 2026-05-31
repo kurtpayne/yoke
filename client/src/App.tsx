@@ -453,13 +453,13 @@ function TabContent({
   // All other tabs are lazy-loaded
   const lazyContent = (() => {
     switch (tab) {
-      case "infrastructure":
+      case "foundations":
         return <InfrastructureTab data={data} />;
       case "security":
         return <SecurityTab data={data} />;
       case "tech":
         return <TechTab data={data} />;
-      case "performance":
+      case "speed":
         return <PerformanceTab data={data} />;
       case "business":
         return <BusinessTabWrapper data={data} />;

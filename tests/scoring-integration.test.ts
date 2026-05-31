@@ -60,8 +60,8 @@ describe("calculateDomainScore integration", () => {
     expect(typeof result.grade).toBe("string");
     expect(result.axes).toBeDefined();
     expect(result.archetype).toBeDefined();
-    // All 5 axes should be present
-    for (const axis of ["security", "performance", "infrastructure", "trust", "visibility"] as const) {
+    // All 6 categories should be present
+    for (const axis of ["security", "speed", "foundations", "reputation", "discoverability", "email"] as const) {
       expect(result.axes[axis]).toBeDefined();
       const score = result.axes[axis].score;
       // score can be number or null
@@ -268,7 +268,7 @@ describe("calculateDomainScore integration", () => {
       expect(f.axis).toBeTruthy();
       expect(f.severity).toBeTruthy();
       expect(f.label).toBeTruthy();
-      expect(["security", "performance", "infrastructure", "trust", "visibility"]).toContain(f.axis);
+      expect(["security", "speed", "foundations", "reputation", "discoverability", "email"]).toContain(f.axis);
       expect(["critical", "high", "medium", "low", "info", "good"]).toContain(f.severity);
     }
   });
@@ -340,7 +340,7 @@ describe("Resource hints scoring", () => {
     const rh = allFindings.find((f) => f.signal === "resource_hints");
     expect(rh).toBeDefined();
     expect(rh?.severity).toBe("good");
-    expect(rh?.axis).toBe("performance");
+    expect(rh?.axis).toBe("speed");
     expect(rh?.label).toContain("2 preload");
     expect(rh?.label).toContain("1 preconnect");
   });

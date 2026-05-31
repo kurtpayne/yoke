@@ -33,10 +33,10 @@ function CopyBtn({ text }: { text: string }) {
 
 const TAB_FILTERS: Record<TabId, { label: string; filter: string } | null> = {
   overview: { label: "Overview", filter: "'{status, domain_score, hosting, tranco_rank}'" },
-  infrastructure: { label: "Infrastructure", filter: "'{dns, ip_info, ssl, rdap, shodan, redirects}'" },
+  foundations: { label: "Foundations", filter: "'{dns, ip_info, ssl, rdap, shodan, redirects}'" },
   security: { label: "Security", filter: "'{headers, email_auth, dnssec, blocklists, breaches}'" },
   tech: { label: "Tech Stack", filter: "'{tech_stack, wordpress}'" },
-  performance: { label: "Performance", filter: "'{performance, compression, http_protocols}'" },
+  speed: { label: "Speed", filter: "'{performance, compression, http_protocols}'" },
   business: { label: "Business", filter: "'{rdap, tranco_rank, json_ld}'" },
   news: { label: "News & Social", filter: "'{social_meta}'" },
   explore: null,

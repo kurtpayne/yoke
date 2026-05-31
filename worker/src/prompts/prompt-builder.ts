@@ -16,15 +16,17 @@ import OUTPUT_SCHEMA from "../../../prompts/output-schema.txt";
 // ─── Axis Descriptions ─────────────────────────────────────────────
 
 const AXIS_DESCRIPTIONS: Record<string, string> = {
-  security: "Security measures protocol safety, header hardening, email authentication, and vulnerability exposure.",
-  infrastructure:
-    "Infrastructure measures DNS hygiene, configuration quality, nameserver setup, and network health. It does NOT measure uptime or reliability — a site with 100% uptime can still score low on infrastructure if DNS configuration follows poor practices.",
-  performance:
-    "Performance measures page speed, Core Web Vitals, protocol modernity, and loading optimization. When both mobile and desktop data are available, the score blends mobile (60%) and desktop (40%) to match Google's mobile-first ranking approach.",
-  trust:
-    "Trust measures domain reputation, age, email authentication maturity, data breach history, and organizational transparency.",
-  visibility:
-    "Visibility measures search engine discoverability, structured data, social sharing readiness, accessibility, and mobile-friendliness.",
+  security: "Security measures protocol safety, header hardening, and vulnerability exposure.",
+  speed:
+    "Speed measures page speed, Core Web Vitals, and loading optimization. When both mobile and desktop data are available, the score blends mobile (60%) and desktop (40%) to match Google's mobile-first ranking approach.",
+  foundations:
+    "Foundations measures DNS hygiene, configuration quality, nameserver setup, network health, protocol modernity (HTTP/2+, CDN), and operational maturity. It does NOT measure uptime or reliability — a site with 100% uptime can still score low on foundations if DNS configuration follows poor practices.",
+  reputation:
+    "Reputation measures domain credibility, age, data breach history, organizational transparency, privacy compliance, and cookie consent practices.",
+  discoverability:
+    "Discoverability measures search engine discoverability, structured data, social sharing readiness, accessibility, and mobile-friendliness.",
+  email:
+    "Email measures email authentication maturity (SPF, DKIM, DMARC), email transport security (MTA-STS), brand indicators (BIMI), and mail infrastructure redundancy.",
 };
 
 // ─── Archetype Context ──────────────────────────────────────────────
@@ -98,7 +100,7 @@ export function buildSystemPrompt(archetype: ArchetypeResult, signalIds: string[
 
   if (Object.keys(signalsByAxis).length > 0) {
     const calibrationLines: string[] = ["SIGNAL CALIBRATION:"];
-    for (const axis of ["security", "infrastructure", "performance", "trust", "visibility"]) {
+    for (const axis of ["security", "speed", "foundations", "reputation", "discoverability", "email"]) {
       const signals = signalsByAxis[axis];
       if (signals && signals.length > 0) {
         calibrationLines.push(`\n[${axis.toUpperCase()}]`, ...signals);
@@ -124,7 +126,7 @@ export function buildSystemPrompt(archetype: ArchetypeResult, signalIds: string[
 
   // (f-h) Additional context sections
   sections.push(
-    "PERFORMANCE CONTEXT:\n- Mobile/desktop blending: when both are available, performance score = 60% mobile + 40% desktop, matching Google's mobile-first approach.\n- CrUX vs lab: CrUX field data reflects real user experience and is MORE authoritative than lab scores. When they diverge, anchor analysis on CrUX. CrUX good + lab poor = CDN/caching benefits real users. CrUX poor + lab good = real users face conditions lab doesn't simulate.\n- Core Web Vitals thresholds: LCP ≤2.5s good / ≤4.0s needs-improvement / >4.0s poor; CLS ≤0.1 / ≤0.25; TTFB ≤800ms; INP ≤200ms / ≤500ms; FCP ≤1.8s / ≤3.0s; TBT ≤200ms / ≤600ms.",
+    "SPEED CONTEXT:\n- Mobile/desktop blending: when both are available, speed score = 60% mobile + 40% desktop, matching Google's mobile-first approach.\n- CrUX vs lab: CrUX field data reflects real user experience and is MORE authoritative than lab scores. When they diverge, anchor analysis on CrUX. CrUX good + lab poor = CDN/caching benefits real users. CrUX poor + lab good = real users face conditions lab doesn't simulate.\n- Core Web Vitals thresholds: LCP ≤2.5s good / ≤4.0s needs-improvement / >4.0s poor; CLS ≤0.1 / ≤0.25; TTFB ≤800ms; INP ≤200ms / ≤500ms; FCP ≤1.8s / ≤3.0s; TBT ≤200ms / ≤600ms.",
   );
 
   // (i) Meta-rules

@@ -54,7 +54,7 @@ import type {
 
 // ─── Types ───────────────────────────────────────────────────────────
 
-export type Axis = "security" | "performance" | "infrastructure" | "trust" | "visibility";
+export type Axis = "security" | "speed" | "foundations" | "reputation" | "discoverability" | "email";
 export type Severity = "critical" | "high" | "medium" | "low" | "info" | "good";
 
 import type { ArchetypeName as _ArchetypeName } from "../../config/contextual-scoring-types";
@@ -849,7 +849,7 @@ export function calculateDomainScore(opts: {
           const caList = [...unauthorizedCAs].slice(0, 5).join(", ");
           findings.push({
             signal: "ct_caa_mismatch",
-            axis: "trust",
+            axis: "security",
             severity: "info",
             label: `${unauthorizedCertCount} cert${unauthorizedCertCount !== 1 ? "s" : ""} from CA${unauthorizedCAs.size !== 1 ? "s" : ""} not in CAA: ${caList}`,
             tradeoff:
@@ -1665,7 +1665,7 @@ export function calculateDomainScore(opts: {
     if (dmarcRejecting) {
       findings.push({
         signal: "dmarc_reject",
-        axis: "trust",
+        axis: "email",
         severity: "good",
         label: "DMARC policy=reject prevents email spoofing",
         tradeoff: null,
@@ -1676,7 +1676,7 @@ export function calculateDomainScore(opts: {
       if (policy === "quarantine") {
         findings.push({
           signal: "dmarc_reject",
-          axis: "trust",
+          axis: "email",
           severity: "info",
           label: "DMARC policy=quarantine — partial email protection",
           tradeoff: "Upgrade to p=reject for full spoofing prevention.",
@@ -1686,7 +1686,7 @@ export function calculateDomainScore(opts: {
         // p=none or unrecognized
         findings.push({
           signal: "dmarc_reject",
-          axis: "trust",
+          axis: "email",
           severity: "low",
           label: "DMARC policy=none — monitoring only, no protection",
           tradeoff: "Move to quarantine/reject once reports look clean.",
@@ -1697,7 +1697,7 @@ export function calculateDomainScore(opts: {
       // No DMARC at all
       findings.push({
         signal: "dmarc_reject",
-        axis: "trust",
+        axis: "email",
         severity: "medium",
         label: "No DMARC — domain vulnerable to email spoofing",
         tradeoff: null,
@@ -1710,7 +1710,7 @@ export function calculateDomainScore(opts: {
     if (opsSignals.length >= 2) {
       findings.push({
         signal: "ops_transparency",
-        axis: "trust",
+        axis: "foundations",
         severity: "good",
         label: `${opsSignals.length} operational transparency tools (status page, monitoring, etc.)`,
         tradeoff: null,
@@ -1735,7 +1735,7 @@ export function calculateDomainScore(opts: {
     // ── CrUX field data available — use real user metrics ──
     findings.push({
       signal: "crux_field_data",
-      axis: "performance",
+      axis: "speed",
       severity: "good",
       label: "Real-user field data available (Chrome UX Report)",
       tradeoff: null,
@@ -1759,7 +1759,7 @@ export function calculateDomainScore(opts: {
         avgScore >= 80 ? ps.severity : contextualSeverity(ps.severity, arch, avgScore >= 50 ? { content: "high" } : {});
       findings.push({
         signal: PERF_SCORE.signal,
-        axis: "performance",
+        axis: "speed",
         severity: psSev,
         label: `Performance score ${avgScore}/100 (field data)`,
         tradeoff: null,
@@ -1774,7 +1774,7 @@ export function calculateDomainScore(opts: {
       const lcp = resolveSeverity(LCP, lcpSec);
       findings.push({
         signal: LCP.signal,
-        axis: "performance",
+        axis: "speed",
         severity: lcp.severity,
         label: `LCP: ${lcpSec.toFixed(1)}s (p75 field)`,
         tradeoff: null,
@@ -1786,7 +1786,7 @@ export function calculateDomainScore(opts: {
       const cls = resolveSeverity(CLS, crux.cls_p75);
       findings.push({
         signal: CLS.signal,
-        axis: "performance",
+        axis: "speed",
         severity: cls.severity,
         label: `CLS: ${crux.cls_p75.toFixed(3)} (p75 field)`,
         tradeoff: null,
@@ -1798,7 +1798,7 @@ export function calculateDomainScore(opts: {
       const ttfb = resolveSeverity(TTFB, crux.ttfb_p75);
       findings.push({
         signal: TTFB.signal,
-        axis: "performance",
+        axis: "speed",
         severity: ttfb.severity,
         label: `TTFB: ${Math.round(crux.ttfb_p75)}ms (p75 field)`,
         tradeoff: null,
@@ -1811,7 +1811,7 @@ export function calculateDomainScore(opts: {
       const fcpResult = resolveSeverity(FCP, fcpSec);
       findings.push({
         signal: FCP.signal,
-        axis: "performance",
+        axis: "speed",
         severity: fcpResult.severity,
         label: `FCP: ${fcpSec.toFixed(1)}s (p75 field)`,
         tradeoff: null,
@@ -1824,7 +1824,7 @@ export function calculateDomainScore(opts: {
       const inpResult = resolveSeverity(INP, crux.inp_p75);
       findings.push({
         signal: INP.signal,
-        axis: "performance",
+        axis: "speed",
         severity: inpResult.severity,
         label: `INP: ${Math.round(crux.inp_p75)}ms (p75 field)`,
         tradeoff: null,
@@ -1856,7 +1856,7 @@ export function calculateDomainScore(opts: {
         : contextualSeverity(ps.severity, arch, blendedScore >= 50 ? { content: "high" } : {});
     findings.push({
       signal: PERF_SCORE.signal,
-      axis: "performance",
+      axis: "speed",
       severity: psSev,
       label: `Performance score ${blendedScore}/100`,
       tradeoff: null,
@@ -1873,7 +1873,7 @@ export function calculateDomainScore(opts: {
       const lcp = resolveSeverity(LCP, lcpSec);
       findings.push({
         signal: LCP.signal,
-        axis: "performance",
+        axis: "speed",
         severity: lcp.severity,
         label: `LCP: ${lcpSec.toFixed(1)}s`,
         tradeoff: null,
@@ -1887,7 +1887,7 @@ export function calculateDomainScore(opts: {
       const cls = resolveSeverity(CLS, primaryPerf.cls);
       findings.push({
         signal: CLS.signal,
-        axis: "performance",
+        axis: "speed",
         severity: cls.severity,
         label: `CLS: ${primaryPerf.cls.toFixed(3)}`,
         tradeoff: null,
@@ -1901,7 +1901,7 @@ export function calculateDomainScore(opts: {
       const ttfb = resolveSeverity(TTFB, primaryPerf.ttfb);
       findings.push({
         signal: TTFB.signal,
-        axis: "performance",
+        axis: "speed",
         severity: ttfb.severity,
         label: `TTFB: ${Math.round(primaryPerf.ttfb)}ms`,
         tradeoff: null,
@@ -1915,7 +1915,7 @@ export function calculateDomainScore(opts: {
       const tbtResult = resolveSeverity(TBT, primaryPerf.tbt);
       findings.push({
         signal: TBT.signal,
-        axis: "performance",
+        axis: "speed",
         severity: tbtResult.severity,
         label: tbtResult.label,
         tradeoff: null,
@@ -1930,7 +1930,7 @@ export function calculateDomainScore(opts: {
       const fcpResult = resolveSeverity(FCP, fcpSec);
       findings.push({
         signal: FCP.signal,
-        axis: "performance",
+        axis: "speed",
         severity: fcpResult.severity,
         label: `FCP: ${fcpSec.toFixed(1)}s`,
         tradeoff: null,
@@ -1943,7 +1943,7 @@ export function calculateDomainScore(opts: {
     // This prevents score inflation when PageSpeed data is missing
     findings.push({
       signal: "pagespeed_unavailable",
-      axis: "performance",
+      axis: "speed",
       severity: "low",
       label: "PageSpeed Insights unavailable",
       tradeoff: null,
@@ -1957,7 +1957,7 @@ export function calculateDomainScore(opts: {
     if (!opts.compression.encoding && !opts.httpBlocked) {
       findings.push({
         signal: "no_compression",
-        axis: "performance",
+        axis: "speed",
         severity: "low",
         label: "No compression detected",
         tradeoff:
@@ -1973,7 +1973,7 @@ export function calculateDomainScore(opts: {
     if (cv === "excellent" || cv === "good") {
       findings.push({
         signal: "cache_headers",
-        axis: "performance",
+        axis: "speed",
         severity: "good",
         label: opts.cacheAnalysis.verdict_label,
         tradeoff: null,
@@ -1982,7 +1982,7 @@ export function calculateDomainScore(opts: {
     } else if (cv === "fair") {
       findings.push({
         signal: "cache_headers",
-        axis: "performance",
+        axis: "speed",
         severity: "info",
         label: opts.cacheAnalysis.verdict_label,
         tradeoff: null,
@@ -1991,7 +1991,7 @@ export function calculateDomainScore(opts: {
     } else if (cv === "poor") {
       findings.push({
         signal: "cache_headers",
-        axis: "performance",
+        axis: "speed",
         severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }),
         label: opts.cacheAnalysis.verdict_label,
         tradeoff: "Aggressive caching may serve stale content to users.",
@@ -2000,7 +2000,7 @@ export function calculateDomainScore(opts: {
     } else if (cv === "none") {
       findings.push({
         signal: "cache_headers",
-        axis: "performance",
+        axis: "speed",
         severity: contextualSeverity("low", arch, { commerce: "medium", content: "medium" }),
         label: "No cache headers — browsers use heuristic caching",
         tradeoff: null,
@@ -2014,7 +2014,7 @@ export function calculateDomainScore(opts: {
     if (opts.httpProtocols.http3) {
       findings.push({
         signal: "http3",
-        axis: "performance",
+        axis: "foundations",
         severity: "good",
         label: "HTTP/3 supported",
         tradeoff: null,
@@ -2023,7 +2023,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.httpProtocols.http2) {
       findings.push({
         signal: "http2",
-        axis: "performance",
+        axis: "foundations",
         severity: "info",
         label: "HTTP/2 supported",
         tradeoff: null,
@@ -2032,7 +2032,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "http1_only",
-        axis: "performance",
+        axis: "foundations",
         severity: "medium",
         label: "HTTP/1.1 only",
         tradeoff: null,
@@ -2045,7 +2045,7 @@ export function calculateDomainScore(opts: {
   if (opts.hosting?.cdn) {
     findings.push({
       signal: "cdn",
-      axis: "performance",
+      axis: "foundations",
       severity: "good",
       label: `CDN: ${opts.hosting.cdn}`,
       tradeoff: null,
@@ -2059,7 +2059,7 @@ export function calculateDomainScore(opts: {
     if (hops >= 4) {
       findings.push({
         signal: "redirect_chain_length",
-        axis: "performance",
+        axis: "speed",
         severity: "medium",
         label: `${hops} redirect hops — excessive latency`,
         tradeoff: null,
@@ -2068,7 +2068,7 @@ export function calculateDomainScore(opts: {
     } else if (hops >= 2) {
       findings.push({
         signal: "redirect_chain_length",
-        axis: "performance",
+        axis: "speed",
         severity: "info",
         label: `${hops} redirect hops`,
         tradeoff: null,
@@ -2085,7 +2085,7 @@ export function calculateDomainScore(opts: {
   const nsCount = dns.filter((r) => r.type === "NS").length;
   findings.push({
     signal: "ns_redundancy",
-    axis: "infrastructure",
+    axis: "foundations",
     severity: "good",
     label: `${nsCount} nameserver${nsCount !== 1 ? "s" : ""}`,
     tradeoff: null,
@@ -2097,7 +2097,7 @@ export function calculateDomainScore(opts: {
   if (mxCount > 0) {
     findings.push({
       signal: "mx_redundancy",
-      axis: "infrastructure",
+      axis: "email",
       severity: mxCount >= 2 ? "good" : "info",
       label: `${mxCount} MX record${mxCount !== 1 ? "s" : ""}`,
       tradeoff: null,
@@ -2109,7 +2109,7 @@ export function calculateDomainScore(opts: {
   const hasIpv6 = dns.some((r) => r.type === "AAAA");
   findings.push({
     signal: "ipv6",
-    axis: "infrastructure",
+    axis: "foundations",
     severity: hasIpv6 ? "good" : "info",
     label: hasIpv6 ? "IPv6 supported" : "No IPv6 (AAAA) records",
     tradeoff: null,
@@ -2121,7 +2121,7 @@ export function calculateDomainScore(opts: {
   if (aCount >= 2) {
     findings.push({
       signal: "lb",
-      axis: "infrastructure",
+      axis: "foundations",
       severity: "good",
       label: `${aCount} A records (load balanced)`,
       tradeoff: null,
@@ -2133,7 +2133,7 @@ export function calculateDomainScore(opts: {
   const hasCaa = dns.some((r) => r.type === "CAA");
   findings.push({
     signal: "caa",
-    axis: "infrastructure",
+    axis: "foundations",
     severity: hasCaa ? "good" : "info",
     label: hasCaa ? "CAA records present" : "No CAA records",
     tradeoff: null,
@@ -2147,7 +2147,7 @@ export function calculateDomainScore(opts: {
     if (minTtl < 60) {
       findings.push({
         signal: "low_ttl",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "info",
         label: `Low DNS TTL (${minTtl}s) — enables fast failover`,
         tradeoff: "Low TTLs enable fast failover and traffic management but increase DNS query volume.",
@@ -2166,7 +2166,7 @@ export function calculateDomainScore(opts: {
     if (tcpMs < 300) {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "good",
         label: `TCP connect: ${Math.round(tcpMs)}ms`,
         tradeoff: null,
@@ -2175,7 +2175,7 @@ export function calculateDomainScore(opts: {
     } else if (tcpMs < 500) {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "info",
         label: `TCP connect: ${Math.round(tcpMs)}ms`,
         tradeoff: null,
@@ -2184,7 +2184,7 @@ export function calculateDomainScore(opts: {
     } else if (tcpMs < 1000) {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "low",
         label: `TCP connect: ${Math.round(tcpMs)}ms — above average`,
         tradeoff: "Connection timing depends on server location relative to probe.",
@@ -2193,7 +2193,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "tcp_connection_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "medium",
         label: `TCP connect: ${Math.round(tcpMs)}ms — very slow`,
         tradeoff: "Connection timing depends on server location relative to probe.",
@@ -2209,7 +2209,7 @@ export function calculateDomainScore(opts: {
     if (dnsMs < 100) {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "good",
         label: `DNS resolution: ${Math.round(dnsMs)}ms`,
         tradeoff: null,
@@ -2218,7 +2218,7 @@ export function calculateDomainScore(opts: {
     } else if (dnsMs < 200) {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "info",
         label: `DNS resolution: ${Math.round(dnsMs)}ms`,
         tradeoff: null,
@@ -2227,7 +2227,7 @@ export function calculateDomainScore(opts: {
     } else if (dnsMs < 500) {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "low",
         label: `DNS resolution: ${Math.round(dnsMs)}ms — slow`,
         tradeoff: null,
@@ -2236,7 +2236,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "dns_resolution_time",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "medium",
         label: `DNS resolution: ${Math.round(dnsMs)}ms — very slow`,
         tradeoff: null,
@@ -2253,7 +2253,7 @@ export function calculateDomainScore(opts: {
       if (nsDiversity.isMultiProvider) {
         findings.push({
           signal: "ns_provider_diversity",
-          axis: "infrastructure",
+          axis: "foundations",
           severity: "good",
           label: `Multi-provider DNS (${nsDiversity.providers.join(", ")})`,
           tradeoff: null,
@@ -2273,7 +2273,7 @@ export function calculateDomainScore(opts: {
     if (!opts.statusResult.is_up && dnsResolves && !opts.statusResult.http_blocked) {
       findings.push({
         signal: "site_unreachable",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "high",
         label: "Site unreachable — DNS resolves but no HTTP response",
         tradeoff: null,
@@ -2282,7 +2282,7 @@ export function calculateDomainScore(opts: {
       // Also tank Visibility — an unreachable site has zero web visibility
       findings.push({
         signal: "site_unreachable_visibility",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "critical",
         label: "Site unreachable — zero web visibility",
         tradeoff: null,
@@ -2291,7 +2291,7 @@ export function calculateDomainScore(opts: {
       // Also tank Performance — cannot measure performance of an unreachable site
       findings.push({
         signal: "site_unreachable_performance",
-        axis: "performance",
+        axis: "speed",
         severity: "critical",
         label: "Site unreachable — cannot measure performance",
         tradeoff: null,
@@ -2305,7 +2305,7 @@ export function calculateDomainScore(opts: {
   if (opts.statusResult?.http_blocked) {
     findings.push({
       signal: "http_blocked_infrastructure",
-      axis: "infrastructure",
+      axis: "foundations",
       severity: "medium",
       label: "HTTP probe blocked — analysis is limited",
       tradeoff: "Site may be blocking automated requests. Scoring is based on DNS/WHOIS/SSL data only.",
@@ -2315,7 +2315,7 @@ export function calculateDomainScore(opts: {
     if (!opts.performance) {
       findings.push({
         signal: "http_blocked_performance",
-        axis: "performance",
+        axis: "speed",
         severity: "medium",
         label: "Cannot measure performance — HTTP blocked",
         tradeoff: null,
@@ -2342,7 +2342,7 @@ export function calculateDomainScore(opts: {
       if (code >= 500) {
         findings.push({
           signal: "http_error_response",
-          axis: "infrastructure",
+          axis: "foundations",
           severity: "high",
           label: `Server error (HTTP ${code})`,
           tradeoff: null,
@@ -2351,7 +2351,7 @@ export function calculateDomainScore(opts: {
       } else {
         findings.push({
           signal: "http_error_response",
-          axis: "infrastructure",
+          axis: "foundations",
           severity: "medium",
           label: `Client error response (HTTP ${code})`,
           tradeoff: "Some sites return 4xx to automated probes while working fine in browsers.",
@@ -2393,7 +2393,7 @@ export function calculateDomainScore(opts: {
                 : `Newly registered domain (${ageDays} days) — high risk NRD`;
     findings.push({
       signal: "domain_age_trust",
-      axis: "trust",
+      axis: "reputation",
       severity,
       label,
       tradeoff: null,
@@ -2407,7 +2407,7 @@ export function calculateDomainScore(opts: {
     const years = Math.floor(expiryDays / 365);
     findings.push({
       signal: "registration_length",
-      axis: "trust",
+      axis: "reputation",
       severity: expiryDays > 730 ? "good" : expiryDays > 30 ? "info" : expiryDays > 7 ? "low" : "medium",
       label:
         expiryDays > 730
@@ -2424,7 +2424,7 @@ export function calculateDomainScore(opts: {
   if (listedCount === 0) {
     findings.push({
       signal: "blocklist_trust",
-      axis: "trust",
+      axis: "reputation",
       severity: "good",
       label: "Clean blocklist record",
       tradeoff: null,
@@ -2433,7 +2433,7 @@ export function calculateDomainScore(opts: {
   } else {
     findings.push({
       signal: "blocklist_trust",
-      axis: "trust",
+      axis: "reputation",
       severity: listedCount >= 2 ? "critical" : "high",
       label: `On ${listedCount} blocklist(s)`,
       tradeoff: null,
@@ -2447,7 +2447,7 @@ export function calculateDomainScore(opts: {
     if (opts.greynoise.noise && !isBehindCdn) {
       findings.push({
         signal: "greynoise_noise",
-        axis: "trust",
+        axis: "reputation",
         severity: "medium",
         label: "IP flagged as internet noise by GreyNoise",
         tradeoff: null,
@@ -2457,7 +2457,7 @@ export function calculateDomainScore(opts: {
       // CDN IP noise is about the shared infrastructure, not this domain
       findings.push({
         signal: "greynoise_noise",
-        axis: "trust",
+        axis: "reputation",
         severity: "info",
         label: `IP flagged as noise by GreyNoise (shared CDN IP: ${opts.hosting?.cdn})`,
         tradeoff: "GreyNoise noise on CDN IPs reflects shared infrastructure, not this domain.",
@@ -2466,7 +2466,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.greynoise.riot && !isBehindCdn) {
       findings.push({
         signal: "greynoise_riot",
-        axis: "trust",
+        axis: "reputation",
         severity: "good",
         label: "IP is a known service (GreyNoise RIOT)",
         tradeoff: null,
@@ -2510,7 +2510,7 @@ export function calculateDomainScore(opts: {
     if (weightedPwned > 10_000_000) {
       findings.push({
         signal: "breaches",
-        axis: "trust",
+        axis: "reputation",
         severity: "high",
         label: `${bc} data breach${bc !== 1 ? "es" : ""} (~${(weightedPwned / 1_000_000).toFixed(0)}M weighted accounts)`,
         tradeoff:
@@ -2520,7 +2520,7 @@ export function calculateDomainScore(opts: {
     } else if (weightedPwned > 1_000_000 || (bc >= 3 && hasVerified)) {
       findings.push({
         signal: "breaches",
-        axis: "trust",
+        axis: "reputation",
         severity: "medium",
         label: `${bc} data breach${bc !== 1 ? "es" : ""} (~${Math.round(weightedPwned).toLocaleString()} weighted accounts)`,
         tradeoff:
@@ -2530,7 +2530,7 @@ export function calculateDomainScore(opts: {
     } else if (bc >= 1 && hasVerified) {
       findings.push({
         signal: "breaches",
-        axis: "trust",
+        axis: "reputation",
         severity: "low",
         label: `${bc} verified data breach${bc !== 1 ? "es" : ""}`,
         tradeoff: "Historical breaches reflect past security incidents, not necessarily current posture.",
@@ -2539,7 +2539,7 @@ export function calculateDomainScore(opts: {
     } else if (bc >= 1) {
       findings.push({
         signal: "breaches",
-        axis: "trust",
+        axis: "reputation",
         severity: "info",
         label: `${bc} unverified data breach report${bc !== 1 ? "s" : ""}`,
         tradeoff: null,
@@ -2557,7 +2557,7 @@ export function calculateDomainScore(opts: {
     if (opts.trancoRank <= 1000) {
       findings.push({
         signal: "tranco_rank",
-        axis: "trust",
+        axis: "reputation",
         severity: "good",
         label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()})`,
         tradeoff: null,
@@ -2566,7 +2566,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.trancoRank <= 10000) {
       findings.push({
         signal: "tranco_rank",
-        axis: "trust",
+        axis: "reputation",
         severity: "good",
         label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()})`,
         tradeoff: null,
@@ -2575,7 +2575,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.trancoRank <= 100000) {
       findings.push({
         signal: "tranco_rank",
-        axis: "trust",
+        axis: "reputation",
         severity: "info",
         label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`,
         tradeoff: null,
@@ -2596,7 +2596,7 @@ export function calculateDomainScore(opts: {
     if (complete) {
       findings.push({
         signal: "email_trust",
-        axis: "trust",
+        axis: "email",
         severity: "good",
         label: "Complete email authentication",
         tradeoff: null,
@@ -2605,7 +2605,7 @@ export function calculateDomainScore(opts: {
     } else if (!hasSpf && !hasDmarc && !hasDkim) {
       findings.push({
         signal: "email_trust",
-        axis: "trust",
+        axis: "email",
         severity: "high",
         label: "No email authentication (missing SPF, DKIM, DMARC)",
         tradeoff: null,
@@ -2620,7 +2620,7 @@ export function calculateDomainScore(opts: {
       if (missing.length > 0) {
         findings.push({
           signal: "email_trust",
-          axis: "trust",
+          axis: "email",
           severity: "medium",
           label: `Incomplete email auth (missing ${missing.join(", ")})`,
           tradeoff: null,
@@ -2630,7 +2630,7 @@ export function calculateDomainScore(opts: {
         // Only DKIM missing — treat as mostly complete
         findings.push({
           signal: "email_trust",
-          axis: "trust",
+          axis: "email",
           severity: "info",
           label: "Email auth present (SPF + DMARC) — DKIM not externally detected",
           tradeoff: null,
@@ -2645,7 +2645,7 @@ export function calculateDomainScore(opts: {
     if (opts.securityTxt.found && opts.securityTxt.has_bug_bounty) {
       findings.push({
         signal: "security_txt",
-        axis: "trust",
+        axis: "security",
         severity: "good",
         label: `security.txt with bug bounty${opts.securityTxt.bug_bounty_platform ? ` (${opts.securityTxt.bug_bounty_platform})` : ""}`,
         tradeoff: null,
@@ -2654,7 +2654,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.securityTxt.found) {
       findings.push({
         signal: "security_txt",
-        axis: "trust",
+        axis: "security",
         severity: "good",
         label: "security.txt present (responsible disclosure)",
         tradeoff: null,
@@ -2668,7 +2668,7 @@ export function calculateDomainScore(opts: {
   if (opts.emailAuth?.bimi?.found) {
     findings.push({
       signal: "bimi_record",
-      axis: "trust",
+      axis: "email",
       severity: "good",
       label: "BIMI record present — email brand verification",
       tradeoff: null,
@@ -2684,7 +2684,7 @@ export function calculateDomainScore(opts: {
     if (hasAdsTxt) {
       findings.push({
         signal: "ads_txt",
-        axis: "trust",
+        axis: "reputation",
         severity: "good",
         label: "ads.txt present — authorized ad sellers declared",
         tradeoff: null,
@@ -2709,7 +2709,7 @@ export function calculateDomainScore(opts: {
     if (isEV && orgName) {
       findings.push({
         signal: "cert_validation_type",
-        axis: "trust",
+        axis: "foundations",
         severity: "good",
         label: `Extended Validation (EV) certificate — ${orgName}`,
         tradeoff: null,
@@ -2718,7 +2718,7 @@ export function calculateDomainScore(opts: {
     } else if (hasOrg && orgName) {
       findings.push({
         signal: "cert_validation_type",
-        axis: "trust",
+        axis: "foundations",
         severity: "good",
         label: `Organization Validated (OV) certificate — ${orgName}`,
         tradeoff: null,
@@ -2727,7 +2727,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "cert_validation_type",
-        axis: "trust",
+        axis: "foundations",
         severity: "info",
         label: "Domain Validated (DV) certificate only",
         tradeoff: null,
@@ -2746,7 +2746,7 @@ export function calculateDomainScore(opts: {
     if (orgCount >= 3) {
       findings.push({
         signal: "organizational_identity",
-        axis: "trust",
+        axis: "reputation",
         severity: "good",
         label: "Privacy policy, terms, and about page found",
         tradeoff: null,
@@ -2759,7 +2759,7 @@ export function calculateDomainScore(opts: {
       if (!hasAbout) missing.push("about page");
       findings.push({
         signal: "organizational_identity",
-        axis: "trust",
+        axis: "reputation",
         severity: "info",
         label: `${orgCount}/3 organizational pages found (missing: ${missing.join(", ")})`,
         tradeoff: null,
@@ -2768,7 +2768,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "organizational_identity",
-        axis: "trust",
+        axis: "reputation",
         severity: "low",
         label: "No organizational identity pages (privacy, terms, about)",
         tradeoff: null,
@@ -2783,7 +2783,7 @@ export function calculateDomainScore(opts: {
       // Has cookies but no consent management = mild trust concern
       findings.push({
         signal: "cookie_consent_missing",
-        axis: "trust",
+        axis: "reputation",
         severity: "low",
         label: `${opts.cookieSecurity.cookies.length} cookies set without consent management`,
         tradeoff: null,
@@ -2800,7 +2800,7 @@ export function calculateDomainScore(opts: {
     if (opts.trancoRank <= 1000) {
       findings.push({
         signal: "domain_popularity",
-        axis: "visibility",
+        axis: "reputation",
         severity: "good",
         label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()}) — elite web presence`,
         tradeoff: null,
@@ -2809,7 +2809,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.trancoRank <= 10000) {
       findings.push({
         signal: "domain_popularity",
-        axis: "visibility",
+        axis: "reputation",
         severity: "good",
         label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()}) — high traffic`,
         tradeoff: null,
@@ -2818,7 +2818,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.trancoRank <= 100000) {
       findings.push({
         signal: "domain_popularity",
-        axis: "visibility",
+        axis: "reputation",
         severity: "info",
         label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`,
         tradeoff: null,
@@ -2827,7 +2827,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "domain_popularity",
-        axis: "visibility",
+        axis: "reputation",
         severity: "low",
         label: `Tranco rank #${opts.trancoRank.toLocaleString()} — low traffic`,
         tradeoff: null,
@@ -2837,7 +2837,7 @@ export function calculateDomainScore(opts: {
   } else {
     findings.push({
       signal: "domain_popularity",
-      axis: "visibility",
+      axis: "reputation",
       severity: "info",
       label: "Not ranked in Tranco top 1M",
       tradeoff: null,
@@ -2850,7 +2850,7 @@ export function calculateDomainScore(opts: {
   if (jsonLdTypes.length > 0) {
     findings.push({
       signal: "structured_data",
-      axis: "visibility",
+      axis: "discoverability",
       severity: "good",
       label: `Structured data: ${jsonLdTypes.slice(0, 3).join(", ")}`,
       tradeoff: null,
@@ -2859,7 +2859,7 @@ export function calculateDomainScore(opts: {
   } else if (!opts.httpBlocked) {
     findings.push({
       signal: "no_structured_data",
-      axis: "visibility",
+      axis: "discoverability",
       severity: contextualSeverity("info", arch, { content: "low", commerce: "low" }),
       label: "No structured data (JSON-LD) found",
       tradeoff: null,
@@ -2872,7 +2872,7 @@ export function calculateDomainScore(opts: {
     const score = opts.socialMeta.score;
     findings.push({
       signal: "social_meta",
-      axis: "visibility",
+      axis: "discoverability",
       severity: score >= 80 ? "good" : score >= 50 ? "info" : score >= 30 ? "low" : "medium",
       label: score >= 80 ? "Complete social meta (OG + Twitter)" : `Social meta score: ${score}/100`,
       tradeoff: null,
@@ -2884,7 +2884,7 @@ export function calculateDomainScore(opts: {
   if (opts.meta) {
     findings.push({
       signal: "robots_txt",
-      axis: "visibility",
+      axis: "discoverability",
       severity: opts.meta.robots_txt_exists ? "good" : "info",
       label: opts.meta.robots_txt_exists ? "robots.txt present" : "No robots.txt",
       tradeoff: null,
@@ -2896,7 +2896,7 @@ export function calculateDomainScore(opts: {
   if (opts.meta) {
     findings.push({
       signal: "sitemap",
-      axis: "visibility",
+      axis: "discoverability",
       severity: opts.meta.sitemap_detected ? "good" : contextualSeverity("low", arch, { content: "medium" }),
       label: opts.meta.sitemap_detected ? "Sitemap detected" : "No sitemap found",
       tradeoff: null,
@@ -2909,7 +2909,7 @@ export function calculateDomainScore(opts: {
     const pageCount = opts.legal.pages_found.length;
     findings.push({
       signal: "legal_pages",
-      axis: "visibility",
+      axis: "reputation",
       severity: pageCount >= 2 ? "good" : pageCount >= 1 ? "info" : "low",
       label:
         pageCount >= 2
@@ -2932,7 +2932,7 @@ export function calculateDomainScore(opts: {
     if (verifiedCount >= 2) {
       findings.push({
         signal: "social_accounts",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "good",
         label: `${verifiedCount} verified social accounts (rel=me)`,
         tradeoff: null,
@@ -2941,7 +2941,7 @@ export function calculateDomainScore(opts: {
     } else if (verifiedCount >= 1 || linkedCount >= 2) {
       findings.push({
         signal: "social_accounts",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "good",
         label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`,
         tradeoff: null,
@@ -2950,7 +2950,7 @@ export function calculateDomainScore(opts: {
     } else if (totalCount >= 1) {
       findings.push({
         signal: "social_accounts",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "info",
         label: `${totalCount} social account${totalCount !== 1 ? "s" : ""} detected`,
         tradeoff: null,
@@ -2962,7 +2962,7 @@ export function calculateDomainScore(opts: {
       // No social presence — mild visibility concern for content/corporate sites
       findings.push({
         signal: "no_social_accounts",
-        axis: "visibility",
+        axis: "discoverability",
         severity: contextualSeverity("info", arch, { content: "low", corporate: "low" }),
         label: "No social accounts detected",
         tradeoff: null,
@@ -2975,7 +2975,7 @@ export function calculateDomainScore(opts: {
   if (opts.robotsParsed?.is_restrictive) {
     findings.push({
       signal: "restrictive_robots",
-      axis: "visibility",
+      axis: "discoverability",
       severity: contextualSeverity("low", arch, { infrastructure: "info", application: "info" }),
       label: "robots.txt blocks all crawlers — site won't appear in search results",
       tradeoff: "May be intentional for private/internal sites.",
@@ -2987,7 +2987,7 @@ export function calculateDomainScore(opts: {
   if (opts.wellKnown?.pwa_ready) {
     findings.push({
       signal: "pwa_ready",
-      axis: "visibility",
+      axis: "discoverability",
       severity: "good",
       label: "Progressive Web App ready (manifest + service worker)",
       tradeoff: null,
@@ -3012,7 +3012,7 @@ export function calculateDomainScore(opts: {
         ) {
           findings.push({
             signal: "canonical_url",
-            axis: "visibility",
+            axis: "discoverability",
             severity: "good",
             label: "Canonical URL set correctly",
             tradeoff: null,
@@ -3021,7 +3021,7 @@ export function calculateDomainScore(opts: {
         } else {
           findings.push({
             signal: "canonical_url",
-            axis: "visibility",
+            axis: "discoverability",
             severity: "info",
             label: `Canonical URL points to different domain (${canonicalHost})`,
             tradeoff: "May be intentional for cross-domain canonical consolidation.",
@@ -3031,7 +3031,7 @@ export function calculateDomainScore(opts: {
       } catch {
         findings.push({
           signal: "canonical_url",
-          axis: "visibility",
+          axis: "discoverability",
           severity: "info",
           label: "Canonical URL present but malformed",
           tradeoff: null,
@@ -3041,7 +3041,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "canonical_url_missing",
-        axis: "visibility",
+        axis: "discoverability",
         severity: contextualSeverity("info", arch, { content: "low", corporate: "low" }),
         label: "No canonical URL — risk of duplicate content in search results",
         tradeoff: null,
@@ -3054,7 +3054,7 @@ export function calculateDomainScore(opts: {
   if (opts.wellKnown?.has_mobile_apps) {
     findings.push({
       signal: "mobile_app_links",
-      axis: "visibility",
+      axis: "discoverability",
       severity: "good",
       label: "Mobile app deep links configured",
       tradeoff: null,
@@ -3068,7 +3068,7 @@ export function calculateDomainScore(opts: {
     if (hasRss) {
       findings.push({
         signal: "rss_feed",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "good",
         label: "RSS/Atom feed available",
         tradeoff: null,
@@ -3083,7 +3083,7 @@ export function calculateDomainScore(opts: {
     if (hasHreflang) {
       findings.push({
         signal: "hreflang",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "good",
         label: "Hreflang tags present — international targeting configured",
         tradeoff: null,
@@ -3098,7 +3098,7 @@ export function calculateDomainScore(opts: {
       if (arch === "content" || arch === "corporate") {
         findings.push({
           signal: "favicon_missing",
-          axis: "visibility",
+          axis: "discoverability",
           severity: "low",
           label: "No favicon detected",
           tradeoff: null,
@@ -3115,7 +3115,7 @@ export function calculateDomainScore(opts: {
     if (!titleText) {
       findings.push({
         signal: "title_tag_missing",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "low",
         label: "Missing page title",
         tradeoff: null,
@@ -3124,7 +3124,7 @@ export function calculateDomainScore(opts: {
     } else if (titleText.length < 5 || /^(untitled|home|welcome|index)$/i.test(titleText)) {
       findings.push({
         signal: "title_tag_generic",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "info",
         label: `Generic page title: "${titleText}"`,
         tradeoff: null,
@@ -3140,7 +3140,7 @@ export function calculateDomainScore(opts: {
     if (!hasMetaDesc && !hasOgDesc) {
       findings.push({
         signal: "meta_description_missing",
-        axis: "visibility",
+        axis: "discoverability",
         severity: contextualSeverity("info", arch, { content: "low" }),
         label: "No meta description — search engines will generate their own snippet",
         tradeoff: null,
@@ -3159,7 +3159,7 @@ export function calculateDomainScore(opts: {
       if (viewportContent.includes("width=device-width")) {
         findings.push({
           signal: "mobile_friendly",
-          axis: "visibility",
+          axis: "discoverability",
           severity: "good",
           label: "Mobile-friendly viewport configured",
           tradeoff: null,
@@ -3168,7 +3168,7 @@ export function calculateDomainScore(opts: {
       } else {
         findings.push({
           signal: "mobile_friendly",
-          axis: "visibility",
+          axis: "discoverability",
           severity: "low",
           label: "Viewport set but not responsive (missing width=device-width)",
           tradeoff: null,
@@ -3178,7 +3178,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "mobile_friendly",
-        axis: "visibility",
+        axis: "discoverability",
         severity: contextualSeverity("medium", arch, { infrastructure: "info", application: "low" }),
         label: "No viewport meta tag — not mobile-friendly",
         tradeoff: null,
@@ -3196,7 +3196,7 @@ export function calculateDomainScore(opts: {
     if (ogPresent >= 5) {
       findings.push({
         signal: "og_completeness",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "good",
         label: `Complete OG tags (${ogPresent}/5)${hasTwitterCard ? " + Twitter Card" : ""}`,
         tradeoff: null,
@@ -3205,7 +3205,7 @@ export function calculateDomainScore(opts: {
     } else if (ogPresent >= 3) {
       findings.push({
         signal: "og_completeness",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "info",
         label: `${ogPresent}/5 OG tags present`,
         tradeoff: null,
@@ -3214,7 +3214,7 @@ export function calculateDomainScore(opts: {
     } else if (ogPresent >= 1) {
       findings.push({
         signal: "og_completeness",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "low",
         label: `Only ${ogPresent}/5 OG tags — social sharing will look incomplete`,
         tradeoff: null,
@@ -3223,7 +3223,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "og_completeness",
-        axis: "visibility",
+        axis: "discoverability",
         severity: contextualSeverity("medium", arch, {
           infrastructure: "info",
           application: "info",
@@ -3240,7 +3240,7 @@ export function calculateDomainScore(opts: {
     if (a11yScore >= 80) {
       findings.push({
         signal: "accessibility",
-        axis: "visibility",
+        axis: "discoverability",
         severity: "good",
         label: `Accessibility score ${a11yScore}/100`,
         tradeoff: null,
@@ -3249,7 +3249,7 @@ export function calculateDomainScore(opts: {
     } else if (a11yScore >= 50) {
       findings.push({
         signal: "accessibility",
-        axis: "visibility",
+        axis: "discoverability",
         severity: contextualSeverity("low", arch, { institutional: "medium", corporate: "medium" }),
         label: `Accessibility score ${a11yScore}/100 — improvements needed`,
         tradeoff: null,
@@ -3258,7 +3258,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "accessibility",
-        axis: "visibility",
+        axis: "discoverability",
         severity: contextualSeverity("medium", arch, { institutional: "high", corporate: "medium" }),
         label: `Low accessibility score ${a11yScore}/100`,
         tradeoff: null,
@@ -3274,7 +3274,7 @@ export function calculateDomainScore(opts: {
     if (tps.render_blocking > 0) {
       findings.push({
         signal: "render_blocking_scripts",
-        axis: "performance",
+        axis: "speed",
         severity: tps.render_blocking > 5 ? "high" : tps.render_blocking > 2 ? "medium" : "low",
         label: `${tps.render_blocking} render-blocking script${tps.render_blocking !== 1 ? "s" : ""}`,
         tradeoff: "Adding async/defer may cause timing issues for scripts that depend on load order.",
@@ -3283,7 +3283,7 @@ export function calculateDomainScore(opts: {
     } else if (tps.third_party > 0) {
       findings.push({
         signal: "render_blocking_scripts",
-        axis: "performance",
+        axis: "speed",
         severity: "good",
         label: "No render-blocking third-party scripts",
         tradeoff: null,
@@ -3295,7 +3295,7 @@ export function calculateDomainScore(opts: {
     if (tps.third_party > 15) {
       findings.push({
         signal: "third_party_count",
-        axis: "performance",
+        axis: "speed",
         severity: "high",
         label: `${tps.third_party} third-party scripts — significant performance overhead`,
         tradeoff: null,
@@ -3304,7 +3304,7 @@ export function calculateDomainScore(opts: {
     } else if (tps.third_party > 8) {
       findings.push({
         signal: "third_party_count",
-        axis: "performance",
+        axis: "speed",
         severity: "medium",
         label: `${tps.third_party} third-party scripts loaded`,
         tradeoff: null,
@@ -3333,7 +3333,7 @@ export function calculateDomainScore(opts: {
     if (cc.cmp_detected) {
       findings.push({
         signal: "cookie_consent_cmp",
-        axis: "trust",
+        axis: "reputation",
         severity: cc.cmp_detected.confidence >= 0.5 ? "good" : "info",
         label: `Consent platform: ${cc.cmp_detected.name}`,
         tradeoff: null,
@@ -3357,7 +3357,7 @@ export function calculateDomainScore(opts: {
     if (cc.compliance_flags.length > 0) {
       findings.push({
         signal: "cookie_compliance",
-        axis: "trust",
+        axis: "reputation",
         severity: cc.compliance_flags.length >= 3 ? "medium" : "low",
         label: `${cc.compliance_flags.length} cookie compliance flag(s)`,
         tradeoff: null,
@@ -3380,7 +3380,7 @@ export function calculateDomainScore(opts: {
       if (isBehindCdn) {
         findings.push({
           signal: "dns_consistent",
-          axis: "infrastructure",
+          axis: "foundations",
           severity: "good",
           label: `DNS varies across resolvers (expected: ${opts.hosting!.cdn} anycast)`,
           tradeoff: null,
@@ -3390,7 +3390,7 @@ export function calculateDomainScore(opts: {
         // Site responds and has multiple IPs — this is geo-DNS / distributed hosting
         findings.push({
           signal: "dns_consistent",
-          axis: "infrastructure",
+          axis: "foundations",
           severity: "good",
           label: "DNS varies across resolvers (distributed hosting)",
           tradeoff: null,
@@ -3399,7 +3399,7 @@ export function calculateDomainScore(opts: {
       } else {
         findings.push({
           signal: "dns_inconsistent",
-          axis: "infrastructure",
+          axis: "foundations",
           severity: contextualSeverity("low", arch, { commerce: "medium", application: "medium" }),
           label: "DNS records inconsistent across resolvers",
           tradeoff: "DNS propagation may still be in progress, or you're using geo-DNS.",
@@ -3409,7 +3409,7 @@ export function calculateDomainScore(opts: {
     } else if (nh.dns_propagation?.consistent) {
       findings.push({
         signal: "dns_consistent",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: "good",
         label: "DNS records consistent across all resolvers",
         tradeoff: null,
@@ -3423,7 +3423,7 @@ export function calculateDomainScore(opts: {
       const siteIsUp = opts.statusResult?.is_up === true;
       findings.push({
         signal: "bgp_unstable",
-        axis: "infrastructure",
+        axis: "foundations",
         severity: siteIsUp ? "info" : contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
         label: siteIsUp
           ? `BGP route churn (${nh.ripe_routing.bgp_updates_24h} updates in 24h — site responding normally)`
@@ -3440,7 +3440,7 @@ export function calculateDomainScore(opts: {
       if (vis < 70) {
         findings.push({
           signal: "low_visibility",
-          axis: "infrastructure",
+          axis: "foundations",
           severity: contextualSeverity("low", arch, { commerce: "medium" }),
           label: `Low route visibility (${vis}% of peers)`,
           tradeoff:
@@ -3454,7 +3454,7 @@ export function calculateDomainScore(opts: {
     if (nh.connection_timing && nh.connection_timing.total_ms > 1000) {
       findings.push({
         signal: "slow_connection",
-        axis: "performance",
+        axis: "foundations",
         severity: "info",
         label: `Slow connection setup (${Math.round(nh.connection_timing.total_ms)}ms total)`,
         tradeoff:
@@ -3475,7 +3475,7 @@ export function calculateDomainScore(opts: {
     if (rh.modulepreload.length > 0) parts.push(`${rh.modulepreload.length} modulepreload`);
     findings.push({
       signal: "resource_hints",
-      axis: "performance",
+      axis: "speed",
       severity: "good",
       label: `Resource hints detected: ${parts.join(", ")}`,
       tradeoff: null,
@@ -3485,7 +3485,7 @@ export function calculateDomainScore(opts: {
 
   // ─── Compute Axis Scores ─────────────────────────────────────────
 
-  const axes: Axis[] = ["security", "performance", "infrastructure", "trust", "visibility"];
+  const axes: Axis[] = ["security", "speed", "foundations", "reputation", "discoverability", "email"];
   const axisScores: Record<Axis, AxisScore> = {} as Record<Axis, AxisScore>;
 
   for (const axis of axes) {
@@ -3499,7 +3499,7 @@ export function calculateDomainScore(opts: {
 
     // Confidence dampening: blend sparse axes toward default to prevent
     // high-confidence scores from limited data
-    const MIN_FINDINGS: Partial<Record<Axis, number>> = { security: 6, visibility: 4, performance: 4 };
+    const MIN_FINDINGS: Partial<Record<Axis, number>> = { security: 6, discoverability: 4, speed: 4 };
     const minRequired = MIN_FINDINGS[axis];
     if (minRequired && axisFindings.length < minRequired) {
       const confidence = axisFindings.length / minRequired;

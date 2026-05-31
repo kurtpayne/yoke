@@ -18,7 +18,7 @@ export default function PerformanceTab({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="space-y-3">
-      <PanelGrid tabId="performance" panels={panels} />
+      <PanelGrid tabId="speed" panels={panels} />
       <div className="flex flex-wrap gap-2 px-1">
         <a
           href={`https://pagespeed.web.dev/analysis?url=https://${domain}`}

@@ -39,11 +39,12 @@ export const SEVERITY_SCORES: Record<Severity, number> = {
 // ─── Axis Weights ───────────────────────────────────────────────────
 
 export const AXIS_WEIGHTS: Record<Axis, number> = {
-  security: 0.28,
-  infrastructure: 0.25,
-  trust: 0.12,
-  performance: 0.2,
-  visibility: 0.15,
+  security: 0.24,
+  speed: 0.18,
+  foundations: 0.18,
+  reputation: 0.15,
+  discoverability: 0.13,
+  email: 0.12,
 };
 
 // ─── Signal Definition ──────────────────────────────────────────────
@@ -259,7 +260,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   blocklist_listed: {
-    axis: "security",
+    axis: "reputation",
     label: "Blocklist Listed",
     actionable: false,
     canBeNonGood: true,
@@ -268,7 +269,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "CDN IPs are shared — blocklist hits reflect neighbors, not this domain. Non-CDN hits are more serious. Severity: 1=medium, 2=high, 3+=critical.",
   },
   email_auth: {
-    axis: "security",
+    axis: "email",
     label: "Email Authentication",
     actionable: false,
     canBeNonGood: false,
@@ -277,7 +278,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "SPF+DKIM+DMARC with p=reject = gold standard. p=none = monitoring only. DKIM detection probes common selectors — absence doesn't necessarily mean unconfigured.",
   },
   email_auth_incomplete: {
-    axis: "security",
+    axis: "email",
     label: "Incomplete Email Authentication",
     actionable: true,
     canBeNonGood: true,
@@ -289,7 +290,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { infrastructure: "API domains that don't send email may not need full email auth." },
   },
   spf_without_dmarc: {
-    axis: "security",
+    axis: "email",
     label: "SPF Without DMARC",
     actionable: true,
     canBeNonGood: true,
@@ -520,7 +521,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { commerce: "Payment/checkout forms over HTTP are critical vulnerabilities." },
   },
   mta_sts: {
-    axis: "security",
+    axis: "email",
     label: "MTA-STS",
     actionable: true,
     canBeNonGood: true,
@@ -622,7 +623,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Severity: expired=critical, <7d=high, <14d=medium, <30d=low, 30d+=good. Let's Encrypt auto-renews — short remaining time may mean failed auto-renewal.",
   },
   pre_consent_cookies: {
-    axis: "security",
+    axis: "reputation",
     label: "Pre-Consent Cookies",
     actionable: true,
     canBeNonGood: true,
@@ -633,7 +634,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { institutional: "Government/education face higher compliance scrutiny." },
   },
   script_privacy: {
-    axis: "security",
+    axis: "reputation",
     label: "Script Privacy Concerns",
     actionable: true,
     canBeNonGood: true,
@@ -665,7 +666,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
   // ── Performance ───────────────────────────────────────────────────
 
   perf_score: {
-    axis: "performance",
+    axis: "speed",
     label: "PageSpeed Score",
     actionable: true,
     canBeNonGood: true,
@@ -681,7 +682,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   lcp: {
-    axis: "performance",
+    axis: "speed",
     label: "Largest Contentful Paint",
     actionable: true,
     canBeNonGood: true,
@@ -692,7 +693,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Largest Contentful Paint: ≤2.5s good, ≤4.0s needs-improvement, >4.0s poor. Core Web Vital for Google ranking.",
   },
   cls: {
-    axis: "performance",
+    axis: "speed",
     label: "Cumulative Layout Shift",
     actionable: true,
     canBeNonGood: true,
@@ -703,7 +704,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Cumulative Layout Shift: ≤0.1 good, ≤0.25 needs-improvement, >0.25 poor. Caused by images without dimensions, dynamic content, web fonts.",
   },
   ttfb: {
-    axis: "performance",
+    axis: "speed",
     label: "Time to First Byte",
     actionable: true,
     canBeNonGood: true,
@@ -714,7 +715,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Time to First Byte: ≤800ms good. Affected by server processing, CDN effectiveness, geographic distance.",
   },
   fcp: {
-    axis: "performance",
+    axis: "speed",
     label: "First Contentful Paint",
     actionable: true,
     canBeNonGood: true,
@@ -724,7 +725,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "First Contentful Paint: ≤1.8s good, ≤3.0s needs-improvement, >3.0s poor.",
   },
   inp: {
-    axis: "performance",
+    axis: "speed",
     label: "Interaction to Next Paint",
     actionable: true,
     canBeNonGood: true,
@@ -735,7 +736,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Interaction to Next Paint: ≤200ms good, ≤500ms needs-improvement, >500ms poor. Core Web Vital (replaced FID March 2024). CrUX only. High INP = JS execution problems.",
   },
   tbt: {
-    axis: "performance",
+    axis: "speed",
     label: "Total Blocking Time",
     actionable: true,
     canBeNonGood: true,
@@ -746,7 +747,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Total Blocking Time: ≤200ms good, ≤600ms needs-improvement, >600ms poor. Lab-only (INP is field equivalent).",
   },
   crux_field_data: {
-    axis: "performance",
+    axis: "speed",
     label: "CrUX Field Data",
     actionable: false,
     canBeNonGood: false,
@@ -755,7 +756,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "CrUX provides real-user data — more authoritative than lab. CrUX good + lab poor = CDN/caching helps real users. CrUX poor + lab good = real users face worse conditions.",
   },
   cdn: {
-    axis: "performance",
+    axis: "foundations",
     label: "CDN Detected",
     actionable: false,
     canBeNonGood: false,
@@ -764,7 +765,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "CDN detected is positive — reduces latency, improves caching. CDN-fronted sites handle compression/caching at edge.",
   },
   http2: {
-    axis: "performance",
+    axis: "foundations",
     label: "HTTP/2 Enabled",
     actionable: false,
     canBeNonGood: false,
@@ -772,7 +773,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "HTTP/2 is standard since 2015. Expected, not exceptional.",
   },
   http3: {
-    axis: "performance",
+    axis: "foundations",
     label: "HTTP/3 Enabled",
     actionable: false,
     canBeNonGood: false,
@@ -780,7 +781,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "HTTP/3 (QUIC) is forward-looking — reduces connection latency. Bonus signal.",
   },
   http1_only: {
-    axis: "performance",
+    axis: "foundations",
     label: "HTTP/1.1 Only",
     actionable: true,
     canBeNonGood: true,
@@ -790,7 +791,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "HTTP/1.1 only is outdated. Usually old server software. Medium severity.",
   },
   cache_headers: {
-    axis: "performance",
+    axis: "speed",
     label: "Cache Headers",
     actionable: true,
     canBeNonGood: true,
@@ -805,7 +806,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   no_compression: {
-    axis: "performance",
+    axis: "speed",
     label: "No Compression",
     actionable: true,
     canBeNonGood: true,
@@ -816,7 +817,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Header-based check may not reflect actual behavior (e.g., Cloudflare decompresses for Workers). Low weight.",
   },
   redirect_chain_length: {
-    axis: "performance",
+    axis: "speed",
     label: "Redirect Chain",
     actionable: true,
     canBeNonGood: true,
@@ -826,7 +827,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Each hop adds latency. 1 hop (HTTP→HTTPS) normal. 2 acceptable. 4+ = config issues.",
   },
   render_blocking_scripts: {
-    axis: "performance",
+    axis: "speed",
     label: "Render-Blocking Scripts",
     actionable: false,
     canBeNonGood: false,
@@ -835,7 +836,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Render-blocking scripts delay rendering. 1-2=low, 3-5=medium, 6+=high. async/defer may cause timing issues.",
   },
   third_party_count: {
-    axis: "performance",
+    axis: "speed",
     label: "Third-Party Script Count",
     actionable: true,
     canBeNonGood: true,
@@ -849,7 +850,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   pagespeed_unavailable: {
-    axis: "performance",
+    axis: "speed",
     label: "PageSpeed Unavailable",
     actionable: false,
     canBeNonGood: true,
@@ -857,7 +858,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "PageSpeed unavailable — can't assess CWV. Don't speculate.",
   },
   resource_hints: {
-    axis: "performance",
+    axis: "speed",
     label: "Resource Hints",
     actionable: false,
     canBeNonGood: false,
@@ -867,7 +868,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { infrastructure: "Static sites/APIs don't need resource hints." },
   },
   http_blocked_performance: {
-    axis: "performance",
+    axis: "speed",
     label: "HTTP Blocked (Performance)",
     actionable: false,
     canBeNonGood: true,
@@ -875,7 +876,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Cannot measure performance when HTTP blocked. Don't speculate.",
   },
   site_unreachable_performance: {
-    axis: "performance",
+    axis: "speed",
     label: "Site Unreachable (Performance)",
     actionable: false,
     canBeNonGood: true,
@@ -883,7 +884,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Cannot measure performance of unreachable site.",
   },
   slow_connection: {
-    axis: "performance",
+    axis: "foundations",
     label: "Slow Connection",
     actionable: false,
     canBeNonGood: true,
@@ -894,7 +895,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
   // ── Infrastructure ───────────────────────────────────────────────────
 
   ns_redundancy: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "Nameserver Count",
     actionable: false,
     canBeNonGood: false,
@@ -902,7 +903,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Informational only (weight 0). 2 is RFC minimum. Most registrars enforce 2+.",
   },
   ipv6: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "IPv6 Support",
     actionable: true,
     canBeNonGood: true,
@@ -912,7 +913,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Many hosts don't support IPv6. Informational, not actionable. IPv4-only is fine. Weight 1.",
   },
   lb: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "Load Balancing",
     actionable: false,
     canBeNonGood: false,
@@ -920,7 +921,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Multiple A records suggest load balancing. Bonus-only.",
   },
   caa: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "CAA Records",
     actionable: true,
     canBeNonGood: true,
@@ -930,7 +931,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "CAA restricts certificate issuance. Absence is informational.",
   },
   low_ttl: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "Low DNS TTL",
     actionable: false,
     canBeNonGood: false,
@@ -939,7 +940,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Low TTL (60-300s) is NORMAL for CDN-managed DNS — fast failover. NOT a problem. Only <60s worth noting.",
   },
   tcp_connection_time: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "TCP Connection Time",
     actionable: true,
     canBeNonGood: true,
@@ -949,7 +950,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Single probe location. <300ms=good, 300-500ms=ok, 500-1000ms=slow, >1000ms=very slow.",
   },
   dns_resolution_time: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "DNS Resolution Time",
     actionable: false,
     canBeNonGood: true,
@@ -957,7 +958,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Single probe location. <100ms=good, 100-200ms=ok, 200-500ms=slow, >500ms=very slow.",
   },
   ns_provider_diversity: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "NS Provider Diversity",
     actionable: true,
     canBeNonGood: true,
@@ -968,7 +969,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Multi-provider DNS is positive. Single major provider (Cloudflare/Route53/Google) runs massive anycast — secondary DNS unnecessary.",
   },
   mx_redundancy: {
-    axis: "infrastructure",
+    axis: "email",
     label: "MX Redundancy",
     actionable: false,
     canBeNonGood: false,
@@ -980,7 +981,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   site_unreachable: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "Site Unreachable",
     actionable: false,
     canBeNonGood: true,
@@ -988,7 +989,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "DNS resolves but no HTTP response — fundamentally broken.",
   },
   http_blocked_infrastructure: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "HTTP Blocked (Infrastructure)",
     actionable: false,
     canBeNonGood: true,
@@ -996,7 +997,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Site blocks automated analysis. Scoring limited to DNS/WHOIS/SSL.",
   },
   http_error_response: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "HTTP Error Response",
     actionable: false,
     canBeNonGood: true,
@@ -1004,7 +1005,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "4xx to automated probes is common. 5xx more concerning. WAF blocks excluded.",
   },
   dns_inconsistent: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "DNS Inconsistency",
     actionable: true,
     canBeNonGood: true,
@@ -1014,7 +1015,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Different IPs across resolvers is NORMAL for CDN (anycast/geo-DNS). Only flag non-CDN domains.",
   },
   dns_consistent: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "DNS Consistent",
     actionable: false,
     canBeNonGood: false,
@@ -1022,7 +1023,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Consistent DNS is positive. CDN variation also reported as consistent (expected).",
   },
   bgp_unstable: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "BGP Instability",
     actionable: false,
     canBeNonGood: true,
@@ -1030,7 +1031,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "BGP churn on responding site = traffic engineering (info). Only concerning if site unreachable.",
   },
   low_visibility: {
-    axis: "infrastructure",
+    axis: "foundations",
     label: "Low Visibility",
     actionable: false,
     canBeNonGood: true,
@@ -1042,7 +1043,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
   // ── Trust ─────────────────────────────────────────────────────────
 
   domain_age_trust: {
-    axis: "trust",
+    axis: "reputation",
     label: "Domain Age",
     actionable: false,
     canBeNonGood: true,
@@ -1051,7 +1052,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "<30d=newly registered (NRD, high risk); 30-90d=recent; 90d-1yr=young; 1-3yr=growing; 3-5yr=mature; 5yr+=established. Young domain + EV cert suggests legitimate new business.",
   },
   registration_length: {
-    axis: "trust",
+    axis: "reputation",
     label: "Registration Length",
     actionable: true,
     canBeNonGood: true,
@@ -1062,7 +1063,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "1 year is normal. Multi-year is trust signal. Near-expiry (<30d) is concern. Weak signal — many legitimate sites renew annually.",
   },
   breaches: {
-    axis: "trust",
+    axis: "reputation",
     label: "Data Breaches",
     actionable: false,
     canBeNonGood: true,
@@ -1071,7 +1072,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Time decay: <1yr full weight, 1-3yr 75%, 3-5yr 50%, 5-10yr 25%, >10yr 10%. Past breach ≠ currently insecure. Distinguish verified vs unverified.",
   },
   tranco_rank: {
-    axis: "trust",
+    axis: "reputation",
     label: "Tranco Rank",
     actionable: false,
     canBeNonGood: true,
@@ -1080,7 +1081,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Top 1K=global; 1K-10K=major; 10K-100K=significant; 100K-1M=moderate. Unranked is neutral, not negative.",
   },
   greynoise_noise: {
-    axis: "trust",
+    axis: "reputation",
     label: "GreyNoise Noise",
     actionable: false,
     canBeNonGood: true,
@@ -1089,7 +1090,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "IP with scanning traffic. CDN IPs excluded (shared infra). Non-CDN noise = moderate trust concern.",
   },
   greynoise_riot: {
-    axis: "trust",
+    axis: "reputation",
     label: "GreyNoise RIOT",
     actionable: false,
     canBeNonGood: false,
@@ -1097,7 +1098,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "IP belongs to known legitimate service. Positive. CDN RIOT is expected, not additional bonus.",
   },
   email_trust: {
-    axis: "trust",
+    axis: "email",
     label: "Email Trust",
     actionable: true,
     canBeNonGood: true,
@@ -1109,7 +1110,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { infrastructure: "API domains that don't send email: missing auth is informational." },
   },
   security_txt: {
-    axis: "trust",
+    axis: "security",
     label: "security.txt",
     actionable: true,
     canBeNonGood: true,
@@ -1124,7 +1125,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   bimi_record: {
-    axis: "trust",
+    axis: "email",
     label: "BIMI Record",
     actionable: false,
     canBeNonGood: false,
@@ -1132,7 +1133,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Requires DMARC enforcement. Indicates advanced email maturity. Absence is neutral — reward-only.",
   },
   ads_txt: {
-    axis: "trust",
+    axis: "reputation",
     label: "ads.txt",
     actionable: false,
     canBeNonGood: false,
@@ -1141,7 +1142,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { content: "Content sites with advertising should have ads.txt." },
   },
   cert_validation_type: {
-    axis: "trust",
+    axis: "foundations",
     label: "Certificate Validation Type",
     actionable: false,
     canBeNonGood: true,
@@ -1154,7 +1155,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   ct_caa_mismatch: {
-    axis: "trust",
+    axis: "security",
     label: "CT/CAA Mismatch",
     actionable: false,
     canBeNonGood: true,
@@ -1163,7 +1164,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Certs from CAs not in CAA may predate CAA deployment — informational ONLY, not vulnerability. Weight 0.",
   },
   organizational_identity: {
-    axis: "trust",
+    axis: "reputation",
     label: "Organizational Identity",
     actionable: true,
     canBeNonGood: true,
@@ -1174,7 +1175,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Privacy policy, terms, about page = organizational transparency. Missing is low concern for small/personal sites.",
   },
   ops_transparency: {
-    axis: "trust",
+    axis: "foundations",
     label: "Operational Transparency",
     actionable: false,
     canBeNonGood: false,
@@ -1182,7 +1183,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Status pages, monitoring tools = mature operations. Bonus-only.",
   },
   cookie_consent_missing: {
-    axis: "trust",
+    axis: "reputation",
     label: "No Cookie Consent",
     actionable: true,
     canBeNonGood: true,
@@ -1197,7 +1198,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   cookie_consent_cmp: {
-    axis: "trust",
+    axis: "reputation",
     label: "Cookie Consent CMP",
     actionable: true,
     canBeNonGood: true,
@@ -1207,7 +1208,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "CMP detected is positive trust signal. Higher confidence = stronger.",
   },
   cookie_compliance: {
-    axis: "trust",
+    axis: "reputation",
     label: "Cookie Compliance",
     actionable: true,
     canBeNonGood: true,
@@ -1217,7 +1218,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Compliance flags indicate potential regulatory issues. Severity scales with count.",
   },
   dmarc_reject: {
-    axis: "trust",
+    axis: "email",
     label: "DMARC Policy",
     actionable: true,
     canBeNonGood: true,
@@ -1228,7 +1229,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
       "Recommend gradual rollout: none → quarantine → reject. NEVER jump straight to p=reject. p=reject prevents spoofing. p=none = monitoring only.",
   },
   blocklist_trust: {
-    axis: "trust",
+    axis: "reputation",
     label: "Blocklist Trust Impact",
     actionable: false,
     canBeNonGood: true,
@@ -1239,7 +1240,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
   // ── Visibility ────────────────────────────────────────────────────
 
   domain_popularity: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Domain Popularity",
     actionable: false,
     canBeNonGood: true,
@@ -1247,7 +1248,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Tranco rank = traffic/popularity. Both trust and visibility signal. Unranked is neutral.",
   },
   structured_data: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Structured Data Present",
     actionable: false,
     canBeNonGood: false,
@@ -1261,7 +1262,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   no_structured_data: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "No Structured Data",
     actionable: true,
     canBeNonGood: true,
@@ -1276,7 +1277,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   social_meta: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Social Meta Tags",
     actionable: true,
     canBeNonGood: true,
@@ -1291,7 +1292,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   robots_txt: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "robots.txt",
     actionable: true,
     canBeNonGood: true,
@@ -1302,7 +1303,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { application: "Private apps may intentionally omit or block." },
   },
   sitemap: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Sitemap",
     actionable: true,
     canBeNonGood: true,
@@ -1318,7 +1319,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   legal_pages: {
-    axis: "visibility",
+    axis: "reputation",
     label: "Legal Pages",
     actionable: true,
     canBeNonGood: true,
@@ -1328,7 +1329,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Low weight (1) but important for trust/compliance.",
   },
   social_accounts: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Social Accounts",
     actionable: false,
     canBeNonGood: false,
@@ -1336,7 +1337,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "rel=me verified > homepage links. Relevance varies by site type.",
   },
   no_social_accounts: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "No Social Accounts",
     actionable: true,
     canBeNonGood: true,
@@ -1347,7 +1348,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { infrastructure: "API/infrastructure don't need social accounts." },
   },
   restrictive_robots: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Restrictive robots.txt",
     actionable: true,
     canBeNonGood: true,
@@ -1361,7 +1362,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   pwa_ready: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "PWA Readiness",
     actionable: true,
     canBeNonGood: true,
@@ -1371,7 +1372,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "PWA readiness is capability/UX, not visibility. Don't over-recommend as 'visibility improvement.'",
   },
   canonical_url: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Canonical URL",
     actionable: false,
     canBeNonGood: false,
@@ -1379,7 +1380,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Self-referencing is standard. Cross-domain may be intentional.",
   },
   canonical_url_missing: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "No Canonical URL",
     actionable: true,
     canBeNonGood: true,
@@ -1390,7 +1391,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { content: "Content sites should have canonical URLs." },
   },
   mobile_app_links: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Mobile App Links",
     actionable: false,
     canBeNonGood: false,
@@ -1398,7 +1399,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Deep links configured. Bonus signal.",
   },
   rss_feed: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "RSS Feed",
     actionable: true,
     canBeNonGood: true,
@@ -1409,7 +1410,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { content: "Content sites should have RSS." },
   },
   hreflang: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Hreflang Tags",
     actionable: false,
     canBeNonGood: false,
@@ -1417,7 +1418,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "International targeting tags. Positive for multi-language sites.",
   },
   favicon_missing: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "No Favicon",
     actionable: true,
     canBeNonGood: true,
@@ -1427,7 +1428,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Minor polish issue. Low weight.",
   },
   title_tag_missing: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "No Title Tag",
     actionable: true,
     canBeNonGood: true,
@@ -1437,7 +1438,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Hurts search visibility. Easy fix.",
   },
   title_tag_generic: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Generic Title Tag",
     actionable: true,
     canBeNonGood: true,
@@ -1447,7 +1448,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Generic titles waste ranking potential.",
   },
   meta_description_missing: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "No Meta Description",
     actionable: true,
     canBeNonGood: true,
@@ -1457,7 +1458,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     promptGuidance: "Search engines generate own snippet. Having one is good practice.",
   },
   mobile_friendly: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Mobile Friendly",
     actionable: true,
     canBeNonGood: true,
@@ -1468,7 +1469,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     archetypeNotes: { infrastructure: "APIs may not need mobile-friendly design." },
   },
   og_completeness: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Open Graph Completeness",
     actionable: true,
     canBeNonGood: true,
@@ -1483,7 +1484,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   accessibility: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Accessibility",
     actionable: true,
     canBeNonGood: true,
@@ -1498,7 +1499,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     },
   },
   site_unreachable_visibility: {
-    axis: "visibility",
+    axis: "discoverability",
     label: "Site Unreachable (Visibility)",
     actionable: false,
     canBeNonGood: true,

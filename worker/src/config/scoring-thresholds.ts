@@ -32,11 +32,11 @@ export const SEVERITY_SCORES: Record<Severity, number> = {
   good: 100,
 };
 
-// ─── Performance ─────────────────────────────────────────────────────
+// ─── Speed ─────────────────────────────────────────────────────
 
 export const PERF_SCORE: ThresholdConfig = {
   signal: "perf_score",
-  axis: "performance",
+  axis: "speed",
   weight: 5,
   description: "Google PageSpeed Insights overall performance score (mobile)",
   source: "Google Lighthouse scoring: 90+ green, 50-89 orange, <50 red",
@@ -52,7 +52,7 @@ export const PERF_SCORE: ThresholdConfig = {
 
 export const LCP: ThresholdConfig = {
   signal: "lcp",
-  axis: "performance",
+  axis: "speed",
   weight: 4,
   description: "Largest Contentful Paint — time until the largest visible element renders",
   source: "Web Vitals: ≤2.5s good, ≤4.0s needs improvement, >4.0s poor (web.dev/lcp)",
@@ -67,7 +67,7 @@ export const LCP: ThresholdConfig = {
 
 export const CLS: ThresholdConfig = {
   signal: "cls",
-  axis: "performance",
+  axis: "speed",
   weight: 3,
   description: "Cumulative Layout Shift — visual stability of the page",
   source: "Web Vitals: ≤0.1 good, ≤0.25 needs improvement, >0.25 poor (web.dev/cls)",
@@ -82,7 +82,7 @@ export const CLS: ThresholdConfig = {
 
 export const TTFB: ThresholdConfig = {
   signal: "ttfb",
-  axis: "performance",
+  axis: "speed",
   weight: 3,
   description: "Time to First Byte — server response time",
   source: "Web Vitals: ≤800ms good, ≤1800ms needs improvement, >1800ms poor (web.dev/ttfb)",
@@ -123,11 +123,11 @@ export const BLOCKLIST: ThresholdConfig = {
   ],
 };
 
-// ─── Trust ───────────────────────────────────────────────────────────
+// ─── Reputation ───────────────────────────────────────────────────────────
 
 export const DOMAIN_AGE: ThresholdConfig = {
   signal: "domain_age_trust",
-  axis: "trust",
+  axis: "reputation",
   weight: 3,
   description: "Domain registration age — newer domains are higher risk",
   source: "NextDNS NRD: domains <30 days are newly registered; industry treats <1 year as young",
@@ -144,7 +144,7 @@ export const DOMAIN_AGE: ThresholdConfig = {
 
 export const DOMAIN_EXPIRY: ThresholdConfig = {
   signal: "domain_expiry",
-  axis: "trust",
+  axis: "reputation",
   weight: 2,
   description: "Domain registration expiry — short registrations may indicate low commitment",
   unit: "days",
@@ -156,11 +156,11 @@ export const DOMAIN_EXPIRY: ThresholdConfig = {
   ],
 };
 
-// ─── Infrastructure ─────────────────────────────────────────────────────
+// ─── Foundations ─────────────────────────────────────────────────────
 
 export const NS_COUNT: ThresholdConfig = {
   signal: "ns_count",
-  axis: "infrastructure",
+  axis: "foundations",
   weight: 2, // Aligned with contextual-scoring ns_redundancy weight (M1)
   description: "Number of authoritative nameservers — more = better redundancy",
   bands: [
@@ -170,11 +170,11 @@ export const NS_COUNT: ThresholdConfig = {
   ],
 };
 
-// ─── Visibility ──────────────────────────────────────────────────────
+// ─── Discoverability ──────────────────────────────────────────────────────
 
 export const INP: ThresholdConfig = {
   signal: "inp",
-  axis: "performance",
+  axis: "speed",
   weight: 3,
   description: "Interaction to Next Paint — responsiveness to user interactions",
   source: "Web Vitals: ≤200ms good, ≤500ms needs improvement, >500ms poor (web.dev/inp)",
@@ -188,7 +188,7 @@ export const INP: ThresholdConfig = {
 
 export const FCP: ThresholdConfig = {
   signal: "fcp",
-  axis: "performance",
+  axis: "speed",
   weight: 2,
   description: "First Contentful Paint — time until first content renders",
   source: "Web Vitals: ≤1.8s good, ≤3.0s needs improvement, >3.0s poor (web.dev/fcp)",
@@ -202,7 +202,7 @@ export const FCP: ThresholdConfig = {
 
 export const TBT: ThresholdConfig = {
   signal: "tbt",
-  axis: "performance",
+  axis: "speed",
   weight: 2,
   description: "Total Blocking Time — JS execution blocking the main thread",
   source: "Lighthouse: <200ms good, <600ms needs improvement, ≥600ms poor",
@@ -214,11 +214,11 @@ export const TBT: ThresholdConfig = {
   ],
 };
 
-// ─── Visibility ──────────────────────────────────────────────────────
+// ─── Discoverability ──────────────────────────────────────────────────────
 
 export const A11Y_SCORE: ThresholdConfig = {
   signal: "accessibility",
-  axis: "visibility",
+  axis: "discoverability",
   weight: 1,
   description: "WCAG accessibility quick scan score",
   source: "9 WCAG 2.1 Level A/AA automated checks",

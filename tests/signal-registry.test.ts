@@ -235,12 +235,13 @@ describe("Signal Registry", () => {
     expect(sum).toBeCloseTo(1.0, 10);
   });
 
-  it("AXIS_WEIGHTS has all 5 axes", () => {
+  it("AXIS_WEIGHTS has all 6 categories", () => {
     expect(AXIS_WEIGHTS).toHaveProperty("security");
-    expect(AXIS_WEIGHTS).toHaveProperty("infrastructure");
-    expect(AXIS_WEIGHTS).toHaveProperty("trust");
-    expect(AXIS_WEIGHTS).toHaveProperty("performance");
-    expect(AXIS_WEIGHTS).toHaveProperty("visibility");
+    expect(AXIS_WEIGHTS).toHaveProperty("speed");
+    expect(AXIS_WEIGHTS).toHaveProperty("foundations");
+    expect(AXIS_WEIGHTS).toHaveProperty("reputation");
+    expect(AXIS_WEIGHTS).toHaveProperty("discoverability");
+    expect(AXIS_WEIGHTS).toHaveProperty("email");
   });
 
   it("registry contains exactly 135 signals", () => {

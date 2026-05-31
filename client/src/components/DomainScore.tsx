@@ -5,13 +5,14 @@ import { Tooltip } from "./Tooltip";
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-const AXES: Axis[] = ["security", "performance", "infrastructure", "trust", "visibility"];
+const AXES: Axis[] = ["security", "speed", "foundations", "reputation", "discoverability", "email"];
 const AXIS_LABELS: Record<Axis, string> = {
   security: "Security",
-  performance: "Performance",
-  infrastructure: "Infrastructure",
-  trust: "Trust",
-  visibility: "Visibility",
+  speed: "Speed",
+  foundations: "Foundations",
+  reputation: "Reputation",
+  discoverability: "Discoverability",
+  email: "Email",
 };
 
 const ARCHETYPE_ICONS: Record<ArchetypeName, string> = {
@@ -47,11 +48,12 @@ const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
 // Fixed axis weights — all archetypes use the same weights now.
 // SYNC: must match server AXIS_WEIGHTS in contextual-scoring.ts
 const FIXED_WEIGHTS: Record<Axis, number> = {
-  security: 0.28,
-  infrastructure: 0.25,
-  performance: 0.2,
-  visibility: 0.15,
-  trust: 0.12,
+  security: 0.24,
+  speed: 0.18,
+  foundations: 0.18,
+  reputation: 0.15,
+  discoverability: 0.13,
+  email: 0.12,
 };
 
 // ─── Radar Plot SVG ──────────────────────────────────────────────────

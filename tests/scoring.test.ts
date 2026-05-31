@@ -24,20 +24,21 @@ describe("Axis Weights", () => {
   });
 
   it("should have correct values", () => {
-    expect(AXIS_WEIGHTS.security).toBe(0.28);
-    expect(AXIS_WEIGHTS.infrastructure).toBe(0.25);
-    expect(AXIS_WEIGHTS.trust).toBe(0.12);
-    expect(AXIS_WEIGHTS.performance).toBe(0.2);
-    expect(AXIS_WEIGHTS.visibility).toBe(0.15);
+    expect(AXIS_WEIGHTS.security).toBe(0.24);
+    expect(AXIS_WEIGHTS.speed).toBe(0.18);
+    expect(AXIS_WEIGHTS.foundations).toBe(0.18);
+    expect(AXIS_WEIGHTS.reputation).toBe(0.15);
+    expect(AXIS_WEIGHTS.discoverability).toBe(0.13);
+    expect(AXIS_WEIGHTS.email).toBe(0.12);
   });
 
   it("security should be weighted highest", () => {
-    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.trust);
-    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.performance);
-    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.visibility);
-    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.infrastructure);
-    expect(AXIS_WEIGHTS.infrastructure).toBeGreaterThan(AXIS_WEIGHTS.trust);
-    expect(AXIS_WEIGHTS.infrastructure).toBeGreaterThan(AXIS_WEIGHTS.visibility);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.reputation);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.speed);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.discoverability);
+    expect(AXIS_WEIGHTS.security).toBeGreaterThan(AXIS_WEIGHTS.foundations);
+    expect(AXIS_WEIGHTS.foundations).toBeGreaterThan(AXIS_WEIGHTS.reputation);
+    expect(AXIS_WEIGHTS.foundations).toBeGreaterThan(AXIS_WEIGHTS.discoverability);
   });
 });
 
@@ -118,19 +119,19 @@ describe("Axis Score Computation", () => {
 
 describe("Composite Score Computation", () => {
   it("should return 100 when all axes are 100", () => {
-    const axes = { security: 100, performance: 100, infrastructure: 100, trust: 100, visibility: 100 };
+    const axes = { security: 100, speed: 100, foundations: 100, reputation: 100, discoverability: 100, email: 100 };
     expect(computeComposite(axes, "general")).toBe(100);
     expect(computeComposite(axes, "commerce")).toBe(100);
   });
 
   it("should return 0 when all axes are 0", () => {
-    const axes = { security: 0, performance: 0, infrastructure: 0, trust: 0, visibility: 0 };
+    const axes = { security: 0, speed: 0, foundations: 0, reputation: 0, discoverability: 0, email: 0 };
     expect(computeComposite(axes, "general")).toBe(0);
   });
 
   it("should produce the same score regardless of archetype", () => {
     // With fixed weights, archetype no longer affects composite
-    const axes = { security: 100, performance: 30, infrastructure: 30, trust: 30, visibility: 30 };
+    const axes = { security: 100, speed: 30, foundations: 30, reputation: 30, discoverability: 30, email: 30 };
     const commerceScore = computeComposite(axes, "commerce");
     const contentScore = computeComposite(axes, "content");
     expect(commerceScore).toBe(contentScore);
@@ -138,7 +139,7 @@ describe("Composite Score Computation", () => {
 
   it("all archetypes should produce the same composite for the same inputs", () => {
     // With fixed weights, archetype no longer changes composite
-    const axes = { security: 30, performance: 30, infrastructure: 30, trust: 30, visibility: 100 };
+    const axes = { security: 30, speed: 30, foundations: 30, reputation: 30, discoverability: 100, email: 30 };
     const generalScore = computeComposite(axes, "general");
     const contentScore = computeComposite(axes, "content");
     const commerceScore = computeComposite(axes, "commerce");
@@ -146,9 +147,9 @@ describe("Composite Score Computation", () => {
     expect(commerceScore).toBe(generalScore);
   });
 
-  it("should use fixed weights (Sec=0.28, Rel=0.25, Trust=0.12, Perf=0.20, Vis=0.15)", () => {
-    const axes = { security: 60, performance: 80, infrastructure: 70, trust: 90, visibility: 50 };
-    const expected = Math.round(60 * 0.28 + 80 * 0.2 + 70 * 0.25 + 90 * 0.12 + 50 * 0.15);
+  it("should use fixed weights (Sec=0.24, Speed=0.18, Found=0.18, Rep=0.15, Disc=0.13, Email=0.12)", () => {
+    const axes = { security: 60, speed: 80, foundations: 70, reputation: 90, discoverability: 50, email: 75 };
+    const expected = Math.round(60 * 0.24 + 80 * 0.18 + 70 * 0.18 + 90 * 0.15 + 50 * 0.13 + 75 * 0.12);
     expect(computeComposite(axes, "general")).toBe(expected);
   });
 
@@ -164,7 +165,7 @@ describe("Composite Score Computation", () => {
     ];
     for (const arch of archetypes) {
       const score = computeComposite(
-        { security: 50, performance: 50, infrastructure: 50, trust: 50, visibility: 50 },
+        { security: 50, speed: 50, foundations: 50, reputation: 50, discoverability: 50, email: 50 },
         arch,
       );
       expect(score).toBeGreaterThanOrEqual(0);

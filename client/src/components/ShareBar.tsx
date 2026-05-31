@@ -23,7 +23,7 @@ function base64urlEncode(bytes: Uint8Array): string {
 
 // ─── Share payload builder ───────────────────────────────────────────
 
-const AXIS_ORDER: Axis[] = ["security", "infrastructure", "trust", "performance", "visibility"];
+const AXIS_ORDER: Axis[] = ["security", "foundations", "reputation", "speed", "discoverability", "email"];
 
 function buildPayload(
   domain: string,

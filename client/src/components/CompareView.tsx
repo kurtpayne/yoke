@@ -12,13 +12,14 @@ import type {
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-const AXES: Axis[] = ["security", "performance", "infrastructure", "trust", "visibility"];
+const AXES: Axis[] = ["security", "speed", "foundations", "reputation", "discoverability", "email"];
 const AXIS_LABELS: Record<Axis, string> = {
   security: "Security",
-  performance: "Performance",
-  infrastructure: "Infrastructure",
-  trust: "Trust",
-  visibility: "Visibility",
+  speed: "Speed",
+  foundations: "Foundations",
+  reputation: "Reputation",
+  discoverability: "Discoverability",
+  email: "Email",
 };
 
 const ARCHETYPE_ICONS: Record<string, string> = {
@@ -785,7 +786,7 @@ function base64urlEncode(bytes: Uint8Array): string {
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-const SHARE_AXIS_ORDER: Axis[] = ["security", "infrastructure", "trust", "performance", "visibility"];
+const SHARE_AXIS_ORDER: Axis[] = ["security", "foundations", "reputation", "speed", "discoverability", "email"];
 
 function buildComparePayload(data: CompareResult): string {
   // Build axis arrays in the canonical share order from comparison axes

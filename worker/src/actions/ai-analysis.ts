@@ -235,7 +235,7 @@ export function buildAIPrompt(analysisData: Record<string, unknown>): { system: 
       secondary: null,
       signals: [],
       platform: null,
-      weights: { security: 0.28, infrastructure: 0.25, performance: 0.2, visibility: 0.15, trust: 0.12 },
+      weights: { security: 0.24, speed: 0.18, foundations: 0.18, reputation: 0.15, discoverability: 0.13, email: 0.12 },
     };
     system = buildSystemPrompt(defaultArchetype, Object.keys(SIGNAL_REGISTRY));
   }
