@@ -2,6 +2,25 @@
 // Single source of truth for severity→color and severity→icon mappings.
 // Used by DomainScore, AIAnalysisPanel, and any component showing findings.
 
+export function severityBg(severity: string): string {
+  switch (severity) {
+    case "critical":
+      return "rgba(248,81,73,0.15)";
+    case "high":
+      return "rgba(255,161,152,0.15)";
+    case "medium":
+      return "rgba(210,153,34,0.15)";
+    case "low":
+      return "rgba(88,166,255,0.15)";
+    case "info":
+      return "rgba(88,166,255,0.08)";
+    case "good":
+      return "rgba(126,231,135,0.15)";
+    default:
+      return "rgba(128,128,128,0.1)";
+  }
+}
+
 export function severityColor(severity: string): string {
   switch (severity) {
     case "critical":

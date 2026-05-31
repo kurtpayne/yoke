@@ -366,6 +366,17 @@ function isFirstParty(scriptDomain: string, pageDomain: string): boolean {
     }
   }
 
+  // Brand-matched CDN pattern: stripecdn.com → stripe.com, shopifyassets.com → shopify.com, etc.
+  // Extract SLDs and check if script SLD starts with the page SLD (min 4 chars to avoid short-string false matches)
+  const getSLD = (parts: string[], tld2: string): string => {
+    if (TWO_PART_TLDS.has(tld2) && parts.length >= 3) return parts[parts.length - 3];
+    if (parts.length >= 2) return parts[parts.length - 2];
+    return "";
+  };
+  const pageSLD = getSLD(pdParts, pdTld2);
+  const scriptSLD = getSLD(sdParts, sdTld2);
+  if (pageSLD.length >= 4 && scriptSLD.startsWith(pageSLD)) return true;
+
   return false;
 }
 

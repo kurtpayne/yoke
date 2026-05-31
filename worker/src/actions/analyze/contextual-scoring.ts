@@ -2500,8 +2500,8 @@ export function calculateDomainScore(opts: {
         signal: "low_ttl",
         axis: "foundations",
         severity: "info",
-        label: `Low DNS TTL (${minTtl}s) — enables fast failover`,
-        tradeoff: "Low TTLs enable fast failover and traffic management but increase DNS query volume.",
+        label: `Low DNS TTL (${minTtl}s) — high resolver query volume`,
+        tradeoff: "Low TTLs increase DNS query volume. Only beneficial with DNS-based failover or traffic management.",
         weight: 1,
       });
     }
@@ -2759,13 +2759,15 @@ export function calculateDomainScore(opts: {
     findings.push({
       signal: "registration_length",
       axis: "reputation",
-      severity: expiryDays > 730 ? "good" : expiryDays > 30 ? "info" : expiryDays > 7 ? "low" : "medium",
+      severity: expiryDays > 365 ? "good" : expiryDays > 90 ? "info" : expiryDays > 30 ? "low" : "medium",
       label:
         expiryDays > 730
           ? `Registration good for ${years}+ years`
-          : expiryDays > 30
-            ? `Expires in ${expiryDays} days`
-            : `Expiring soon (${expiryDays} days)`,
+          : expiryDays > 365
+            ? `Registration renewed (${expiryDays} days remaining)`
+            : expiryDays > 90
+              ? `Expires in ${expiryDays} days`
+              : `Expiring soon (${expiryDays} days)`,
       tradeoff: null,
       weight: 2,
     });

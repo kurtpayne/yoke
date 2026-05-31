@@ -414,7 +414,7 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
           </span>
           {!axes[hoveredAxis].not_measured && (
             <span style={{ color: "var(--dim)", marginLeft: 6 }}>
-              ({Math.round(weights[hoveredAxis] * 100)}% weight for {ARCHETYPE_LABELS[archetype]})
+              ({Math.round(weights[hoveredAxis] * 100)}% weight)
             </span>
           )}
         </div>

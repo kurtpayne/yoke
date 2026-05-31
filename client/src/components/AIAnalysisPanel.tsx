@@ -25,7 +25,7 @@ import {
   NON_ACTIONABLE_SIGNALS,
 } from "../../../worker/src/config/signal-registry";
 import type { Axis, ScoreFinding, Severity } from "../api";
-import { severityColor, severityIcon } from "../utils/severity";
+import { severityBg, severityColor, severityIcon } from "../utils/severity";
 import type { AnalysisResult } from "../utils/types";
 import { findReferenceLink } from "./DomainSignals";
 
@@ -668,7 +668,6 @@ interface GradeUpItem {
   currentSeverity: Severity;
   weight: number;
   pointGain: number; // estimated composite score improvement
-  effort: string;
   fixDescription: string;
   fixLink: { url: string; label: string } | null;
 }
@@ -1778,16 +1777,7 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
     return null;
   }
 
-  const DEFAULT_VISIBLE = 5;
-  const visibleItems = expanded ? plan.items : plan.items.slice(0, DEFAULT_VISIBLE);
-  const hasMore = plan.items.length > DEFAULT_VISIBLE;
-
-  // Calculate running totals for visible items
-  let runningGain = 0;
-  const itemsWithRunning = visibleItems.map((item) => {
-    runningGain += item.pointGain;
-    return { ...item, runningTotal: runningGain };
-  });
+  const hasMore = plan.items.length > 3;
 
   const totalGain = plan.items.reduce((sum, i) => sum + i.pointGain, 0);
   const projectedScore = Math.min(100, Math.round(plan.currentScore + totalGain));
@@ -1805,18 +1795,32 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
 
   const axisLabels: Record<string, string> = {
     security: "Security",
-    performance: "Performance",
-    infrastructure: "Infrastructure",
-    trust: "Trust",
-    visibility: "Visibility",
+    speed: "Speed",
+    foundations: "Foundations",
+    reputation: "Reputation",
+    discoverability: "Discoverability",
+    email: "Email",
   };
   const axisColors: Record<string, string> = {
     security: "#f85149",
-    performance: "#58a6ff",
-    infrastructure: "#7ee787",
-    trust: "#d2a221",
-    visibility: "#bc8cff",
+    speed: "#58a6ff",
+    foundations: "#7ee787",
+    reputation: "#d2a221",
+    discoverability: "#bc8cff",
+    email: "#f778ba",
   };
+
+  // ─── Cluster items by category, each group sorted by impact ─────
+  // Category groups ordered by their highest-impact item
+  const groupMap = new Map<string, typeof plan.items>();
+  for (const item of plan.items) {
+    const group = groupMap.get(item.axis) || [];
+    group.push(item);
+    groupMap.set(item.axis, group);
+  }
+  const categoryGroups = Array.from(groupMap.entries())
+    .map(([axis, groupItems]) => ({ axis: axis as Axis, items: groupItems }))
+    .sort((a, b) => b.items[0].pointGain - a.items[0].pointGain);
 
   return (
     <div
@@ -1862,115 +1866,126 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
         </div>
       </div>
 
-      {/* Fix items */}
-      <ol style={{ display: "flex", flexDirection: "column", gap: "8px", listStyle: "none", margin: 0, padding: 0 }}>
-        {itemsWithRunning.map((item, i) => (
-          <li
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "10px",
-              padding: "8px 10px",
-              borderRadius: "6px",
-              background: "rgba(88,166,255,0.03)",
-              border: "1px solid rgba(88,166,255,0.08)",
-            }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                color: "var(--accent)",
-                minWidth: "20px",
-                textAlign: "right",
-                paddingTop: "1px",
-              }}
-            >
-              {i + 1}.
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>{item.fixDescription}</span>
-                {(() => {
-                  const _effort = item.effort.toLowerCase();
-                  const isQuickWin = isQuickWinItem(item);
-                  return isQuickWin ? (
-                    <span
-                      style={{
-                        fontSize: "9px",
-                        padding: "1px 5px",
-                        borderRadius: "3px",
-                        background: "rgba(210,153,34,0.15)",
-                        color: "var(--warning)",
-                        fontWeight: 700,
-                        letterSpacing: "0.02em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ⚡ quick win
-                    </span>
-                  ) : null;
-                })()}
-                {item.fixLink && (
-                  <a
-                    href={item.fixLink.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={item.fixLink.label}
-                    style={{
-                      color: "var(--accent)",
-                      display: "flex",
-                      alignItems: "center",
-                      opacity: 0.6,
-                      transition: "opacity 0.15s",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
-                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
-                  >
-                    <ExternalLink size={10} />
-                  </a>
-                )}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px", flexWrap: "wrap" }}>
+      {/* Fix items — clustered by category */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        {categoryGroups.map(({ axis, items: groupItems }) => {
+          const visibleGroupItems = expanded ? groupItems : groupItems.slice(0, 3);
+          return (
+            <div key={axis}>
+              {/* Category header */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  marginBottom: "6px",
+                  paddingBottom: "4px",
+                  borderBottom: `2px solid ${axisColors[axis] || "var(--border)"}`,
+                }}
+              >
                 <span
                   style={{
-                    fontSize: "10px",
-                    padding: "1px 6px",
-                    borderRadius: "3px",
-                    background: `${axisColors[item.axis] || "var(--muted)"}15`,
-                    color: axisColors[item.axis] || "var(--muted)",
-                    fontWeight: 600,
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: axisColors[axis] || "var(--muted)",
+                    flexShrink: 0,
                   }}
-                >
-                  {axisLabels[item.axis] || item.axis}
+                />
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text)" }}>
+                  {axisLabels[axis] || axis}
                 </span>
-                <span style={{ fontSize: "10px", color: "var(--success)", fontWeight: 600 }}>
-                  +{item.pointGain.toFixed(1)} pts
+                <span style={{ fontSize: "10px", color: "var(--muted)" }}>
+                  {groupItems.length} {groupItems.length === 1 ? "item" : "items"} · +
+                  {groupItems.reduce((s, it) => s + it.pointGain, 0).toFixed(1)} pts
                 </span>
-                {item.effort && item.effort !== "Varies" && (
-                  <span style={{ fontSize: "10px", color: "var(--muted)" }}>{item.effort}</span>
-                )}
               </div>
-              {item.label !== item.fixDescription && (
-                <div style={{ fontSize: "10px", color: "var(--dim)", marginTop: "2px" }}>Current: {item.label}</div>
-              )}
+              <ol
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                }}
+              >
+                {visibleGroupItems.map((item, i) => (
+                  <li
+                    key={`${item.signal}-${i}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "10px",
+                      padding: "8px 10px",
+                      borderRadius: "6px",
+                      background: "rgba(88,166,255,0.03)",
+                      border: "1px solid rgba(88,166,255,0.08)",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>
+                          {item.fixDescription}
+                        </span>
+                        {item.fixLink && (
+                          <a
+                            href={item.fixLink.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={item.fixLink.label}
+                            style={{
+                              color: "var(--accent)",
+                              display: "flex",
+                              alignItems: "center",
+                              opacity: 0.6,
+                              transition: "opacity 0.15s",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                            onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+                          >
+                            <ExternalLink size={10} />
+                          </a>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginTop: "3px",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            padding: "1px 6px",
+                            borderRadius: "3px",
+                            background: severityBg(item.currentSeverity),
+                            color: severityColor(item.currentSeverity),
+                            fontWeight: 600,
+                          }}
+                        >
+                          {item.currentSeverity}
+                        </span>
+                        <span style={{ fontSize: "10px", color: "var(--success)", fontWeight: 600 }}>
+                          +{item.pointGain.toFixed(1)} pts
+                        </span>
+                      </div>
+                      {item.label !== item.fixDescription && (
+                        <div style={{ fontSize: "10px", color: "var(--dim)", marginTop: "2px" }}>
+                          Current: {item.label}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
             </div>
-            <span
-              style={{
-                fontSize: "10px",
-                color: "var(--muted)",
-                whiteSpace: "nowrap",
-                paddingTop: "2px",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              Σ +{item.runningTotal.toFixed(1)}
-            </span>
-          </li>
-        ))}
-      </ol>
+          );
+        })}
+      </div>
 
       {hasMore && (
         <button
@@ -1997,7 +2012,7 @@ function GradeUpSimulator({ data }: { data: AnalysisResult }) {
             </>
           ) : (
             <>
-              <ChevronDown size={12} /> Show {plan.items.length - DEFAULT_VISIBLE} more
+              <ChevronDown size={12} /> Show all recommendations
             </>
           )}
         </button>
