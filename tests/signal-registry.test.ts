@@ -157,9 +157,9 @@ describe("Signal Registry", () => {
     }
   });
 
-  it("NON_ACTIONABLE_SIGNALS matches the !actionable && canBeNonGood filter on registry", () => {
+  it("NON_ACTIONABLE_SIGNALS matches all non-actionable signals in registry", () => {
     const expected = Object.entries(SIGNAL_REGISTRY)
-      .filter(([, def]) => !def.actionable && def.canBeNonGood)
+      .filter(([, def]) => !def.actionable)
       .map(([id]) => id)
       .sort();
     expect([...NON_ACTIONABLE_SIGNALS].sort()).toEqual(expected);

@@ -1586,7 +1586,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
 
 /** Signal IDs for signals that are non-actionable but CAN be non-good (i.e. should be excluded from Grade-Up) */
 export const NON_ACTIONABLE_SIGNALS: string[] = Object.entries(SIGNAL_REGISTRY)
-  .filter(([, def]) => !def.actionable && def.canBeNonGood)
+  .filter(([, def]) => !def.actionable)
   .map(([id]) => id);
 
 /** All valid signal IDs */

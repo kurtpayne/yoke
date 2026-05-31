@@ -63,7 +63,7 @@ export function buildSystemPrompt(archetype: ArchetypeResult, signalIds: string[
     .join(", ");
 
   sections.push(
-    `SCORING CONTEXT:\nComposite scoring: Yoke scores 0-100 using anchor-and-adjust across 6 categories: ${axisStr}.\nScoring model: baseline 50, good findings earn bonuses (+2 to +6), negatives penalize by severity×weight. Composite uses weighted geometric mean.\nGrades: ${gradeStr}, F <${GRADE_THRESHOLDS[GRADE_THRESHOLDS.length - 1]?.min ?? 0}.`,
+    `SCORING CONTEXT:\nComposite scoring: Yoke scores 0-100 using anchor-and-adjust across 6 categories: ${axisStr}.\nScoring model: baseline 55, good findings earn bonuses (+2×weight), negatives penalize by severity×weight (critical -4, high -2.5, medium -1.25, low -0.5). Composite uses weighted geometric mean. Categories with <3 scoreable findings are marked "Not Assessed" and excluded from the composite.\nGrades: ${gradeStr}, F <${GRADE_THRESHOLDS[GRADE_THRESHOLDS.length - 1]?.min ?? 0}.`,
   );
 
   // Axis descriptions
