@@ -874,7 +874,7 @@ export default {
           return json(
             {
               description:
-                "Yoke domain scoring methodology. All thresholds, weights, and severity mappings used to calculate the 5-axis composite score.",
+                "Yoke domain scoring methodology. All thresholds, weights, and severity mappings used to calculate the 6-category composite score.",
               axis_weights: AXIS_WEIGHTS,
               severity_scores: SEVERITY_SCORES,
               grade_thresholds: GRADE_THRESHOLDS,
@@ -883,7 +883,7 @@ export default {
               fix_desc_map: FIX_DESC_MAP,
               thresholds: ALL_THRESHOLDS,
               archetype_note:
-                "Fixed axis weights: Security (0.28), Infrastructure (0.25), Performance (0.20), Visibility (0.15), Trust (0.12). Grades: A+≥95, A≥90, B+≥85, B≥80, C+≥75, C≥70, D+≥65, D≥50, F<50. Performance blending is mobile-first (60% mobile + 40% desktop). Breach trust impact uses time decay: <1yr 1.0×, 1–3yr 0.75×, 3–5yr 0.50×, 5–10yr 0.25×, >10yr 0.10×; unknown-date breaches get 0.50×; grade cap only applies to breaches <3 years old. Site archetype is detected for contextual severity adjustments on individual findings.",
+                "Anchor-and-adjust scoring: baseline 50, good findings earn +2 to +6, negatives penalize by severity×weight. Composite uses weighted geometric mean (penalizes weak categories). Hard caps: critical→D max, high→C+ max. Grade thresholds: A+≥88, A≥82, B+≥76, B≥70, C+≥64, C≥58, D+≥50, D≥40, F<40. Categories: Security (0.24), Speed (0.18), Foundations (0.18), Reputation (0.15), Discoverability (0.13), Email (0.12). Breach trust impact uses time decay.",
             },
             200,
           );

@@ -1,6 +1,8 @@
 import {
   type ArchetypeName,
   AXIS_WEIGHTS,
+  applyAbsencePenalties,
+  applyHardCaps,
   computeAxisScore,
   computeComposite,
   contextualSeverity,
@@ -64,42 +66,45 @@ describe("Severity Score Mapping", () => {
 // ─── Axis Score Computation ──────────────────────────────────────────
 
 describe("Axis Score Computation", () => {
-  it("should return 65 for empty findings", () => {
-    expect(computeAxisScore([])).toBe(65);
+  it("should return baseline (50) for empty findings", () => {
+    expect(computeAxisScore([])).toBe(50);
   });
 
-  it("should return 100 for all-good findings", () => {
+  it("should award bonus for all-good findings", () => {
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "good", label: "B", tradeoff: null, weight: 3 },
     ];
-    expect(computeAxisScore(findings)).toBe(100);
+    // Baseline 50 + goodBonus(5)=6 + goodBonus(3)=4 = 60
+    expect(computeAxisScore(findings)).toBe(60);
   });
 
-  it("should return 0 for all-critical findings", () => {
+  it("should heavily penalize all-critical findings", () => {
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "critical", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 3 },
     ];
+    // Baseline 50 + (-15*5) + (-15*3) = 50 - 75 - 45 = -70 → clamped to 0
     expect(computeAxisScore(findings)).toBe(0);
   });
 
-  it("should weight findings correctly", () => {
-    // One good (100) with weight 5, one critical (0) with weight 5 → 50
+  it("should balance good bonus against critical penalty", () => {
+    // One good w5 (+6), one critical w5 (-75) → 50 + 6 - 75 = -19 → 0
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 5 },
     ];
-    expect(computeAxisScore(findings)).toBe(50);
+    expect(computeAxisScore(findings)).toBe(0);
   });
 
-  it("should respect higher weights", () => {
-    // Good (100) weight 9, Critical (0) weight 1 → should be 90
+  it("should handle mixed severity findings", () => {
+    // Good w3 (+4), medium w2 (-5*2=-10), info w1 (-1*1=-1) → 50 + 4 - 10 - 1 = 43
     const findings: Finding[] = [
-      { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 9 },
-      { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 1 },
+      { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 3 },
+      { signal: "b", axis: "security", severity: "medium", label: "B", tradeoff: null, weight: 2 },
+      { signal: "c", axis: "security", severity: "info", label: "C", tradeoff: null, weight: 1 },
     ];
-    expect(computeAxisScore(findings)).toBe(90);
+    expect(computeAxisScore(findings)).toBe(43);
   });
 
   it("should produce score in 0-100 range", () => {
@@ -113,6 +118,16 @@ describe("Axis Score Computation", () => {
       expect(score).toBeLessThanOrEqual(100);
     }
   });
+
+  it("should scale penalties by weight", () => {
+    // high w1 → 50 + (-10*1) = 40
+    const w1: Finding[] = [{ signal: "a", axis: "security", severity: "high", label: "A", tradeoff: null, weight: 1 }];
+    // high w3 → 50 + (-10*3) = 20
+    const w3: Finding[] = [{ signal: "a", axis: "security", severity: "high", label: "A", tradeoff: null, weight: 3 }];
+    expect(computeAxisScore(w1)).toBe(40);
+    expect(computeAxisScore(w3)).toBe(20);
+    expect(computeAxisScore(w1)).toBeGreaterThan(computeAxisScore(w3));
+  });
 });
 
 // ─── Composite Score Computation ─────────────────────────────────────
@@ -124,9 +139,10 @@ describe("Composite Score Computation", () => {
     expect(computeComposite(axes, "commerce")).toBe(100);
   });
 
-  it("should return 0 when all axes are 0", () => {
+  it("should return 1 when all axes are 0 (floored at 1 for log safety)", () => {
     const axes = { security: 0, speed: 0, foundations: 0, reputation: 0, discoverability: 0, email: 0 };
-    expect(computeComposite(axes, "general")).toBe(0);
+    // All axes floor to 1, so exp(sum(w_i * ln(1))) = exp(0) = 1
+    expect(computeComposite(axes, "general")).toBe(1);
   });
 
   it("should produce the same score regardless of archetype", () => {
@@ -147,10 +163,31 @@ describe("Composite Score Computation", () => {
     expect(commerceScore).toBe(generalScore);
   });
 
-  it("should use fixed weights (Sec=0.24, Speed=0.18, Found=0.18, Rep=0.15, Disc=0.13, Email=0.12)", () => {
+  it("should use weighted geometric mean (not arithmetic)", () => {
     const axes = { security: 60, speed: 80, foundations: 70, reputation: 90, discoverability: 50, email: 75 };
-    const expected = Math.round(60 * 0.24 + 80 * 0.18 + 70 * 0.18 + 90 * 0.15 + 50 * 0.13 + 75 * 0.12);
+    // Geometric mean: exp(0.24*ln(60) + 0.18*ln(80) + 0.18*ln(70) + 0.15*ln(90) + 0.13*ln(50) + 0.12*ln(75))
+    const expected = Math.round(
+      Math.exp(
+        0.24 * Math.log(60) +
+          0.18 * Math.log(80) +
+          0.18 * Math.log(70) +
+          0.15 * Math.log(90) +
+          0.13 * Math.log(50) +
+          0.12 * Math.log(75),
+      ),
+    );
     expect(computeComposite(axes, "general")).toBe(expected);
+    // Geometric mean should be strictly less than arithmetic mean for non-uniform inputs
+    const arithmetic = Math.round(60 * 0.24 + 80 * 0.18 + 70 * 0.18 + 90 * 0.15 + 50 * 0.13 + 75 * 0.12);
+    expect(computeComposite(axes, "general")).toBeLessThanOrEqual(arithmetic);
+  });
+
+  it("geometric mean penalizes low outliers more than arithmetic", () => {
+    // One very low axis (10) + rest high (90) — geometric mean should be notably lower
+    const axes = { security: 90, speed: 90, foundations: 90, reputation: 90, discoverability: 90, email: 10 };
+    const geoScore = computeComposite(axes, "general");
+    const arithmeticScore = Math.round(90 * 0.24 + 90 * 0.18 + 90 * 0.18 + 90 * 0.15 + 90 * 0.13 + 10 * 0.12);
+    expect(geoScore).toBeLessThan(arithmeticScore);
   });
 
   it("composite should always be in 0-100 range", () => {
@@ -179,21 +216,22 @@ describe("Composite Score Computation", () => {
 describe("Grade Assignment", () => {
   it("should assign correct grades (production thresholds)", () => {
     expect(gradeFromComposite(100)).toBe("A+");
-    expect(gradeFromComposite(95)).toBe("A+");
-    expect(gradeFromComposite(90)).toBe("A");
-    expect(gradeFromComposite(89)).toBe("B+");
-    expect(gradeFromComposite(85)).toBe("B+");
-    expect(gradeFromComposite(84)).toBe("B");
-    expect(gradeFromComposite(80)).toBe("B");
-    expect(gradeFromComposite(79)).toBe("C+");
-    expect(gradeFromComposite(75)).toBe("C+");
-    expect(gradeFromComposite(74)).toBe("C");
-    expect(gradeFromComposite(70)).toBe("C");
-    expect(gradeFromComposite(69)).toBe("D+");
-    expect(gradeFromComposite(65)).toBe("D+");
-    expect(gradeFromComposite(64)).toBe("D");
-    expect(gradeFromComposite(50)).toBe("D");
-    expect(gradeFromComposite(49)).toBe("F");
+    expect(gradeFromComposite(88)).toBe("A+");
+    expect(gradeFromComposite(87)).toBe("A");
+    expect(gradeFromComposite(82)).toBe("A");
+    expect(gradeFromComposite(81)).toBe("B+");
+    expect(gradeFromComposite(76)).toBe("B+");
+    expect(gradeFromComposite(75)).toBe("B");
+    expect(gradeFromComposite(70)).toBe("B");
+    expect(gradeFromComposite(69)).toBe("C+");
+    expect(gradeFromComposite(64)).toBe("C+");
+    expect(gradeFromComposite(63)).toBe("C");
+    expect(gradeFromComposite(58)).toBe("C");
+    expect(gradeFromComposite(57)).toBe("D+");
+    expect(gradeFromComposite(50)).toBe("D+");
+    expect(gradeFromComposite(49)).toBe("D");
+    expect(gradeFromComposite(40)).toBe("D");
+    expect(gradeFromComposite(39)).toBe("F");
     expect(gradeFromComposite(0)).toBe("F");
   });
 });
@@ -326,5 +364,156 @@ describe("Managed Platform Detection", () => {
 
   it("should return null for custom hosting", () => {
     expect(detectPlatform("nginx", [{ name: "React" }])).toBeNull();
+  });
+});
+
+// ─── Absence Penalties ───────────────────────────────────────────────
+
+describe("Absence Penalties", () => {
+  it("should penalize missing expected signals", () => {
+    // Foundations expects cdn, http2, ipv6. If cdn is absent, penalty applies.
+    const findings: Finding[] = [
+      { signal: "http2", axis: "foundations", severity: "good", label: "HTTP/2", tradeoff: null, weight: 2 },
+      { signal: "ipv6", axis: "foundations", severity: "good", label: "IPv6", tradeoff: null, weight: 1 },
+    ];
+    // Create allFindings that show HTTP ran (so absence penalty applies)
+    const allFindings: Finding[] = [
+      ...findings,
+      { signal: "ssl_grade", axis: "security", severity: "good", label: "SSL A+", tradeoff: null, weight: 3 },
+      { signal: "hsts", axis: "security", severity: "good", label: "HSTS", tradeoff: null, weight: 4 },
+    ];
+
+    const baseScore = computeAxisScore(findings);
+    const penalizedScore = applyAbsencePenalties(baseScore, "foundations", findings, allFindings);
+    // cdn absent → -4 penalty
+    expect(penalizedScore).toBe(baseScore - 4);
+  });
+
+  it("should not penalize when signal is present", () => {
+    const findings: Finding[] = [
+      { signal: "cdn", axis: "foundations", severity: "good", label: "CDN", tradeoff: null, weight: 2 },
+      { signal: "http2", axis: "foundations", severity: "good", label: "HTTP/2", tradeoff: null, weight: 2 },
+      { signal: "ipv6", axis: "foundations", severity: "good", label: "IPv6", tradeoff: null, weight: 1 },
+    ];
+    const allFindings: Finding[] = [
+      ...findings,
+      { signal: "ssl_grade", axis: "security", severity: "good", label: "SSL", tradeoff: null, weight: 3 },
+    ];
+
+    const baseScore = computeAxisScore(findings);
+    const result = applyAbsencePenalties(baseScore, "foundations", findings, allFindings);
+    expect(result).toBe(baseScore); // no penalties — all expected signals present
+  });
+
+  it("should accept http3 as alternative to http2", () => {
+    const findings: Finding[] = [
+      { signal: "cdn", axis: "foundations", severity: "good", label: "CDN", tradeoff: null, weight: 2 },
+      { signal: "http3", axis: "foundations", severity: "good", label: "HTTP/3", tradeoff: null, weight: 2 },
+      { signal: "ipv6", axis: "foundations", severity: "good", label: "IPv6", tradeoff: null, weight: 1 },
+    ];
+    const allFindings: Finding[] = [
+      ...findings,
+      { signal: "ssl_grade", axis: "security", severity: "good", label: "SSL", tradeoff: null, weight: 3 },
+    ];
+
+    const baseScore = computeAxisScore(findings);
+    const result = applyAbsencePenalties(baseScore, "foundations", findings, allFindings);
+    expect(result).toBe(baseScore); // http3 satisfies http2 requirement
+  });
+
+  it("should skip HTTP-dependent penalties when HTTP is blocked", () => {
+    const findings: Finding[] = [
+      { signal: "ipv6", axis: "foundations", severity: "good", label: "IPv6", tradeoff: null, weight: 1 },
+    ];
+    // Site unreachable → HTTP didn't run
+    const allFindings: Finding[] = [
+      ...findings,
+      {
+        signal: "site_unreachable",
+        axis: "foundations",
+        severity: "high",
+        label: "Unreachable",
+        tradeoff: null,
+        weight: 3,
+      },
+    ];
+
+    const baseScore = computeAxisScore(findings);
+    const result = applyAbsencePenalties(baseScore, "foundations", findings, allFindings);
+    // cdn and http2 penalties should be skipped (requiresHttp), only ipv6 might apply
+    // but ipv6 is present, so no penalty at all
+    expect(result).toBe(baseScore);
+  });
+
+  it("should return score for categories with no expected baselines", () => {
+    const findings: Finding[] = [
+      { signal: "perf_score", axis: "speed", severity: "good", label: "Perf", tradeoff: null, weight: 5 },
+    ];
+    const baseScore = computeAxisScore(findings);
+    const result = applyAbsencePenalties(baseScore, "speed", findings, findings);
+    expect(result).toBe(baseScore); // speed has no expected baselines
+  });
+});
+
+// ─── Hard Caps ───────────────────────────────────────────────────────
+
+describe("Hard Caps", () => {
+  const allAxesHigh = { security: 90, speed: 85, foundations: 80, reputation: 75, discoverability: 70, email: 65 };
+
+  it("should cap grade to D when critical finding exists", () => {
+    const findings: Finding[] = [
+      { signal: "ssl_grade", axis: "security", severity: "critical", label: "SSL F", tradeoff: null, weight: 5 },
+    ];
+    const result = applyHardCaps("A+", findings, allAxesHigh);
+    expect(result).toBe("D");
+  });
+
+  it("should cap grade to C+ when high finding exists", () => {
+    const findings: Finding[] = [
+      { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
+    ];
+    const result = applyHardCaps("A", findings, allAxesHigh);
+    expect(result).toBe("C+");
+  });
+
+  it("should cap to B when any category score is below 30", () => {
+    const scores = { ...allAxesHigh, email: 25 };
+    const result = applyHardCaps("A+", [], scores);
+    expect(result).toBe("B");
+  });
+
+  it("should cap to C+ when two categories are below 40", () => {
+    const scores = { ...allAxesHigh, email: 35, discoverability: 38 };
+    const result = applyHardCaps("A+", [], scores);
+    expect(result).toBe("C+");
+  });
+
+  it("should not cap when no conditions met", () => {
+    const result = applyHardCaps("A+", [], allAxesHigh);
+    expect(result).toBe("A+");
+  });
+
+  it("should not promote grade (only cap downward)", () => {
+    const result = applyHardCaps("C", [], allAxesHigh);
+    expect(result).toBe("C");
+  });
+
+  it("critical cap takes precedence over high cap", () => {
+    const findings: Finding[] = [
+      { signal: "ssl_grade", axis: "security", severity: "critical", label: "SSL F", tradeoff: null, weight: 5 },
+      { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
+    ];
+    const result = applyHardCaps("A+", findings, allAxesHigh);
+    expect(result).toBe("D");
+  });
+
+  it("combines severity cap with score cap (takes lowest)", () => {
+    const scores = { ...allAxesHigh, email: 25 };
+    const findings: Finding[] = [
+      { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
+    ];
+    // high → C+, score<30 → B, combined should take C+ (lower)
+    const result = applyHardCaps("A+", findings, scores);
+    expect(result).toBe("C+");
   });
 });

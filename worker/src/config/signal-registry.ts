@@ -14,14 +14,14 @@ import type { ArchetypeName, Axis, Severity } from "./contextual-scoring-types";
 // ─── Grade Thresholds (single source of truth) ──────────────────────
 
 export const GRADE_THRESHOLDS = [
-  { grade: "A+", min: 95 },
-  { grade: "A", min: 90 },
-  { grade: "B+", min: 85 },
-  { grade: "B", min: 80 },
-  { grade: "C+", min: 75 },
-  { grade: "C", min: 70 },
-  { grade: "D+", min: 65 },
-  { grade: "D", min: 50 },
+  { grade: "A+", min: 88 },
+  { grade: "A", min: 82 },
+  { grade: "B+", min: 76 },
+  { grade: "B", min: 70 },
+  { grade: "C+", min: 64 },
+  { grade: "C", min: 58 },
+  { grade: "D+", min: 50 },
+  { grade: "D", min: 40 },
   { grade: "F", min: 0 },
 ] as const;
 

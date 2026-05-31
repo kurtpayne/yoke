@@ -28,12 +28,12 @@ describe("Prompt Builder", () => {
 
   it("includes grade thresholds from signal registry", () => {
     const prompt = buildSystemPrompt(makeArchetype(), Object.keys(SIGNAL_REGISTRY));
-    expect(prompt).toContain("A+ ≥95");
-    expect(prompt).toContain("A ≥90");
-    expect(prompt).toContain("B+ ≥85");
-    expect(prompt).toContain("C ≥70");
-    expect(prompt).toContain("D+ ≥65");
-    expect(prompt).toContain("D ≥50");
+    expect(prompt).toContain("A+ ≥88");
+    expect(prompt).toContain("A ≥82");
+    expect(prompt).toContain("B+ ≥76");
+    expect(prompt).toContain("C ≥58");
+    expect(prompt).toContain("D+ ≥50");
+    expect(prompt).toContain("D ≥40");
   });
 
   it("includes axis weights", () => {

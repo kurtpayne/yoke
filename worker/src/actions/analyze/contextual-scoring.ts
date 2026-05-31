@@ -94,33 +94,202 @@ export interface DomainScoreResult {
 }
 
 // ─── Severity → Score mapping ────────────────────────────────────────
-
+// SEVERITY_SCORES maps severity to a 0-100 numeric score. Still used by
+// CrUX/PageSpeed metric resolution (converting metric values to severities)
+// and the /api/scoring transparency endpoint. NOT used for axis scoring
+// (anchor-and-adjust uses penalty/bonus directly).
 const SEVERITY_SCORE = SEVERITY_SCORES;
+
+// ─── Anchor-and-Adjust Scoring Model ─────────────────────────────────
+// Replaces the old weighted-average model. Each axis starts at BASELINE (50)
+// and earns/loses points based on findings. This prevents sparse axes from
+// inflating (the old "absence of bad = high score" problem).
+
+const BASELINE = 50;
+
+const SEVERITY_PENALTY: Record<Severity, number> = {
+  critical: -15,
+  high: -10,
+  medium: -5,
+  low: -2,
+  info: -1,
+  good: 0, // good findings use goodBonus() instead
+};
+
+/** Bonus points for a "good" finding, scaled by weight. */
+function goodBonus(weight: number): number {
+  return Math.min(weight + 1, 6); // w1→+2, w2→+3, w3→+4, w4→+5, w5→+6
+}
+
+// ─── Expected Baselines (Absence Penalties) ──────────────────────────
+// Each category defines signals that a competent site should produce.
+// If none of the listed signals fired, a mild penalty applies.
+// "check_signals" are alternative signal keys that also satisfy the requirement
+// (e.g., http3 satisfies the http2 requirement).
+
+interface BaselineExpectation {
+  /** Primary signal key expected. */
+  signal: string;
+  /** Penalty applied if signal is absent (negative number). */
+  penalty: number;
+  /** Alternative signal keys that also satisfy this expectation. */
+  alsoSatisfiedBy?: string[];
+  /** If true, only penalize when HTTP-based checks could run (site reachable). */
+  requiresHttp?: boolean;
+  /** If true, only penalize when SSL data was collected. */
+  requiresSsl?: boolean;
+}
+
+export const EXPECTED_BASELINES: Partial<Record<Axis, BaselineExpectation[]>> = {
+  security: [
+    { signal: "hsts", penalty: -3, requiresHttp: true },
+    { signal: "http_to_https_redirect", penalty: -3, requiresHttp: true },
+  ],
+  email: [
+    { signal: "email_auth", penalty: -4 },
+    { signal: "dmarc_reject", penalty: -3 },
+  ],
+  foundations: [
+    { signal: "cdn", penalty: -4, requiresHttp: true },
+    { signal: "http2", penalty: -3, alsoSatisfiedBy: ["http3"], requiresHttp: true },
+    { signal: "ipv6", penalty: -2 },
+  ],
+  discoverability: [
+    // These are "good" signals — title_tag_missing FIRES when title is missing,
+    // but we want to penalize absence of a title. We check if the positive scenario
+    // exists: no title_tag_missing finding means the title IS present (no penalty).
+    // So we actually don't penalize here — the title_tag_missing signal already
+    // handles it. Skip absence-based penalties for discoverability for now.
+  ],
+  reputation: [{ signal: "organizational_identity", penalty: -2, requiresHttp: true }],
+};
+
+/**
+ * Apply absence penalties: for each expected baseline signal, if it never
+ * fired AND the relevant checks ran, apply a mild score deduction.
+ */
+export function applyAbsencePenalties(score: number, axis: Axis, findings: Finding[], allFindings: Finding[]): number {
+  const baselines = EXPECTED_BASELINES[axis];
+  if (!baselines || baselines.length === 0) return score;
+
+  const signalKeys = new Set(findings.map((f) => f.signal));
+  const allSignalKeys = new Set(allFindings.map((f) => f.signal));
+
+  // Determine if HTTP-based checks ran (site was reachable and not blocked)
+  const httpBlocked =
+    allSignalKeys.has("site_unreachable") ||
+    allSignalKeys.has("http_blocked_security") ||
+    allSignalKeys.has("http_blocked_infrastructure") ||
+    allSignalKeys.has("http_blocked_performance");
+  // If no HTTP-based findings fired at all across ANY axis, HTTP probably didn't run
+  const hasAnyHttpFindings = allFindings.some(
+    (f) =>
+      f.signal === "ssl_grade" ||
+      f.signal === "hsts" ||
+      f.signal === "hsts_missing" ||
+      f.signal === "csp" ||
+      f.signal === "csp_missing" ||
+      f.signal === "http2" ||
+      f.signal === "http3" ||
+      f.signal === "http1_only" ||
+      f.signal === "cdn",
+  );
+  const httpRan = !httpBlocked && hasAnyHttpFindings;
+
+  // Check if SSL data was collected
+  const sslRan =
+    allSignalKeys.has("ssl_grade") || allSignalKeys.has("tls_version") || allSignalKeys.has("cert_expiry_proximity");
+
+  let adjusted = score;
+
+  for (const baseline of baselines) {
+    // Skip if the required check type didn't run
+    if (baseline.requiresHttp && !httpRan) continue;
+    if (baseline.requiresSsl && !sslRan) continue;
+
+    // Check if the primary signal or any alternative fired
+    if (signalKeys.has(baseline.signal)) continue;
+    if (baseline.alsoSatisfiedBy?.some((alt) => signalKeys.has(alt))) continue;
+
+    // Signal expected but absent — apply penalty
+    adjusted += baseline.penalty;
+  }
+
+  return Math.max(0, Math.min(100, adjusted));
+}
 
 // ─── Exported Scoring Helpers ────────────────────────────────────────
 // Pure functions extracted for testability. Used by calculateDomainScore below.
 
 export function computeAxisScore(findings: Finding[]): number {
-  if (findings.length === 0) return 65; // measured axis with no findings defaults to 65
-  let weightedSum = 0;
-  let totalWeight = 0;
+  if (findings.length === 0) return BASELINE;
+
+  let score = BASELINE;
+
   for (const f of findings) {
-    weightedSum += SEVERITY_SCORE[f.severity] * f.weight;
-    totalWeight += f.weight;
+    if (f.severity === "good") {
+      score += goodBonus(f.weight);
+    } else {
+      score += SEVERITY_PENALTY[f.severity] * Math.max(f.weight, 1);
+    }
   }
-  return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 65;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 export function computeComposite(axisScores: Record<Axis, number>, _archetype: ArchetypeName): number {
-  let composite = 0;
+  // Weighted geometric mean — punishes low outliers more than arithmetic mean.
+  // A site can't mask a weak category with strong ones.
+  let logSum = 0;
   for (const axis of Object.keys(AXIS_WEIGHTS) as Axis[]) {
-    composite += axisScores[axis] * AXIS_WEIGHTS[axis];
+    const s = Math.max(axisScores[axis], 1); // floor at 1 to prevent log(0)
+    logSum += AXIS_WEIGHTS[axis] * Math.log(s);
   }
-  return Math.round(composite);
+  return Math.max(0, Math.min(100, Math.round(Math.exp(logSum))));
 }
 
 export function gradeFromComposite(score: number): string {
   return registryGradeFromComposite(score);
+}
+
+// ─── Per-Category Hard Caps ──────────────────────────────────────────
+// Applied AFTER composite grade calculation to prevent good composites
+// from hiding critical problems.
+
+const GRADE_ORDER = ["F", "D", "D+", "C", "C+", "B", "B+", "A", "A+"];
+
+function capGrade(current: string, max: string): string {
+  const currentIdx = GRADE_ORDER.indexOf(current);
+  const maxIdx = GRADE_ORDER.indexOf(max);
+  if (currentIdx === -1 || maxIdx === -1) return current;
+  return GRADE_ORDER[Math.min(currentIdx, maxIdx)];
+}
+
+export function applyHardCaps(grade: string, allFindings: Finding[], axisScores: Record<Axis, number>): string {
+  let capped = grade;
+
+  // Any critical finding anywhere → max grade D
+  if (allFindings.some((f) => f.severity === "critical")) {
+    capped = capGrade(capped, "D");
+  }
+  // Any high finding anywhere → max grade C+
+  else if (allFindings.some((f) => f.severity === "high")) {
+    capped = capGrade(capped, "C+");
+  }
+
+  // Very low category scores
+  const scores = Object.values(axisScores);
+  const belowThirty = scores.filter((s) => s < 30).length;
+  const belowForty = scores.filter((s) => s < 40).length;
+
+  if (belowThirty >= 1) {
+    capped = capGrade(capped, "B");
+  }
+  if (belowForty >= 2) {
+    capped = capGrade(capped, "C+");
+  }
+
+  return capped;
 }
 
 export function contextualSeverity(
@@ -596,7 +765,7 @@ export function calculateDomainScore(opts: {
     if (isBehindCdn) {
       findings.push({
         signal: "blocklist_listed",
-        axis: "security",
+        axis: "reputation",
         severity: "info",
         label: `Listed on ${listedCount} blocklist${listedCount > 1 ? "s" : ""} (shared CDN IP: ${opts.hosting?.cdn})`,
         tradeoff: "Blocklist hits on CDN IPs reflect shared infrastructure, not this domain specifically.",
@@ -605,7 +774,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "blocklist_listed",
-        axis: "security",
+        axis: "reputation",
         severity: listedCount >= 3 ? "critical" : listedCount >= 2 ? "high" : "medium",
         label: `Listed on ${listedCount} blocklist${listedCount > 1 ? "s" : ""}`,
         tradeoff: null,
@@ -625,7 +794,7 @@ export function calculateDomainScore(opts: {
     if (emailComplete && dmarcPolicy === "reject") {
       findings.push({
         signal: "email_auth",
-        axis: "security",
+        axis: "email",
         severity: "good",
         label: "Full email auth (SPF+DKIM+DMARC reject)",
         tradeoff: null,
@@ -634,7 +803,7 @@ export function calculateDomainScore(opts: {
     } else if (emailComplete) {
       findings.push({
         signal: "email_auth",
-        axis: "security",
+        axis: "email",
         severity: "info",
         label: `Email auth present (DMARC: ${dmarcPolicy || "none"})`,
         tradeoff: null,
@@ -647,7 +816,7 @@ export function calculateDomainScore(opts: {
       if (missing.length > 0) {
         findings.push({
           signal: "email_auth_incomplete",
-          axis: "security",
+          axis: "email",
           severity: contextualSeverity("medium", arch, { corporate: "high" }),
           label: `Missing email auth: ${missing.join(", ")}`,
           tradeoff: null,
@@ -661,7 +830,7 @@ export function calculateDomainScore(opts: {
       if (hasSpf && !hasDmarc) {
         findings.push({
           signal: "spf_without_dmarc",
-          axis: "security",
+          axis: "email",
           severity: contextualSeverity("low", arch, { corporate: "medium" }),
           label: "SPF without DMARC — spoofing protection incomplete without enforcement policy",
           tradeoff: "Add a DMARC record (start with p=none) to enforce SPF alignment.",
@@ -1220,7 +1389,7 @@ export function calculateDomainScore(opts: {
     if (mta.policy_found && mta.mode === "enforce") {
       findings.push({
         signal: "mta_sts",
-        axis: "security",
+        axis: "email",
         severity: "good",
         label: "MTA-STS enforced — email transport protected from downgrade attacks",
         tradeoff: null,
@@ -1229,7 +1398,7 @@ export function calculateDomainScore(opts: {
     } else if (mta.policy_found && mta.mode === "testing") {
       findings.push({
         signal: "mta_sts",
-        axis: "security",
+        axis: "email",
         severity: "info",
         label: "MTA-STS in testing mode",
         tradeoff: null,
@@ -2800,7 +2969,7 @@ export function calculateDomainScore(opts: {
     if (opts.trancoRank <= 1000) {
       findings.push({
         signal: "domain_popularity",
-        axis: "reputation",
+        axis: "discoverability",
         severity: "good",
         label: `Tranco top 1K (#${opts.trancoRank.toLocaleString()}) — elite web presence`,
         tradeoff: null,
@@ -2809,7 +2978,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.trancoRank <= 10000) {
       findings.push({
         signal: "domain_popularity",
-        axis: "reputation",
+        axis: "discoverability",
         severity: "good",
         label: `Tranco top 10K (#${opts.trancoRank.toLocaleString()}) — high traffic`,
         tradeoff: null,
@@ -2818,7 +2987,7 @@ export function calculateDomainScore(opts: {
     } else if (opts.trancoRank <= 100000) {
       findings.push({
         signal: "domain_popularity",
-        axis: "reputation",
+        axis: "discoverability",
         severity: "info",
         label: `Tranco top 100K (#${opts.trancoRank.toLocaleString()})`,
         tradeoff: null,
@@ -2827,7 +2996,7 @@ export function calculateDomainScore(opts: {
     } else {
       findings.push({
         signal: "domain_popularity",
-        axis: "reputation",
+        axis: "discoverability",
         severity: "low",
         label: `Tranco rank #${opts.trancoRank.toLocaleString()} — low traffic`,
         tradeoff: null,
@@ -2837,7 +3006,7 @@ export function calculateDomainScore(opts: {
   } else {
     findings.push({
       signal: "domain_popularity",
-      axis: "reputation",
+      axis: "discoverability",
       severity: "info",
       label: "Not ranked in Tranco top 1M",
       tradeoff: null,
@@ -3316,7 +3485,7 @@ export function calculateDomainScore(opts: {
     if (tps.privacy_concerns.length > 0) {
       findings.push({
         signal: "script_privacy",
-        axis: "security",
+        axis: "reputation",
         severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "high" }),
         label: `${tps.privacy_concerns.length} privacy concern(s) from third-party scripts`,
         tradeoff: null,
@@ -3345,7 +3514,7 @@ export function calculateDomainScore(opts: {
     if (cc.pre_consent_cookies > 0) {
       findings.push({
         signal: "pre_consent_cookies",
-        axis: "security",
+        axis: "reputation",
         severity: contextualSeverity("medium", arch, { commerce: "high", institutional: "critical" }),
         label: `${cc.pre_consent_cookies} potential tracking cookie(s) set before consent`,
         tradeoff: null,
@@ -3497,44 +3666,27 @@ export function calculateDomainScore(opts: {
     }
     let score = computeAxisScore(axisFindings);
 
-    // Confidence dampening: blend sparse axes toward default to prevent
-    // high-confidence scores from limited data
-    const MIN_FINDINGS: Partial<Record<Axis, number>> = { security: 6, discoverability: 4, speed: 4 };
-    const minRequired = MIN_FINDINGS[axis];
-    if (minRequired && axisFindings.length < minRequired) {
-      const confidence = axisFindings.length / minRequired;
-      score = Math.round(confidence * score + (1 - confidence) * 50);
-    }
+    // Apply absence penalties — expected-but-missing signals get mild deductions.
+    // Pass all findings so absence detection can check if HTTP/SSL ran.
+    score = applyAbsencePenalties(score, axis, axisFindings, findings);
 
     axisScores[axis] = { score, weight: AXIS_WEIGHTS[axis], findings: axisFindings };
   }
 
   // ─── Compute Composite Score ─────────────────────────────────────
-  // Include all axes (unmeasured default to 50, not skipped)
+  // Weighted geometric mean — low outliers are punished more than arithmetic.
 
-  let composite = 0;
+  const rawAxisScores: Record<Axis, number> = {} as Record<Axis, number>;
   for (const axis of axes) {
-    composite += (axisScores[axis].score ?? 50) * AXIS_WEIGHTS[axis];
+    rawAxisScores[axis] = axisScores[axis].score ?? 50;
   }
-  composite = Math.round(composite);
-
-  // ─── Floor Penalty ───────────────────────────────────────────────
-  // Prevent domains with one catastrophically bad axis from still scoring well overall
-  const measuredScores = axes.filter((a) => !axisScores[a].not_measured).map((a) => axisScores[a].score!);
-  if (measuredScores.length > 0) {
-    const minScore = Math.min(...measuredScores);
-    if (minScore < 30) {
-      composite = Math.min(composite, 55);
-    } else if (minScore < 50) {
-      composite = Math.min(composite, 72);
-    } else if (minScore < 60) {
-      // Drag: proportional pull-down for moderately weak axes
-      const drag = Math.round((60 - minScore) * 0.4);
-      composite = Math.max(0, composite - drag);
-    }
-  }
+  const composite = computeComposite(rawAxisScores, archetype.detected);
 
   let grade = gradeFromComposite(composite);
+
+  // ─── Hard Caps ───────────────────────────────────────────────────
+  // Per-category hard caps prevent good composites from hiding critical problems.
+  grade = applyHardCaps(grade, findings, rawAxisScores);
 
   // ─── Breach grade cap ────────────────────────────────────────────
   // Domains with catastrophic RECENT data breaches should not earn top grades.

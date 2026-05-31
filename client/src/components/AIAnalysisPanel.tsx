@@ -23,7 +23,6 @@ import {
   FIX_DESC_MAP,
   GRADE_THRESHOLDS,
   NON_ACTIONABLE_SIGNALS,
-  SEVERITY_SCORES,
 } from "../../../worker/src/config/signal-registry";
 import type { Axis, ScoreFinding, Severity } from "../api";
 import { severityColor, severityIcon } from "../utils/severity";
@@ -680,15 +679,31 @@ function getNextGrade(currentGrade: string): { grade: string; min: number } | nu
   return GRADE_THRESHOLDS[idx - 1];
 }
 
+// Anchor-and-adjust scoring — mirrors worker/src/actions/analyze/contextual-scoring.ts
+const SCORING_BASELINE = 50;
+const SEVERITY_PENALTY: Record<string, number> = {
+  critical: -15,
+  high: -10,
+  medium: -5,
+  low: -2,
+  info: -1,
+  good: 0,
+};
+function goodBonus(weight: number): number {
+  return Math.min(weight + 1, 6);
+}
+
 function computeAxisScore(findings: ScoreFinding[]): number {
-  if (findings.length === 0) return 65;
-  let weightedSum = 0;
-  let totalWeight = 0;
+  if (findings.length === 0) return SCORING_BASELINE;
+  let score = SCORING_BASELINE;
   for (const f of findings) {
-    weightedSum += (SEVERITY_SCORES[f.severity] ?? 82) * f.weight;
-    totalWeight += f.weight;
+    if (f.severity === "good") {
+      score += goodBonus(f.weight);
+    } else {
+      score += (SEVERITY_PENALTY[f.severity] ?? -1) * Math.max(f.weight, 1);
+    }
   }
-  return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 65;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 function generateGradeUpPlan(data: AnalysisResult): {
@@ -712,10 +727,25 @@ function generateGradeUpPlan(data: AnalysisResult): {
 
   const items: GradeUpItem[] = [];
 
+  // Build current axis scores map for geometric mean simulation
+  const currentAxisScores: Record<string, number> = {};
+  for (const [axisName, axisData] of Object.entries(score.axes) as [Axis, (typeof score.axes)[Axis]][]) {
+    currentAxisScores[axisName] = axisData.score ?? 50;
+  }
+
+  // Helper: compute weighted geometric mean from axis scores
+  function geoComposite(axisScoresMap: Record<string, number>): number {
+    let logSum = 0;
+    for (const [axis, w] of Object.entries(AXIS_WEIGHTS)) {
+      const s = Math.max(axisScoresMap[axis] ?? 50, 1);
+      logSum += w * Math.log(s);
+    }
+    return Math.max(0, Math.min(100, Math.round(Math.exp(logSum))));
+  }
+
   // For each axis, find non-good findings and compute what fixing each one would do
   for (const [axisName, axisData] of Object.entries(score.axes) as [Axis, (typeof score.axes)[Axis]][]) {
     if (axisData.not_measured || !axisData.findings) continue;
-    const axisWeight = AXIS_WEIGHTS[axisName] ?? 0.15;
 
     for (const finding of axisData.findings) {
       if (finding.severity === "good") continue;
@@ -724,11 +754,13 @@ function generateGradeUpPlan(data: AnalysisResult): {
       if (NON_ACTIONABLE_SIGNALS.includes(finding.signal)) continue;
 
       // Simulate fixing this finding: change its severity to "good" and recalculate
-      const currentAxisScore = computeAxisScore(axisData.findings);
       const fixedFindings = axisData.findings.map((f) => (f === finding ? { ...f, severity: "good" as Severity } : f));
       const newAxisScore = computeAxisScore(fixedFindings);
-      const axisDelta = newAxisScore - currentAxisScore;
-      const compositeDelta = Math.round(axisDelta * axisWeight * 10) / 10;
+
+      // Compute composite delta using geometric mean
+      const simScores = { ...currentAxisScores, [axisName]: newAxisScore };
+      const newComposite = geoComposite(simScores);
+      const compositeDelta = Math.round((newComposite - currentScore) * 10) / 10;
 
       if (compositeDelta < 0.1) continue; // negligible impact
 
@@ -1036,6 +1068,7 @@ function AdvancedSettings({
   };
 
   // Load prompt when panel starts open (e.g. persisted in localStorage)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only re-run on domain change to avoid infinite loops
   useEffect(() => {
     if (open && !promptText && domain) {
       loadPrompt();
@@ -2307,6 +2340,7 @@ export function AIAnalysisPanel({
   const _actionItems = analysisData ? generateActionItems(analysisData) : [];
 
   // Auto-scroll streaming container to bottom as new text arrives
+  // biome-ignore lint/correctness/useExhaustiveDependencies: streamingText is an intentional trigger to re-scroll on each text update
   useEffect(() => {
     if (streamContainerRef.current && isStreaming) {
       streamContainerRef.current.scrollTop = streamContainerRef.current.scrollHeight;

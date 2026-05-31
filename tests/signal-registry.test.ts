@@ -202,22 +202,22 @@ describe("Signal Registry", () => {
   it("gradeFromComposite matches GRADE_THRESHOLDS", () => {
     // Test boundary values
     expect(gradeFromComposite(100)).toBe("A+");
-    expect(gradeFromComposite(95)).toBe("A+");
-    expect(gradeFromComposite(94)).toBe("A");
-    expect(gradeFromComposite(90)).toBe("A");
-    expect(gradeFromComposite(89)).toBe("B+");
-    expect(gradeFromComposite(85)).toBe("B+");
-    expect(gradeFromComposite(84)).toBe("B");
-    expect(gradeFromComposite(80)).toBe("B");
-    expect(gradeFromComposite(79)).toBe("C+");
-    expect(gradeFromComposite(75)).toBe("C+");
-    expect(gradeFromComposite(74)).toBe("C");
-    expect(gradeFromComposite(70)).toBe("C");
-    expect(gradeFromComposite(69)).toBe("D+");
-    expect(gradeFromComposite(65)).toBe("D+");
-    expect(gradeFromComposite(64)).toBe("D");
-    expect(gradeFromComposite(50)).toBe("D");
-    expect(gradeFromComposite(49)).toBe("F");
+    expect(gradeFromComposite(88)).toBe("A+");
+    expect(gradeFromComposite(87)).toBe("A");
+    expect(gradeFromComposite(82)).toBe("A");
+    expect(gradeFromComposite(81)).toBe("B+");
+    expect(gradeFromComposite(76)).toBe("B+");
+    expect(gradeFromComposite(75)).toBe("B");
+    expect(gradeFromComposite(70)).toBe("B");
+    expect(gradeFromComposite(69)).toBe("C+");
+    expect(gradeFromComposite(64)).toBe("C+");
+    expect(gradeFromComposite(63)).toBe("C");
+    expect(gradeFromComposite(58)).toBe("C");
+    expect(gradeFromComposite(57)).toBe("D+");
+    expect(gradeFromComposite(50)).toBe("D+");
+    expect(gradeFromComposite(49)).toBe("D");
+    expect(gradeFromComposite(40)).toBe("D");
+    expect(gradeFromComposite(39)).toBe("F");
     expect(gradeFromComposite(0)).toBe("F");
   });
 
