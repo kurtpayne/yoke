@@ -75,8 +75,8 @@ describe("Axis Score Computation", () => {
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "good", label: "B", tradeoff: null, weight: 3 },
     ];
-    // Baseline 50 + goodBonus(5)=6 + goodBonus(3)=4 = 60
-    expect(computeAxisScore(findings)).toBe(60);
+    // Baseline 50 + goodBonus(5)=10 + goodBonus(3)=6 = 66
+    expect(computeAxisScore(findings)).toBe(66);
   });
 
   it("should heavily penalize all-critical findings", () => {
@@ -84,27 +84,27 @@ describe("Axis Score Computation", () => {
       { signal: "a", axis: "security", severity: "critical", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 3 },
     ];
-    // Baseline 50 + (-15*5) + (-15*3) = 50 - 75 - 45 = -70 → clamped to 0
-    expect(computeAxisScore(findings)).toBe(0);
+    // Baseline 50 + (-3*5) + (-3*3) = 50 - 15 - 9 = 26
+    expect(computeAxisScore(findings)).toBe(26);
   });
 
   it("should balance good bonus against critical penalty", () => {
-    // One good w5 (+6), one critical w5 (-75) → 50 + 6 - 75 = -19 → 0
+    // One good w5 (+10), one critical w5 (-15) → 50 + 10 - 15 = 45
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 5 },
     ];
-    expect(computeAxisScore(findings)).toBe(0);
+    expect(computeAxisScore(findings)).toBe(45);
   });
 
   it("should handle mixed severity findings", () => {
-    // Good w3 (+4), medium w2 (-5*2=-10), info w1 (-1*1=-1) → 50 + 4 - 10 - 1 = 43
+    // Good w3 (+6), medium w2 (-1*2=-2), info w1 (0*1=0) → 50 + 6 - 2 + 0 = 54
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 3 },
       { signal: "b", axis: "security", severity: "medium", label: "B", tradeoff: null, weight: 2 },
       { signal: "c", axis: "security", severity: "info", label: "C", tradeoff: null, weight: 1 },
     ];
-    expect(computeAxisScore(findings)).toBe(43);
+    expect(computeAxisScore(findings)).toBe(54);
   });
 
   it("should produce score in 0-100 range", () => {
@@ -120,12 +120,12 @@ describe("Axis Score Computation", () => {
   });
 
   it("should scale penalties by weight", () => {
-    // high w1 → 50 + (-10*1) = 40
+    // high w1 → 50 + (-2*1) = 48
     const w1: Finding[] = [{ signal: "a", axis: "security", severity: "high", label: "A", tradeoff: null, weight: 1 }];
-    // high w3 → 50 + (-10*3) = 20
+    // high w3 → 50 + (-2*3) = 44
     const w3: Finding[] = [{ signal: "a", axis: "security", severity: "high", label: "A", tradeoff: null, weight: 3 }];
-    expect(computeAxisScore(w1)).toBe(40);
-    expect(computeAxisScore(w3)).toBe(20);
+    expect(computeAxisScore(w1)).toBe(48);
+    expect(computeAxisScore(w3)).toBe(44);
     expect(computeAxisScore(w1)).toBeGreaterThan(computeAxisScore(w3));
   });
 });

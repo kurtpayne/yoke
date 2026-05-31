@@ -108,17 +108,17 @@ const SEVERITY_SCORE = SEVERITY_SCORES;
 const BASELINE = 50;
 
 const SEVERITY_PENALTY: Record<Severity, number> = {
-  critical: -15,
-  high: -10,
-  medium: -5,
-  low: -2,
-  info: -1,
+  critical: -3,
+  high: -2,
+  medium: -1,
+  low: -0.5,
+  info: 0,
   good: 0, // good findings use goodBonus() instead
 };
 
 /** Bonus points for a "good" finding, scaled by weight. */
 function goodBonus(weight: number): number {
-  return Math.min(weight + 1, 6); // w1→+2, w2→+3, w3→+4, w4→+5, w5→+6
+  return 2 * weight; // w1→+2, w2→+4, w3→+6, w4→+8, w5→+10
 }
 
 // ─── Expected Baselines (Absence Penalties) ──────────────────────────
