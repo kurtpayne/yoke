@@ -19,7 +19,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AXIS_WEIGHTS,
-  EFFORT_MAP,
   FIX_DESC_MAP,
   GRADE_THRESHOLDS,
   NON_ACTIONABLE_SIGNALS,
@@ -763,9 +762,8 @@ function generateGradeUpPlan(data: AnalysisResult): {
 
       if (compositeDelta < 0.1) continue; // negligible impact
 
-      // Effort and fix description from signal-registry (single source of truth)
+      // Fix description from signal-registry (single source of truth)
       const signalKey = finding.signal.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-      const effort = EFFORT_MAP[signalKey] || "Varies";
       const fixDescription = FIX_DESC_MAP[signalKey] || finding.label;
 
       items.push({
@@ -775,7 +773,6 @@ function generateGradeUpPlan(data: AnalysisResult): {
         currentSeverity: finding.severity,
         weight: finding.weight,
         pointGain: compositeDelta,
-        effort,
         fixDescription,
         fixLink: getFixLink(finding, data),
       });
