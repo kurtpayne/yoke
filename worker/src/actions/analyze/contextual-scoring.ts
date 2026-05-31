@@ -2546,8 +2546,8 @@ export function calculateDomainScore(opts: {
             : ageDays > 90
               ? "medium"
               : ageDays > 30
-                ? "high"
-                : "critical";
+                ? "medium"
+                : "high";
     const label =
       ageDays > 365 * 5
         ? `Established domain (${Math.floor(ageDays / 365)}+ years)`
