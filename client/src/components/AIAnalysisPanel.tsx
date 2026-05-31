@@ -680,17 +680,17 @@ function getNextGrade(currentGrade: string): { grade: string; min: number } | nu
 }
 
 // Anchor-and-adjust scoring — mirrors worker/src/actions/analyze/contextual-scoring.ts
-const SCORING_BASELINE = 50;
+const SCORING_BASELINE = 55;
 const SEVERITY_PENALTY: Record<string, number> = {
-  critical: -15,
-  high: -10,
-  medium: -5,
-  low: -2,
-  info: -1,
+  critical: -4,
+  high: -2.5,
+  medium: -1.25,
+  low: -0.5,
+  info: 0,
   good: 0,
 };
 function goodBonus(weight: number): number {
-  return Math.min(weight + 1, 6);
+  return 2 * weight;
 }
 
 function computeAxisScore(findings: ScoreFinding[]): number {

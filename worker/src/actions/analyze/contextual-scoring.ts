@@ -98,19 +98,18 @@ export interface DomainScoreResult {
 // CrUX/PageSpeed metric resolution (converting metric values to severities)
 // and the /api/scoring transparency endpoint. NOT used for axis scoring
 // (anchor-and-adjust uses penalty/bonus directly).
-const SEVERITY_SCORE = SEVERITY_SCORES;
 
 // ─── Anchor-and-Adjust Scoring Model ─────────────────────────────────
-// Replaces the old weighted-average model. Each axis starts at BASELINE (50)
+// Replaces the old weighted-average model. Each axis starts at BASELINE (55)
 // and earns/loses points based on findings. This prevents sparse axes from
 // inflating (the old "absence of bad = high score" problem).
 
-const BASELINE = 50;
+const BASELINE = 55;
 
 const SEVERITY_PENALTY: Record<Severity, number> = {
-  critical: -3,
-  high: -2,
-  medium: -1,
+  critical: -4,
+  high: -2.5,
+  medium: -1.25,
   low: -0.5,
   info: 0,
   good: 0, // good findings use goodBonus() instead
@@ -253,28 +252,24 @@ export function gradeFromComposite(score: number): string {
 }
 
 // ─── Per-Category Hard Caps ──────────────────────────────────────────
-// Applied AFTER composite grade calculation to prevent good composites
-// from hiding critical problems.
+// Applied to the composite SCORE (not just the grade) to prevent good
+// composites from hiding critical problems. The grade is then derived
+// from the capped composite, eliminating score/grade paradoxes.
 
-const GRADE_ORDER = ["F", "D", "D+", "C", "C+", "B", "B+", "A", "A+"];
+/**
+ * Apply hard caps to the composite score based on critical/high findings
+ * and very low category scores. Returns the capped composite.
+ */
+export function applyHardCaps(composite: number, allFindings: Finding[], axisScores: Record<Axis, number>): number {
+  let capped = composite;
 
-function capGrade(current: string, max: string): string {
-  const currentIdx = GRADE_ORDER.indexOf(current);
-  const maxIdx = GRADE_ORDER.indexOf(max);
-  if (currentIdx === -1 || maxIdx === -1) return current;
-  return GRADE_ORDER[Math.min(currentIdx, maxIdx)];
-}
-
-export function applyHardCaps(grade: string, allFindings: Finding[], axisScores: Record<Axis, number>): string {
-  let capped = grade;
-
-  // Any critical finding anywhere → max grade D
+  // Any critical finding anywhere → composite capped at max D (49)
   if (allFindings.some((f) => f.severity === "critical")) {
-    capped = capGrade(capped, "D");
+    capped = Math.min(capped, 49);
   }
-  // Any high finding anywhere → max grade C+
+  // Any high finding anywhere → composite capped at max C+ (75)
   else if (allFindings.some((f) => f.severity === "high")) {
-    capped = capGrade(capped, "C+");
+    capped = Math.min(capped, 75);
   }
 
   // Very low category scores
@@ -283,10 +278,10 @@ export function applyHardCaps(grade: string, allFindings: Finding[], axisScores:
   const belowForty = scores.filter((s) => s < 40).length;
 
   if (belowThirty >= 1) {
-    capped = capGrade(capped, "B");
+    capped = Math.min(capped, 81); // max B
   }
   if (belowForty >= 2) {
-    capped = capGrade(capped, "C+");
+    capped = Math.min(capped, 75); // max C+
   }
 
   return capped;
@@ -3680,13 +3675,14 @@ export function calculateDomainScore(opts: {
   for (const axis of axes) {
     rawAxisScores[axis] = axisScores[axis].score ?? 50;
   }
-  const composite = computeComposite(rawAxisScores, archetype.detected);
-
-  let grade = gradeFromComposite(composite);
+  const rawComposite = computeComposite(rawAxisScores, archetype.detected);
 
   // ─── Hard Caps ───────────────────────────────────────────────────
-  // Per-category hard caps prevent good composites from hiding critical problems.
-  grade = applyHardCaps(grade, findings, rawAxisScores);
+  // Apply hard caps to the composite SCORE, then derive grade from capped score.
+  // This eliminates score/grade paradoxes (e.g. 75 composite mapping to B vs C+).
+  const composite = applyHardCaps(rawComposite, findings, rawAxisScores);
+
+  let grade = gradeFromComposite(composite);
 
   // ─── Breach grade cap ────────────────────────────────────────────
   // Domains with catastrophic RECENT data breaches should not earn top grades.

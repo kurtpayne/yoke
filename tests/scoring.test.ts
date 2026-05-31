@@ -66,8 +66,8 @@ describe("Severity Score Mapping", () => {
 // ─── Axis Score Computation ──────────────────────────────────────────
 
 describe("Axis Score Computation", () => {
-  it("should return baseline (50) for empty findings", () => {
-    expect(computeAxisScore([])).toBe(50);
+  it("should return baseline (55) for empty findings", () => {
+    expect(computeAxisScore([])).toBe(55);
   });
 
   it("should award bonus for all-good findings", () => {
@@ -75,8 +75,8 @@ describe("Axis Score Computation", () => {
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "good", label: "B", tradeoff: null, weight: 3 },
     ];
-    // Baseline 50 + goodBonus(5)=10 + goodBonus(3)=6 = 66
-    expect(computeAxisScore(findings)).toBe(66);
+    // Baseline 55 + goodBonus(5)=10 + goodBonus(3)=6 = 71
+    expect(computeAxisScore(findings)).toBe(71);
   });
 
   it("should heavily penalize all-critical findings", () => {
@@ -84,12 +84,12 @@ describe("Axis Score Computation", () => {
       { signal: "a", axis: "security", severity: "critical", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 3 },
     ];
-    // Baseline 50 + (-3*5) + (-3*3) = 50 - 15 - 9 = 26
-    expect(computeAxisScore(findings)).toBe(26);
+    // Baseline 55 + (-4*5) + (-4*3) = 55 - 20 - 12 = 23
+    expect(computeAxisScore(findings)).toBe(23);
   });
 
   it("should balance good bonus against critical penalty", () => {
-    // One good w5 (+10), one critical w5 (-15) → 50 + 10 - 15 = 45
+    // One good w5 (+10), one critical w5 (-20) → 55 + 10 - 20 = 45
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 5 },
       { signal: "b", axis: "security", severity: "critical", label: "B", tradeoff: null, weight: 5 },
@@ -98,13 +98,13 @@ describe("Axis Score Computation", () => {
   });
 
   it("should handle mixed severity findings", () => {
-    // Good w3 (+6), medium w2 (-1*2=-2), info w1 (0*1=0) → 50 + 6 - 2 + 0 = 54
+    // Good w3 (+6), medium w2 (-1.25*2=-2.5), info w1 (0*1=0) → 55 + 6 - 2.5 + 0 = 58.5 → 59
     const findings: Finding[] = [
       { signal: "a", axis: "security", severity: "good", label: "A", tradeoff: null, weight: 3 },
       { signal: "b", axis: "security", severity: "medium", label: "B", tradeoff: null, weight: 2 },
       { signal: "c", axis: "security", severity: "info", label: "C", tradeoff: null, weight: 1 },
     ];
-    expect(computeAxisScore(findings)).toBe(54);
+    expect(computeAxisScore(findings)).toBe(59);
   });
 
   it("should produce score in 0-100 range", () => {
@@ -120,12 +120,12 @@ describe("Axis Score Computation", () => {
   });
 
   it("should scale penalties by weight", () => {
-    // high w1 → 50 + (-2*1) = 48
+    // high w1 → 55 + (-2.5*1) = 52.5 → 53
     const w1: Finding[] = [{ signal: "a", axis: "security", severity: "high", label: "A", tradeoff: null, weight: 1 }];
-    // high w3 → 50 + (-2*3) = 44
+    // high w3 → 55 + (-2.5*3) = 47.5 → 48
     const w3: Finding[] = [{ signal: "a", axis: "security", severity: "high", label: "A", tradeoff: null, weight: 3 }];
-    expect(computeAxisScore(w1)).toBe(48);
-    expect(computeAxisScore(w3)).toBe(44);
+    expect(computeAxisScore(w1)).toBe(53);
+    expect(computeAxisScore(w3)).toBe(48);
     expect(computeAxisScore(w1)).toBeGreaterThan(computeAxisScore(w3));
   });
 });
@@ -460,42 +460,42 @@ describe("Absence Penalties", () => {
 describe("Hard Caps", () => {
   const allAxesHigh = { security: 90, speed: 85, foundations: 80, reputation: 75, discoverability: 70, email: 65 };
 
-  it("should cap grade to D when critical finding exists", () => {
+  it("should cap composite to 49 when critical finding exists", () => {
     const findings: Finding[] = [
       { signal: "ssl_grade", axis: "security", severity: "critical", label: "SSL F", tradeoff: null, weight: 5 },
     ];
-    const result = applyHardCaps("A+", findings, allAxesHigh);
-    expect(result).toBe("D");
+    const result = applyHardCaps(95, findings, allAxesHigh);
+    expect(result).toBe(49);
   });
 
-  it("should cap grade to C+ when high finding exists", () => {
+  it("should cap composite to 75 when high finding exists", () => {
     const findings: Finding[] = [
       { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
     ];
-    const result = applyHardCaps("A", findings, allAxesHigh);
-    expect(result).toBe("C+");
+    const result = applyHardCaps(90, findings, allAxesHigh);
+    expect(result).toBe(75);
   });
 
-  it("should cap to B when any category score is below 30", () => {
+  it("should cap to 81 when any category score is below 30", () => {
     const scores = { ...allAxesHigh, email: 25 };
-    const result = applyHardCaps("A+", [], scores);
-    expect(result).toBe("B");
+    const result = applyHardCaps(95, [], scores);
+    expect(result).toBe(81);
   });
 
-  it("should cap to C+ when two categories are below 40", () => {
+  it("should cap to 75 when two categories are below 40", () => {
     const scores = { ...allAxesHigh, email: 35, discoverability: 38 };
-    const result = applyHardCaps("A+", [], scores);
-    expect(result).toBe("C+");
+    const result = applyHardCaps(95, [], scores);
+    expect(result).toBe(75);
   });
 
   it("should not cap when no conditions met", () => {
-    const result = applyHardCaps("A+", [], allAxesHigh);
-    expect(result).toBe("A+");
+    const result = applyHardCaps(95, [], allAxesHigh);
+    expect(result).toBe(95);
   });
 
-  it("should not promote grade (only cap downward)", () => {
-    const result = applyHardCaps("C", [], allAxesHigh);
-    expect(result).toBe("C");
+  it("should not promote composite (only cap downward)", () => {
+    const result = applyHardCaps(60, [], allAxesHigh);
+    expect(result).toBe(60);
   });
 
   it("critical cap takes precedence over high cap", () => {
@@ -503,8 +503,8 @@ describe("Hard Caps", () => {
       { signal: "ssl_grade", axis: "security", severity: "critical", label: "SSL F", tradeoff: null, weight: 5 },
       { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
     ];
-    const result = applyHardCaps("A+", findings, allAxesHigh);
-    expect(result).toBe("D");
+    const result = applyHardCaps(95, findings, allAxesHigh);
+    expect(result).toBe(49);
   });
 
   it("combines severity cap with score cap (takes lowest)", () => {
@@ -512,8 +512,8 @@ describe("Hard Caps", () => {
     const findings: Finding[] = [
       { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
     ];
-    // high → C+, score<30 → B, combined should take C+ (lower)
-    const result = applyHardCaps("A+", findings, scores);
-    expect(result).toBe("C+");
+    // high → 75, score<30 → 81, combined should take 75 (lower)
+    const result = applyHardCaps(95, findings, scores);
+    expect(result).toBe(75);
   });
 });
