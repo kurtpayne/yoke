@@ -136,7 +136,7 @@ function StreamingProgress({ progress }: { progress: ProgressState }) {
       {/* Progress bar */}
       <div className="w-full h-1.5 rounded-full" style={{ background: "var(--border)" }}>
         <div
-          className="h-full rounded-full transition-all"
+          className={`h-full rounded-full transition-all${pct >= 100 ? " animate-pulse" : ""}`}
           style={{ width: `${pct}%`, background: "var(--accent)", transition: "width 0.3s ease" }}
         />
       </div>
@@ -265,12 +265,15 @@ function useStreamingAnalysis() {
               if (d.label && d.key) {
                 checks.set(d.key, { label: d.label, done: true, error: !!d.error });
               }
+              const completed = d.completed ?? prev.completed;
+              const total = d.total ?? prev.total;
+              const allDone = total > 0 && completed >= total;
               return {
                 ...prev,
                 checks,
-                completed: d.completed ?? prev.completed,
-                total: d.total ?? prev.total,
-                label: `Analyzing… ${d.completed ?? prev.completed} of ${d.total ?? prev.total} checks complete`,
+                completed,
+                total,
+                label: allDone ? "Calculating score…" : `Analyzing… ${completed} of ${total} checks complete`,
               };
             });
             break;

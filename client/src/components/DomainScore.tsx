@@ -35,15 +35,25 @@ const ARCHETYPE_LABELS: Record<ArchetypeName, string> = {
   general: "General",
 };
 
-const WEIGHT_SUMMARIES: Record<ArchetypeName, string> = {
-  commerce: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
-  content: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
-  application: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
-  corporate: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
-  infrastructure: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
-  institutional: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
-  general: "Security & Infrastructure weighted highest, then Trust, Performance, Visibility",
-};
+// Dynamic weight summary — generated from current weights.
+function weightSummary(weightsTable: Record<Axis, number>): string {
+  const sorted = [...AXES].sort((a, b) => weightsTable[b] - weightsTable[a]);
+  const parts: string[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    const weight = weightsTable[sorted[i]];
+    const group = [sorted[i]];
+    while (i + 1 < sorted.length && weightsTable[sorted[i + 1]] === weight) {
+      i++;
+      group.push(sorted[i]);
+    }
+    const pct = Math.round(weight * 100);
+    const names = group.map((a) => AXIS_LABELS[a]).join(" & ");
+    parts.push(group.length > 1 ? `${names} (${pct}% each)` : `${names} (${pct}%)`);
+    i++;
+  }
+  return `${parts[0]} weighted highest, then ${parts.slice(1).join(", ")}`;
+}
 
 // Fixed axis weights — all archetypes use the same weights now.
 // SYNC: must match server AXIS_WEIGHTS in contextual-scoring.ts
@@ -304,26 +314,34 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
         {/* Axis labels */}
         {AXES.map((axis, i) => {
           const angle = (2 * Math.PI * i) / AXES.length;
-          const labelR = RADIUS + 18;
+          const labelR = RADIUS + 20;
           const [x, y] = polarToCartesian(angle, labelR);
           const score = axes[axis].score;
           const notMeasured = axes[axis].not_measured || score == null;
           const isHovered = hoveredAxis === axis;
 
+          // Position-aware text anchoring and offsets
+          // 0=top, 1=top-right, 2=bottom-right, 3=bottom, 4=bottom-left, 5=top-left
+          const anchor = i === 0 || i === 3 ? "middle" : i === 1 || i === 2 ? "start" : "end";
+          const labelDy = i === 0 ? -5 : i === 3 ? 1 : -5;
+          const scoreDy = i === 0 ? 7 : i === 3 ? 13 : 7;
+
           return (
             <g key={axis}>
               {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG text labels with hover behavior */}
               <text
-                textAnchor="middle"
+                x={x}
+                y={y + labelDy}
+                textAnchor={anchor}
                 dominantBaseline="central"
                 style={{
                   fontFamily: "var(--font-ui)",
-                  fontSize: "10px",
+                  fontSize: "9px",
                   fontWeight: isHovered ? 600 : 500,
                   fill: notMeasured ? "var(--dim)" : isHovered ? "var(--accent)" : "var(--dim)",
                   cursor: "default",
                   transition: "fill 0.15s",
-                  opacity: notMeasured ? 0.5 : 1,
+                  opacity: notMeasured ? 0.5 : 0.8,
                 }}
                 onMouseEnter={() => setHoveredAxis(axis)}
                 onMouseLeave={() => setHoveredAxis(null)}
@@ -334,8 +352,8 @@ export function RadarPlot({ axes, archetype, weightsTable }: RadarPlotProps) {
               {/* biome-ignore lint/a11y/noStaticElementInteractions: SVG text labels with hover behavior */}
               <text
                 x={x}
-                y={y + 12}
-                textAnchor="middle"
+                y={y + scoreDy}
+                textAnchor={anchor}
                 dominantBaseline="central"
                 style={{
                   fontFamily: "var(--font-mono)",
@@ -525,7 +543,7 @@ export function DomainScore({ data }: { data: AnalysisResult }) {
 
             {/* Weight summary */}
             <p style={{ fontFamily: "var(--font-ui)", fontSize: "12px", color: "var(--dim)", lineHeight: "18px" }}>
-              {WEIGHT_SUMMARIES[activeArchetype]}
+              {weightSummary(weightsTable)}
             </p>
 
             {/* Axis breakdown bars */}
