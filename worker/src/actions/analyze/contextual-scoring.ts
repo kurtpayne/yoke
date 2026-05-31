@@ -833,6 +833,195 @@ export function calculateDomainScore(opts: {
         });
       }
     }
+
+    // ── SPF Strictness ──────────────────────────────────────────────
+    const qualifier = opts.emailAuth.spf.all_qualifier;
+    if (qualifier) {
+      const q = qualifier.charAt(0);
+      if (q === "-") {
+        findings.push({
+          signal: "spf_strictness",
+          axis: "email",
+          severity: "good",
+          label: "SPF hardfail (-all) — strongest enforcement",
+          tradeoff: null,
+          weight: 2,
+        });
+      } else if (q === "~") {
+        // ~all (softfail) is the dominant convention — neutral, no penalty
+        findings.push({
+          signal: "spf_strictness",
+          axis: "email",
+          severity: "info",
+          label: "SPF softfail (~all) — acceptable but weaker than hardfail",
+          tradeoff: "Consider switching to -all (hardfail) if all senders are known.",
+          weight: 2,
+        });
+      } else if (q === "?") {
+        findings.push({
+          signal: "spf_strictness",
+          axis: "email",
+          severity: "medium",
+          label: "SPF neutral (?all) — provides no protection",
+          tradeoff: "Switch to ~all or -all for meaningful spoofing protection.",
+          weight: 2,
+        });
+      } else if (q === "+") {
+        findings.push({
+          signal: "spf_strictness",
+          axis: "email",
+          severity: "high",
+          label: "SPF pass-all (+all) — authorizes all senders, actively dangerous",
+          tradeoff: "Remove +all immediately and replace with ~all or -all.",
+          weight: 2,
+        });
+      }
+    }
+
+    // ── SPF Multiple Records ────────────────────────────────────────
+    const spfRecordCount = opts.dnsRecords.filter(
+      (r) => r.type === "TXT" && r.data.replace(/^"|"$/g, "").startsWith("v=spf1"),
+    ).length;
+    if (spfRecordCount > 1) {
+      findings.push({
+        signal: "spf_multiple_records",
+        axis: "email",
+        severity: "high",
+        label: `${spfRecordCount} SPF records — RFC violation, causes PermError`,
+        tradeoff: "Merge all SPF records into a single TXT record.",
+        weight: 3,
+      });
+    }
+
+    // ── SPF Lookup Count ────────────────────────────────────────────
+    if (opts.emailAuth.spf.found && opts.emailAuth.spf.mechanisms.length > 0) {
+      // Count DNS-querying mechanisms: include, a, mx, ptr, exists, redirect
+      const lookupMechs = opts.emailAuth.spf.mechanisms.filter((m) =>
+        /^(include:|a:|a$|mx:|mx$|ptr:|ptr$|exists:|redirect=)/i.test(m),
+      );
+      const lookupCount = lookupMechs.length;
+      if (lookupCount > 10) {
+        findings.push({
+          signal: "spf_lookup_count",
+          axis: "email",
+          severity: "high",
+          label: `SPF exceeds 10-lookup limit (${lookupCount} mechanisms) — SPF is broken`,
+          tradeoff: "Flatten SPF record or reduce includes. Use an SPF flattening service.",
+          weight: 2,
+        });
+      } else if (lookupCount === 10) {
+        findings.push({
+          signal: "spf_lookup_count",
+          axis: "email",
+          severity: "low",
+          label: "SPF at exact 10-lookup limit — any addition will break it",
+          tradeoff: "Consider SPF flattening to create headroom.",
+          weight: 2,
+        });
+      } else if (lookupCount >= 8) {
+        findings.push({
+          signal: "spf_lookup_count",
+          axis: "email",
+          severity: "info",
+          label: `SPF near lookup limit (${lookupCount}/10 mechanisms)`,
+          tradeoff: null,
+          weight: 2,
+        });
+      } else if (lookupCount >= 1) {
+        findings.push({
+          signal: "spf_lookup_count",
+          axis: "email",
+          severity: "good",
+          label: `SPF well within lookup limit (${lookupCount}/10 mechanisms)`,
+          tradeoff: null,
+          weight: 2,
+        });
+      }
+    }
+
+    // ── DMARC Reporting (rua=) ──────────────────────────────────────
+    if (opts.emailAuth.dmarc.found) {
+      if (opts.emailAuth.dmarc.rua) {
+        findings.push({
+          signal: "dmarc_rua",
+          axis: "email",
+          severity: "good",
+          label: "DMARC aggregate reporting (rua) configured",
+          tradeoff: null,
+          weight: 2,
+        });
+      } else {
+        findings.push({
+          signal: "dmarc_rua",
+          axis: "email",
+          severity: "medium",
+          label: "DMARC without reporting — no visibility into spoofing attempts",
+          tradeoff: "Add rua=mailto:dmarc-reports@yourdomain.com to your DMARC record.",
+          weight: 2,
+        });
+      }
+    }
+
+    // ── DMARC Subdomain Policy (sp=) ────────────────────────────────
+    if (opts.emailAuth.dmarc.found && opts.emailAuth.dmarc.subdomain_policy) {
+      const sp = opts.emailAuth.dmarc.subdomain_policy;
+      if (sp === "reject") {
+        findings.push({
+          signal: "dmarc_subdomain_policy",
+          axis: "email",
+          severity: "good",
+          label: "DMARC subdomain policy: reject — subdomains protected",
+          tradeoff: null,
+          weight: 1,
+        });
+      } else if (sp === "quarantine") {
+        findings.push({
+          signal: "dmarc_subdomain_policy",
+          axis: "email",
+          severity: "info",
+          label: "DMARC subdomain policy: quarantine",
+          tradeoff: null,
+          weight: 1,
+        });
+      }
+      // sp=none → no finding (don't penalize, inheriting parent is standard)
+    }
+
+    // ── DKIM Discovered ─────────────────────────────────────────────
+    const dkimCount = opts.emailAuth.dkim_selectors_found.length;
+    if (dkimCount > 0) {
+      findings.push({
+        signal: "dkim_discovered",
+        axis: "email",
+        severity: "good",
+        label: `DKIM verified (${dkimCount} selector${dkimCount !== 1 ? "s" : ""} found)`,
+        tradeoff: null,
+        weight: 2,
+      });
+    } else if (opts.emailAuth.spf.found || opts.emailAuth.dmarc.found) {
+      // Only penalize DKIM absence if domain has other email auth (indicates it sends email)
+      // Don't penalize hard — selector enumeration has inherent false negatives
+      findings.push({
+        signal: "dkim_discovered",
+        axis: "email",
+        severity: "info",
+        label: "No DKIM selectors discovered (may use non-standard selectors)",
+        tradeoff: "Configure DKIM signing via your email provider.",
+        weight: 2,
+      });
+    }
+
+    // ── TLS-RPT ─────────────────────────────────────────────────────
+    if (opts.emailAuth.tls_rpt?.found) {
+      findings.push({
+        signal: "tls_rpt",
+        axis: "email",
+        severity: "good",
+        label: "TLS-RPT configured — TLS delivery failure reporting enabled",
+        tradeoff: null,
+        weight: 1,
+      });
+    }
   }
 
   // WAF detection
@@ -1388,7 +1577,7 @@ export function calculateDomainScore(opts: {
         severity: "good",
         label: "MTA-STS enforced — email transport protected from downgrade attacks",
         tradeoff: null,
-        weight: 1,
+        weight: 2,
       });
     } else if (mta.policy_found && mta.mode === "testing") {
       findings.push({
@@ -1397,7 +1586,7 @@ export function calculateDomainScore(opts: {
         severity: "info",
         label: "MTA-STS in testing mode",
         tradeoff: null,
-        weight: 1,
+        weight: 2,
       });
     }
   }
@@ -2258,15 +2447,37 @@ export function calculateDomainScore(opts: {
 
   // MX records
   const mxCount = dns.filter((r) => r.type === "MX").length;
-  if (mxCount > 0) {
+  if (mxCount >= 2) {
     findings.push({
       signal: "mx_redundancy",
       axis: "email",
-      severity: mxCount >= 2 ? "good" : "info",
-      label: `${mxCount} MX record${mxCount !== 1 ? "s" : ""}`,
+      severity: "good",
+      label: `${mxCount} MX records (redundant email delivery)`,
       tradeoff: null,
       weight: 2,
     });
+  } else if (mxCount === 1) {
+    findings.push({
+      signal: "mx_redundancy",
+      axis: "email",
+      severity: "info",
+      label: "1 MX record (no redundancy)",
+      tradeoff: null,
+      weight: 2,
+    });
+  } else {
+    // No MX records — only penalize if domain appears to send email (has SPF or DMARC)
+    const hasEmailAuth = opts.emailAuth?.spf?.found || opts.emailAuth?.dmarc?.found;
+    if (hasEmailAuth) {
+      findings.push({
+        signal: "mx_redundancy",
+        axis: "email",
+        severity: "medium",
+        label: "No MX records despite having email authentication — relies on A record fallback",
+        tradeoff: "Add MX records pointing to your mail server.",
+        weight: 2,
+      });
+    }
   }
 
   // IPv6 — informational only, IPv4-only sites are fully reachable
@@ -2830,13 +3041,16 @@ export function calculateDomainScore(opts: {
 
   // ─── Phase 3: BIMI Record (email brand identity) ────────────────
   if (opts.emailAuth?.bimi?.found) {
+    const hasVmc = !!opts.emailAuth.bimi.authority_url;
     findings.push({
       signal: "bimi_record",
       axis: "email",
       severity: "good",
-      label: "BIMI record present — email brand verification",
+      label: hasVmc
+        ? "BIMI record with VMC — verified brand logo in email clients"
+        : "BIMI record present — email brand verification",
       tradeoff: null,
-      weight: 1,
+      weight: 2,
     });
   }
 

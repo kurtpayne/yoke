@@ -527,7 +527,7 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     canBeNonGood: true,
     effort: "~30 min — DNS + well-known file",
     fixDescription: "Configure MTA-STS policy",
-    weightRange: [1, 1],
+    weightRange: [2, 2],
     promptGuidance:
       "MTA-STS enforces TLS for email transport. mode=enforce is strong. mode=testing is a good step. Bonus-only.",
   },
@@ -1129,8 +1129,82 @@ export const SIGNAL_REGISTRY: Record<string, SignalDef> = {
     label: "BIMI Record",
     actionable: false,
     canBeNonGood: false,
+    weightRange: [2, 2],
+    promptGuidance:
+      "Requires DMARC enforcement. Indicates advanced email maturity. VMC (Verified Mark Certificate) is even stronger. Absence is neutral — reward-only.",
+  },
+  spf_strictness: {
+    axis: "email",
+    label: "SPF Strictness",
+    actionable: true,
+    canBeNonGood: true,
+    effort: "~5 min — update SPF record to use -all",
+    fixDescription: "Use -all (hard fail) in SPF record",
+    weightRange: [2, 2],
+    promptGuidance:
+      "SPF -all rejects unauthorized senders. ~all soft-fails (marks but delivers). ?all/+all provide no protection. +all is actively dangerous.",
+  },
+  spf_multiple_records: {
+    axis: "email",
+    label: "Multiple SPF Records",
+    actionable: true,
+    canBeNonGood: true,
+    effort: "~10 min — merge SPF records into one TXT record",
+    fixDescription: "Merge duplicate SPF records into a single TXT record",
+    weightRange: [3, 3],
+    promptGuidance:
+      "RFC 7208 §3.2: domain MUST NOT have >1 SPF record. Multiple = PermError = all SPF checks fail. Shockingly common misconfiguration.",
+  },
+  spf_lookup_count: {
+    axis: "email",
+    label: "SPF Lookup Count",
+    actionable: true,
+    canBeNonGood: true,
+    effort: "~30 min — flatten SPF record or reduce includes",
+    fixDescription: "Reduce SPF DNS lookups to stay under RFC limit of 10",
+    weightRange: [2, 2],
+    promptGuidance:
+      "RFC 7208 limits SPF to 10 DNS lookups (include, a, mx, ptr, exists, redirect). Exceeding causes PermError — SPF fails silently. Common with many SaaS senders.",
+  },
+  dmarc_rua: {
+    axis: "email",
+    label: "DMARC Reporting",
+    actionable: true,
+    canBeNonGood: true,
+    effort: "~5 min — add rua= to DMARC record",
+    fixDescription: "Add aggregate reporting (rua) to DMARC record",
+    weightRange: [2, 2],
+    promptGuidance:
+      "DMARC rua= enables aggregate reports on authentication failures. Without it, domain owners have zero visibility into spoofing attempts. Essential operational signal.",
+  },
+  dmarc_subdomain_policy: {
+    axis: "email",
+    label: "DMARC Subdomain Policy",
+    actionable: false,
+    canBeNonGood: false,
     weightRange: [1, 1],
-    promptGuidance: "Requires DMARC enforcement. Indicates advanced email maturity. Absence is neutral — reward-only.",
+    promptGuidance:
+      "DMARC sp= sets explicit subdomain policy. sp=reject closes subdomain spoofing gap. Absence inherits parent policy — usually fine. Bonus-only.",
+  },
+  dkim_discovered: {
+    axis: "email",
+    label: "DKIM Discovered",
+    actionable: true,
+    canBeNonGood: true,
+    effort: "~15 min — configure DKIM via email provider",
+    fixDescription: "Configure DKIM signing for your domain",
+    weightRange: [2, 2],
+    promptGuidance:
+      "Probes common DKIM selectors (google, selector1, selector2, k1, s1, etc.). Found = domain signs email. Not found may be false negative — custom selectors aren't probed.",
+  },
+  tls_rpt: {
+    axis: "email",
+    label: "TLS-RPT",
+    actionable: false,
+    canBeNonGood: false,
+    weightRange: [1, 1],
+    promptGuidance:
+      "TLS Reporting (RFC 8460) enables reports on TLS delivery failures. Companion to MTA-STS. Adoption <1%. Bonus-only — advanced signal.",
   },
   ads_txt: {
     axis: "reputation",
