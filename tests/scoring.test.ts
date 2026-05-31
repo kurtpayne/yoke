@@ -455,65 +455,35 @@ describe("Absence Penalties", () => {
   });
 });
 
-// ─── Hard Caps ───────────────────────────────────────────────────────
+// ─── Hard Caps (removed — now pass-through) ─────────────────────────
 
-describe("Hard Caps", () => {
+describe("Hard Caps (pass-through)", () => {
   const allAxesHigh = { security: 90, speed: 85, foundations: 80, reputation: 75, discoverability: 70, email: 65 };
 
-  it("should cap composite to 49 when critical finding exists", () => {
+  it("should pass through composite unchanged (caps removed)", () => {
     const findings: Finding[] = [
       { signal: "ssl_grade", axis: "security", severity: "critical", label: "SSL F", tradeoff: null, weight: 5 },
     ];
     const result = applyHardCaps(95, findings, allAxesHigh);
-    expect(result).toBe(49);
+    expect(result).toBe(95);
   });
 
-  it("should cap composite to 75 when high finding exists", () => {
+  it("should pass through with high finding (caps removed)", () => {
     const findings: Finding[] = [
       { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
     ];
     const result = applyHardCaps(90, findings, allAxesHigh);
-    expect(result).toBe(75);
+    expect(result).toBe(90);
   });
 
-  it("should cap to 81 when any category score is below 30", () => {
+  it("should pass through with low category scores (caps removed)", () => {
     const scores = { ...allAxesHigh, email: 25 };
     const result = applyHardCaps(95, [], scores);
-    expect(result).toBe(81);
-  });
-
-  it("should cap to 75 when two categories are below 40", () => {
-    const scores = { ...allAxesHigh, email: 35, discoverability: 38 };
-    const result = applyHardCaps(95, [], scores);
-    expect(result).toBe(75);
-  });
-
-  it("should not cap when no conditions met", () => {
-    const result = applyHardCaps(95, [], allAxesHigh);
     expect(result).toBe(95);
   });
 
-  it("should not promote composite (only cap downward)", () => {
+  it("should pass through unchanged regardless of inputs", () => {
     const result = applyHardCaps(60, [], allAxesHigh);
     expect(result).toBe(60);
-  });
-
-  it("critical cap takes precedence over high cap", () => {
-    const findings: Finding[] = [
-      { signal: "ssl_grade", axis: "security", severity: "critical", label: "SSL F", tradeoff: null, weight: 5 },
-      { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
-    ];
-    const result = applyHardCaps(95, findings, allAxesHigh);
-    expect(result).toBe(49);
-  });
-
-  it("combines severity cap with score cap (takes lowest)", () => {
-    const scores = { ...allAxesHigh, email: 25 };
-    const findings: Finding[] = [
-      { signal: "hsts_missing", axis: "security", severity: "high", label: "No HSTS", tradeoff: null, weight: 3 },
-    ];
-    // high → 75, score<30 → 81, combined should take 75 (lower)
-    const result = applyHardCaps(95, findings, scores);
-    expect(result).toBe(75);
   });
 });

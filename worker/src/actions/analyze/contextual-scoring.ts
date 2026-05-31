@@ -252,39 +252,15 @@ export function gradeFromComposite(score: number): string {
 }
 
 // ─── Per-Category Hard Caps ──────────────────────────────────────────
-// Applied to the composite SCORE (not just the grade) to prevent good
-// composites from hiding critical problems. The grade is then derived
-// from the capped composite, eliminating score/grade paradoxes.
+// Hard caps removed — severity penalties + geometric mean provide sufficient
+// downward pressure. Caps created confusing score/grade paradoxes and
+// triple-penalized findings (per-axis penalty + geometric mean drag + cap).
+// The breach grade cap below (in calculateDomainScore) is retained as a
+// separate, specific mechanism for catastrophic data breaches.
 
-/**
- * Apply hard caps to the composite score based on critical/high findings
- * and very low category scores. Returns the capped composite.
- */
-export function applyHardCaps(composite: number, allFindings: Finding[], axisScores: Record<Axis, number>): number {
-  let capped = composite;
-
-  // Any critical finding anywhere → composite capped at max D (49)
-  if (allFindings.some((f) => f.severity === "critical")) {
-    capped = Math.min(capped, 49);
-  }
-  // Any high finding anywhere → composite capped at max C+ (75)
-  else if (allFindings.some((f) => f.severity === "high")) {
-    capped = Math.min(capped, 75);
-  }
-
-  // Very low category scores
-  const scores = Object.values(axisScores);
-  const belowThirty = scores.filter((s) => s < 30).length;
-  const belowForty = scores.filter((s) => s < 40).length;
-
-  if (belowThirty >= 1) {
-    capped = Math.min(capped, 81); // max B
-  }
-  if (belowForty >= 2) {
-    capped = Math.min(capped, 75); // max C+
-  }
-
-  return capped;
+/** @deprecated Hard caps removed. Kept as pass-through for API compatibility. */
+export function applyHardCaps(composite: number, _allFindings: Finding[], _axisScores: Record<Axis, number>): number {
+  return composite;
 }
 
 export function contextualSeverity(
