@@ -843,8 +843,8 @@ export interface StructuredDataValidationResult {
 
 export interface AxisDelta {
   axis: Axis;
-  score1: number;
-  score2: number;
+  score1: number | null;
+  score2: number | null;
   delta: number;
   absDelta: number;
 }

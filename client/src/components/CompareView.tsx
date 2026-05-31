@@ -61,9 +61,10 @@ function buildCompareResult(d1: AnalysisResult, d2: AnalysisResult): CompareResu
   const score2 = d2.domain_score as DomainScoreData | undefined;
 
   const axes: CompareResult["comparison"]["axes"] = AXES.map((axis) => {
-    const s1 = score1?.axes?.[axis]?.score ?? 0;
-    const s2 = score2?.axes?.[axis]?.score ?? 0;
-    return { axis, score1: s1, score2: s2, delta: s1 - s2, absDelta: Math.abs(s1 - s2) };
+    const s1 = score1?.axes?.[axis]?.score ?? null;
+    const s2 = score2?.axes?.[axis]?.score ?? null;
+    const delta = (s1 ?? 0) - (s2 ?? 0);
+    return { axis, score1: s1, score2: s2, delta, absDelta: Math.abs(delta) };
   });
 
   return {
@@ -1361,7 +1362,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                         flexShrink: 0,
                       }}
                     >
-                      {ax.score1}
+                      {ax.score1 ?? "N/A"}
                     </span>
                     {/* Bars */}
                     <div className="flex-1 relative" style={{ height: 8, borderRadius: 4 }}>
@@ -1370,7 +1371,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                         className="absolute top-0 left-0 rounded"
                         style={{
                           height: 4,
-                          width: `${ax.score1}%`,
+                          width: `${ax.score1 ?? 0}%`,
                           background: "var(--accent)",
                           transition: "width 0.6s ease-out",
                         }}
@@ -1379,7 +1380,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                         className="absolute bottom-0 left-0 rounded"
                         style={{
                           height: 4,
-                          width: `${ax.score2}%`,
+                          width: `${ax.score2 ?? 0}%`,
                           background: "#f97316",
                           transition: "width 0.6s ease-out",
                         }}
@@ -1397,7 +1398,7 @@ export function CompareView({ initialDomain }: { initialDomain?: string }) {
                         flexShrink: 0,
                       }}
                     >
-                      {ax.score2}
+                      {ax.score2 ?? "N/A"}
                     </span>
                   </div>
                 );

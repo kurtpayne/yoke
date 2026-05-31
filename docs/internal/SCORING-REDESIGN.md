@@ -1,13 +1,13 @@
-# Scoring Redesign v2 — Pre-Launch
+# Scoring Redesign v2 — Final
 
 **Decision date:** 2026-05-30
-**Target:** Ship before June 23 launch
+**Status:** Implemented
 
 ## Summary
 
-Replace the current 5-axis weighted-average model with a 6-category anchor-and-adjust model using weighted geometric mean for the composite grade.
+Replaced the 5-axis weighted-average model with a 6-category anchor-and-adjust model using weighted geometric mean for the composite grade.
 
-## Categories (was: Axes)
+## Categories
 
 | Old | New | Signals | Weight |
 |-----|-----|---------|--------|
@@ -16,7 +16,7 @@ Replace the current 5-axis weighted-average model with a 6-category anchor-and-a
 | Infrastructure | **Foundations** | 18 | 0.18 |
 | Trust → split | **Reputation** | ~20 | 0.15 |
 | Visibility | **Discoverability** | ~18 | 0.13 |
-| *(new)* | **Email** | 8 | 0.12 |
+| *(new)* | **Email** | 15 | 0.12 |
 
 ### Signal Assignment Rules
 
@@ -56,103 +56,135 @@ Replace the current 5-axis weighted-average model with a 6-category anchor-and-a
 
 ## Scoring Model: Anchor-and-Adjust
 
-Replace `computeAxisScore` (weighted average of findings) with:
+### Baseline
 
-```
-category_score = clamp(BASELINE + positives - negatives - absences, 0, 100)
-```
+**BASELINE = 55** — neutral starting point. Raised from initial proposal of 50 to prevent excessive D grades on sparse axes.
 
-- **BASELINE = 50** — neutral starting point
-- **Positives:** Each `good` finding adds `GOOD_BONUS[weight]` points
-- **Negatives:** Each non-good finding subtracts `SEVERITY_PENALTY[severity] × weight_factor`
-- **Absences:** Each expected-but-missing signal subtracts a mild penalty
+### Severity Penalties
 
-### Severity Penalty Scale
+Each non-good finding subtracts `penalty × max(weight, 1)`:
 
 | Severity | Penalty per weight unit |
 |----------|----------------------|
-| critical | -15 |
-| high | -10 |
-| medium | -5 |
-| low | -2 |
-| info | -1 |
+| critical | -4 |
+| high | -2.5 |
+| medium | -1.25 |
+| low | -0.5 |
+| info | 0 |
 
-### Good Bonus Scale
+These values are significantly lower than the original proposal (which had critical=-15, high=-10, etc.) to prevent single findings from having outsized impact.
+
+### Good Bonus
+
+```
+goodBonus(weight) = 2 × weight
+```
 
 | Weight | Bonus |
 |--------|-------|
 | 1 | +2 |
-| 2 | +3 |
-| 3 | +4 |
-| 4 | +5 |
-| 5 | +6 |
+| 2 | +4 |
+| 3 | +6 |
+| 4 | +8 |
+| 5 | +10 |
 
-### Expected Baselines (absence penalties)
+No cap — bonus scales linearly with weight. Original proposal had a fixed table (w1→+2 through w5→+6); simplified to `2×weight` for clarity.
 
-Each category defines signals that a competent site should have. If the signal is completely absent from findings (never fired), a mild penalty applies.
+### Formula
 
-**Security:**
-- HSTS (-3 if absent)
-- HTTPS redirect (-3 if absent)
-- TLS 1.2+ (-2 if absent, only when SSL data exists)
+```
+category_score = clamp(55 + good_bonuses - severity_penalties - absence_penalties, 0, 100)
+```
 
-**Email:**
-- SPF (-4 if absent)
-- DMARC (-3 if absent)
+### Expected Baselines (Absence Penalties)
 
-**Speed:**
-- No absences — CWV signals always fire if PageSpeed runs. If PageSpeed is unavailable, that has its own signal.
+Each category defines signals a competent site should produce. If none of the listed signals fired, a mild penalty applies.
 
-**Foundations:**
-- CDN (-4 if absent)
-- HTTP/2+ (-3 if absent, only when HTTP protocol detected)
-- IPv6 (-2 if absent)
-
-**Discoverability:**
-- Title tag (-2 if absent)
-- Meta description (-1 if absent)
-
-**Reputation:**
-- Privacy/terms pages (-2 if absent)
+| Category | Signal | Penalty | Condition |
+|----------|--------|---------|-----------|
+| Security | hsts | -3 | requiresHttp |
+| Security | http_to_https_redirect | -3 | requiresHttp |
+| Email | email_auth | -4 | — |
+| Email | dmarc_reject | -3 | — |
+| Foundations | cdn | -4 | requiresHttp |
+| Foundations | http2 (or http3) | -3 | requiresHttp |
+| Foundations | ipv6 | -2 | — |
+| Reputation | organizational_identity | -2 | requiresHttp |
+| Speed | *(none)* | — | CWV signals always fire if PageSpeed runs |
+| Discoverability | *(none)* | — | Handled by signal-level findings |
 
 ### Absence Detection
 
-An "absent" signal means no finding was emitted for that signal key at all. This is different from a finding with severity `info` — `info` means "we checked and it's neutral." Absence means "we expected this signal and it didn't fire."
+An "absent" signal means no finding was emitted for that signal key at all. Different from `info` severity ("we checked and it's neutral"). Absence means "we expected this signal and it didn't fire."
 
-Implementation: after all findings are collected for a category, check whether expected baseline signal keys appear. If not, apply the absence penalty directly to the score.
+After all findings are collected for a category, check whether expected baseline signal keys (or their `alsoSatisfiedBy` alternatives) appear. If not, and the relevant checks ran (HTTP/SSL available), apply the absence penalty.
+
+## "Not Assessed" Threshold
+
+Categories with **fewer than 3 scoreable findings** get `score: null, not_measured: true` instead of a numeric score.
+
+**Excluded from count:** Meta-signals (`http_blocked_*`, `site_unreachable_*`) that indicate checks couldn't run.
+
+**Effect on composite:** "Not Assessed" axes are excluded from the geometric mean, and weights are re-normalized over assessed axes only.
+
+**Client display:** Shows "N/A" badge and "Not Assessed" text instead of a numeric score.
 
 ## Composite: Weighted Geometric Mean
 
-Replace arithmetic weighted mean with:
-
 ```ts
-function computeComposite(scores: Record<Category, number>): number {
-  // Floor at 1 to prevent geometric mean collapse
+function computeComposite(axisScores: Record<Axis, number>): number {
+  // Only include assessed axes (score != null)
+  // Re-normalize weights so they sum to 1.0 over assessed axes
+  const totalWeight = assessedAxes.reduce((sum, a) => sum + AXIS_WEIGHTS[a], 0);
   let logSum = 0;
-  for (const cat of CATEGORIES) {
-    const s = Math.max(scores[cat], 1);
-    logSum += WEIGHTS[cat] * Math.log(s);
+  for (const axis of assessedAxes) {
+    const s = Math.max(axisScores[axis], 1); // floor at 1 to prevent log(0)
+    const normalizedWeight = AXIS_WEIGHTS[axis] / totalWeight;
+    logSum += normalizedWeight * Math.log(s);
   }
   return Math.round(Math.exp(logSum));
 }
 ```
 
-Weights sum to 1.0.
+Weights sum to 1.0 (after re-normalization over assessed axes).
 
-## Per-Category Hard Caps
+## Hard Caps — Removed
 
-Applied to the composite grade AFTER geometric mean calculation:
+The original proposal included per-category hard caps (critical→D max, high→C+ max, etc.). These were **removed** because:
+
+1. Severity penalties + geometric mean already provide sufficient downward pressure
+2. Caps created confusing score/grade paradoxes
+3. Caps triple-penalized findings (per-axis penalty + geometric mean drag + cap)
+
+The `applyHardCaps` function is kept as a pass-through for API compatibility.
+
+### Breach Grade Cap — Retained
+
+A separate, specific mechanism for catastrophic data breaches:
 
 | Condition | Max Grade |
 |-----------|-----------|
-| Any category has a `critical` finding | D |
-| Any category has a `high` finding | C+ |
-| Any category score < 30 | B |
-| Two+ categories score < 40 | C+ |
+| Recent breach with >500M weighted pwned records | B |
+| Recent breach with >100M weighted pwned records | B |
+
+Breaches >3 years old no longer trigger the cap (time decay).
+
+## Domain Age / NRD Severity
+
+Updated from original proposal:
+
+| Age | Severity |
+|-----|----------|
+| >5 years | good |
+| >3 years | info |
+| >1 year | low |
+| 91-365 days | medium |
+| 31-90 days | medium |
+| ≤30 days | **high** |
+
+Key change from original: NRD ≤30d is **high** (not critical), and 31-90d is **medium** (not high). Prevents newly registered domains from being unfairly crushed.
 
 ## Grade Thresholds
-
-To be calibrated empirically after implementing anchor-and-adjust + geometric mean. Initial proposal (adjust after running across reference domains):
 
 | Grade | Threshold |
 |-------|-----------|
@@ -166,52 +198,33 @@ To be calibrated empirically after implementing anchor-and-adjust + geometric me
 | D | ≥ 40 |
 | F | < 40 |
 
-These thresholds WILL change after calibration.
+## Grade-Up Recommendations
+
+- **Priority sort:** Items sorted by `pointGain` (impact) within each category group
+- **Category clustering:** Items grouped by category with color-coded headers showing point totals
+- **No effort assumptions:** `effort` field removed from `GradeUpItem` interface — effort estimation was unreliable and misleading
+- **Severity badges:** Visual severity indicators with color-coded backgrounds
+
+## Client Updates
+
+- **6-spoke hexagonal radar chart** — `AXES.length` used for dynamic angle calculation
+- **Email tab** — `EmailTab.tsx` with EmailAuthPanel and EmailExtrasPanel, between Speed and Business
+- **Share cards / OG images** — bar spacing reduced for 6 bars (50px single, 47px compare)
+- **Weight summary** — `weightSummary()` dynamically computes from actual weights table
+- **"Not Assessed" display** — N/A badge and "Not Assessed" text instead of N/M / "Not measured"
+
+## AI Prompt Updates
+
+- All prompt files use correct 6-category names
+- Scoring context updated: baseline 55, penalty/bonus values, "Not Assessed" mention
+- Dimension lists updated throughout `content.ts` and `prompt-builder.ts`
+- Archetype note in `index.ts` updated with accurate scoring description
 
 ## Archetype Handling
 
-Archetypes (content, commerce, application, infrastructure, institutional, community, personal) still apply. They modify severity of individual signals contextually, same as today. The category a signal belongs to doesn't change by archetype.
+Archetypes (content, commerce, application, infrastructure, institutional, community, personal) still apply. They modify severity of individual signals contextually. The category a signal belongs to doesn't change by archetype.
 
-**Email category + infrastructure archetype:** API/infrastructure domains that don't send email can have Email scored as "Not Assessed" instead of penalizing. Archetype detection already identifies these.
-
-## Implementation Phases
-
-### Phase 1: Signal Reclassification
-- Update `axis` field for all signals in `signal-registry.ts`
-- Add `email` to Axis type
-- Rename axis values: `performance` → `speed`, `infrastructure` → `foundations`, `trust` → `reputation`, `visibility` → `discoverability`
-- Update `AXIS_WEIGHTS` to 6-category weights
-- Update all archetype notes referencing old axis names
-- Run tests, fix breakage
-
-### Phase 2: Scoring Engine
-- Implement `computeAnchorAdjustScore` to replace `computeAxisScore`
-- Define expected baselines per category
-- Implement absence detection
-- Replace `computeComposite` with geometric mean
-- Implement per-category hard caps
-- Update `gradeFromComposite` thresholds (initial values, will recalibrate)
-- Update all tests
-
-### Phase 3: Client Updates
-- Rename all axis labels in UI components
-- Add Email category tab/panel
-- Update radar chart from 5 to 6 spokes (hexagonal)
-- Update share cards and OG images
-- Update comparison view
-
-### Phase 4: AI & Prompt Updates
-- Update AI analysis prompt with new categories
-- Update Grade-Up recommendations
-- Update cross-signal insights references
-
-### Phase 5: Calibration
-- Run scoring against 50-100 reference domains
-- Compare old vs new scores
-- Adjust grade thresholds
-- Adjust absence penalties
-- Verify no pathological cases (sites that should score well don't, or vice versa)
-- Update daily_snapshots schema if needed
+**Email category + infrastructure archetype:** API/infrastructure domains that don't send email can have Email scored as "Not Assessed" instead of penalizing.
 
 ## Reference Domains for Calibration
 
