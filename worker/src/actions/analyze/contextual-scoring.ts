@@ -273,7 +273,7 @@ export function contextualSeverity(
 
 // ─── Fixed Axis Weights ──────────────────────────────────────────────
 // Re-exported from signal-registry.ts (single source of truth).
-// Security weighted highest; Trust de-emphasized until axis has more diverse signals;
+// Security weighted highest; Reputation de-emphasized until axis has more diverse signals;
 // visibility and performance boosted for better discrimination.
 
 export const AXIS_WEIGHTS: Record<Axis, number> = REGISTRY_AXIS_WEIGHTS;
@@ -1985,7 +1985,7 @@ export function calculateDomainScore(opts: {
   }
 
   // Trust meta-signals removed — trust_strong/trust_moderate were double-counting
-  // underlying signals already scored individually, inflating Trust axis by ~15 points.
+  // underlying signals already scored individually, inflating Reputation axis by ~15 points.
   if (opts.trustSignals) {
     // DMARC enforcement — bidirectional: reward reject, penalize weak/absent
     const dmarcRejecting = opts.trustSignals.signals.some(
@@ -2048,7 +2048,7 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // ─── Performance Axis Findings ───────────────────────────────────
+  // ─── Speed Axis Findings ───────────────────────────────────
 
   const perf = opts.performance; // PSI mobile (always present)
   const perfDesktop = opts.performanceDesktop; // PSI desktop (new)
@@ -2406,7 +2406,7 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // ─── Infrastructure Axis Findings ───────────────────────────────────
+  // ─── Foundations Axis Findings ───────────────────────────────────
 
   const dns = opts.dnsRecords;
 
@@ -2630,7 +2630,7 @@ export function calculateDomainScore(opts: {
         tradeoff: null,
         weight: 5,
       });
-      // Also tank Visibility — an unreachable site has zero web visibility
+      // Also tank Discoverability — an unreachable site has zero web visibility
       findings.push({
         signal: "site_unreachable_visibility",
         axis: "discoverability",
@@ -2639,7 +2639,7 @@ export function calculateDomainScore(opts: {
         tradeoff: null,
         weight: 5,
       });
-      // Also tank Performance — cannot measure performance of an unreachable site
+      // Also tank Speed — cannot measure performance of an unreachable site
       findings.push({
         signal: "site_unreachable_performance",
         axis: "speed",
@@ -2712,7 +2712,7 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // ─── Trust Axis Findings ─────────────────────────────────────────
+  // ─── Reputation Axis Findings ─────────────────────────────────────────
 
   // Domain age (trust signal — graduated thresholds, 5yr+ for "good")
   // Palo Alto: ≤32d = NRD; CF Email: 7d malicious, 30-45d suspicious; NextDNS: 30d block
@@ -3149,7 +3149,7 @@ export function calculateDomainScore(opts: {
     // CMP detected is already scored as cookie_consent_cmp above
   }
 
-  // ─── Visibility Axis Findings ────────────────────────────────────
+  // ─── Discoverability Axis Findings ────────────────────────────────────
 
   // Domain popularity (Tranco rank) — direct visibility measure
   if (opts.trancoRank != null) {
@@ -3623,7 +3623,7 @@ export function calculateDomainScore(opts: {
     }
   }
 
-  // ─── Third-Party Scripts → Performance Axis ────────────────────
+  // ─── Third-Party Scripts → Speed Axis ────────────────────
   if (opts.thirdPartyScripts) {
     const tps = opts.thirdPartyScripts;
     // Render-blocking scripts impact
